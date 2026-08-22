@@ -847,6 +847,38 @@ button {
    bottom rather than boxed, so it reads as part of the memo rather than as a
    widget somebody dropped into it.
 */
+/*
+   The verdict and the post-mortem on the death screen.
+
+   F11 was that this screen showed a reason and a button. A career is not a
+   reason; it is a shape and a set of numbers, and this is where the player is
+   most willing to read them.
+*/
+.title-verdict {
+  border-top: 1px solid var(--line-soft);
+  border-bottom: 1px solid var(--line-soft);
+  padding: 14px 0;
+  margin-bottom: 18px;
+}
+
+.title-verdict-name {
+  font-family: var(--font-mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--brass);
+}
+
+.title-postmortem {
+  margin-bottom: 26px;
+}
+
+.title-postmortem-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 3px 0;
+}
+
 .memo-subject {
   margin: 4px 26px 0;
   padding: 10px 0;

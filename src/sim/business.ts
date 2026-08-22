@@ -17,6 +17,12 @@ import { trainAttribute } from './player';
 import { addHeat } from './heat';
 import { launderRestriction } from './investigation';
 import { worldMod } from './world';
+import {
+  DEFAULT_PRESSURE,
+  INSPECTION,
+  PRESSURE_BY_ID,
+  type PressureDef,
+} from '../config/pressure';
 import { activity, priced } from './market';
 import { outrageBusinessMultiplier } from './perception';
 import {
@@ -175,8 +181,17 @@ export function healthPressure(
   };
 }
 
+/** How hard this front is being leaned on. Absent reads as the old behaviour. */
+export function pressureOf(business: Business): PressureDef {
+  return PRESSURE_BY_ID[business.pressure ?? DEFAULT_PRESSURE];
+}
+
 export function launderCapacity(state: GameState, business: Business): number {
-  return Math.round(businessDef(business).launderCapacity * wealthScale(state, business.territoryId));
+  return Math.round(
+    businessDef(business).launderCapacity *
+      wealthScale(state, business.territoryId) *
+      pressureOf(business).launder,
+  );
 }
 
 export function totalLaunderCapacity(state: GameState): number {
@@ -482,6 +497,16 @@ export function tickBusinesses(
       );
     }
 
+    /*
+       And how it is being run, on top of how much went through it.
+
+       Applied every week rather than only on weeks something moved, because
+       "keep it clean" has to be worth something to a front that is idle — a
+       restaurant nobody is washing through is quietly becoming a restaurant.
+    */
+    const lean = pressureOf(business);
+    business.exposure = clamp(business.exposure + lean.exposure, 0, 100);
+
     // Quiet weeks let a front cool off, faster the more ordinary it looks.
     const decay = EXPOSURE_DECAY_BASE + def.legitimacy * EXPOSURE_DECAY_PER_LEGITIMACY;
     if (moved < capacity * 0.5) {
@@ -501,7 +526,33 @@ export function tickBusinesses(
      */
     const pressure = healthPressure(state, business);
     const before = business.health ?? HEALTH.start;
-    business.health = clamp(before + pressure.total, 0, 100);
+    business.health = clamp(before + pressure.total - lean.wear, 0, 100);
+
+    /*
+       Somebody official takes an interest.
+
+       The roll is only half of it: a front in decent condition passes, so the
+       risk of leaning on a place is a risk you have already decided the size
+       of by how well you have been running it. A dice roll the player cannot
+       affect would be a tax, not a decision.
+    */
+    if (lean.inspectionChance > 0 && rng.chance(lean.inspectionChance)) {
+      if (business.health >= INSPECTION.survivesAbove) {
+        addLog(
+          state,
+          `Somebody came round ${def.name} in ${territoryDef(business.territoryId).name} with a clipboard and left again.`,
+          'crew',
+        );
+      } else {
+        business.health = clamp(business.health - INSPECTION.healthCost, 0, 100);
+        business.exposure = clamp(business.exposure + INSPECTION.exposureCost, 0, 100);
+        addLog(
+          state,
+          `${def.name} in ${territoryDef(business.territoryId).name} failed an inspection. There is a file with the address on it now.`,
+          'failure',
+        );
+      }
+    }
 
     if (before >= HEALTH.warnBelow && business.health < HEALTH.warnBelow) {
       addLog(

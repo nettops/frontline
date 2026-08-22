@@ -191,7 +191,7 @@ function Favours() {
                 <td className="num mono">{p.owed}</td>
                 <td style={{ minWidth: 190 }}>
                   <button
-                    className="ghost"
+                    className="btn"
                     disabled={!!p.blocked}
                     onClick={() =>
                       mutate((s) => {

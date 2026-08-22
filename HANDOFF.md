@@ -19,7 +19,7 @@ operations, crew, territory, rival families, and law enforcement.
     npx tsc -b         # types
     npm run playtest   # namespaced instance for blind testers
 
-**Current verified state: `tsc` clean, 660 tests, 57 files — 659 passing and one
+**Current verified state: `tsc` clean, 687 tests, 60 files — 686 passing and one
 failing on purpose.** `ladder.probe.test.ts` carries a pre-committed pacing
 target the rank table does not meet; see §9. 53,553 lines
 across 160 source files, after the audit in §8.
@@ -256,6 +256,33 @@ Ranked. F10 outranks everything else in this list.
   was a constant zero. Deleted along with `STARTING_INFLUENCE` and the row.
   `deadState.test.ts` now fails if any field on `Org` is declared and never
   assigned. **Second time dead state has shipped here** — see §8.
+
+### The Mafia-boss systems — ALL FOUR BUILT, none measured by a round
+
+The developer's vision named twelve layers. Nine already existed. All five that
+did not now do, and none has been seen by a blind tester.
+
+- **The favour network** — `config/civic.ts`, `sim/civic.ts`, a panel on The
+  City. Four figures whose standing accrues from how the family is run and
+  cannot be bought. See the entry below.
+- **Legitimacy** — `sim/legacy.ts`. A derived reading like `estate`, not stored
+  state: what you visibly own, whether the police are interested, whether the
+  papers use your name, and whether the money on hand can be explained.
+- **Career shapes** — eight endings read off what actually happened, with
+  `unremarkable` at weight 0 as the floor that stops it being a horoscope. On
+  the Player screen while alive and on the death screen at the end, **which
+  closes F11.**
+- **Whispers** — `config/whispers.ts`, `sim/whispers.ts`, a feed at the top of
+  Intelligence. Confidence-rated claims generated from real state, **some of
+  them false, and the read cannot say which.** Attacks round 14's MUST FIX 2:
+  the supply is the simulation rather than an authored list.
+- **How hard you lean on a front** — `config/pressure.ts`. One dial per
+  business, three settings, feeding four systems that already existed. The
+  default is the old behaviour in every term, so an existing save is untouched.
+
+**All four verified in the live game**, not only in tests. **None has a bot
+that exercises it**, so every one is invisible to the probes — F7, four times
+over — and round 15 is what is owed.
 
 - **The favour network — FIRST SLICE BUILT, unmeasured.** `config/civic.ts`,
   `sim/civic.ts`, and a panel at the top of The City. Four figures — a police

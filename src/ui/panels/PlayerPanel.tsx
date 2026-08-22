@@ -2,6 +2,7 @@ import { useGame } from '../../store';
 import { Panel, Bar, KeyValue } from '../components';
 import { nextRank, rankRequirements } from '../../sim/player';
 import { estate } from '../../sim/estate';
+import { careerShape, legitimacy } from '../../sim/legacy';
 import { controlledTerritories } from '../../sim/territory';
 import { formatMoney } from '../../sim/util';
 import {
@@ -162,6 +163,16 @@ export default function PlayerPanel() {
              Removed rather than repointed: the real one is already on this
              page and carries more.
           */}
+          {/*
+             How the outside reads you, and what the career is shaping into.
+
+             On the living screen as well as the death screen, because a
+             verdict you only see once you have lost is a verdict you cannot
+             steer by. Round 14 played 180 days "grinding a position I could
+             not win" with nothing on any screen naming what the position was.
+          */}
+          <KeyValue label="How legitimate it looks" value={`${legitimacy(state)} of 100`} />
+          <KeyValue label="Shaping into" value={careerShape(state).name} tone="brass" />
           <KeyValue label="Operations completed" value={player.opsCompleted} tone="good" />
           <KeyValue label="Operations failed" value={player.opsFailed} tone="hot" />
           <KeyValue label="People you can command" value={rank.maxCrew} />
