@@ -77,7 +77,6 @@ export const STARTING_CASH = 2_500;
 export const STARTING_DIRTY_CASH = 0;
 export const STARTING_RESPECT = 0;
 export const STARTING_FEAR = 0;
-export const STARTING_INFLUENCE = 0;
 
 /** Wages are paid every 7 days, on days where day % 7 === 0. */
 /**

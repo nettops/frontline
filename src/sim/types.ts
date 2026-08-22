@@ -136,7 +136,6 @@ export interface Org {
   respect: number;
   /** What people will do for you because of what happens if they do not. */
   fear: number;
-  influence: number;
   /**
    * 0..100 law-enforcement attention. Always the clamped sum of `heatBy`.
    *
