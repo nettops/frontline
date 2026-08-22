@@ -159,6 +159,40 @@ export const GEN_WHEN = {
   districtInfluence: 15,
   /** A file with enough in it to be worth telling you about. */
   caseStrength: 30,
+  /**
+   * Days before the same person may raise the same thing again.
+   *
+   * Round 15's second MUST FIX, and it is the worse of the two because it
+   * corrodes the layer the rest of the game is built on. The tester paid
+   * Emilio Petrosino on day 202, again on day 215, again on day 225, each time
+   * against an option reading "and the matter is closed". They paid Dana
+   * Vitale on days 45, 101, 174 and 226 — four times, always about the same
+   * injury from day 9.
+   *
+   * *"It turned the whole crew-management layer into a subscription. I stopped
+   * believing that anything I did for my people mattered — which is precisely
+   * the emotional register the rest of the game is built to earn."*
+   *
+   * The cause was that the shape fires on grievance **or** low loyalty, and
+   * paying moves loyalty by 7. A man at "looking for the door" is still at
+   * "looking for the door" afterwards, so the loyalty branch re-armed
+   * immediately and the payment bought nothing but a fortnight.
+   *
+   * A cooldown per person rather than per shape. Somebody else may still come
+   * to you tomorrow; this one has been dealt with, and dealing with people is
+   * supposed to be a thing that works.
+   */
+  askedAgainAfterDays: 60,
+  /**
+   * How old a grievance may be before the memo stops citing it.
+   *
+   * Dana Vitale was hurt on day 9 and the memo was still opening with it on
+   * day 226. A memory that old is real — `memory.ts` keeps it on purpose and
+   * it still drives poaching and informing — but a man walking into your
+   * office to raise a two-hundred-day-old injury for the fourth time reads as
+   * a bug, because it is one.
+   */
+  grievanceStaleAfterDays: 120,
   /** A steward whose district has been quietly earning him more than you. */
   skimmed: 2_000,
   /** A whisper somebody has now brought you twice. */
@@ -216,8 +250,27 @@ export const GEN_EFFECT = {
   heardGrievance: 0,
   /** Money in a hand. The multiplier is on the man's weekly wage. */
   payWages: 3,
-  paidLoyalty: 7,
-  paidGrievance: -26,
+  /*
+     Paying has to actually settle it.
+
+     Round 15 paid the same three men on a rolling schedule for grievances that
+     never resolved. Loyalty +7 against a shape that also fires below loyalty
+     40 meant the payment could not clear its own trigger, so the promise in
+     the option text — "and the matter is closed" — was false by construction.
+
+     Bigger on loyalty so it can clear the bar it is being paid to clear, and
+     the cooldown in `GEN_WHEN` does the rest.
+  */
+  paidLoyalty: 16,
+  /*
+     Enough to actually clear the bar that raised the memo.
+
+     At -30 a man at 90 came out at 60, still above `GEN_WHEN.grievance`,
+     so the cooldown was only slowing the subscription down rather than
+     ending it — he would be back in sixty days with the same complaint.
+     An option that says "and it is settled" has to settle it.
+  */
+  paidGrievance: -60,
   /** Turning somebody down. */
   refusedLoyalty: -6,
   refusedGrievance: 8,

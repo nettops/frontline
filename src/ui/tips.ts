@@ -191,7 +191,7 @@ export const TIPS: Tip[] = [
     only: ['career', 'sandbox'],
     label: 'Attention',
     text:
-      'Heat is how hard the city is looking at you. It makes every job worse, and it barely falls while you are working. Laying low drops it fast and earns nothing.',
+      'Heat is how hard the city is looking at you. It makes every job worse, and it barely falls while you are working. Laying low drops it fast, and only quiet work moves while you are dark.',
     panel: 'dashboard',
     when: (s) => s.org.heat >= 35 && !isLayingLow(s),
     urgent: true,

@@ -1,10 +1,10 @@
-import { useGame } from '../../store';
+import { useGame, mutate } from '../../store';
 import { Panel, Bar, KeyValue } from '../components';
 import { nextRank, rankRequirements } from '../../sim/player';
 import { estate } from '../../sim/estate';
 import { careerShape, legitimacy } from '../../sim/legacy';
 import { authorityRead } from '../../sim/authority';
-import { homeRead } from '../../sim/personal';
+import { canGoHome, goHome, homeRead } from '../../sim/personal';
 import { controlledTerritories } from '../../sim/territory';
 import { formatMoney } from '../../sim/util';
 import {
@@ -82,6 +82,7 @@ export default function PlayerPanel() {
   const difficulty = DIFFICULTY_BY_ID[state.difficulty];
   const authorityNow = authorityRead(state);
   const houseNow = homeRead(state);
+  const goingHome = canGoHome(state);
 
   return (
     <>
@@ -213,6 +214,31 @@ export default function PlayerPanel() {
             value={houseNow.since === 0 ? 'Today' : `${houseNow.since} days ago`}
             tone={houseNow.neglect >= 50 ? 'hot' : undefined}
           />
+          {/*
+             And a way to actually go.
+
+             There was no button here at first, on the reasoning that a pull
+             toward home should arrive rather than sit on a panel as a bar to
+             top up. Round 15 waited **233 days** for the memo to arrive while
+             the briefing counted upward at them the whole time — "for 230 days
+             the game showed me a rising counter I had no way to act on" — and
+             that reasoning turned out to describe a tax rather than a life.
+             The memo stays; this is for a boss who does not need inviting.
+          */}
+          <button
+            className="btn"
+            style={{ marginTop: 10 }}
+            disabled={!goingHome.ok}
+            title={goingHome.reason ?? 'An evening at home'}
+            onClick={() => mutate((g) => goHome(g), true)}
+          >
+            Go home for the evening
+          </button>
+          {!goingHome.ok && (
+            <p className="faint tiny" style={{ marginTop: 6, marginBottom: 0 }}>
+              {goingHome.reason}
+            </p>
+          )}
           <KeyValue label="Shaping into" value={careerShape(state).name} tone="brass" />
           <KeyValue label="Operations completed" value={player.opsCompleted} tone="good" />
           <KeyValue label="Operations failed" value={player.opsFailed} tone="hot" />

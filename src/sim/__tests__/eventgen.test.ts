@@ -24,7 +24,7 @@ import { newGame } from '../state';
 import { Rng } from '../rng';
 import { EVENT_DEF_BY_ID, resolveEvent } from '../events';
 import { GEN_DEFS, isGenerated } from '../eventgen';
-import { GEN_SHAPES } from '../../config/eventgen';
+import { GEN_SHAPES, GEN_WHEN } from '../../config/eventgen';
 import { acquireBusiness, ownedBusinesses } from '../business';
 import { crewList, generateNpc } from '../npc';
 import { HOME_TERRITORY } from '../../config/territories';
@@ -32,7 +32,7 @@ import { territoryList } from '../territory';
 import { figure } from '../civic';
 import { home } from '../personal';
 import { runDays } from './helpers';
-import type { GameState } from '../types';
+import type { GameState, Npc } from '../types';
 
 /**
  * A world with one of everything the six shapes ask for.
@@ -73,6 +73,19 @@ function world(seed = 88): GameState {
   for (const role of ['soldier', 'soldier', 'associate'] as const) {
     const npc = generateNpc(state, hireRng, role);
     state.npcs[npc.id] = npc;
+  }
+
+  /*
+     Nobody has been dealt with recently.
+
+     The sixty days of warm-up above can raise and answer `gen_wants_a_word`
+     themselves, which sets the per-person cooldown added after round 15 — so
+     the fixture was handing itself a man the game had correctly decided not to
+     ask about again. Cleared, because this builder is constructing a fresh
+     situation rather than continuing one.
+  */
+  for (const key of Object.keys(state.flags)) {
+    if (key.startsWith('asked_')) delete state.flags[key];
   }
 
   // Somebody aggrieved, and two who will not work together.
@@ -259,5 +272,100 @@ describe('answering one', () => {
   it('marks its own memos so the resolver can find them', () => {
     expect(GEN_DEFS.every((d) => isGenerated(d.id))).toBe(true);
     expect(isGenerated('promotion_demand')).toBe(false);
+  });
+});
+
+/*
+   Round 15's second MUST FIX, and the guard against it coming back.
+
+   The tester paid Emilio Petrosino on day 202, again on day 215, again on day
+   225, each time against an option reading "and the matter is closed". They
+   paid Dana Vitale on days 45, 101, 174 and 226 — four times, always about the
+   same injury from day 9.
+
+     "It turned the whole crew-management layer into a subscription. I stopped
+     believing that anything I did for my people mattered — which is precisely
+     the emotional register the rest of the game is built to earn."
+
+   The shape fires on grievance **or** low loyalty, and paying moved loyalty by
+   seven. A man at "looking for the door" was still at "looking for the door"
+   afterwards, so the loyalty branch re-armed immediately.
+*/
+describe('answering somebody settles it', () => {
+  function aggrieved(): { state: GameState; man: Npc } {
+    const state = world();
+    const man = crewList(state).filter((n) => n.status !== 'dead')[0];
+    man.stats.grievance = 90;
+    // The state that made this a subscription: paying could not clear the
+    // loyalty branch, so the same man came back every fortnight for ever.
+    man.stats.loyalty = 15;
+    return { state, man };
+  }
+
+  it('does not raise the same person again straight away', () => {
+    const { state, man } = aggrieved();
+    const def = GEN_DEFS.find((d) => d.id === 'gen_wants_a_word')!;
+    const rng = new Rng(state.rng);
+
+    const ctx = def.applies(state, rng);
+    expect(ctx?.npc?.id, 'the aggrieved man was not the subject').toBe(man.id);
+
+    const built = def.build(state, rng, ctx!);
+    state.pendingEvents.push({ ...built, id: 'evt_word', day: state.day });
+    resolveEvent(state, rng, 'evt_word', 'pay');
+
+    // Same day, and for a good while after.
+    expect(def.applies(state, new Rng(state.rng))).toBeNull();
+    state.day += GEN_WHEN.askedAgainAfterDays - 1;
+    expect(
+      def.applies(state, new Rng(state.rng)),
+      'the same man came back inside the cooldown',
+    ).toBeNull();
+  });
+
+  /*
+     And it is the answer that settles it, not merely the asking. A cooldown
+     alone would be a mute button; paying has to actually move the man.
+  */
+  it('leaves a paid man out of the state that raised it', () => {
+    const { state, man } = aggrieved();
+    const def = GEN_DEFS.find((d) => d.id === 'gen_wants_a_word')!;
+    const rng = new Rng(state.rng);
+    const ctx = def.applies(state, rng)!;
+    const built = def.build(state, rng, ctx);
+    state.pendingEvents.push({ ...built, id: 'evt_word', day: state.day });
+    resolveEvent(state, rng, 'evt_word', 'pay');
+
+    expect(man.stats.grievance, 'paying did not settle the grievance').toBeLessThan(
+      GEN_WHEN.grievance,
+    );
+    expect(
+      man.stats.loyalty,
+      'paying could not clear the loyalty bar that also raises this memo',
+    ).toBeGreaterThan(GEN_WHEN.loyaltyUnder - 10);
+  });
+
+  /*
+     A man raises what happened to him recently. Round 15 watched the same
+     injury from day 9 cited on days 45, 101, 174 and 226.
+  */
+  it('does not raise a grievance from another year', () => {
+    const state = world();
+    const man = crewList(state).filter((n) => n.status !== 'dead')[0];
+    man.stats.grievance = 90;
+    man.memories = [
+      { kind: 'was_hurt', day: state.day - (GEN_WHEN.grievanceStaleAfterDays + 60), aboutId: null, weight: 40 },
+    ];
+    man.notes = [];
+
+    const def = GEN_DEFS.find((d) => d.id === 'gen_wants_a_word')!;
+    const rng = new Rng(state.rng);
+    const ctx = def.applies(state, rng)!;
+    const built = def.build(state, rng, ctx);
+
+    expect(
+      built.body,
+      'a two-hundred-day-old injury is still being walked into the room',
+    ).not.toMatch(/hurt working for you/);
   });
 });

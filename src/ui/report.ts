@@ -386,14 +386,19 @@ export function buildReport(before: Snapshot, state: GameState): DayReport | nul
       'player',
       'evening',
     );
-  } else if (somethingHappened && house.since >= HOME.intervalDays * 3) {
+  } else if (somethingHappened && house.since >= HOME.intervalDays * 6) {
     /*
        And the quiet version only ever rides along.
 
-       Its own test caught this: a boss who had a completely uneventful week
-       was handed a briefing whose single line was that nobody at home had
-       seen him. That is a nag with a heading on it, and the surest way to
-       teach somebody to dismiss the briefing without reading it.
+       Its own test caught the first half of this: a boss who had a completely
+       uneventful week was handed a briefing whose single line was that nobody
+       at home had seen him. That is a nag with a heading on it, and the surest
+       way to teach somebody to dismiss the briefing without reading it.
+
+       Round 15 caught the second half — it still appeared on almost every
+       briefing for two hundred days, because "something happened" is true most
+       weeks. Six weeks away rather than three, so the line is an observation
+       about a real absence rather than a running total.
     */
     push(`Nobody at home has said anything. It has been ${house.since} days.`, 'neutral', 'player', 'evening');
   }

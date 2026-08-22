@@ -275,7 +275,8 @@ export default function Dashboard({ onNavigate }: { onNavigate: (id: PanelId) =>
           </p>
           {laying && (
             <p className="brass" style={{ marginBottom: 0 }}>
-              Laying low until day {org.layLowUntilDay}. No operations can be launched.
+              Laying low until day {org.layLowUntilDay}. Quiet work still moves;
+              anything louder is refused.
             </p>
           )}
           {!laying && org.quietDays > 0 && org.heat > 0 && (

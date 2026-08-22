@@ -69,13 +69,33 @@ export function tickHome(state: GameState): void {
 }
 
 /**
+ * Whether there is any point going home tonight.
+ *
+ * Refuses by naming its own bar, like every other refusal in this project.
+ */
+export function canGoHome(state: GameState): { ok: boolean; reason?: string } {
+  const house = home(state);
+  const since = state.day - house.lastVisitDay;
+  if (since < HOME.visitAgainAfterDays) {
+    return {
+      ok: false,
+      reason:
+        `You were there ${since === 0 ? 'today' : `${since} ${since === 1 ? 'day' : 'days'} ago`}. ` +
+        `Going again inside ${HOME.visitAgainAfterDays} days is not worth anything to anybody.`,
+    };
+  }
+  return { ok: true };
+}
+
+/**
  * An evening at home.
  *
- * Deliberately not free and deliberately not priced in money — what it costs
- * is the week, and the game charges that by the memo arriving on a week when
- * something else also wanted doing. There is no way to buy this back.
+ * Not priced in money — what it costs is the evening, and the game charges
+ * that by the memo arriving on a week when something else also wanted doing.
+ * There is no way to buy this back.
  */
 export function goHome(state: GameState): void {
+  if (!canGoHome(state).ok) return;
   const house = home(state);
   house.neglect = clamp(house.neglect - HOME.clearedByVisit, 0, 100);
   house.lastVisitDay = state.day;

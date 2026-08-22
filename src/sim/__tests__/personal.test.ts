@@ -24,7 +24,7 @@
 import { describe, expect, it } from 'vitest';
 import { newGame } from '../state';
 import { advanceDay } from '../clock';
-import { goHome, home, homeRead, neglectRisk, tickHome } from '../personal';
+import { canGoHome, goHome, home, homeRead, neglectRisk, tickHome } from '../personal';
 import { HOME, RELATIONS } from '../../config/personal';
 import type { GameState } from '../types';
 
@@ -180,5 +180,43 @@ describe('what it costs', () => {
     const risk = neglectRisk(state);
     for (let i = 0; i < 4; i++) goHome(state);
     expect(neglectRisk(state)).toBeLessThan(risk);
+  });
+});
+
+/*
+   Round 15's severest SHOULD FIX, and the reason the panel has a button.
+
+     "For 230 days the game showed me a rising counter I had no way to act on.
+     I assumed for most of the run that I was missing a screen."
+
+   The only way to go home was a memo on a weighted draw, and it arrived on day
+   233 of a 245-day run.
+*/
+describe('going home without being asked', () => {
+  it('is available to a boss who has been away', () => {
+    const state = game();
+    weeks(state, 10);
+    expect(canGoHome(state).ok, 'ten weeks away and the door is still shut').toBe(true);
+  });
+
+  it('refuses a second evening in the same week, and says why', () => {
+    const state = game();
+    weeks(state, 10);
+    goHome(state);
+
+    const again = canGoHome(state);
+    expect(again.ok).toBe(false);
+    expect(again.reason, 'the refusal does not name its own bar').toContain(
+      String(HOME.visitAgainAfterDays),
+    );
+  });
+
+  it('does nothing when it is refused, rather than quietly working', () => {
+    const state = game();
+    weeks(state, 10);
+    goHome(state);
+    const after = home(state).neglect;
+    goHome(state);
+    expect(home(state).neglect, 'a refused visit still cleared neglect').toBe(after);
   });
 });

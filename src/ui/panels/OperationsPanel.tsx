@@ -209,8 +209,8 @@ export default function OperationsPanel() {
       {isLayingLow(state) && (
         <Panel title="Laying low">
           <p className="brass" style={{ margin: 0 }}>
-            Nothing can be launched until day {state.org.layLowUntilDay}. That is the
-            point of it.
+            Until day {state.org.layLowUntilDay}, only the quiet approach moves. Anything
+            louder is refused, and the street reads it as weakness.
           </p>
         </Panel>
       )}

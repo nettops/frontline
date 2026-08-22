@@ -23,8 +23,6 @@ export default function CityPanel() {
 
   return (
     <>
-      <Favours />
-
       <div className="page-head">
         <h1 className="page-title">The City</h1>
         <span className="tiny">
@@ -33,6 +31,16 @@ export default function CityPanel() {
             : 'Nothing about you has been printed'}
         </span>
       </div>
+
+      {/*
+         Under the heading, not above it.
+
+         The favour panel was added at the top of the component and therefore
+         rendered before the page title, so round 15 scrolled to the top of The
+         City and found a large contacts table with no heading over it: "the
+         page appears to begin mid-sentence".
+      */}
+      <Favours />
 
       <div className="grid-2">
         <Panel title="What people are saying">
