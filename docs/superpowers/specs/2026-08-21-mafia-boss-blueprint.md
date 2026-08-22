@@ -95,7 +95,8 @@ ranked in §4.**
 
 ### Boss
 
-**Status: EXISTS, and one field of it is broken.**
+**Status: EXISTS. One field of it was broken; that half is now fixed — see the
+note under The defect.**
 
 Eight attributes at [`types.ts:33`](../../../src/sim/types.ts) — leadership,
 intimidation, negotiation, intelligence, streetSmarts, business, strategy,
@@ -111,9 +112,13 @@ exist at org level. **Legitimacy is the only genuinely new one.**
 **The defect.** `state.org.influence` and `state.player.attributes.influence` are
 two different fields with the same label on the same screen.
 
-- `org.influence` is initialised to `0` at [`state.ts:205`](../../../src/sim/state.ts)
-  and **is never assigned anywhere else in the codebase**. Its only appearance is
-  `PlayerPanel.tsx:151`, which renders it as "Influence" on the Standing block.
+- `org.influence` is initialised from `STARTING_INFLUENCE`, which is `0`
+  ([`economy.ts:80`](../../../src/config/economy.ts)), at
+  [`state.ts:261`](../../../src/sim/state.ts) and **is never assigned anywhere
+  else in the codebase**. Its only appearance is `PlayerPanel.tsx:151`, which
+  renders it as "Influence" on the Standing block. *(An earlier draft of this
+  document cited `state.ts:205` — that line is the player-attribute
+  initialiser, not the org's. The claim is unchanged; the citation was wrong.)*
 - `player.attributes.influence` is what every gate reads —
   `investigation.ts:1080` and `:1090`, `perception.ts:237` and `:264`.
 
@@ -123,6 +128,12 @@ Influence in the attributes block that governs the entire political vertical.
 
 Round 13: *"a whole vertical of the game was invisible to me for 300 days because
 of one attribute I had no idea how to train."*
+
+**Fixed after this document was first written.** `org.influence` is deleted along
+with `STARTING_INFLUENCE`, the Standing row is removed, and the attribute below it
+already carries the progress bar that says how to move it.
+`src/sim/__tests__/deadState.test.ts` now fails if any field on `Org` is declared
+and never assigned. Only the *supply* half of item 1 remains.
 
 ### Family
 
@@ -425,7 +436,7 @@ Ranked by the evidence in §1 and §2, not by the order this document presents t
 
 | # | What | Closes | Size |
 |---|---|---|---|
-| 1 | **Influence supply, and the two-fields defect** | F2, and a permanently-zero readout | Small |
+| 1 | **Influence supply** ~~and the two-fields defect~~ | F2 | Small |
 | 2 | **Generalise `PATRON` + contacts into a favour network** | Round 14's most-wanted system | Medium |
 | 3 | **F15 — the front fork** | 25 of 36 careers never compound | Medium |
 | 4 | **Whispers** | MUST FIX 2, the memo pool exhausting | Large |
