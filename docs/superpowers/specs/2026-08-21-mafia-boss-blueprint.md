@@ -434,18 +434,46 @@ correct and the supply is broken.**
 
 Ranked by the evidence in §1 and §2, not by the order this document presents them.
 
-| # | What | Closes | Size |
-|---|---|---|---|
-| 1 | **Influence supply** ~~and the two-fields defect~~ | F2 | Small |
-| 2 | **Generalise `PATRON` + contacts into a favour network** | Round 14's most-wanted system | Medium |
-| 3 | **F15 — the front fork** | 25 of 36 careers never compound | Medium |
-| 4 | **Whispers** | MUST FIX 2, the memo pool exhausting | Large |
-| 5 | **Win conditions** | Fun 5, a ladder with no destination | Small |
-| 6 | **Boss profile + Legitimacy** | Presentation | Small |
-| 7 | **Business texture** | Nothing measured | Large |
+| # | What | Closes | Size | State |
+|---|---|---|---|---|
+| 1 | ~~Influence supply~~ | F2 | Small | **DONE** |
+| 2 | **F17 — open a diplomatic door** | F17, and it runs through F5 | Medium | **new, and now first** |
+| 3 | **Generalise `PATRON` + contacts into a favour network** | Round 14's most-wanted system | Medium | blocked on 2 |
+| 4 | **F15 — the front fork** | 25 of 36 careers never compound | Medium | |
+| 5 | **Whispers** | MUST FIX 2, the memo pool exhausting | Large | |
+| 6 | **Win conditions** | Fun 5, a ladder with no destination | Small | |
+| 7 | **Boss profile + Legitimacy** | Presentation | Small | |
+| 8 | **Business texture** | Nothing measured | Large | |
 
-**1 before 2 is not a preference.** Building the favour network first produces a
-system nobody can reach, which is the defect it was built to fix.
+### Item 1 is done, and it changed the order
+
+`org.influence` is deleted, the skipped retainer and the uncapped approach are
+fixed, and `counselPerWeek` went 0.12 → 2.4 against a pre-committed target. The
+median career now ends its 300 days on Influence 5 rather than 0, which opens a
+task-force contact.
+
+**But the instrument built to measure it produced F17, and F17 goes in front of
+the favour network.**
+
+The probe's bot now approaches a family every week — the first instrument in this
+project ever to do so. **Every approach is refused, all 300 days, in the same
+sentence:** *"you lead them by -72 strength and would need 15 — or 55 standing
+with them, against 29."* The paid courtesy wants $25,000 spare in an economy
+money-blocked in 97% of its idle weeks.
+
+Both diplomatic doors are shut, always. So `counselPerWeek` is carrying a vertical
+it should be sharing, and the consequence is backwards: **a boss who is never
+investigated keeps no lawyer and earns no political pull at all.**
+
+**That is why item 2 changed.** A favour network is a system of relationships with
+people outside the family, and this game currently has no working way to build one
+— the only route it has is refused every time it is tried. Building the network
+first would produce exactly what item 1 was moved ahead of it to prevent: a system
+nobody can reach.
+
+And F17 is F5 wearing another hat. The player runs 40 to 80 strength behind every
+rival for the whole game, which is the same inertness round 13 measured as three
+houses at 84, 100 and 100 sitting Neutral for 224 days.
 
 ---
 
