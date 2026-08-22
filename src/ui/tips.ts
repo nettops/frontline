@@ -31,7 +31,10 @@ import { playerIsAtWar } from '../sim/diplomacy';
 import { mostHostile } from '../sim/faction';
 import { eligibleHeirs, heirOf } from '../sim/succession';
 import { tradeUnlocked } from '../sim/contraband';
-import { totalOwed } from '../sim/market';
+import { canBorrow, totalOwed } from '../sim/market';
+import { canAcquire } from '../sim/business';
+
+import { BUSINESSES } from '../config/businesses';
 import { isLayingLow } from '../sim/heat';
 import { eligibleStewards } from '../sim/delegation';
 import { playerInfluence, territoryList } from '../sim/territory';
@@ -216,6 +219,59 @@ export const TIPS: Tip[] = [
       s.operationHistory.length >= 6 && controlledTerritories(s).length === 0,
   },
   {
+    /*
+       F15, and it is a teaching problem rather than an economy problem.
+
+       The economy forks on fronts: front income compounds into holdings, so a
+       family that never gets a second one never starts. `ladder.probe` reports
+       the gate as **money in 98% of the weeks a career owns nothing** — and 27
+       of 36 careers finish flat, holding one front.
+
+       What no instrument had ever checked is that the game already answers
+       this. The first lender in the catalogue is a man at the back of a
+       restaurant: $40,000, no collateral, no respect requirement, no business
+       requirement, available on the first morning. An arm of the probe that
+       borrows to reach a front moves careers past $100,000 from 9 in 36 to 14
+       in 36, median fronts from one to two — and **kills nobody**: careers
+       ending early stayed at zero.
+
+       Seventeen loans across thirty-six careers was all it took, and the bot
+       had to be told to do it. This is F10's shape again, which is the one
+       finding this project has actually closed: a good thing nobody can see is
+       there.
+    */
+    id: 'borrow_a_front',
+    only: ['career', 'sandbox'],
+    label: 'The difference',
+    text:
+      'A front pays into holdings, and holdings compound — which is why the second one is the one that matters, and why the money is always the thing in the way. Somebody on Delacroix will advance the difference against nothing but your word. It is expensive and it is not the worst idea you have had.',
+    panel: 'finances',
+    when: (s) =>
+      ownedBusinesses(s).length <= 1 &&
+      totalOwed(s) === 0 &&
+      canBorrow(s, 'shark', {
+        respect: s.org.respect,
+        businesses: ownedBusinesses(s).length,
+        friendlyFactionId: null,
+      }).ok &&
+      // Only once there is something to buy and it is out of reach, so this is
+      // advice at the moment it becomes true rather than on the first morning.
+      /*
+         A front whose only remaining blocker is the money.
+
+         `canAcquire` returns `ok: false` when you cannot cover it, so this
+         cannot be written as "allowed but unaffordable" — the first version
+         was, and the predicate could never be true. The refusal names the
+         shortfall now, and this reads it.
+      */
+      territoryList(s).some((t) =>
+        BUSINESSES.some((def) => {
+          const check = canAcquire(s, def.id, t.id);
+          return !check.ok && /short\.$/.test(check.reason ?? '');
+        }),
+      ),
+  },
+  {
     id: 'step_up',
     only: ['career', 'sandbox'],
     label: 'Yourself',
@@ -262,7 +318,26 @@ export const TIPS: Tip[] = [
     panel: 'crew',
     when: (s) =>
       crewList(s).some(
-        (n) => (n.status === 'active' || n.status === 'busy') && n.stats.grievance >= 55,
+        /*
+           35, and the number was measured rather than chosen.
+
+           `tips.reach` plays six four-year careers and records what an active
+           man actually carries. The ceiling across those careers moves between
+           roughly 44 and 54 depending on nothing but the random stream — it
+           was re-measured three times across one afternoon of unrelated
+           changes and moved every time. So a bar of 55 was above what the
+           simulation produces at all, and anything in the forties passes or
+           fails on the seed: the advice was reachable by luck, and twice it
+           was not reachable at all.
+
+           A tip nobody can reach is F10's shape, and F10 is the one finding
+           this project has actually closed. 35 is below the whole of the
+           observed band rather than inside it, which is the only way a bar on
+           a stochastic quantity stops being a coin flip — and it is still well
+           above the twenty-odd an ordinary man carries, so the line still
+           means what it says: somebody is carrying something.
+        */
+        (n) => (n.status === 'active' || n.status === 'busy') && n.stats.grievance >= 35,
       ),
   },
   {

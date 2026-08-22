@@ -142,8 +142,23 @@ export const SHAPE_BARS = {
   kingpinDistricts: 4,
   /** Estate for the Financial Boss. */
   financierEstate: 250_000,
-  /** Legitimacy for the Legitimate Boss, 0..100. */
-  legitimateAbove: 55,
+  /**
+   * Legitimacy for the Legitimate Boss, 0..100.
+   *
+   * Was 55, and it made this the verdict on 22 of 36 careers.
+   *
+   * The bar was set by eye rather than against the reading. `ladder.probe`
+   * measures legitimacy across the population at 63 / 66 / 73 for the 40th,
+   * median and 75th — so a bar of 55 sat *below the median career* and handed
+   * 61% of the game the same name. That is the horoscope this file's header
+   * says a shape must not be, arriving at the population level where no
+   * single-career test could see it.
+   *
+   * 72 is just under the 75th percentile, which makes it what it was supposed
+   * to be: the quarter of careers that really did look like a man with
+   * businesses.
+   */
+  legitimateAbove: 72,
   /** Respect for the Old-School Don. */
   donRespect: 260,
   /** Fear for the Street King. */

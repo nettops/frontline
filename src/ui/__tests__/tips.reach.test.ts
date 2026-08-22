@@ -46,6 +46,16 @@ const NEEDS_AN_ACTION: Record<string, string> = {
   ledger: 'handing a district to a steward and reading his record',
   unrest: 'a city condition this bot never provokes',
   watching: 'Simulation mode',
+  /*
+     Reachable by any player and unreachable by this bot for a reason that has
+     nothing to do with the tip: `runDaysSolvent` tops the wallet up to a
+     million every morning, so no front is ever out of reach here and the
+     condition "you cannot cover it and somebody would lend you the
+     difference" can never be true. Measured on the real bot in
+     `ladder.probe` instead, where the money gate is 98% of the weeks a career
+     owns nothing.
+  */
+  borrow_a_front: 'a front you cannot afford, which this bot never has',
 };
 
 describe('the advice', () => {
@@ -89,6 +99,32 @@ describe('the advice', () => {
   it('reaches every tip an ordinary career should see', () => {
     const missed = ORDINARY.filter((id) => !fired.has(id));
     expect(missed).toEqual([]);
+  });
+
+  /*
+     The one tip this bot cannot reach, checked directly.
+
+     Filing something under NEEDS_AN_ACTION is a claim that a player can get
+     there, and a claim nobody checks is how a tip quietly dies. This builds
+     the state the advice is about — a foothold, a front on the board, and not
+     enough money for it — and asserts the line appears.
+  */
+  it('reaches the borrowing tip in the state it is about', () => {
+    const s = newGame({ name: 'Broke', difficulty: 'normal', mode: 'career', seed: 4 });
+    for (const t of Object.values(s.territories)) t.influence.player = 45;
+    s.org.cash = 200;
+    s.org.dirtyCash = 0;
+
+    const tip = TIPS.find((t) => t.id === 'borrow_a_front')!;
+    expect(tip, 'the tip is gone').toBeDefined();
+    expect(
+      tip.when(s),
+      'a boss holding $200, a foothold and no front is not shown the lender',
+    ).toBe(true);
+
+    // And it goes away once there is money, rather than nagging.
+    s.org.cash = 500_000;
+    expect(tip.when(s)).toBe(false);
   });
 
   it('accounts for every tip in the list', () => {

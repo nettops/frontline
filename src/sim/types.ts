@@ -486,6 +486,29 @@ export interface Whisper {
 }
 
 /** One person outside the family, and where you stand with them. */
+/**
+ * Somebody at home.
+ *
+ * Deliberately not an `Npc`. An `Npc` is a person the game assigns to jobs,
+ * pays a wage, tracks courage and skill for, and puts on the crew sheet, and
+ * none of that is true of a brother-in-law — reusing the type would have put
+ * the whole household on the payroll. Three fields is what this needs.
+ */
+export interface HouseholdMember {
+  name: string;
+  /** An id from `config/personal.ts`. */
+  relationId: string;
+}
+
+export interface Home {
+  /** Where you actually live, which is a district like any other. */
+  districtId: string;
+  people: HouseholdMember[];
+  lastVisitDay: number;
+  /** 0..100. How long it has been, from their side. */
+  neglect: number;
+}
+
 export interface CivicStanding {
   id: string;
   /** 0..100. Drifts toward what they watch; never set directly. */
@@ -1252,6 +1275,16 @@ export interface GameState {
    * once. Same reasoning as `promises` above.
    */
   civic?: CivicStanding[];
+  /**
+   * The half of a boss that is not the business.
+   *
+   * Optional with a lazy initialiser in `personal.ts`, the same idiom as
+   * `promises`, `civic` and `whispers` — so `SAVE_VERSION` does not move and a
+   * save written before this existed loads with a family it turns out it
+   * always had. Not in `validate()`, for the same reason none of the others
+   * are.
+   */
+  home?: Home;
 
   /**
    * What has reached you, and how sure whoever brought it was.

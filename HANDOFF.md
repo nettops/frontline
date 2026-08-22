@@ -19,10 +19,15 @@ operations, crew, territory, rival families, and law enforcement.
     npx tsc -b         # types
     npm run playtest   # namespaced instance for blind testers
 
-**Current verified state: `tsc` clean, 687 tests, 60 files — 686 passing and one
-failing on purpose.** `ladder.probe.test.ts` carries a pre-committed pacing
-target the rank table does not meet; see §9. 53,553 lines
-across 160 source files, after the audit in §8.
+**Current verified state: `tsc` clean, 726 tests, 63 files — 724 passing and
+two failing.** Both are the same finding seen from two angles: the rank ladder
+is slow. `ladder.probe`'s pre-committed pacing target reads Capo in 13 careers
+of 36 against a target of 24, and `scorecard.probe`'s Pacing axis reads 2.7
+against a floor of 3 because a bot that has run every job kind, worked every
+district and stopped gaining rank has no firsts left. **The two pre-commits
+written during the Mafia-boss build are now met** — see section 6. `ladder.probe.test.ts` carries a pre-committed pacing
+target the rank table does not meet; see §9. 61,839 lines
+across 183 source files, counted 2026-08-22.
 
 ---
 
@@ -58,7 +63,24 @@ across 160 source files, after the audit in §8.
 ## 3. The recurring failure mode
 
 **Instruments that return believable numbers while measuring nothing.** This
-project has produced **23 instances** of it. Recent examples:
+project has produced **28 instances** of it. Recent examples:
+
+- **A diplomatic bar set below the value every game starts at.** Sizing
+  `demandRespect` against the measured distribution of rival respect gave 28,
+  which looked reasonable until `diplomacy.test.ts` refused a demand from a
+  boss on day one — `STARTING_RESPECT_FOR` is **30**. The distribution had been
+  read without reading what it starts at, so a bar "between the median and the
+  75th" was in fact below the floor. Any threshold on a quantity needs its
+  starting value as well as its spread.
+
+- **A supply test that passed before the thing it tested was built.** The
+  generative-events work pre-committed that a career must meet at least eight
+  new memos after day 180, counted by distinct memo **body**. It passed at
+  fifteen — with the generator switched off. Every authored event carries two
+  to four `oneOf` variants, so the same memo about the same man reads as new
+  content three times, and the instrument was measuring the prose rather than
+  the game. Round 14 was not fooled by that and the probe should not have been.
+  Now counted as *situations*: the shape plus who it is about.
 
 - **`refusals.test.ts` missed the whole memo-pricing class, and round 14 paid
   for it.** Every priced memo option put its figure in `hint` and its refusal in
@@ -280,9 +302,276 @@ did not now do, and none has been seen by a blind tester.
   business, three settings, feeding four systems that already existed. The
   default is the old behaviour in every term, so an existing save is untouched.
 
-**All four verified in the live game**, not only in tests. **None has a bot
+**All four verified in the live game**, not only in tests. ~~**None has a bot
 that exercises it**, so every one is invisible to the probes — F7, four times
-over — and round 15 is what is owed.
+over~~ — **the probe now plays them; see F18 to F21 below.** Round 15 is still
+what is owed: a probe can say whether a career meets a system, and only a
+person can say whether meeting it was worth anything.
+
+### Task 1 — the memos the simulation writes for itself
+
+`src/config/eventgen.ts`, `src/sim/eventgen.ts`, `src/sim/memo.ts`, and a second
+draw inside `tickEvents`. Six shapes — a man wants a word, two of your people
+are not speaking, a front is going under, a street has turned, somebody outside
+wants something, a file is moving — each instantiated against a real subject out
+of the state. Verified live: *"A judge has a problem ... Standing with them is
+22; they start owing you above 55"*, with the refusal reading **"You have
+$1,750"** beside a hint still naming the $9,000.
+
+**They do not share the authored pool's slot.** They were appended to
+`EVENT_DEFS` first, which is tidy and was wrong: there is one memo a day, so
+every generated memo cost an authored one, and `scorecard.probe` measured Pacing
+falling from 3.8 to 2.4. Lowering their weights protected pacing and left the
+generator supplying 15% of a career's late novelty. They now draw on a second,
+smaller roll that only runs when the authored pool had nothing — which is
+precisely the hole round 14 fell into.
+
+**Four things this broke, all of them real and all now fixed:**
+
+- **`plea_offer` and five other priced choices had a `disabledReason` and no
+  `cost`.** The field exists so `MemoModal` can re-check at the moment of
+  rendering; without it the memo quoted $30,000 to a boss holding $29,747 and
+  stayed clickable. Pre-existing, surfaced by the extra spending pressure.
+- **The grievance tip had become unreachable.** The memo fired at grievance 45
+  and took the edge off, so nobody reached the tip's bar of 55. The memo now
+  sits at 50 and hearing somebody out no longer moves grievance at all — and
+  the tip came down to 45, because `tips.reach` measures the ceiling an active
+  man actually reaches at 47 to 54 depending on nothing but the seed. **The bar
+  was above what the game produces; the advice was reachable by luck.**
+- **`approach.test` was committing the `advanceDays` trap** that `helpers.ts`
+  documents in its own header, and comparing two worlds on heat that had decayed
+  to zero in both. It now advances properly and compares the high-water mark.
+- **A free answer that quietly ran a front at a quarter capacity forever.**
+  "Run it clean for a while" wrote `b.pressure = 'clean'` and never wrote it
+  back. The dial belongs to the player.
+
+**Two things it cost, and neither was worth reverting for:**
+
+- **`informants.probe` is one world short of its guard** — 29 of 30 rather than
+  30 of 30. Confirmed caused by the generator: with `GEN_CHANCE_PER_DAY` at 0 it
+  passes. The likely mechanism is `gen_paper_moving`, which gives a boss with no
+  representation a way to retain counsel they never had, so in one world in
+  thirty the case never advances and nobody is ever seen to talk. The guard
+  asserts every world leaks. **Left failing rather than weakened** — it is
+  somebody else's instrument and the developer should decide.
+- **The generated half supplies about 30% of the new situations in a career's
+  back half, against a pre-committed third.** Raising the rate from 0.07 to 0.11
+  moved it by one point: the authored pool keeps producing new situations too,
+  because the same memo about a different man counts for them exactly as it
+  counts for these. **The bar stays where it was written.**
+
+**And one scare that was not real.** At 36 seeds, careers reaching Capo fell
+from 16 to 10 with the generator on, which reads as serious damage. At 96 seeds
+it is 34/96 against 29/96 — inside one standard deviation, with the median Capo
+arriving *sooner* (day 99 against 127). Determinism reshuffles everything after
+the first divergent call; 36 careers was not enough sample to tell a five-point
+shift from noise, and two hours went into chasing it.
+
+### Tasks 2 to 5 of the Mafia-boss roadmap
+
+**Task 2 — the front fork (F15) is a teaching problem, not an economy one.**
+The probe reports the gate on a career's first front as **money in 98% of the
+weeks it owns nothing**, and 27 of 36 careers finish flat holding one front.
+What nobody had checked is that the game already answers it: `LENDERS[0]` is a
+man at the back of a restaurant with a $40,000 ceiling, `minRespect: 0`,
+`minBusinesses: 0`, reachable on the first morning. A probe arm that borrows to
+reach a front moves careers past $100,000 from **9/36 to 14/36**, median fronts
+from one to two, and **kills nobody** — careers ending early stayed at zero.
+Seventeen loans across thirty-six careers was all it took, and the bot had to
+be told to do it.
+
+So the repair is visibility, not balance: a new `borrow_a_front` tip, and the
+front-purchase refusal now names the figures. **It used to say "You cannot
+cover the purchase." and stop** — no price, no balance, on the refusal that
+gates the only tap between the dirty economy and the clean one.
+`refusals.test.ts` walked past it because its detector wants a comparison
+against a *named constant* and this one compares against a local.
+
+**Task 3 — F17, measured and mostly opened.** Nothing had ever counted what a
+player can actually press. The answer was: `declare_war`, 99% of weeks, and
+almost nothing else.
+
+      before                                     after
+      sue_for_peace      0/36 careers            9/36
+      offer_tribute     22/36                   22/36
+      demand_tribute     2/36                   12/36
+      propose_alliance   0/36                    3/36
+
+Three separate causes, all of them bars set against distributions nobody had
+plotted. The alliance wanted relationship 40 and $100,000 against a measured
+9 / 20 / 22 and a median best estate of $28,870 — two walls stacked, both sized
+for a career that has already succeeded. Rival respect for the player was
+nearly a constant (29 / 29 / 31) because its target read only strength and
+districts, both the war player's axis and both whole numbers; it now also reads
+cases beaten and street standing, which widened it to 27 / 35 / 54. And the
+settle rate of 1.4 a week meant twenty-one weeks to cross the bar, so a career
+that took its fifth district on day 200 never arrived.
+
+**F5 — improved, and the cause is arithmetic.** The families spent **69% of
+all rival-weeks on `consolidate`** — going quiet — against 7% pressuring
+anybody. Two repairs measured nothing and were reverted: the action weight
+1 → 0.6 moved it to 68%, and `consolidate.heatReduction` 6 → 14 moved it to
+69%. Neither was the term.
+
+The term was money, and the mechanism is a hard gate rather than a score:
+**`scoreExpand` and `scorePressure` both return zero outright when a family
+cannot afford the action**, so a broke family has exactly one option. The
+probe measured them short of the $25,000 a push costs in **49% of all
+rival-weeks**, and `collectIncome` leaves them netting about $4,700 a week once
+upkeep is paid — five weeks of saving per shove.
+
+Two changes. The flat 0.45 "broke" bonus in `scoreConsolidate` is now
+proportional to the shortfall, so a family a dollar short is no longer treated
+as destitute. And `pressure.cost` came down from 25,000 to 20,000 — the price
+of the one action the player actually feels, and the only figure in that
+balance sheet that was safe to move: the upkeep was tuned against a measured
+$137M-after-thirty-years problem and its own comment records what happens when
+a family is left with nothing.
+
+    consolidate  69% → 61%      pressure  7% → 9%      diplomacy  2% → 9%
+    broke weeks  49% → 27%      careers where a family leaves Neutral  25 → 31
+
+**It is improved, not closed.** 12,000 works better on the families —
+consolidate 42%, pressure 18% — and `broke.probe` fails on it, because rivals
+leaning on the player that hard compresses its three hiring policies into each
+other. The four values measured are in the comment on `pressure.cost`. The next
+hypothesis is the balance sheet itself, and it needs the developer, because the
+last person to tune it left a comment saying why.
+
+**And the rival fix costs the ladder.** `scorecard.probe`'s Pacing axis went
+from 3.7 to 2.7 as pressure rose, for a plain reason: a world with active
+rivals is harder to climb in, the bot's rank stalls earlier, and "firsts" in
+that probe are ranks and first-time job kinds. That is the same finding as the
+Capo pre-commit, measured from the other end. **Whether rival activity is worth
+ladder speed is a question for a round, not for a probe.**
+
+**Task 4 — Authority.** `config/authority.ts`, `sim/authority.ts`. A derived
+reading like `estate` and `legitimacy`, never stored, over four terms: what the
+crew think of you, whether they are afraid to test it, what they are carrying
+against you, and whether your word has held. **One mechanical consumer**, and
+it replaces the missing half of a term that already existed — a steward
+deciding whether to skim asked what he was paid and what he was carrying, and
+never asked whether anybody was counting. Measured: six worlds, forty weeks,
+three districts each — **$0 skimmed under a boss who is obeyed against $3,554
+under one who is not.**
+
+**Task 5 — the Boss's personal life.** `config/personal.ts`,
+`sim/personal.ts`. A home district, three people, and one number: neglect. Its
+only consequence is that a boss who is never home is easier to depose, which is
+`succession.ts`'s own description of the one way out of the chair that is
+entirely the player's doing. The pull toward home arrives as a memo with a name
+in it rather than as a bar to top up.
+
+Three things it cost, all found and fixed:
+
+- **The household is not made of `Npc`s**, and that was deliberate — an `Npc`
+  gets assigned to jobs, paid a wage, and listed on the crew sheet, so reusing
+  the type would have put the whole family on the payroll.
+- **The memo was permanently eligible.** Every other generated shape needs a
+  state that comes and goes; the house is always there. At the same weight as
+  the rest it made the generated draw stop ever coming up empty and
+  `scorecard.probe` put Pacing back under its floor at 2.2. Weight 2, cooldown
+  30 days, and gated at the neglect where the penalty starts: 3.3.
+- **"Carla, your son."** The name pool is deliberately mixed and the relation
+  labels were not. `voice.test.ts` hunts gendered *pronouns* and these were
+  nouns, so it walked past. The labels now say the relation rather than the
+  person — "the one you married", "your youngest" — which is both correct and
+  better writing, and `personal.test.ts` guards it.
+
+### The two Mafia-boss pre-commits, and how they were met
+
+Both were written during the build, both failed, and neither was moved.
+
+**The generated half now supplies 35% of a career's late situations**, against
+a pre-committed third. It got there by doing more of the thing the bar
+measures rather than by lowering it: three more shapes, each needing a state
+that comes and goes — somebody of yours in a cell, a steward whose district is
+earning more than it hands over, and a name the whisper feed has now brought
+you twice. That last one is the only place in the game that reads a
+corroborated whisper and asks the player to decide about it, and it still does
+not say whether the whisper is true.
+
+Ten shapes rather than seven also **improved Pacing** in the four-year probe
+rather than costing it — 3.1 to 3.7 — because the generated half only draws on
+days the authored pool has nothing, and more shapes means fewer of those days
+come up empty.
+
+**A door is open to a career that is not at war in 19 careers of 36**, against
+a pre-committed half. `demandRespect` came to the median of the measured
+distribution rather than the 75th, for the reason the police captain's bar did:
+it is the only door a peaceful career has. The alliance price came down twice
+more, because the measurement kept saying the money was still the binding gate
+— standing is bought by paying tribute, and tribute cost almost exactly what
+the alliance did, so the two conditions were being bought out of the same pot
+and never held at once.
+
+### F18 to F21 — the first measurement of the Mafia-boss systems
+
+`ladder.probe.test.ts` gained two things: a weekly read of all five systems
+against the population that already existed, and a second population of 36
+careers on the same seeds whose bot actually spends favours and turns the dial.
+The read is derivation-only — `readWhispers`, `civicRead`, `legitimacy` and
+`careerShape` never touch `rng`, which is now asserted by its own test and was
+confirmed by running the probe either side of the change: **every ladder number
+is identical.**
+
+- **Whispers work.** 36/36 careers hear something, median 13 distinct claims
+  over 300 days, something on the desk in 98% of weeks, mean stated confidence
+  63%. The one system of the five that measured healthy on its first contact
+  with an instrument.
+
+- **F18 — two of the four civic figures were misconfigured against quantities
+  nobody had measured. FIXED.**
+
+      before                                    after
+      captain   owed in 30/36                   30/36
+      union     owed in 14/36                   14/36
+      judge     owed in 36/36  ← a fixture      15/36
+      alderman  owed in  0/36  ← dead content   21/36
+
+  The judge watched `100 - notoriety`, and **peak notoriety across a 300-day
+  career is 3** — so the reading was 97 every week of every game and the figure
+  owed the entire population regardless of play. It now also reads the strongest
+  live case against you, weighted by `CIVIC.discretionCaseWeight`, which is a
+  number that actually moves.
+
+  The alderman's bar was 60 against a mean public feeling of **38**, best week
+  46. Not demanding — outside the range of the quantity it was set against.
+  Now 45.
+
+- **F19 — "The Legitimate Boss" was the verdict on 61% of careers. FIXED.**
+  `legitimateAbove` was 55; measured legitimacy runs 63 / 66 / 73 across the
+  population, so the bar sat *below the median career*. Raised to 72, just under
+  the 75th. Shapes went from five names with 22/36 on one, to six names with
+  13/36 on the largest. **This is the horoscope failure `config/legacy.ts` has a
+  test against, arriving at a level no single-career test could see.**
+
+- **F20 — the pressure dial's two off-centre settings are close to mutually
+  exclusive.** Across 1,498 career-weeks the active bot asked for `clean` 915
+  times, `normal` 554, and `hard` **29**. Wanting to wash hard requires dirty
+  money backing up, and having dirty money means heat — so the setting that
+  moves the most money is gated behind a state the game rarely lets you be in.
+  Not yet fixed; it is a balance question and it needs the round.
+
+- **F21 — using the two operable systems is close to free, and close to
+  worthless.** Same seeds, same bot, plus favours and the dial:
+
+      estate       32,978 → 33,017
+      heat-weeks    2,571 →  2,337   (-9%)
+      laundered    37,557 → 22,235   (-41%)
+      legitimacy       66 →     61
+
+  296 favours spent and 235 dial turns bought a 9% reduction in heat for 41% of
+  the laundering and no change in the estate. **A system a competent player can
+  use all game for no net result is decoration**, and this is the first number
+  anybody has had on it.
+
+- **Instance 26 of §3, self-caught before it was reported.** The first version
+  of the civic readout printed the *maximum* standing over the four figures and
+  reported 99 for every career, which reads as "the network saturates". It
+  established only that one of the four got there — and the four were in
+  opposite states, one unreachable and one universal. A max over a population is
+  not a measurement of that population.
 
 - **The favour network — FIRST SLICE BUILT, unmeasured.** `config/civic.ts`,
   `sim/civic.ts`, and a panel at the top of The City. Four figures — a police

@@ -11,7 +11,7 @@
 
 import { Rng, clamp } from './rng';
 import type { Business, GameState, Territory } from './types';
-import { addEvidence, addLog, nextId } from './util';
+import { addEvidence, addLog, formatMoney, nextId } from './util';
 import { canAfford, earnClean, spend, weeklyWageBill } from './economy';
 import { trainAttribute } from './player';
 import { addHeat } from './heat';
@@ -345,8 +345,29 @@ export function canAcquire(
      earnings put away would be told it could not afford the thing that money
      exists to buy.
   */
-  if (state.org.cash + state.org.dirtyCash + (state.org.holdings ?? 0) < cost) {
-    return { ok: false, reason: 'You cannot cover the purchase.', cost };
+  /*
+     And it names both halves of the subtraction.
+
+     This said "You cannot cover the purchase." and stopped — no price, no
+     balance, on the refusal that gates the only tap between the dirty economy
+     and the clean one. `refusals.test.ts` walked past it for the same reason
+     it walked past the memo pricing: its detector wants a comparison against a
+     *named constant*, and this one compares against a local. A scanner that
+     reads guards cannot see a guard whose bar is a variable.
+
+     The shortfall is spelled out rather than left as arithmetic, because it is
+     the number that decides whether the answer is "wait a fortnight" or "go
+     and borrow it" — and somebody on Delacroix will lend against nothing.
+  */
+  const inHand = state.org.cash + state.org.dirtyCash + (state.org.holdings ?? 0);
+  if (inHand < cost) {
+    return {
+      ok: false,
+      reason:
+        `${def.name} in ${territoryDef(t.id).name} is ${formatMoney(cost)} and you have ` +
+        `${formatMoney(inHand)} — ${formatMoney(cost - inHand)} short.`,
+      cost,
+    };
   }
   return { ok: true, reason: null, cost };
 }
