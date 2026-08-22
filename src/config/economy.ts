@@ -442,8 +442,46 @@ export const ATTRIBUTE_MAX = 20;
  * the door, not walk through it.
  */
 export const INFLUENCE_FROM = {
-  /** Per week on a real retainer, scaled by how serious the firm is. */
-  counselPerWeek: 0.12,
+  /*
+     Per week on a real retainer, scaled by how serious the firm is.
+
+     This was 0.12, which against a cost curve of `3 + current * 1.6` put the
+     patron's bar of 9 about thirteen years away. Four blind rounds never saw a
+     player exceed 2, and round 13 kept the top tier at $5,863 a week for a
+     career and finished at 0. The comment above this one already recorded one
+     failed attempt to unwall this attribute; that attempt added the approach
+     credit, and the approach is measured shut — see below.
+
+     Sized against the 300-day window per HANDOFF section 5, not against the
+     four-year probe. Measured over 36 careers, influence at day 300 as
+     40th / median / 75th:
+
+         0.12   0 / 0 / 3        the reported state
+         1.2    2 / 3 / 6
+         2.4    4 / 5 / 9        the door opens for the median career
+
+     All three re-measured under the final probe. An earlier version of this
+     table was taken while the bot was also paying $25,000 courtesies, which
+     moved the economy underneath it — the numbers here are the ones the
+     shipped instrument produces.
+
+     The pre-committed target in `ladder.probe` is a median of 4 to 8: the
+     career that keeps counsel opens one political door and still has to work
+     for city hall. The median lands on 5 and the top quartile reaches 9, so a
+     career that invests hard in representation does get to city hall — which
+     is the shape wanted, and is a distribution rather than a guarantee.
+
+     **What this does not fix, and it is the larger half.** Both diplomatic
+     routes are closed to an ordinary career, measured rather than assumed. The
+     free demand is refused every time with "you lead them by -72 strength and
+     would need 15 — or 55 standing, against 29", and the paid courtesy wants
+     $25,000 spare in an economy where the bot is money-blocked in 97% of its
+     idle weeks. So this number is carrying a vertical it should be sharing,
+     and the consequence is that a boss who is never investigated keeps no
+     lawyer and earns no pull at all. That is backwards and it is the next
+     finding, not this one.
+  */
+  counselPerWeek: 2.4,
   /** Per diplomatic approach that is made and paid for, refused or not. */
   approach: 0.6,
   /*

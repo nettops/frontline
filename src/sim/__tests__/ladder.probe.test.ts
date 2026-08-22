@@ -53,7 +53,14 @@ import {
 import { claimStrength, eligibleHeirs, heirOf, nameHeir } from '../succession';
 import { CLAIM } from '../../config/succession';
 import { estate } from '../estate';
-import { atWar, bond, factionStrength, playerStrength } from '../diplomacy';
+import {
+  atWar,
+  bond,
+  canDo,
+  doDiplomacy,
+  factionStrength,
+  playerStrength,
+} from '../diplomacy';
 import { CASE_CLOSED_BELOW, type LawyerLevel } from '../../config/lawEnforcement';
 import { retainLawyer, weeklyLegalCost } from '../investigation';
 import { AI, RIVAL_IDS } from '../../config/factions';
@@ -859,6 +866,42 @@ function climb(seed: number, days: number): Climb {
         else if (want !== 'none') legalWeeks++;
       } else if (want !== 'none') {
         legalWeeks++;
+      }
+    }
+
+    /*
+       Talk to the other families.
+
+       F7, named directly. No instrument in this project had ever made a
+       diplomatic approach, so half of the Influence economy was invisible to
+       every measurement ever taken here — and Influence is the attribute four
+       blind rounds have reported not understanding. A rate tuned against a bot
+       that only ever pulls one of the two taps is tuned against a player who
+       does not exist.
+
+       The free demand only. A first version also paid `offer_tribute` when the
+       money looked spare, and that is not a play a boss makes — $25,000 for
+       0.6 of an attribute — so it was distorting the thing it was added to
+       measure: careers that compounded fell from 12 in 36 to 8 because the
+       treasury was going on courtesies instead of fronts.
+
+       `doDiplomacy` credits pull on the approach whether or not they say yes,
+       and the credit is rate-limited per family, so asking every week costs
+       nothing and buys nothing extra.
+
+       **The measurement this produced is that the door is shut.** Every refusal
+       across 36 careers is the same sentence — "you lead them by -72 strength
+       and would need 15 — or 55 standing with them, against 29" — for all 300
+       days. Which is F5 wearing another hat: the player is 40 to 80 strength
+       behind every rival for the whole game.
+
+       Not attempted during a war — `canDo` refuses it anyway, and asking is
+       how the bot would learn a rule the player already knows.
+    */
+    if (state.day % 7 === 0) {
+      for (const id of RIVAL_IDS) {
+        if (atWar(state, 'player', id)) continue;
+        if (canDo(state, 'demand_tribute', id).ok) doDiplomacy(state, rng, 'demand_tribute', id);
       }
     }
 
@@ -1890,6 +1933,30 @@ describe('the ladder, over the 300 days a person plays', () => {
 
     expect(reached('boss').length, 'Boss is out of reach in a human career').toBeGreaterThanOrEqual(8);
     expect(medianDay('boss'), 'Boss arrives too late').toBeLessThanOrEqual(285);
+  });
+
+  /*
+     Influence, pre-committed before the rate was touched.
+
+     Four rounds have never seen a player above 2, and after the two supply
+     defects were fixed the median career still ended on 0. The bar that
+     matters is 5 — a task-force contact, the first political door that is not
+     already open — and 9 is the patron, which should stay something a career
+     works toward rather than passes through.
+
+     So: the median career opens one door and does not reach city hall. Both
+     ends are asserted, because a rate raised until everything unlocks has not
+     fixed the vertical, it has deleted it.
+
+     This is a target for `INFLUENCE_FROM`, not a threshold on the instrument.
+     DIRECTOR section 5 forbids moving it to make the config pass.
+  */
+  it('lets a career that keeps counsel and talks reach the first political door', () => {
+    const pull = RUNS_300.map((r) => r.pull);
+    const mid = median(pull);
+
+    expect(mid, 'the median career still cannot open anything').toBeGreaterThanOrEqual(4);
+    expect(mid, 'the patron has stopped being something you work toward').toBeLessThanOrEqual(8);
   });
 
   /*
