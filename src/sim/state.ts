@@ -47,7 +47,6 @@ import {
   STARTING_CASH,
   STARTING_DIRTY_CASH,
   STARTING_FEAR,
-  STARTING_INFLUENCE,
   STARTING_RESPECT,
 } from '../config/economy';
 
@@ -258,7 +257,6 @@ export function newGame(opts: NewGameOptions): GameState {
       // the one thing a sandbox position does not hand over — it is bought
       // with specific acts, and a starting position has not committed any.
       fear: STARTING_FEAR,
-      influence: STARTING_INFLUENCE,
       heat: 0,
       heatBy: newHeatChannels(),
       quietDays: 0,

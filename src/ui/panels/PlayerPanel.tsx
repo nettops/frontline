@@ -148,7 +148,20 @@ export default function PlayerPanel() {
 
         <Panel title="Standing">
           <KeyValue label="Respect" value={Math.floor(org.respect)} />
-          <KeyValue label="Influence" value={Math.floor(org.influence)} />
+          {/*
+             Influence used to sit here, reading `org.influence` — a field
+             initialised to STARTING_INFLUENCE and never assigned again
+             anywhere in the game. It was a constant zero with top billing,
+             a few rows above the *attribute* of the same name, which is what
+             every gate in the game actually reads and which appears below
+             with the progress bar that says how to move it.
+
+             Two numbers, one label, one screen, and the prominent one could
+             not be changed. Four rounds reported not understanding Influence;
+             round 13 called it "one attribute I had no idea how to train".
+             Removed rather than repointed: the real one is already on this
+             page and carries more.
+          */}
           <KeyValue label="Operations completed" value={player.opsCompleted} tone="good" />
           <KeyValue label="Operations failed" value={player.opsFailed} tone="hot" />
           <KeyValue label="People you can command" value={rank.maxCrew} />
