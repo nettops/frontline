@@ -118,7 +118,7 @@ export const CIVIC_FIGURES: CivicFigureDef[] = [
     id: 'alderman',
     title: 'Somebody in office',
     blurb:
-      'The building takes their calls. Replaces the anonymous arrangement the City screen used to sell for $120,000.',
+      'The building takes their calls. The same arrangement the City screen sells for money, reached the other way.',
     watches: 'standing',
     grants: 'lose_the_paperwork',
     owesAbove: 60,
