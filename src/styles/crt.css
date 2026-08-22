@@ -1,0 +1,435 @@
+/* =========================================================================
+   The CRT skin — an IBM DOS terminal.
+
+   Loaded always, applies only under [data-skin='crt'] on <html>. See
+   ui/skin.ts. The default ledger look is untouched by anything in this file.
+
+   Three layers, in the order they matter:
+
+     1. tokens    the CGA palette, swapped in at :root
+     2. chrome    the handful of places where a web idiom has to become a
+                  text-mode one — square corners, box borders, a DOS dialog
+     3. the tube  scanlines, shadow mask, bloom, vignette, sync roll
+
+   Nothing here was ported from cool-retro-term. Its effects are GLSL shaders
+   under GPL2/3 and this project is not GPL, so lifting them would relicense
+   the game. These are written from the same physics and a lot of squinting.
+   ========================================================================= */
+
+/* -------------------------------------------------------------- the font ---
+
+   The one thing CSS cannot fake. Real VGA text is a 9x16 bitmap and no vector
+   monospace has those glyphs.
+
+   The rule below points at a file that is not in the repository, and the
+   decision is that it stays that way. Px437_IBM_VGA_8x16.woff2 comes from the
+   Ultimate Oldschool PC Font Pack under CC BY-SA 4.0, and CC BY-SA is a
+   share-alike licence: vendoring it means carrying its attribution and its
+   terms alongside a project that is otherwise not share-alike, which is a real
+   obligation to take on for one skin's worth of extra correctness.
+
+   So it is opt-in rather than absent-by-oversight. If it is missing the browser
+   falls through to the next family in the stack and the skin still works;
+   `font-display: swap` means the absence costs nothing at all. Anybody who
+   wants the exact 9x16 bitmap drops the file into public/fonts/ and takes on
+   the attribution themselves, with no code change.
+   -------------------------------------------------------------------------- */
+
+@font-face {
+  font-family: 'Px437 IBM VGA';
+  src: url('/fonts/Px437_IBM_VGA_8x16.woff2') format('woff2');
+  font-display: swap;
+  font-weight: normal;
+  font-style: normal;
+}
+
+/* ------------------------------------------------------------- 1. tokens ---
+
+   The IBM CGA/EGA text palette, which is not an aesthetic choice but fixed
+   hardware: 0x00 / 0x55 / 0xAA / 0xFF per channel and nothing between. That is
+   why DOS software looks the way it does, and why using approximations of
+   these values reads as a filter rather than as a machine.
+
+   The mapping onto the game's own semantic slots is one-to-one with nothing
+   left over, which is the whole reason this skin is sixty lines rather than a
+   rewrite. The game already needed exactly: a ground, three text weights, a
+   money colour, a danger colour, a good colour, and a cold institutional
+   colour. CGA has exactly those.
+   -------------------------------------------------------------------------- */
+
+:root[data-skin='crt'] {
+  /*
+     Surfaces. A text-mode screen has one background and it is black; the panel
+     hierarchy that the ledger skin carries in five shades of brown has to move
+     into the borders instead. These are not all #000 only because a completely
+     flat black loses the sense of a raised card entirely — the differences are
+     a couple of points and do most of their work at the edges.
+  */
+  --ink-900: #000000;
+  --ink-850: #000000;
+  --ink-800: #040404;
+  --ink-700: #0a0a0a;
+  --ink-600: #101010;
+  --line: #555555;
+  --line-soft: #2a2a2a;
+
+  /* Three text weights, and CGA gives exactly three greys. No interpolation. */
+  --text: #aaaaaa;
+  --text-dim: #7d7d7d;
+  --text-faint: #555555;
+
+  --brass: #ffff55;
+  --brass-bright: #ffffff;
+  --brass-dim: #aa5500;
+
+  --stamp: #ff5555;
+  --stamp-bright: #ff5555;
+  --stamp-deep: #aa0000;
+
+  --ok: #55ff55;
+  --ok-dim: #00aa00;
+
+  --carbon: #55ffff;
+  --carbon-dim: #00aaaa;
+
+  /*
+     The memo.
+
+     In the ledger skin this is paper — the only light surface in the game,
+     used where the game hands you a document. A sheet of paper on a phosphor
+     tube is nonsense, so it becomes the other thing a 1980s screen did when it
+     needed your attention: a Turbo Vision dialog. Blue ground, white text,
+     cyan rule. It is a better fit than the paper was, because a modal in DOS
+     genuinely was a different kind of object rather than a lighter one.
+  */
+  --paper: #0000aa;
+  --paper-edge: #55ffff;
+  --paper-rule: #5555ff;
+  --paper-ink: #ffffff;
+  --paper-faint: #aaaaaa;
+
+  /* One family for everything. A terminal has no display face. */
+  --font-display: 'Px437 IBM VGA', 'Cascadia Mono', Consolas, 'DejaVu Sans Mono',
+    ui-monospace, monospace;
+  --font-ui: var(--font-display);
+  --font-mono: var(--font-display);
+
+  --radius: 0px;
+
+  /* The phosphor itself, used by the bloom and the tube below. */
+  --phosphor: rgba(190, 190, 190, 0.45);
+}
+
+/* ------------------------------------------------------------- 2. chrome ---
+
+   Everywhere a web idiom has to become a text-mode one. Deliberately short:
+   the layout stays flex and grid, because an eighty-column character grid is
+   an information architecture rather than a skin and this game's density
+   truncates in it rather than reflowing.
+   -------------------------------------------------------------------------- */
+
+:root[data-skin='crt'] body {
+  background: #000;
+  /*
+     Aliased type. A bitmap font has no antialiasing and neither did the
+     hardware; smoothing is most of what makes a vector monospace read as a
+     web page rather than as a terminal.
+  */
+  -webkit-font-smoothing: none;
+  -moz-osx-font-smoothing: unset;
+  font-smooth: never;
+  /*
+     Phosphor bloom, inherited rather than applied per component. One shadow
+     declaration on the body reaches every text node in the app; forty
+     declarations would reach the same nodes and be forty things to keep in
+     sync.
+  */
+  text-shadow: 0 0 1px var(--phosphor), 0 0 7px var(--phosphor);
+}
+
+/* Square everything. There is not a rounded corner in text mode. */
+:root[data-skin='crt'] .panel,
+:root[data-skin='crt'] .btn,
+:root[data-skin='crt'] .memo,
+:root[data-skin='crt'] .bar,
+:root[data-skin='crt'] .bar-fill,
+:root[data-skin='crt'] input,
+:root[data-skin='crt'] .chip {
+  border-radius: 0;
+}
+
+/*
+   Panels become boxes.
+
+   A single-pixel border in the line grey is as close as CSS gets to ┌─┐ without
+   moving to a character grid, and at the scanline pitch below it reads as one.
+   The shadow goes: a tube does not cast one.
+*/
+:root[data-skin='crt'] .panel {
+  border: 1px solid var(--line);
+  box-shadow: none;
+}
+
+/*
+   Selection is inverse video, not a tint.
+
+   The DOS convention, and it is better here than the ledger skin's highlight
+   because a phosphor screen has no third colour to tint with — you have the
+   foreground, the background, and swapping them.
+
+   The descendant selector is not optional. Every cell in this game wraps its
+   content in spans carrying their own colour — `.faint`, `.dim`, `.brass` —
+   so setting the colour on the `td` alone paints a light bar and leaves the
+   text on it exactly the grey it already was. Caught on the Rivals table,
+   where the selected row was legible only by the fact that it had moved.
+*/
+:root[data-skin='crt'] tr.selected td,
+:root[data-skin='crt'] .clickable.selected td {
+  background: var(--text);
+  text-shadow: none;
+}
+
+/*
+   `!important` here, and only here.
+   
+   The family name in this table carries its house colour as an *inline* style,
+   because which house sits in a slot is drawn per seed and therefore data
+   rather than CSS. Inline styles beat every selector, so on the inverse bar
+   the Sokolov Group stayed #6d6f8c on #aaaaaa — a contrast ratio of about 1.7
+   and effectively invisible. This is the case the keyword exists for:
+   overriding a style that is generated at runtime and cannot be reached any
+   other way.
+*/
+:root[data-skin='crt'] tr.selected td,
+:root[data-skin='crt'] tr.selected td *,
+:root[data-skin='crt'] .clickable.selected td,
+:root[data-skin='crt'] .clickable.selected td * {
+  color: #000 !important;
+  text-shadow: none;
+}
+
+/* Bars become blocks. ▓ against ░ is what a DOS progress bar actually was. */
+:root[data-skin='crt'] .bar {
+  background: #000;
+  border: 1px solid var(--line-soft);
+}
+
+:root[data-skin='crt'] .bar-fill {
+  box-shadow: 0 0 6px currentColor;
+}
+
+/*
+   The memo, as a dialog.
+
+   Double border in cyan, which is the Turbo Vision signature, and none of the
+   paper skin's rotation or landing animation — paper lands on a desk, a dialog
+   is simply there on the next frame.
+*/
+:root[data-skin='crt'] .memo {
+  border: 3px double var(--paper-edge);
+  box-shadow: 8px 8px 0 rgba(0, 0, 0, 0.55);
+  animation: none;
+}
+
+:root[data-skin='crt'] .memo-head {
+  border-bottom: 1px solid var(--paper-edge);
+}
+
+:root[data-skin='crt'] .memo-backdrop {
+  /* The classic half-tone wash a DOS dialog put over the screen behind it. */
+  background: rgba(0, 0, 0, 0.72);
+}
+
+:root[data-skin='crt'] .memo,
+:root[data-skin='crt'] .memo * {
+  text-shadow: none;
+}
+
+/* --------------------------------------------------------------- 3. tube ---
+
+   One fixed element, rendered by App above everything and inert to the
+   pointer. Every layer is a gradient on a composited surface, so the cost is a
+   single extra layer for the whole application rather than anything per-panel.
+   -------------------------------------------------------------------------- */
+
+.tube {
+  display: none;
+}
+
+:root[data-skin='crt'] .tube {
+  display: block;
+  position: fixed;
+  inset: 0;
+  z-index: 900;
+  pointer-events: none;
+}
+
+/*
+   Scanlines and the shadow mask.
+
+   Horizontal lines at the scanline pitch; vertical triads at the aperture
+   pitch. The vertical stripe is 3px rather than 1px because a one-pixel
+   repeat aliases into visible moiré on any display that is not exactly 1:1,
+   which is most of them.
+*/
+.tube::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    repeating-linear-gradient(
+      to bottom,
+      rgba(0, 0, 0, 0) 0px,
+      rgba(0, 0, 0, 0) 2px,
+      rgba(0, 0, 0, 0.26) 3px,
+      rgba(0, 0, 0, 0.26) 4px
+    ),
+    repeating-linear-gradient(
+      to right,
+      rgba(255, 60, 60, 0.04) 0px,
+      rgba(60, 255, 60, 0.04) 1px,
+      rgba(60, 60, 255, 0.04) 2px,
+      rgba(0, 0, 0, 0) 3px
+    );
+}
+
+/*
+   The glass and the vignette.
+
+   The soft patch at the top left is the room reflected in the tube, and it is
+   most of what stops a black rectangle reading as a black rectangle. The
+   vignette does the work that real curvature would: there is no barrel warp
+   here, because displacing live text through an SVG filter turns 12px glyphs
+   into mush.
+
+   The second reason is an observation rather than a technique — every terminal
+   emulator of this kind, run rather than remembered, curves far less than the
+   memory of one does. That is a note about how the effect *looks* on screen,
+   not about how anybody else achieves it: see the licence note at the top of
+   this file. Nothing here was read off somebody else's shader.
+*/
+.tube::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(140% 100% at 20% 6%, rgba(255, 255, 255, 0.045), transparent 42%),
+    radial-gradient(120% 120% at 50% 50%, transparent 55%, rgba(0, 0, 0, 0.55) 100%);
+}
+
+/*
+   The slow vertical sync roll. One faint band, nine seconds a pass — the
+   artifact you only notice once you have been looking at a tube for a while,
+   which is exactly how often it should be noticeable.
+*/
+.tube-roll {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: -22%;
+  height: 22%;
+  background: linear-gradient(
+    rgba(255, 255, 255, 0) 0%,
+    rgba(255, 255, 255, 0.03) 50%,
+    rgba(255, 255, 255, 0) 100%
+  );
+  animation: tube-roll 9s linear infinite;
+}
+
+@keyframes tube-roll {
+  from { transform: translateY(0); }
+  to { transform: translateY(560%); }
+}
+
+/* Mains hum in the brightness. Four frames in five and a half seconds. */
+:root[data-skin='crt'] .app {
+  animation: tube-flicker 5.5s steps(1) infinite;
+}
+
+@keyframes tube-flicker {
+  0%, 96% { opacity: 1; }
+  97% { opacity: 0.965; }
+  98% { opacity: 1; }
+  99% { opacity: 0.98; }
+}
+
+/*
+   Everything above that moves, turned off for anyone who asked.
+
+   The roll and the flicker are the two things in this skin that animate
+   forever with no user action behind them, which is precisely the category
+   prefers-reduced-motion exists for. The static layers stay: they are the
+   skin, not the motion.
+*/
+@media (prefers-reduced-motion: reduce) {
+  .tube-roll,
+  :root[data-skin='crt'] .app {
+    animation: none;
+  }
+  .tube-roll { display: none; }
+}
+
+/* ------------------------------------------------- 4. the width problem ---
+
+   A terminal font is wider than a UI sans, and by more than it looks: measured
+   in the running app, 'Warehouse District' is 1.27x wider in Cascadia Mono
+   than in Segoe UI at the same size. Everywhere the layout reflows that costs
+   nothing, which is most of the game. Two places it does not.
+
+   Correcting globally would mean scaling type to 0.79 and reading a strategy
+   game at ten pixels, so it is corrected where it actually bites instead.
+   -------------------------------------------------------------------------- */
+
+/*
+   The map is SVG with a fixed viewBox, so the district names are at fixed
+   coordinates inside cells that cannot grow — a wider glyph does not wrap, it
+   leaves the box. The names are set to fit the narrowest cell at 1.27x.
+*/
+:root[data-skin='crt'] .map-name {
+  font-size: 10px;
+  letter-spacing: 0;
+}
+
+:root[data-skin='crt'] .map-meta {
+  font-size: 8px;
+  letter-spacing: 0.02em;
+}
+
+:root[data-skin='crt'] .map-key {
+  letter-spacing: 0.04em;
+}
+
+/*
+   Uppercase mono at wide tracking is the other casualty: every small caps
+   label in the game was letter-spaced for a sans, and a monospace face is
+   already carrying that spacing in the advance width. Doubling it turns
+   section headers into something you read one letter at a time.
+*/
+:root[data-skin='crt'] .panel-title,
+:root[data-skin='crt'] .statbar-key,
+:root[data-skin='crt'] th,
+:root[data-skin='crt'] .tiny,
+:root[data-skin='crt'] .rail-group {
+  letter-spacing: 0.04em;
+}
+
+/*
+   Tables get one notch smaller. They are the densest thing in the game and the
+   only place where 1.27x turns a comfortable row into a horizontal scroll.
+*/
+:root[data-skin='crt'] table.data {
+  font-size: 12px;
+}
+
+/*
+   The one control the browser draws for us.
+
+   Range inputs — the arms sale and the loan amount — render with the user
+   agent's accent, which is a blue nothing else on this screen uses and the
+   only thing in the skin that was still obviously a web page. `accent-color`
+   is a one-line answer that leaves the native keyboard behaviour alone, which
+   is worth more here than a hand-built slider would be.
+*/
+:root[data-skin='crt'] input[type='range'] {
+  accent-color: var(--text);
+}

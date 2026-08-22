@@ -1,0 +1,10 @@
+node_modules
+dist
+*.local
+.DS_Store
+
+# Build artefacts
+tsconfig.tsbuildinfo
+
+# Local Claude Code state, if it ever appears
+.claude/settings.local.json

@@ -1,0 +1,321 @@
+/**
+ * Law-enforcement attention.
+ *
+ * Heat is deliberately sticky: it decays slowly, decays slower the higher it
+ * is, and only decays at all after consecutive quiet days. You cannot idle
+ * your way down from 80 — you have to actively change how you operate.
+ */
+
+export interface HeatTier {
+  min: number;
+  max: number;
+  name: string;
+  /** Multiplies the base decay rate. High heat barely bleeds off. */
+  decayMultiplier: number;
+  /** Percentage points subtracted from operation success at this tier's peak. */
+  description: string;
+}
+
+export const HEAT_TIERS: HeatTier[] = [
+  {
+    min: 0,
+    max: 10,
+    name: 'Quiet',
+    decayMultiplier: 1.0,
+    description: 'Nobody is looking at you.',
+  },
+  {
+    min: 11,
+    max: 25,
+    name: 'Suspicious',
+    decayMultiplier: 0.85,
+    description: 'A name in a file somewhere. Nothing more.',
+  },
+  {
+    min: 26,
+    max: 40,
+    name: 'Investigating',
+    decayMultiplier: 0.7,
+    description: 'Someone has been assigned to you.',
+  },
+  {
+    min: 41,
+    max: 60,
+    name: 'Major Investigation',
+    decayMultiplier: 0.55,
+    description: 'Resources are being spent. Your people are being watched.',
+  },
+  {
+    min: 61,
+    max: 80,
+    name: 'Intensive Task Force',
+    decayMultiplier: 0.42,
+    description: 'A dedicated unit. Surveillance. Pressure on your weakest links.',
+  },
+  {
+    min: 81,
+    max: 92,
+    name: 'Organization Under Siege',
+    decayMultiplier: 0.32,
+    description: 'They are coming. The only question is who talks first.',
+  },
+  /*
+     The last stretch reads differently, because it used to read the same.
+
+     81 to 100 was one band with one name, one description and one decay rate,
+     and the number itself clamps at 100 — so a player at 96 saw exactly what a
+     player at 82 saw, and every further mistake changed nothing on screen. A
+     round-7 tester described heat as going inert near the top, which is what a
+     gauge with no travel left looks like from the outside.
+
+     Splitting the band costs nothing mechanically at 81-92 and gives the last
+     eight points somewhere to say so. The decay is lower again, which is the
+     honest continuation of a curve that has been falling the whole way up.
+  */
+  {
+    min: 93,
+    max: 100,
+    name: 'Nothing Left To Watch',
+    decayMultiplier: 0.22,
+    description:
+      'Every room you use is known and every name on your payroll is written down. This does not get worse. It only ends.',
+  },
+];
+
+/**
+ * Which tier a reading falls in — by floor alone, because heat is not an integer.
+ *
+ * This matched `heat >= t.min && heat <= t.max` against ranges written as whole
+ * numbers (0-10, 11-25, 26-40 ...) while `org.heat` is a sum of three floating
+ * channels. Every value in a gap — 10.4, 25.6, 40.2, 60.8, 80.5 — matched no
+ * tier at all and fell through to the `?? HEAT_TIERS[0]` at the end, which is
+ * *Quiet*, the bottom of the scale.
+ *
+ * Round 9's tester found it from the outside and correctly called it
+ * impossible: their log read `Attention on the organization has risen: Quiet.`
+ * on a day the Overview said `INVESTIGATING · 28/100`, and twice in one day.
+ * `addHeat` only writes that line when the tier name changes, so a reading that
+ * flickers into Quiet and back manufactures two announcements out of nothing
+ * happening. The same lookup feeds the stat bar's tooltip, so the description
+ * under the number was wrong on those days too.
+ *
+ * Taking the last tier whose floor the reading has passed has no gaps by
+ * construction. `max` stays on the table because it is what the panels print.
+ */
+export function heatTier(heat: number): HeatTier {
+  const clamped = Math.max(0, Math.min(100, heat));
+  let tier = HEAT_TIERS[0];
+  for (const t of HEAT_TIERS) {
+    if (clamped >= t.min) tier = t;
+  }
+  return tier;
+}
+
+/** Base points bled off per quiet day, before tier and difficulty scaling. */
+export const HEAT_DECAY_PER_DAY = 1.1;
+
+/** Days of no heat-generating activity before decay starts at all. */
+export const QUIET_DAYS_BEFORE_DECAY = 2;
+
+/**
+ * What an organization makes go away on its own, every day, working or not.
+ *
+ * The gate above has a consequence nobody intended. `addHeat` resets
+ * `quietDays`, so an outfit that generates heat at least every other day never
+ * decays at all — and the bigger the outfit, the more continuously it works. A
+ * three-man crew gets quiet gaps between jobs by accident. A twelve-man crew
+ * gets none. Attention therefore behaved *worse* the larger you got, which is
+ * backwards, and it is why measurement found the economy resting at three
+ * people: heat generated per day exceeded heat removed per day at any size, so
+ * the duty cycle was fixed and income never grew with the payroll.
+ *
+ * Over four years and twelve careers, not one reached Capo. Capo needs ten
+ * people. The median career ended with three.
+ *
+ * This is the other half of `heatDistance`. That made each job quieter the
+ * more organization stood between you and it; this makes the organization
+ * itself absorb attention continuously — the lawyers on retainer, the
+ * detective who owes somebody, the alderman's office that loses a file. They
+ * do not stop working because you had a busy week.
+ *
+ * Deliberately small per head. It is a floor that lets a large family sustain
+ * work, not a licence: it still runs through the tier multiplier, so heat that
+ * is already dangerous stays sticky, and it is capped so that no family ever
+ * becomes immune.
+ */
+export const HEAT_ABSORPTION = {
+  /**
+   * People below which there is no apparatus at all.
+   *
+   * A man on his own has nobody making anything go away, and neither do three.
+   * This keeps the early game exactly as it was — including the rule above
+   * that you cannot idle your way out of trouble, which matters most when the
+   * organization is small enough for one bad week to end it.
+   */
+  fromCrew: 4,
+  /**
+   * Per person on the payroll beyond that floor, per day.
+   *
+   * 0.12 was set when twelve people was a large family. A Boss-sized outfit is
+   * thirty and the apparatus has to grow with it or the same fault returns one
+   * rank higher — measured at 0.12, a family ran a job in 24% of the weeks of
+   * a career and mean heat sat at 67 against a working line of 70.
+   *
+   * Raised again from 0.17 after `heatTier` was fixed. That function matched
+   * integer ranges against a floating number, so every reading in a gap —
+   * 10.4, 25.6, 40.2 — reported *Quiet*, whose decay multiplier is 1.0, the
+   * fastest on the table. The bug had been quietly accelerating heat decay for
+   * the whole life of the project, and this figure had been tuned on top of
+   * it: correcting the lookup took Boss from 17 careers in 36 to 9 without
+   * anything about heat itself changing.
+   *
+   * So this is the first value for the absorption that has ever been measured
+   * against heat behaving as the table describes.
+   */
+  perCrew: 0.2,
+  /**
+   * The most an organization can make go away by being large alone.
+   *
+   * Was 2, which at `perCrew` 0.12 is reached at twenty people — and twenty
+   * people is exactly where the top of the ladder starts. Underboss asks for
+   * eighteen and Boss for twenty-eight, so every man hired past the cap was a
+   * wage, a grievance and another body generating attention, against an
+   * apparatus that had stopped growing.
+   *
+   * That is the same fault this whole block was written to fix, reappearing
+   * one rank higher. The comment above says attention behaved worse the larger
+   * you got and that not one career in twelve reached Capo because of it; the
+   * cap moved the wall from three people to twenty rather than removing it.
+   * Measured after the move: 36% of all weeks in a career are lost to heat
+   * sitting above the line where any sensible boss stops working, and a family
+   * runs a job in 24% of the weeks it lives.
+   *
+   * Four covers a full Boss-sized family — thirty-six people at 0.12 is 3.84 —
+   * so the apparatus now scales the whole length of the ladder instead of the
+   * first half of it. It still runs through the tier multiplier, so heat that
+   * is already dangerous stays sticky, and it still does nothing at all about
+   * an informant.
+   */
+  max: 5.75,
+  /**
+   * And it only works on the street.
+   *
+   * A first version absorbed every channel, which quietly said that hiring
+   * more people does something about an informant already inside the
+   * organization. It does not. A man talking to the Bureau is not made to go
+   * away by having a larger payroll — he is the one thing a big family cannot
+   * fix by being big, and `informants.ts` exists because of it.
+   *
+   * Street heat is what jobs generate and what a fixer, a lawyer on retainer
+   * or a detective who owes somebody can actually make quieter.
+   */
+  channel: 'street',
+} as const;
+
+/** Laying low multiplies decay, but you cannot run operations while doing it. */
+const LAY_LOW_DECAY_MULTIPLIER = 4;
+export const LAY_LOW_DURATION_DAYS = 14;
+/**
+ * Laying low costs respect — the street notices you went quiet. Kept modest
+ * because heat management is a repeated action: at a steep cost, a player who
+ * correctly goes quiet several times ends up with less standing than one who
+ * never manages heat at all, which inverts the whole point of the system.
+ */
+export const LAY_LOW_RESPECT_COST = 4;
+
+/**
+ * How much heat hurts operations. At heat 100 this removes 38 percentage
+ * points of success chance, which is what makes the doom loop real:
+ * high heat causes failures, failures cause more heat.
+ */
+export const HEAT_SUCCESS_PENALTY_AT_MAX = 0.3;
+
+/** Dismissing an exposed crew member cuts a thread — and their loyalty to you. */
+export const DISMISS_HEAT_REDUCTION = 4;
+
+/** Heat added when an operation is cancelled mid-run (loose ends). */
+export const CANCEL_OPERATION_HEAT = 3;
+
+// ------------------------------------------------------------- channels ---
+
+/**
+ * Heat, decomposed.
+ *
+ * It was one number for a long time and the criticism of that was fair: every
+ * kind of trouble arrived in the same meter and every kind of trouble had the
+ * same answer, which was to go quiet for a fortnight. Somebody talking to the
+ * Bureau is not a problem you can solve by not doing anything for two weeks.
+ *
+ * Three channels, chosen to match the four evidence sources agencies already
+ * read, so nothing new had to be invented to make them mean something:
+ *
+ *   street   violence and jobs        cools fast when you stop
+ *   money    fronts, laundering, cash cools slowly, and never on its own
+ *   inside   informants and arrests   does not cool for going quiet at all
+ *
+ * `org.heat` is still the sum, clamped, so every threshold, tier and penalty
+ * tuned against the old single number means exactly what it always meant. The
+ * channels change *who* is looking and *what you can do about it*, not how much
+ * pressure a given week of work produces.
+ */
+export type HeatChannel = 'street' | 'money' | 'inside';
+
+export const HEAT_CHANNELS: HeatChannel[] = ['street', 'money', 'inside'];
+
+export const HEAT_CHANNEL_LABEL: Record<HeatChannel, string> = {
+  street: 'On the street',
+  money: 'On the books',
+  inside: 'Inside the family',
+};
+
+/**
+ * What would put something in a channel that currently has nothing in it.
+ *
+ * Three of these bars are usually flat at once, and a flat bar with no
+ * explanation reads as a broken gauge rather than as a quiet week — a round-7
+ * tester reported "Inside the family" as stuck at zero after four defections,
+ * which was true and correct and told them nothing. The `inside` channel in
+ * particular is written by a short list of specific events, so the honest
+ * thing is to name them.
+ */
+export const HEAT_CHANNEL_EMPTY: Record<HeatChannel, string> = {
+  street: 'Nothing you have done lately happened where anybody could see it.',
+  money: 'Nothing on paper has gone unexplained yet.',
+  inside:
+    'Nobody has been caught reaching into the department, and nobody has fumbled a witness or a piece of evidence. This one stays empty until somebody does.',
+};
+
+export const HEAT_CHANNEL_BLURB: Record<HeatChannel, string> = {
+  street: 'Bodies, jobs, and things that happened where people could see them.',
+  money: 'Fronts, deposits, and money that has not explained where it came from.',
+  inside: 'People who used to work for you and are now talking to somebody else.',
+};
+
+/** Which channel an evidence source belongs to. Agencies read their focus. */
+export const CHANNEL_OF_SOURCE: Record<'operation' | 'violence' | 'finance' | 'informant', HeatChannel> = {
+  operation: 'street',
+  violence: 'street',
+  finance: 'money',
+  informant: 'inside',
+};
+
+/**
+ * How each channel responds to going quiet.
+ *
+ * This is the whole point of the split. Laying low was a universal solvent; now
+ * it is a specific tool that does one thing very well and one thing not at all.
+ * A player pinned by an informant has to deal with the informant.
+ */
+export const LAY_LOW_BY_CHANNEL: Record<HeatChannel, number> = {
+  street: LAY_LOW_DECAY_MULTIPLIER,
+  money: 1,
+  inside: 0,
+};
+
+/** Ordinary decay speed per channel, before tier and difficulty. */
+export const DECAY_BY_CHANNEL: Record<HeatChannel, number> = {
+  street: 1.25,
+  // Paper does not go away because you stopped. It goes away because it got old.
+  money: 0.8,
+  inside: 0.6,
+};

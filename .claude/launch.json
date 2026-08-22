@@ -1,0 +1,38 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "mafia",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "run",
+        "dev"
+      ],
+      "port": 5173
+    },
+    {
+      "name": "mafia-verify",
+      "runtimeExecutable": "node",
+      "runtimeArgs": [
+        "scripts/playtest-run.mjs",
+        "--port",
+        "5310",
+        "--id",
+        "verify"
+      ],
+      "port": 5310
+    },
+    {
+      "name": "mafia-round14",
+      "runtimeExecutable": "node",
+      "runtimeArgs": [
+        "scripts/playtest-run.mjs",
+        "--port",
+        "5314",
+        "--id",
+        "round14"
+      ],
+      "port": 5314
+    }
+  ]
+}

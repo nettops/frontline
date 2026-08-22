@@ -1,0 +1,2115 @@
+/* =========================================================================
+   Crime Empire — visual system
+
+   The world is 1978 and the interface is the boss's book: a dim back room,
+   a ledger, and case files. Surfaces are warm tobacco-dark rather than
+   neutral black, data is typed, and the one bright material is paper —
+   used only where the game hands you a document.
+   ========================================================================= */
+
+:root {
+  /* Warm dark surfaces — brown-black, not neutral black. */
+  --ink-900: #0c0a09;
+  --ink-850: #100d0b;
+  --ink-800: #15110e;
+  --ink-700: #1c1713;
+  --ink-600: #241d18;
+  --line: #332a22;
+  --line-soft: #241e18;
+
+  /* Text on dark. */
+  --text: #e6ddcd;
+  --text-dim: #9c9083;
+  --text-faint: #6b6157;
+
+  /* Brass: values, money, primary action. Used sparingly. */
+  --brass: #c9a227;
+  --brass-dim: #7d6720;
+
+  /* Stamp red: heat, danger, failure. Never decorative. */
+  --stamp: #c2352b;
+  --stamp-bright: #dd5347;
+  --stamp-deep: #6d1b16;
+
+  /* Olive: things going right. */
+  --ok: #85a45c;
+  --ok-dim: #4f6337;
+
+  /* Carbon blue: law enforcement, cold institutional information. */
+  --carbon: #7593a8;
+  --carbon-dim: #3d5464;
+
+  /* Paper: the memo. The only light surface in the game. */
+  --paper: #ded3bc;
+  --paper-edge: #c4b89d;
+  --paper-rule: #b3a68a;
+  --paper-ink: #221f1a;
+  --paper-faint: #6a6154;
+
+  /* Type. Condensed display where available, typewriter mono for all data. */
+  --font-display: Bahnschrift, 'Avenir Next Condensed', 'Arial Narrow', 'Segoe UI',
+    system-ui, sans-serif;
+  --font-ui: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  --font-mono: ui-monospace, 'Cascadia Mono', Consolas, 'SF Mono', Menlo, monospace;
+
+  --radius: 2px;
+  --rail-width: 208px;
+
+  /*
+     Motion.
+
+     Two durations and one curve, because this interface has exactly two
+     speeds: things that respond to the pointer, which have to feel immediate,
+     and things that arrive on their own, which need long enough to be seen
+     landing. Anything slower than --t-slow starts to feel like the game is
+     waiting for the animation rather than the other way round.
+
+     The curve decelerates hard. Everything here is a physical object being
+     put down on a desk, and objects put down do not ease in.
+  */
+  --t-fast: 0.12s;
+  --t-med: 0.2s;
+  --t-slow: 0.34s;
+  --ease-land: cubic-bezier(0.2, 0.8, 0.3, 1);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--ink-900);
+  color: var(--text);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Everything numeric lines up in columns. */
+.mono,
+td.num,
+th.num {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+h1,
+h2,
+h3,
+h4 {
+  font-family: var(--font-display);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  margin: 0;
+}
+
+:focus-visible {
+  outline: 2px solid var(--brass);
+  outline-offset: 2px;
+}
+
+/*
+   Reduced motion removes the movement, not the information.
+
+   Everything animated in this interface also carries its meaning in colour,
+   position or text, so collapsing the durations to nothing leaves a game that
+   still reads correctly — the briefing still appears, the changed figure is
+   still tinted, the panel still swaps. Nothing here is animation-only.
+*/
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ---------------------------------------------------------------- shell --- */
+
+.app {
+  display: grid;
+  grid-template-columns: var(--rail-width) 1fr;
+  grid-template-rows: auto 1fr;
+  height: 100%;
+  min-height: 0;
+}
+
+/*
+   The bar does not scroll. The readout inside it does.
+
+   This was `overflow-x: auto` on the whole bar, which meant that on any window
+   narrower than about 1280px the row overflowed and the first thing to go off
+   the right-hand edge was the clock block — containing the +1 day / +1 week /
+   +1 month buttons, which are the only way to make time pass. A playtester on
+   a 987px window found the game apparently frozen and had to discover, by
+   dragging the header sideways, that the controls existed at all. Measured
+   after the report: 1278px of content in 987px of bar, with `+1 day` sitting
+   at x=1105.
+
+   Identity and clock are pinned; the seven stat blocks between them are the
+   part that scrolls, because they are a readout you can catch up on and the
+   controls are how you play at all.
+*/
+.statbar {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+  border-bottom: 1px solid var(--line);
+  background: linear-gradient(180deg, var(--ink-800), var(--ink-850));
+  overflow: hidden;
+}
+
+.statbar-identity {
+  padding: 10px 16px;
+  border-right: 1px solid var(--line);
+  min-width: 200px;
+  flex-shrink: 0;
+}
+
+.statbar-name {
+  font-family: var(--font-display);
+  font-size: 16px;
+  letter-spacing: 0.04em;
+  color: var(--text);
+  white-space: nowrap;
+}
+
+.statbar-rank {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  color: var(--brass);
+}
+
+/*
+   Grows to fill the bar, but never shrinks below its own contents.
+
+   It was `flex: 1` with `min-width: 0`, which on a phone collapsed this box to
+   zero width while its six children kept their 96px each — 576px of figures
+   painting straight over the clock and the day buttons. The bar already has
+   `overflow-x: auto`, so refusing to shrink is all it needed: the whole bar
+   scrolls sideways as one piece, which is the gesture a phone expects anyway.
+*/
+.statbar-stats {
+  display: flex;
+  /*
+     `1 1 auto`, not `1 0 auto`. The old value refused to shrink, which is what
+     pushed the clock off the edge instead of letting the numbers scroll.
+  */
+  flex: 1 1 auto;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+/*
+   Below a laptop, the figures wrap instead of scrolling out of sight.
+
+   Scrolling kept the clock reachable, which was the bug it was written for,
+   and then hid half the readout to do it: measured at 1024px, 576px of stats
+   in 323px of room, so Fear, Heat and Crew were all off the right-hand edge
+   behind a 3px scrollbar. Heat is the number the whole game is about not
+   letting get away from you, and a player has to know it is there before they
+   will think to drag for it.
+
+   Wrapping costs a second row of chrome on a narrow window and shows
+   everything. The row-scroll behaviour is kept above it for anything narrower
+   still, where two rows would eat the screen.
+*/
+@media (max-width: 1200px) and (min-width: 861px) {
+  .statbar-stats {
+    flex-wrap: wrap;
+    overflow-x: visible;
+  }
+}
+
+/* A hint that there is more to the right, rather than a scrollbar sitting
+   across the middle of the chrome. */
+.statbar-stats::-webkit-scrollbar {
+  height: 3px;
+}
+
+.statbar-stats::-webkit-scrollbar-thumb {
+  background: var(--line);
+}
+
+.stat {
+  padding: 10px 18px;
+  border-right: 1px solid var(--line-soft);
+  min-width: 96px;
+  flex-shrink: 0;
+}
+
+.stat-label {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--text-faint);
+  white-space: nowrap;
+}
+
+.stat-value {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 15px;
+  color: var(--text);
+  white-space: nowrap;
+}
+
+.stat-value.brass {
+  color: var(--brass);
+}
+.stat-value.dirty {
+  color: var(--ok);
+}
+.stat-value.hot {
+  color: var(--stamp-bright);
+}
+
+/*
+   A figure that has just moved.
+
+   The tint overrides the figure's own colour for a moment — brass money going
+   green is the point, because for that second what matters is not that it is
+   money but that there is more of it than there was. Heat inverts before it
+   gets here, so rising heat arrives as `moved-down` and reads red.
+*/
+.stat-value.moved-up,
+.stat-value.moved-down {
+  animation: figure-moved 0.9s ease-out;
+}
+
+.stat-value.moved-up {
+  color: var(--ok);
+}
+
+.stat-value.moved-down {
+  color: var(--stamp-bright);
+}
+
+@keyframes figure-moved {
+  0% {
+    transform: translateY(-2px);
+  }
+  30% {
+    transform: none;
+  }
+}
+
+.statbar-clock {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border-left: 1px solid var(--line);
+  flex-shrink: 0;
+}
+
+.clock-date {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+
+.clock-day {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+
+/* Typed, like everything else here. A speaker glyph would be the only icon in
+   the game and would look borrowed from a different one. */
+.statbar-mute {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  background: none;
+  border: none;
+  padding: 4px 6px;
+  cursor: pointer;
+  transition: color var(--t-fast);
+}
+
+.statbar-mute:hover {
+  color: var(--brass);
+}
+
+.statbar-mute.off {
+  color: var(--text-faint);
+  text-decoration: line-through;
+}
+
+/* ------------------------------------------------------------------ rail --- */
+
+.rail {
+  border-right: 1px solid var(--line);
+  background: var(--ink-850);
+  padding: 12px 0;
+  overflow-y: auto;
+  min-height: 0;
+}
+
+.rail-group {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  color: var(--text-faint);
+  padding: 14px 16px 6px;
+}
+
+.rail-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  padding: 7px 16px;
+  background: none;
+  border: none;
+  border-left: 2px solid transparent;
+  color: var(--text-dim);
+  font-family: var(--font-display);
+  font-size: 14px;
+  letter-spacing: 0.03em;
+  text-align: left;
+  cursor: pointer;
+  transition: color var(--t-fast), background var(--t-fast),
+    border-left-color var(--t-med);
+}
+
+.rail-item:hover {
+  color: var(--text);
+  background: var(--ink-800);
+}
+
+.rail-item.active {
+  color: var(--brass);
+  border-left-color: var(--brass);
+  background: var(--ink-800);
+}
+
+.rail-item.locked {
+  color: var(--text-faint);
+  cursor: not-allowed;
+}
+
+.rail-item.locked:hover {
+  background: none;
+  color: var(--text-faint);
+}
+
+.rail-badge {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.08em;
+  color: var(--ink-900);
+  background: var(--stamp);
+  border-radius: 8px;
+  padding: 0 6px;
+  min-width: 18px;
+  text-align: center;
+  /* Arrives rather than appears. A badge that blinks into place next to a nav
+     item you are not looking at is a badge you do not notice. */
+  animation: badge-in var(--t-slow) var(--ease-land);
+}
+
+@keyframes badge-in {
+  from {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+}
+
+.rail-phase {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  color: var(--text-faint);
+  border: 1px solid var(--line);
+  padding: 0 4px;
+}
+
+/* ------------------------------------------------------------------ main --- */
+
+.main {
+  overflow-y: auto;
+  min-height: 0;
+  padding: 20px 24px 60px;
+}
+
+.page-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 4px;
+}
+
+.page-title {
+  font-size: 24px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.page-sub {
+  color: var(--text-dim);
+  max-width: 68ch;
+  margin: 0 0 20px;
+}
+
+/* ---------------------------------------------------------------- panels --- */
+
+.panel {
+  background: var(--ink-800);
+  border: 1px solid var(--line);
+  margin-bottom: 16px;
+}
+
+.panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 9px 14px;
+  border-bottom: 1px solid var(--line);
+  background: var(--ink-700);
+}
+
+.panel-title {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  color: var(--text-dim);
+}
+
+.panel-body {
+  padding: 14px;
+}
+
+.panel-body.flush {
+  padding: 0;
+}
+
+.grid-2 {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 16px;
+  align-items: start;
+}
+
+.grid-3 {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 16px;
+  align-items: start;
+}
+
+/* ---------------------------------------------------------------- tables --- */
+
+.table-wrap {
+  overflow-x: auto;
+}
+
+table.data {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12.5px;
+}
+
+table.data th {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--text-faint);
+  text-align: left;
+  font-weight: 400;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--line);
+  white-space: nowrap;
+}
+
+table.data td {
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--line-soft);
+  vertical-align: middle;
+}
+
+table.data tbody tr:hover {
+  background: var(--ink-700);
+}
+
+table.data tbody tr.selected {
+  background: var(--ink-600);
+}
+
+table.data td.num,
+table.data th.num {
+  text-align: right;
+}
+
+table.data tr.clickable {
+  cursor: pointer;
+}
+
+/*
+   A name and what it is, stacked. Nine tables use this.
+
+   Nowrap because the point of the cell is that the name reads as one thing.
+   Round 13's roster squeezed this column to 92px, broke "Bruno Kestler" over two
+   lines and the role line under it over two more, and every row in the
+   organization became 113px tall. Every table using this sits inside
+   `.table-wrap`, which scrolls, so the width has somewhere to go — and a table
+   that scrolls is the behaviour that wrapper exists for. A shredded name is not.
+*/
+.name-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  white-space: nowrap;
+}
+
+.name-main {
+  color: var(--text);
+}
+
+.name-sub {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+
+/* --------------------------------------------------------------- buttons --- */
+
+button {
+  font-family: inherit;
+}
+
+.btn {
+  font-family: var(--font-display);
+  font-size: 13.5px;
+  letter-spacing: 0.05em;
+  padding: 7px 16px;
+  background: var(--ink-600);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: background 0.12s, border-color 0.12s;
+}
+
+.btn:hover:not(:disabled) {
+  background: var(--ink-700);
+  border-color: var(--brass-dim);
+}
+
+.btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.btn.primary {
+  background: var(--brass-dim);
+  border-color: var(--brass);
+  color: #17120a;
+  font-weight: 600;
+}
+
+.btn.primary:hover:not(:disabled) {
+  background: var(--brass);
+}
+
+.btn.danger {
+  border-color: var(--stamp-deep);
+  color: var(--stamp-bright);
+}
+
+.btn.danger:hover:not(:disabled) {
+  background: var(--stamp-deep);
+  color: var(--text);
+}
+
+.btn.small {
+  font-size: 12px;
+  padding: 4px 10px;
+}
+
+.btn-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* ------------------------------------------------------------------ bars --- */
+
+.bar {
+  height: 5px;
+  background: var(--ink-600);
+  border-radius: 1px;
+  overflow: hidden;
+}
+
+.bar-fill {
+  height: 100%;
+  background: var(--brass-dim);
+  /* Slower than the figures above them. A bar is a quantity you compare over
+     time, so seeing it travel is most of what it is for. */
+  transition: width var(--t-slow) var(--ease-land), background var(--t-med);
+}
+
+.bar-fill.ok {
+  background: var(--ok-dim);
+}
+.bar-fill.hot {
+  background: var(--stamp);
+}
+.bar-fill.cold {
+  background: var(--carbon-dim);
+}
+
+/* Perception readout — a phrase and a coarse position, never a number. */
+.read {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/*
+   The hedged word next to the pips — "looking for the door", "wants your chair".
+
+   Nowrap for the same reason `.name-cell` has it: these are three- and four-word
+   phrases sitting in the narrowest columns in the game, and round 13's roster
+   broke them one word per line. The read is a single hedged judgement and has to
+   read as one. The tables all scroll.
+*/
+.read-band {
+  font-size: 12px;
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+
+.read-unknown {
+  color: var(--text-faint);
+  font-style: italic;
+}
+
+.pips {
+  display: flex;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.pip {
+  width: 12px;
+  height: 4px;
+  background: var(--ink-600);
+}
+
+.pip.on {
+  background: var(--brass-dim);
+}
+.pip.on.warn {
+  background: var(--stamp-deep);
+}
+
+/* ----------------------------------------------------------- heat stamp --- */
+
+/* The one piece of theatre: heat is a classification stamped on your file. */
+.stamp {
+  display: inline-block;
+  border: 2px solid var(--stamp);
+  color: var(--stamp-bright);
+  font-family: var(--font-display);
+  font-size: 15px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  padding: 4px 12px;
+  transform: rotate(-1.5deg);
+  opacity: 0.92;
+}
+
+.stamp.cool {
+  border-color: var(--carbon-dim);
+  color: var(--carbon);
+}
+
+.stamp.warm {
+  border-color: var(--brass-dim);
+  color: var(--brass);
+}
+
+/* ------------------------------------------------------------- the memo --- */
+
+/*
+   Events arrive as a typed page on the desk. This is the only light surface
+   in the game, and the only place the interface stops being a dashboard.
+*/
+.memo-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(6, 4, 3, 0.78);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  z-index: 50;
+  animation: fade-in 0.18s ease-out;
+}
+
+.memo {
+  background: var(--paper);
+  color: var(--paper-ink);
+  max-width: 640px;
+  width: 100%;
+  max-height: 88vh;
+  overflow-y: auto;
+  border: 1px solid var(--paper-edge);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.7), 0 2px 0 var(--paper-edge);
+  animation: memo-land 0.22s cubic-bezier(0.2, 0.8, 0.3, 1);
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes memo-land {
+  from {
+    opacity: 0;
+    transform: translateY(-10px) rotate(-0.4deg) scale(0.99);
+  }
+}
+
+.memo-head {
+  padding: 18px 26px 12px;
+  border-bottom: 2px solid var(--paper-ink);
+}
+
+.memo-kicker {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--paper-faint);
+  margin-bottom: 8px;
+}
+
+.memo-title {
+  font-family: var(--font-display);
+  font-size: 23px;
+  letter-spacing: 0.01em;
+  color: var(--paper-ink);
+  line-height: 1.2;
+}
+
+.memo-body {
+  padding: 18px 26px 8px;
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  line-height: 1.75;
+  white-space: pre-wrap;
+}
+
+/*
+   Who the memo is about.
+
+   Sits between the body and the choices because that is the order the decision
+   is made in: read what happened, look at the man, choose. Bordered top and
+   bottom rather than boxed, so it reads as part of the memo rather than as a
+   widget somebody dropped into it.
+*/
+.memo-subject {
+  margin: 4px 26px 0;
+  padding: 10px 0;
+  border-top: 1px solid var(--line-soft);
+  border-bottom: 1px solid var(--line-soft);
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
+.memo-subject-row + .memo-subject-row {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--line-soft);
+}
+
+.memo-subject-who {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  margin-bottom: 6px;
+}
+
+.memo-subject-reads {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 18px;
+  align-items: center;
+  color: var(--paper-dim);
+}
+
+.memo-choices {
+  padding: 8px 26px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.memo-choice {
+  position: relative;
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 11px 14px 11px 26px;
+  background: rgba(34, 31, 26, 0.04);
+  border: 1px solid var(--paper-rule);
+  border-radius: var(--radius);
+  cursor: pointer;
+  color: var(--paper-ink);
+  transition: background var(--t-fast), border-color var(--t-fast);
+}
+
+.memo-choice:hover:not(:disabled) {
+  background: rgba(34, 31, 26, 0.09);
+  border-color: var(--paper-ink);
+}
+
+.memo-choice:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* The number you can press instead of aiming. Set in the margin so it reads as
+   an annotation on the page rather than part of the sentence. */
+.memo-choice-key {
+  position: absolute;
+  left: 8px;
+  top: 10px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--paper-faint);
+}
+
+.memo-choice-label {
+  font-family: var(--font-display);
+  font-size: 15px;
+  letter-spacing: 0.02em;
+}
+
+.memo-choice-hint {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--paper-faint);
+  margin-top: 2px;
+}
+
+/*
+   The hint slot when it is carrying a refusal rather than a description.
+
+   Same slot, opposite meaning, and it used to be the same grey — so "Public
+   feeling in Little Sicily is 26; nobody there sells below 30" read as a note
+   about the option rather than the reason it would not work. The rule is the
+   one the rest of the game already follows: a thing standing between the player
+   and what they wanted is `hot`, and it says so before they press it.
+*/
+.memo-choice-blocked {
+  /* The same red `.memo-severity.danger` already uses on this sheet, so the
+     memo keeps one palette rather than gaining a second red for one case. */
+  color: #8f2018;
+  opacity: 1;
+}
+
+.memo-choice:disabled .memo-choice-blocked::before {
+  content: '✕ ';
+}
+
+.memo-severity {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.2em;
+  border: 1.5px solid currentColor;
+  padding: 1px 7px;
+}
+
+.memo-severity.danger {
+  color: #8f2018;
+}
+.memo-severity.warning {
+  color: #8a6a12;
+}
+.memo-severity.opportunity {
+  color: #3f6134;
+}
+.memo-severity.info {
+  color: var(--paper-faint);
+}
+
+/* ------------------------------------------------------------- city map --- */
+
+/*
+   The board as a district plan drawn on the inside of a case file — flat
+   shapes, hairline links, no cartography. Fill height is your influence, the
+   border is whoever leads the district.
+*/
+.map-wrap {
+  overflow-x: auto;
+}
+
+.city-map {
+  width: 100%;
+  max-width: 560px;
+  height: auto;
+  display: block;
+  margin: 0 auto;
+}
+
+/*
+   Adjacency, drawn so it can be seen.
+
+   Was a 1px dashed hairline running centre to centre under opaque cells, which
+   left roughly fourteen pixels of it visible in each gap. A playtester spent
+   six in-game months on this screen and reported that the map does not exist.
+   The lines are now trimmed to the gap in the component and drawn heavily
+   enough to read as a join between two places.
+*/
+.map-link {
+  stroke: var(--brass-dim, #7a6134);
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  opacity: 0.55;
+}
+
+/* Somewhere the next job could go. Held, or next to something held. */
+.map-reachable {
+  fill: none;
+  stroke: var(--brass, #b9903f);
+  stroke-width: 1.5;
+  stroke-dasharray: 5 4;
+  opacity: 0.7;
+  pointer-events: none;
+}
+
+.map-key-reach {
+  display: inline-block;
+  width: 14px;
+  height: 0;
+  margin-right: 6px;
+  border-top: 2px dashed var(--brass, #b9903f);
+  vertical-align: middle;
+  opacity: 0.7;
+}
+
+.map-cell {
+  cursor: pointer;
+}
+
+.map-cell-bg {
+  fill: var(--ink-700);
+}
+
+.map-cell:hover .map-cell-bg {
+  fill: var(--ink-600);
+}
+
+.map-cell.selected .map-cell-bg {
+  fill: var(--ink-600);
+}
+
+.map-cell.selected .map-cell-border {
+  stroke-width: 3;
+}
+
+.map-cell-border {
+  fill: none;
+}
+
+.map-name {
+  fill: var(--text);
+  font-family: var(--font-display);
+  font-size: 13px;
+  letter-spacing: 0.03em;
+}
+
+.map-meta {
+  fill: var(--text-faint);
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.08em;
+}
+
+.map-contested {
+  fill: var(--stamp);
+}
+
+.map-key {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  justify-content: center;
+  margin-top: 14px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+
+.map-key-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.map-key-swatch {
+  width: 10px;
+  height: 10px;
+  display: inline-block;
+}
+
+th.sortable {
+  cursor: pointer;
+  user-select: none;
+}
+
+th.sortable:hover {
+  color: var(--text-dim);
+}
+
+/* ------------------------------------------------------ district picker --- */
+
+.district-picker {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 6px;
+}
+
+.district {
+  text-align: left;
+  padding: 8px 10px;
+  background: var(--ink-700);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  color: var(--text-dim);
+  cursor: pointer;
+}
+
+.district:hover {
+  border-color: var(--brass-dim);
+}
+
+.district.selected {
+  border-color: var(--brass);
+  background: var(--ink-600);
+  color: var(--text);
+}
+
+.district-name {
+  font-family: var(--font-display);
+  font-size: 14px;
+  letter-spacing: 0.03em;
+  color: var(--text);
+}
+
+.district-meta {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+}
+
+/* -------------------------------------------------------------------- log --- */
+
+.log {
+  max-height: 340px;
+  overflow-y: auto;
+}
+
+.log-entry {
+  display: grid;
+  grid-template-columns: 44px 1fr;
+  gap: 10px;
+  padding: 5px 14px;
+  border-bottom: 1px solid var(--line-soft);
+  font-size: 12.5px;
+}
+
+.log-day {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--text-faint);
+  padding-top: 2px;
+}
+
+.log-text {
+  color: var(--text-dim);
+}
+
+.log-entry.success .log-text {
+  color: var(--ok);
+}
+.log-entry.failure .log-text,
+.log-entry.heat .log-text {
+  color: var(--stamp-bright);
+}
+.log-entry.money .log-text {
+  color: var(--brass);
+}
+.log-entry.crew .log-text {
+  color: var(--text);
+}
+
+/* ------------------------------------------------------------- utilities --- */
+
+.dim {
+  color: var(--text-dim);
+}
+.faint {
+  color: var(--text-faint);
+}
+.brass {
+  color: var(--brass);
+}
+.hot {
+  color: var(--stamp-bright);
+}
+.good {
+  color: var(--ok);
+}
+.cold {
+  color: var(--carbon);
+}
+
+.tiny {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+
+.empty {
+  padding: 26px 14px;
+  text-align: center;
+  color: var(--text-faint);
+  font-size: 12.5px;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.row.between {
+  justify-content: space-between;
+}
+
+.wrap {
+  flex-wrap: wrap;
+}
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.kv {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 5px 0;
+  border-bottom: 1px solid var(--line-soft);
+  font-size: 12.5px;
+}
+
+.kv:last-child {
+  border-bottom: none;
+}
+
+.kv-key {
+  color: var(--text-dim);
+}
+
+.kv-val {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+
+.tag {
+  display: inline-block;
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  padding: 1px 6px;
+  border: 1px solid var(--line);
+  color: var(--text-dim);
+}
+
+.tag.busy {
+  border-color: var(--brass-dim);
+  color: var(--brass);
+}
+.tag.injured {
+  border-color: var(--stamp-deep);
+  color: var(--stamp-bright);
+}
+.tag.arrested {
+  border-color: var(--carbon-dim);
+  color: var(--carbon);
+}
+
+/* ---------------------------------------------------------- title screen --- */
+
+.title-screen {
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: radial-gradient(ellipse at 50% 0%, #191310 0%, var(--ink-900) 62%);
+}
+
+.title-card {
+  width: 100%;
+  max-width: 520px;
+}
+
+.title-mark {
+  font-family: var(--font-display);
+  font-size: 46px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  line-height: 1;
+  color: var(--text);
+}
+
+.title-rule {
+  height: 2px;
+  background: linear-gradient(90deg, var(--brass), transparent);
+  margin: 12px 0 6px;
+}
+
+.title-sub {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  margin-bottom: 32px;
+}
+
+.field {
+  margin-bottom: 16px;
+}
+
+.field-label {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  color: var(--text-faint);
+  display: block;
+  margin-bottom: 5px;
+}
+
+.input {
+  width: 100%;
+  padding: 9px 12px;
+  background: var(--ink-800);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 14px;
+}
+
+.input:focus {
+  border-color: var(--brass-dim);
+  outline: none;
+}
+
+.choice-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.choice {
+  text-align: left;
+  padding: 10px 13px;
+  background: var(--ink-800);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  color: var(--text-dim);
+  cursor: pointer;
+}
+
+.choice:hover {
+  border-color: var(--brass-dim);
+  color: var(--text);
+}
+
+.choice.selected {
+  border-color: var(--brass);
+  background: var(--ink-700);
+  color: var(--text);
+}
+
+.choice-name {
+  font-family: var(--font-display);
+  font-size: 15px;
+  letter-spacing: 0.04em;
+}
+
+.choice-blurb {
+  font-size: 11.5px;
+  color: var(--text-faint);
+  margin-top: 1px;
+}
+
+/* --------------------------------------------------------- city weather --- */
+
+/*
+   What the whole city is doing this month, sitting above everything else on
+   the overview because it is the one piece of context that changes the meaning
+   of every number below it. Reads as a wire report clipped to the top of the
+   file, not as a notification.
+*/
+.world-strip {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  flex-wrap: wrap;
+  padding: 9px 14px;
+  margin-bottom: 16px;
+  background: var(--ink-800);
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--text-faint);
+}
+
+.world-strip.bad {
+  border-left-color: var(--stamp);
+}
+
+.world-strip.good {
+  border-left-color: var(--ok);
+}
+
+.world-strip.mixed {
+  border-left-color: var(--brass-dim);
+}
+
+.world-name {
+  font-family: var(--font-display);
+  font-size: 12.5px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text);
+  white-space: nowrap;
+}
+
+.world-summary {
+  flex: 1;
+  min-width: 200px;
+  font-size: 13px;
+  color: var(--text-dim);
+}
+
+/* ------------------------------------------------------------- responsive --- */
+
+/* Marks a save that is not a career, on the load list. */
+.choice-tag {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  border: 1px solid var(--line);
+  padding: 1px 5px;
+  margin-left: 8px;
+  vertical-align: middle;
+}
+
+/* -------------------------------------------------------------- bulletin --- */
+
+/*
+   What happened while you were not looking.
+
+   The memo owns paper. This owns the opposite material: a strip of wire copy,
+   dark, typed, no ceremony, pinned to the top of the page until you have read
+   it. Two surfaces that both said "document" would cost the memo the thing
+   that makes it land, so this one is deliberately machine rather than hand.
+
+   It is sticky rather than fixed so it scrolls with the page it belongs to,
+   and it sits above the panel content because it is about the moment you
+   arrived, not about whatever you were reading last.
+*/
+.bulletin {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  margin: -20px -24px 18px;
+  padding: 10px 24px 12px;
+  background: linear-gradient(180deg, var(--ink-700), var(--ink-800));
+  border-bottom: 1px solid var(--line);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.4);
+  animation: bulletin-in var(--t-slow) var(--ease-land);
+}
+
+@keyframes bulletin-in {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+}
+
+.bulletin-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 7px;
+}
+
+.bulletin-span {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+
+.bulletin-close {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  background: none;
+  border: none;
+  padding: 2px 0;
+  cursor: pointer;
+  transition: color var(--t-fast);
+}
+
+.bulletin-close:hover {
+  color: var(--text);
+}
+
+.bulletin-lines {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+/* The lines print in sequence rather than all at once — the stagger is what
+   makes a seven-line week feel like seven things instead of a wall. */
+.bulletin-line {
+  border-left: 2px solid var(--line);
+  padding: 1px 0 1px 10px;
+  font-size: 13px;
+  color: var(--text-dim);
+  animation: bulletin-line-in var(--t-med) var(--ease-land) backwards;
+}
+
+@keyframes bulletin-line-in {
+  from {
+    opacity: 0;
+    transform: translateX(-4px);
+  }
+}
+
+.bulletin-line.good {
+  border-left-color: var(--ok-dim);
+  color: var(--text);
+}
+.bulletin-line.bad {
+  border-left-color: var(--stamp);
+  color: var(--text);
+}
+.bulletin-line.money {
+  border-left-color: var(--brass-dim);
+  color: var(--brass);
+}
+
+/* Only lines you could act on are buttons, so being clickable means
+   something. */
+.bulletin-go {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: none;
+  padding: 0;
+  text-align: left;
+  cursor: pointer;
+  border-bottom: 1px solid transparent;
+  transition: border-color var(--t-fast);
+}
+
+.bulletin-go:hover {
+  border-bottom-color: currentColor;
+}
+
+/* ----------------------------------------------------------------- tips --- */
+
+/*
+   The thing nobody told you.
+
+   Third register, and it has to be the quietest of the three. The memo is
+   paper and stops the world; the bulletin is wire copy and reports on it;
+   this is a margin note about a system you have just walked into, and it
+   earns none of the weight of either. Hence: no background, no shadow, one
+   rule down the left and text a shade under the panel titles it sits above.
+
+   Urgent takes the stamp colour, which everywhere else in this interface
+   means the law or a loss. That is exactly what it means here too.
+*/
+.coach {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+  padding: 7px 0 7px 12px;
+  border-left: 2px solid var(--brass-dim);
+  animation: coach-in var(--t-med) var(--ease-land);
+}
+
+.coach.urgent {
+  border-left-color: var(--stamp);
+}
+
+@keyframes coach-in {
+  from {
+    opacity: 0;
+    transform: translateX(-4px);
+  }
+}
+
+.coach-label {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--brass-dim);
+  white-space: nowrap;
+}
+
+.coach.urgent .coach-label {
+  color: var(--stamp);
+}
+
+.coach-text {
+  flex: 1;
+  min-width: 220px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-dim);
+}
+
+.coach-actions {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  margin-left: auto;
+}
+
+.coach-go,
+.coach-off {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  background: none;
+  border: none;
+  padding: 2px 0;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color var(--t-fast);
+}
+
+.coach-go:hover,
+.coach-off:hover {
+  color: var(--text);
+}
+
+.coach-off {
+  font-size: 13px;
+  letter-spacing: 0;
+}
+
+/* The same material at rest, on the Tips page: the kicker in its own column
+   so nineteen of them stack into something you can scan rather than read. */
+.tip-row {
+  display: grid;
+  grid-template-columns: 96px 1fr auto;
+  align-items: baseline;
+  gap: 14px;
+  padding: 9px 14px;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.tip-row:last-child {
+  border-bottom: none;
+}
+
+.tip-label {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--brass-dim);
+}
+
+.tip-text {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-dim);
+}
+
+.tip-row.seen .tip-text {
+  color: var(--text);
+}
+
+/* Switching panels replaces everything below the rail at once. Without this
+   the content changes under a static frame, which reads as a failed click. */
+.panel-swap {
+  animation: panel-in var(--t-med) var(--ease-land);
+}
+
+@keyframes panel-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+
+@media (max-width: 860px) {
+  .app {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto auto 1fr;
+  }
+  .bulletin {
+    margin: -16px -16px 14px;
+    padding: 10px 16px 12px;
+  }
+  .rail {
+    display: flex;
+    overflow-x: auto;
+    padding: 0;
+    border-right: none;
+    border-bottom: 1px solid var(--line);
+  }
+  .rail-group {
+    display: none;
+  }
+  .rail-item {
+    border-left: none;
+    border-bottom: 2px solid transparent;
+    white-space: nowrap;
+    width: auto;
+  }
+  .rail-item.active {
+    border-left: none;
+    border-bottom-color: var(--brass);
+  }
+  .main {
+    padding: 16px;
+  }
+  /* A phone has no room for a kicker, a paragraph and three controls on one
+     line — the paragraph loses, down to about thirty characters a row. Stack
+     them instead and let the sentence have the width. */
+  .coach {
+    flex-direction: column;
+    gap: 6px;
+  }
+  .coach-actions {
+    margin-left: 0;
+  }
+  /* Same problem on the Tips page: a 96px kicker column leaves the sentence
+     about 28 characters wide. Stack it and give the words the row. */
+  .tip-row {
+    grid-template-columns: 1fr;
+    gap: 5px;
+  }
+}
+
+/* -------------------------------------------------------------- receipt ---
+   What the answer you just gave actually did.
+
+   The memo asks and the bulletin reports on a week; neither covers the gap
+   between clicking a choice and the money having already moved. Some
+   resolutions land entirely under the click — a purchase that turns out to be
+   gone, an option you could not cover — and those used to close the page with
+   no account of themselves at all.
+
+   So it is deliberately the smallest surface in the game: no header, no
+   buttons, nothing to dismiss. It sits above the memo backdrop because the
+   next memo can open on top of it and the stamp still has to be readable, and
+   it takes itself away.
+*/
+.receipt {
+  position: fixed;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 60;
+  max-width: min(560px, calc(100vw - 32px));
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 9px 16px;
+  background: linear-gradient(180deg, var(--ink-700), var(--ink-800));
+  border: 1px solid var(--line);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.55);
+  animation: receipt-in var(--t-med) var(--ease-land);
+  pointer-events: none;
+}
+
+@keyframes receipt-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -8px);
+  }
+}
+
+.receipt-line {
+  margin: 0;
+  padding-left: 10px;
+  border-left: 2px solid var(--line);
+  font-size: 13px;
+  color: var(--text-dim);
+}
+
+.receipt-line.money {
+  border-left-color: var(--brass-dim);
+  color: var(--brass);
+}
+.receipt-line.success {
+  border-left-color: var(--ok-dim);
+  color: var(--text);
+}
+.receipt-line.failure,
+.receipt-line.heat {
+  border-left-color: var(--stamp);
+  color: var(--text);
+}
+.receipt-line.crew,
+.receipt-line.event {
+  color: var(--text);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .receipt {
+    animation: none;
+  }
+}
+
+/* ------------------------------------------------------------- the room ---
+   The sit-down.
+
+   Deliberately not paper. The memo owns the one light surface in this game
+   and it means a specific thing — a document has been handed to you. A
+   conversation is not a document, and a second sheet of paper would cost the
+   memo the thing that makes it land.
+
+   So this goes the other way: the darkest surface in the game, one warm edge
+   at the top standing in for the lamp, and everything else gone. Where the
+   memo is a page on your desk, this is a room you are sitting in.
+*/
+.room-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(4, 3, 2, 0.9);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  z-index: 55;
+  animation: fade-in var(--t-med) ease-out;
+}
+
+.room {
+  background: var(--ink-900);
+  border: 1px solid var(--line);
+  /* The lamp. The only warm thing in here. */
+  border-top: 2px solid var(--brass-dim);
+  border-radius: var(--radius);
+  width: 100%;
+  max-width: 600px;
+  max-height: 88vh;
+  overflow-y: auto;
+  box-shadow: 0 30px 70px rgba(0, 0, 0, 0.8);
+  animation: room-in var(--t-slow) var(--ease-land);
+}
+
+@keyframes room-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.995);
+  }
+}
+
+.room-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: 13px 20px 11px;
+  border-bottom: 1px solid var(--line-soft);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  color: var(--text-faint);
+}
+
+.room-who {
+  padding: 16px 20px 14px;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.room-name {
+  font-family: var(--font-display);
+  font-size: 23px;
+  letter-spacing: 0.02em;
+  color: var(--text);
+  margin: 0;
+  line-height: 1.1;
+}
+
+.room-sub {
+  font-size: 12px;
+  color: var(--text-faint);
+  margin: 3px 0 0;
+}
+
+.room-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 12px;
+}
+
+/* The same hedged words the crew sheet uses. There they are a readout; here
+   they are the only thing the player has to choose against. */
+.room-chip {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  padding: 3px 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  color: var(--text-dim);
+}
+.room-chip.good {
+  color: var(--ok);
+  border-color: var(--ok-dim);
+}
+.room-chip.want {
+  color: var(--brass);
+  border-color: var(--brass-dim);
+}
+.room-chip.bad {
+  color: var(--stamp);
+  border-color: var(--stamp-deep);
+}
+.room-chip.unknown {
+  color: var(--text-faint);
+}
+
+.room-why {
+  font-size: 13px;
+  color: var(--text-dim);
+  margin: 12px 0 0;
+  font-style: italic;
+}
+
+.room-talk {
+  padding: 14px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.room-quiet {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-faint);
+}
+
+/* A miss is dim on a grey rule; a read that landed is bright on olive. The
+   player infers how it went from the prose — nothing here prints a number. */
+.room-beat {
+  border-left: 2px solid var(--line);
+  padding-left: 12px;
+  animation: bulletin-line-in var(--t-med) var(--ease-land) backwards;
+}
+.room-beat.landed {
+  border-left-color: var(--ok-dim);
+}
+
+.room-beat-label {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  margin-bottom: 4px;
+}
+
+.room-beat-text {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--text-dim);
+}
+.room-beat.landed .room-beat-text {
+  color: var(--text);
+}
+
+.room-outcome {
+  margin: 0;
+  padding-top: 12px;
+  border-top: 1px solid var(--line-soft);
+  font-family: var(--font-display);
+  font-size: 16px;
+  letter-spacing: 0.02em;
+  color: var(--brass);
+}
+
+.room-learned {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--ok);
+}
+
+.room-choices {
+  padding: 6px 20px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.room-choice {
+  position: relative;
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 10px 13px 10px 26px;
+  background: rgba(230, 221, 205, 0.03);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  cursor: pointer;
+  color: var(--text);
+  transition: background var(--t-fast), border-color var(--t-fast);
+}
+
+.room-choice:hover:not(:disabled) {
+  background: rgba(230, 221, 205, 0.07);
+  border-color: var(--brass-dim);
+}
+
+.room-choice:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.room-choice-key {
+  position: absolute;
+  left: 9px;
+  top: 10px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-faint);
+}
+
+.room-choice-label {
+  display: block;
+  font-family: var(--font-display);
+  font-size: 15px;
+  letter-spacing: 0.02em;
+}
+
+.room-choice-hint {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-faint);
+  margin-top: 2px;
+}
+
+.room-foot {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 20px 14px;
+  border-top: 1px solid var(--line-soft);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-faint);
+}
+
+.room-leave {
+  background: none;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  color: var(--text-dim);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  padding: 5px 10px;
+  cursor: pointer;
+}
+.room-leave:hover {
+  border-color: var(--brass-dim);
+  color: var(--text);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .room,
+  .room-beat {
+    animation: none;
+  }
+}
+
+/* The sit-down entry, wherever it appears. Set apart from the roster actions
+   because it is a different kind of thing: not a lever you pull at somebody,
+   but a room you go and sit in. */
+.sit-row {
+  padding-top: 12px;
+  border-top: 1px solid var(--line-soft);
+}

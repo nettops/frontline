@@ -1,0 +1,639 @@
+/**
+ * Legitimate fronts and the laundering pipeline.
+ *
+ *   dirty cash → capacity → cut → clean cash
+ *                    ↓
+ *                 exposure → heat and evidence
+ *
+ * The decision this system exists to create: throughput is what makes dirty
+ * money usable, and throughput is exactly what gets a business noticed.
+ */
+
+import { Rng, clamp } from './rng';
+import type { Business, GameState, Territory } from './types';
+import { addEvidence, addLog, nextId } from './util';
+import { canAfford, earnClean, spend, weeklyWageBill } from './economy';
+import { trainAttribute } from './player';
+import { addHeat } from './heat';
+import { launderRestriction } from './investigation';
+import { worldMod } from './world';
+import { activity, priced } from './market';
+import { outrageBusinessMultiplier } from './perception';
+import {
+  businessSlots,
+  controlLevel,
+  isContested,
+  prosperity,
+  territoryDef,
+  usedSlots,
+} from './territory';
+import { RIVAL_IDS } from '../config/factions';
+import {
+  ACQUISITION_PREMIUM_CONTESTED,
+  BUSINESSES,
+  BUSINESS_BY_ID,
+  HEALTH,
+  EXPOSURE_ALARMING_ABOVE,
+  EXPOSURE_DECAY_BASE,
+  EXPOSURE_DECAY_PER_LEGITIMACY,
+  EXPOSURE_EVIDENCE_ABOVE,
+  EXPOSURE_EVIDENCE_CHANCE,
+  EXPOSURE_HEAT_AT_MAX,
+  LAUNDER_CUT_BASE,
+  LAUNDER_CUT_MIN,
+  LAUNDER_CUT_PER_BUSINESS_POINT,
+  BUSINESS_FROM,
+  LEGITIMATE_REVENUE_SCALE,
+  SHUTTER_REFUND_SHARE,
+  WEALTH_REVENUE_BASE,
+  WEALTH_REVENUE_RANGE,
+  type BusinessDef,
+} from '../config/businesses';
+import { CONTROL_THRESHOLDS, SENTIMENT_HOSTILE_BELOW } from '../config/territories';
+import { PAYDAY_INTERVAL } from '../config/economy';
+import type { ControlLevel } from '../config/territories';
+
+export function businessDef(business: Business): BusinessDef {
+  return BUSINESS_BY_ID[business.defId];
+}
+
+export function ownedBusinesses(state: GameState): Business[] {
+  return Object.values(state.businesses).filter((b) => b.status === 'operating');
+}
+
+/** A district's wealth scales both what a front earns and what it can absorb. */
+function wealthScale(state: GameState, territoryId: string): number {
+  return WEALTH_REVENUE_BASE + (prosperity(state, territoryId) / 100) * WEALTH_REVENUE_RANGE;
+}
+
+/**
+ * What a front would earn here, before you own it.
+ *
+ * The Businesses panel used to quote `def.revenue` straight from the config —
+ * the catalogue number, before the legitimate-income scale, before the
+ * district's wealth, and before what the city is doing that month. Measured
+ * across twelve careers, a front realises 74-79% of that figure, so every row
+ * in the buy table overstated its own income by about a quarter.
+ *
+ * That is the same defect as the savings yield round 9 caught: a number that is
+ * honest in the config and wrong on the screen. It matters more here than it
+ * looks, because the buy table *is* the ladder — a player deciding whether to
+ * save for the next tier up is comparing two numbers that are both inflated,
+ * and unequally, since the multipliers differ by district.
+ *
+ * Health is assumed to start where a new front starts, which is what will
+ * actually happen on the day it opens.
+ */
+export function revenueIfBought(
+  state: GameState,
+  def: BusinessDef,
+  territoryId: string,
+): number {
+  return Math.round(
+    priced(state, def.revenue) *
+      wealthScale(state, territoryId) *
+      LEGITIMATE_REVENUE_SCALE *
+      (HEALTH.revenueAtZero +
+        (1 - HEALTH.revenueAtZero) * clamp(HEALTH.start / 100, 0, 1)) *
+      activity(state),
+  );
+}
+
+export function weeklyRevenue(state: GameState, business: Business): number {
+  // A struggling front earns like a struggling front, which is the warning the
+  // player gets before it closes.
+  const health = clamp((business.health ?? HEALTH.start) / 100, 0, 1);
+  const scale = HEALTH.revenueAtZero + (1 - HEALTH.revenueAtZero) * health;
+  return Math.round(
+    priced(state, businessDef(business).revenue) *
+      wealthScale(state, business.territoryId) *
+      LEGITIMATE_REVENUE_SCALE *
+      scale *
+      // The cycle. A front is the most exposed thing you own to what the city
+      // is actually doing — it is the only income in the game that comes from
+      // people choosing to walk in.
+      activity(state),
+  );
+}
+
+/**
+ * How the business itself is doing this week, before rounding.
+ *
+ * Exposed so the Businesses panel can show the player *why* a front is in
+ * trouble rather than only that it is — the four terms are four different
+ * problems with four different answers, and a number on its own would tell
+ * them nothing they could act on.
+ */
+export function healthPressure(
+  state: GameState,
+  business: Business,
+): { sentiment: number; exposure: number; rivals: number; city: number; total: number } {
+  const t = state.territories[business.territoryId];
+  const sentiment =
+    t && t.sentiment < HEALTH.sentimentFine
+      ? ((HEALTH.sentimentFine - t.sentiment) / HEALTH.sentimentFine) *
+        HEALTH.fromSentimentAtWorst
+      : 0;
+
+  const exposure =
+    business.exposure > HEALTH.exposureFine
+      ? ((business.exposure - HEALTH.exposureFine) / (100 - HEALTH.exposureFine)) *
+        HEALTH.fromExposureAtMax
+      : 0;
+
+  // Somebody else running the same kind of thing where you are running yours.
+  let competition = 0;
+  for (const id of RIVAL_IDS) {
+    if ((t?.influence[id] ?? 0) < 25) continue;
+    competition += (state.factions[id]?.businessCount ?? 0) * HEALTH.fromRivalPerFront;
+  }
+
+  const city = (state.city.outrage / 100) * HEALTH.fromOutrageAtMax;
+
+  /*
+     Recovery is a rate, not a prize for being untouched.
+
+     This used to read `total < 0 ? total : HEALTH.recoverPerWeek`, which gave
+     the whole +2.2 to a front with no pressure at all and none of it to a
+     front with any. A district one point below `sentimentFine` cost a business
+     its entire recovery, so there was no state in which a front was leaned on
+     a little and still stood. Twelve four-year careers bought four fronts each
+     and buried four each, and 22% of all paydays happened with every front the
+     player owned already shuttered.
+
+     Adding it means light pressure is survivable and real pressure still
+     kills: a front holds its ground up to -2.2 a week and goes under above it,
+     which is the trade the health readout in the panel has always described.
+  */
+  const total = sentiment + exposure + competition + city + HEALTH.recoverPerWeek;
+  return {
+    sentiment,
+    exposure,
+    rivals: competition,
+    city,
+    total,
+  };
+}
+
+export function launderCapacity(state: GameState, business: Business): number {
+  return Math.round(businessDef(business).launderCapacity * wealthScale(state, business.territoryId));
+}
+
+export function totalLaunderCapacity(state: GameState): number {
+  return ownedBusinesses(state).reduce((sum, b) => sum + launderCapacity(state, b), 0);
+}
+
+export function totalWeeklyRevenue(state: GameState): number {
+  return ownedBusinesses(state).reduce((sum, b) => sum + weeklyRevenue(state, b), 0);
+}
+
+/** The share taken to make dirty money look clean. Business ability buys it down. */
+export interface LaunderOutlook {
+  /** Total weekly capacity across every front you own. */
+  capacity: number;
+  /** Dirty cash held back to meet the coming payroll. */
+  heldBack: number;
+  /** What could actually go through this week. */
+  washable: number;
+  /** What would come out clean at the end of it. */
+  clean: number;
+  /** Which of the two is the binding constraint. */
+  limit: 'capacity' | 'dirty' | 'nothing';
+}
+
+/**
+ * What the washing machine will actually do this week, and why.
+ *
+ * There is a rule in `tickBusinesses` that nobody could see: the coming wage
+ * bill is held back out of dirty cash rather than laundered, because paying
+ * the cut on money that goes straight out the door the same day is a pure
+ * loss. Correct, and invisible — a playtester with one front watched clean
+ * money crawl in at four hundred a week against a three-thousand capacity and
+ * concluded the gate was simply too expensive, when the real answer was that
+ * almost everything they earned was spoken for before it reached the front.
+ *
+ * That makes the wage bill a laundering decision, which is a genuinely good
+ * one and was being made blind. This is the readout for it.
+ */
+export function launderOutlook(state: GameState): LaunderOutlook {
+  const capacity = Math.round(
+    totalLaunderCapacity(state) * launderRestriction(state) * worldMod(state, 'launderCapacity'),
+  );
+  const heldBack = weeklyWageBill(state);
+  const surplus = Math.max(0, state.org.dirtyCash - heldBack);
+  const washable = Math.min(capacity, surplus);
+  const clean = Math.round(washable * (1 - launderCut(state)));
+  return {
+    capacity,
+    heldBack,
+    washable,
+    clean,
+    limit: washable <= 0 ? 'nothing' : surplus > capacity ? 'capacity' : 'dirty',
+  };
+}
+
+export function launderCut(state: GameState): number {
+  return Math.max(
+    LAUNDER_CUT_MIN,
+    LAUNDER_CUT_BASE - state.player.attributes.business * LAUNDER_CUT_PER_BUSINESS_POINT,
+  );
+}
+
+// ----------------------------------------------------------- acquisition ---
+
+const CONTROL_RANK: ControlLevel[] = ['none', 'presence', 'foothold', 'control', 'dominance'];
+
+function meetsControl(level: ControlLevel, required: ControlLevel): boolean {
+  return CONTROL_RANK.indexOf(level) >= CONTROL_RANK.indexOf(required);
+}
+
+export function acquisitionCost(state: GameState, def: BusinessDef, t: Territory): number {
+  const base = priced(state, def.cost) * wealthScale(state, t.id);
+  // Buying in somewhere you do not securely hold means paying somebody off.
+  const premium = isContested(t) ? ACQUISITION_PREMIUM_CONTESTED : 1;
+  const haggle = 1 - Math.min(0.2, state.player.attributes.negotiation * 0.01);
+  return Math.round(base * premium * haggle);
+}
+
+export interface AcquireCheck {
+  ok: boolean;
+  reason: string | null;
+  cost: number;
+}
+
+export function canAcquire(
+  state: GameState,
+  defId: string,
+  territoryId: string,
+): AcquireCheck {
+  const def = BUSINESS_BY_ID[defId];
+  const t = state.territories[territoryId];
+  if (!def || !t) return { ok: false, reason: 'No such business or district.', cost: 0 };
+
+  const cost = acquisitionCost(state, def, t);
+  const level = controlLevel(t);
+
+  if (!meetsControl(level, def.minControl)) {
+    const label = CONTROL_THRESHOLDS.find((c) => c.level === def.minControl);
+    return {
+      ok: false,
+      reason: `Needs ${def.minControl} in ${territoryDef(t.id).name} (${label?.min ?? '?'} influence).`,
+      cost,
+    };
+  }
+  if (usedSlots(state, t) >= businessSlots(t)) {
+    return {
+      ok: false,
+      reason: `No room for another front in ${territoryDef(t.id).name}. Take more of the district.`,
+      cost,
+    };
+  }
+  /*
+     The three refusals above each name the requirement and the number attached
+     to it. This one used to say "Nobody in X will sell to you right now" and
+     stop, which is the same sentence a district uses when it has decided about
+     you — atmospheric, and useless to somebody trying to work out what to do.
+
+     It cost two careers four rounds apart. Round 7 was refused every business
+     in Little Sicily for ninety days and never learned why; the repair then was
+     a label and a tooltip on the Territory panel, which is the screen holding
+     the number rather than the screen making the refusal, and round 12 walked
+     into the identical wall and did not own a front until day 200. A front is
+     the only tap between the dirty economy and the clean one, so being silently
+     held off one holds the player out of half the game.
+
+     So it names the figure, the bar, and the way back. The way back was already
+     free — `SENTIMENT_RECOVERY_PER_WEEK` runs whether or not anybody knows it
+     is running — which is what made the silence expensive rather than merely
+     unhelpful: the player was one piece of information short of a remedy they
+     already had.
+
+     Every caller reads `reason`, so the event that offers a front it cannot
+     sell you (events.ts) explains itself now too, from this one string.
+  */
+  if (t.sentiment < SENTIMENT_HOSTILE_BELOW) {
+    return {
+      ok: false,
+      reason:
+        `Public feeling in ${territoryDef(t.id).name} is ${Math.round(t.sentiment)}; ` +
+        `nobody there sells below ${SENTIMENT_HOSTILE_BELOW}. ` +
+        `Leaving the district alone brings it back.`,
+      cost,
+    };
+  }
+  /*
+     Holdings count towards a front, because a front is what they buy.
+
+     Front income is paid into holdings so it compounds rather than being spent
+     on the next job, and `acquireBusiness` draws on it directly. If this check
+     kept reading only the wallet, a family with every dollar of its legitimate
+     earnings put away would be told it could not afford the thing that money
+     exists to buy.
+  */
+  if (state.org.cash + state.org.dirtyCash + (state.org.holdings ?? 0) < cost) {
+    return { ok: false, reason: 'You cannot cover the purchase.', cost };
+  }
+  return { ok: true, reason: null, cost };
+}
+
+export function acquireBusiness(
+  state: GameState,
+  defId: string,
+  territoryId: string,
+): Business | null {
+  const check = canAcquire(state, defId, territoryId);
+  if (!check.ok) return null;
+  /*
+     Holdings first, because this is the one thing they are for.
+
+     Moving money from a box at a bank into a building is not selling in a
+     hurry, so it does not pay the hurry price. Without this the previous
+     change would tax every reinvestment fifteen per cent through `takeBack`
+     and fight the design it exists to serve: front income would land somewhere
+     it could only be spent on fronts at a discount.
+
+     Everything else in the game still has to draw on the wallet.
+  */
+  const fromHoldings = Math.min(state.org.holdings ?? 0, check.cost);
+  const rest = check.cost - fromHoldings;
+  if (rest > 0 && !canAfford(state, rest)) return null;
+  state.org.holdings = (state.org.holdings ?? 0) - fromHoldings;
+  if (rest > 0 && !spend(state, rest)) {
+    // Put it back rather than losing it to a failed purchase.
+    state.org.holdings = (state.org.holdings ?? 0) + fromHoldings;
+    return null;
+  }
+
+  const business: Business = {
+    id: nextId(state, 'biz'),
+    defId,
+    territoryId,
+    purchasedDay: state.day,
+    exposure: 0,
+    health: HEALTH.start,
+    revenueTotal: 0,
+    launderedTotal: 0,
+    lastLaundered: 0,
+    status: 'operating',
+  };
+  state.businesses[business.id] = business;
+  state.territories[territoryId].businessIds.push(business.id);
+
+  addLog(
+    state,
+    `You now own ${BUSINESS_BY_ID[defId].name.toLowerCase()} in ${territoryDef(territoryId).name}. On paper, anyway.`,
+    'money',
+  );
+  return business;
+}
+
+/**
+ * Closing a front dumps its exposure and returns part of the purchase price.
+ * The usual reason to do it is that it has become the most interesting thing
+ * about you.
+ */
+export function shutterBusiness(state: GameState, businessId: string): void {
+  const business = state.businesses[businessId];
+  if (!business || business.status !== 'operating') return;
+  const def = businessDef(business);
+
+  business.status = 'shuttered';
+  earnClean(state, Math.round(priced(state, def.cost) * SHUTTER_REFUND_SHARE));
+  addLog(
+    state,
+    `${def.name} in ${territoryDef(business.territoryId).name} is closed. Whatever it was carrying goes with it.`,
+    'money',
+  );
+}
+
+// ------------------------------------------------------------------ tick ---
+
+/**
+ * Weekly, on payday, before wages — so a business can pay for the crew it
+ * takes to hold the district it sits in.
+ *
+ * Returns what moved, for the log and the finances panel.
+ */
+export function tickBusinesses(
+  state: GameState,
+  rng: Rng,
+): { revenue: number; laundered: number; cut: number } {
+  if (state.day % PAYDAY_INTERVAL !== 0) return { revenue: 0, laundered: 0, cut: 0 };
+
+  const operating = ownedBusinesses(state);
+  if (operating.length === 0) {
+    state.lastLaunderReport = null;
+    return { revenue: 0, laundered: 0, cut: 0 };
+  }
+
+  let revenue = 0;
+  let laundered = 0;
+  let capacityTotal = 0;
+  const cutShare = launderCut(state);
+
+  /*
+   * Keep the coming payroll back in dirty cash rather than washing it.
+   *
+   * Wages are paid from dirty first, so laundering the whole pile means paying
+   * the cut on money that goes straight back out the door the same day — a
+   * pure loss, and exposure on the business for nothing. You launder what you
+   * intend to keep.
+   */
+  const keepBack = weeklyWageBill(state);
+  const washable = Math.max(0, state.org.dirtyCash - keepBack);
+
+  for (const business of operating) {
+    const def = businessDef(business);
+
+    // Clean income arrives regardless of what you push through it.
+    // Legitimate trade is worse in a city that feels unsafe — which is a cost
+    // of violence that finally lands somewhere other than a heat meter.
+    const earned = Math.round(
+      weeklyRevenue(state, business) *
+        worldMod(state, 'businessRevenue') *
+        outrageBusinessMultiplier(state),
+    );
+    revenue += earned;
+    business.revenueTotal += earned;
+
+    // Laundering takes whatever is left of the washable surplus, up to
+    // capacity — reduced sharply once investigators are inside the books, and
+    // again when the whole city's books are being looked at.
+    const capacity = Math.max(
+      1,
+      Math.round(
+        launderCapacity(state, business) *
+          launderRestriction(state) *
+          worldMod(state, 'launderCapacity'),
+      ),
+    );
+    capacityTotal += capacity;
+    const moved = Math.min(capacity, Math.max(0, washable - laundered));
+    business.lastLaundered = moved;
+
+    if (moved > 0) {
+      laundered += moved;
+      business.launderedTotal += moved;
+      // Exposure tracks how hard you leaned on it, not how much it holds.
+      business.exposure = clamp(
+        business.exposure + (moved / capacity) * def.exposureRate,
+        0,
+        100,
+      );
+    }
+
+    // Quiet weeks let a front cool off, faster the more ordinary it looks.
+    const decay = EXPOSURE_DECAY_BASE + def.legitimacy * EXPOSURE_DECAY_PER_LEGITIMACY;
+    if (moved < capacity * 0.5) {
+      business.exposure = clamp(business.exposure - decay, 0, 100);
+    }
+
+    // A front that has become interesting starts costing you on its own.
+    if (business.exposure > EXPOSURE_ALARMING_ABOVE) {
+      const over = (business.exposure - EXPOSURE_ALARMING_ABOVE) / (100 - EXPOSURE_ALARMING_ABOVE);
+      addHeat(state, over * EXPOSURE_HEAT_AT_MAX, 'money', `${def.name} finances`);
+    }
+    /*
+     * How the business itself is doing, which is not the same question as how
+     * interesting it is to an investigator. A front can be perfectly clean and
+     * dying because the neighbourhood has turned and somebody opened the same
+     * thing two streets over.
+     */
+    const pressure = healthPressure(state, business);
+    const before = business.health ?? HEALTH.start;
+    business.health = clamp(before + pressure.total, 0, 100);
+
+    if (before >= HEALTH.warnBelow && business.health < HEALTH.warnBelow) {
+      addLog(
+        state,
+        `${def.name} in ${territoryDef(business.territoryId).name} is in trouble. Takings are down and it is not the season.`,
+        'failure',
+      );
+    }
+
+    if (business.health <= 0) {
+      business.status = 'shuttered';
+      earnClean(state, Math.round(priced(state, def.cost) * HEALTH.collapseRefundShare));
+      addLog(
+        state,
+        `${def.name} in ${territoryDef(business.territoryId).name} has gone under. You get the fittings and the lease back, which is not much.`,
+        'failure',
+      );
+      continue;
+    }
+
+    if (business.exposure > EXPOSURE_EVIDENCE_ABOVE && rng.chance(EXPOSURE_EVIDENCE_CHANCE)) {
+      addEvidence(state, {
+        day: state.day,
+        source: 'finance',
+        strength: Math.round(business.exposure / 4),
+        npcIds: [],
+        detail: `Irregular accounts at ${def.name.toLowerCase()} in ${territoryDef(business.territoryId).name}.`,
+      });
+    }
+  }
+
+  const cut = Math.round(laundered * cutShare);
+  const cleaned = laundered - cut;
+
+  state.org.dirtyCash = Math.max(0, state.org.dirtyCash - laundered);
+  /*
+     The takings go somewhere they can compound. What was washed stays liquid.
+
+     These are two different kinds of money and paying them into the same pool
+     was why the legitimate side never grew. Over four years a family earns
+     $184,077 of clean money and spends $85,137 of it on job costs, because
+     clean is the pool every cost falls back on the moment dirty runs out — so
+     the fronts' own income was funding hijackings, and the family reinvested
+     two per cent of its earnings into the thing earning them.
+
+     `revenue` is what the businesses took over the counter. It is the
+     reinvestment capital of an organization that intends to own more of them,
+     so it goes where it cannot be quietly spent, and `acquireBusiness` can
+     reach it. Drawing it out for anything else costs the hurry price, which is
+     the decision this is meant to create.
+
+     `cleaned` is dirty money the player *chose* to wash, at a cut they paid on
+     purpose. That is spending money by definition — for the lawyer, the
+     contact, the payroll — and it stays in the wallet.
+  */
+  earnClean(state, cleaned);
+  /*
+     All of it, and the withdrawal cost is a real decision rather than a bug.
+
+     Tried the other way — takings meeting the week's bills in the wallet and
+     only the surplus compounding — on the reasoning that it would stop a
+     family paying the hurry price to reach its own earnings. It measured
+     worse on every figure: best estate across 36 careers fell from $218,386 to
+     $143,222 and the median from $24,229 to $13,034, because money that lands
+     in the wallet is money that goes on the next job. Paying the bills out of
+     the takings hands the compounding pool straight back to the leak it exists
+     to escape.
+
+     So the takings go where they compound, in full. A boss who has to sell
+     holdings to make payroll is a boss who over-hired, and the fifteen per
+     cent is what that costs. The probe's bot pays it constantly because its
+     rule is crude; a player watching the payroll forecast need not.
+  */
+  if (revenue > 0) {
+    state.org.holdings = (state.org.holdings ?? 0) + revenue;
+  }
+
+  /*
+     The work teaches the trade. See config/businesses.ts:BUSINESS_FROM.
+
+     Scaled by how much of the available capacity actually moved, so a front
+     standing idle in a dead district teaches nothing and a pipeline running at
+     the limit teaches the full rate.
+  */
+  if (capacityTotal > 0 && laundered > 0) {
+    trainAttribute(
+      state,
+      'business',
+      BUSINESS_FROM.launderingPerWeek * clamp(laundered / capacityTotal, 0, 1),
+    );
+  }
+
+  state.lastLaunderReport = { laundered, cut, revenue, capacity: capacityTotal, washable };
+
+  /*
+     Both lines name where the takings went, which neither used to.
+
+     The revenue was logged and its destination was not, so `Put away` grew on
+     its own — round 11 reached $57,452 having never pressed the button, found
+     no log line in 303 days that mentioned money moving there, and ended up
+     selling the lot at the hurry price to survive a payroll. That is a large
+     decision about money the player did not know they had.
+  */
+  if (laundered > 0) {
+    addLog(
+      state,
+      `Businesses took in $${revenue.toLocaleString('en-US')}, put away rather than banked, ` +
+        `and moved $${laundered.toLocaleString('en-US')} through, ` +
+        `$${cut.toLocaleString('en-US')} lost in the washing.`,
+      'money',
+    );
+  } else if (revenue > 0) {
+    addLog(
+      state,
+      `Businesses took in $${revenue.toLocaleString('en-US')}. It goes to what is put away.`,
+      'money',
+    );
+  }
+
+  return { revenue, laundered, cut };
+}
+
+/** Everything the player could buy right now, for the businesses panel. */
+export function acquisitionOptions(
+  state: GameState,
+): { def: BusinessDef; territory: Territory; check: AcquireCheck }[] {
+  const out: { def: BusinessDef; territory: Territory; check: AcquireCheck }[] = [];
+  for (const t of Object.values(state.territories)) {
+    if (controlLevel(t) === 'none' || controlLevel(t) === 'presence') continue;
+    for (const def of BUSINESSES) {
+      out.push({ def, territory: t, check: canAcquire(state, def.id, t.id) });
+    }
+  }
+  return out.sort((a, b) => Number(b.check.ok) - Number(a.check.ok) || a.def.cost - b.def.cost);
+}
