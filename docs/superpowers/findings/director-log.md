@@ -2015,12 +2015,30 @@ F12 and F15 at once: a district under the bar sells no fronts, and fronts are th
 No bot exercises it, so it is invisible to every probe — F7, again. No blind round has
 seen it.
 
-**And the browser check is half done.** The panel was verified rendering on the
-isolated instance with all four figures and their refusals as visible body text
-naming the bar, no console errors. **The live half could not run: the Browser pane was
-not displayed, so the page stopped compositing and the clock would not advance.** That
-is round 12's failure mode in a new place, and it is recorded rather than papered
-over — accruing standing across a season is proven by the twelve sim tests, not by
-having watched it.
+**The browser check was completed on a second attempt.** The first failed because the
+Browser pane was not displayed, so the page stopped compositing and the clock would
+not advance — round 12's failure mode in a new place. With the pane open, a real
+career was driven to **day 112** and the following verified live:
+
+- All four figures render, with a standing bar and what spending one would do.
+- **Standing accrues from play.** A career kept at heat 0 had a police captain
+  owing **2** by day 112, and the panel's own header changed from "Nobody outside
+  the family owes you anything yet" to "Somebody owes you."
+- **Every refusal names its own bar and the player's value against it**, in body
+  text rather than a tooltip: the union boss at "standing is 24; they start owing
+  above 40", the judge at "needs Influence 3; you have 0", the alderman at 6.
+- **A favour that cannot land says so.** Calling in the captain with no open case
+  printed "There is no open file for them to lose" and did not spend the favour.
+
+**Still not verified live: a successful bury.** That career never attracted a case, and
+grinding one open was not worth the driving; the effect is asserted directly against
+the investigation object in `civic.test.ts`.
+
+**And looking at the screen found a defect no test could.** The alderman's blurb said
+it *replaces* the $120,000 arrangement on the City panel — and that arrangement is
+still rendered directly below it. Two routes to the same ninety days is the shape the
+vision actually asked for ("instead of clicking Reduce Heat — $50,000 you need to
+solve the problem through your network"), so the panel is right and the sentence was
+wrong. Corrected to say the same arrangement reached the other way.
 
 `tsc` clean. 660 tests, 57 files, 659 passing and one failing on purpose.

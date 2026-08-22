@@ -279,9 +279,14 @@ Ranked. F10 outranks everything else in this list.
   district under the bar sells no fronts, and fronts are the fork the whole
   economy turns on.
 
+  **Verified live to day 112:** standing accrues from play (a quiet career had a
+  captain owing 2), every refusal names its own bar in body text, and a favour
+  that cannot land says why instead of doing nothing. A successful bury is
+  asserted in `civic.test.ts` rather than watched — that career never drew a
+  case.
+
   **Not yet done:** no bot exercises it, so it is invisible to every probe
-  (F7). No blind round has seen it. The live-game half of the browser check
-  could not run — see below.
+  (F7). No blind round has seen it.
 
 - **F15 — the economy is bimodal and it forks on fronts. NEW, and it now
   outranks the rest of this list.** At day 300, twenty-five careers of thirty-six
