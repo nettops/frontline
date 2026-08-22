@@ -17,7 +17,9 @@ import { newGame } from '../../sim/state';
 import { runDaysSolvent } from '../../sim/__tests__/helpers';
 import { crewList } from '../../sim/npc';
 import { addLog } from '../../sim/util';
-import { buildReport, snapshot } from '../report';
+import { DAY_PARTS, buildReport, snapshot } from '../report';
+import { home } from '../../sim/personal';
+import { HOME } from '../../config/personal';
 import { AGENCIES } from '../../config/lawEnforcement';
 import { TERRITORIES } from '../../config/territories';
 import type { GameState } from '../../sim/types';
@@ -268,5 +270,106 @@ describe('the briefing survives a real game', () => {
 
     // If this is zero the assertions above never ran and the test is a lie.
     expect(reports).toBeGreaterThan(10);
+  });
+});
+
+/*
+   The day has a shape.
+
+   The simulation has always run in this order — the night resolves, the desk
+   fills, and the part of a boss's life that is not the business is whatever is
+   left. What was missing was anywhere the player could feel it: the briefing
+   was one list in which a man dying overnight, a memo still waiting for an
+   answer, and your family asking after you were the same kind of line.
+
+   Nothing in `sim/` knows this exists, which is the property the first test
+   here guards.
+*/
+describe('the parts of the day', () => {
+  it('files what already happened under the night', () => {
+    const state = fresh();
+    const snap = snapshot(state);
+    state.org.heat += 20;
+    const report = buildReport(snap, state)!;
+    expect(report).not.toBeNull();
+    expect(report.lines.every((l) => (l.part ?? 'overnight') === 'overnight')).toBe(true);
+  });
+
+  /*
+     A memo has not happened yet, which is the whole difference. Reading it
+     under the same heading as a death is what made the old briefing a list
+     rather than a morning.
+  */
+  it('files what has not happened yet under today', () => {
+    const state = fresh();
+    const snap = snapshot(state);
+    state.org.heat += 20;
+    state.pendingEvents.push({
+      id: 'evt_x',
+      defId: 'test',
+      day: state.day,
+      title: 'Something',
+      body: 'Anything',
+      severity: 'info',
+      choices: [{ id: 'ok', label: 'Fine', hint: '' }],
+      npcId: null,
+      data: {},
+    });
+
+    const report = buildReport(snap, state)!;
+    const today = report.lines.filter((l) => l.part === 'today');
+    expect(today.length, 'a memo on the desk was not filed under today').toBe(1);
+    expect(today[0].text).toMatch(/waiting for an answer/);
+  });
+
+  /*
+     And the evening, which is the reason the roadmap put this after the
+     personal life rather than before it. An evening with nothing in it is
+     worse than no evening.
+  */
+  it('says nothing about the evening while the house is content', () => {
+    const state = fresh();
+    const snap = snapshot(state);
+    state.org.heat += 20;
+    const report = buildReport(snap, state)!;
+    expect(report.lines.some((l) => l.part === 'evening')).toBe(false);
+  });
+
+  it('speaks in the evening once the house has noticed', () => {
+    const state = fresh();
+    const snap = snapshot(state);
+    state.org.heat += 20;
+    home(state).neglect = HOME.depositionFrom + 10;
+    home(state).lastVisitDay = state.day - 90;
+
+    const report = buildReport(snap, state)!;
+    const evening = report.lines.filter((l) => l.part === 'evening');
+    expect(evening.length, 'the house has given up on you and the briefing did not say').toBe(1);
+    expect(evening[0].panel, 'the evening line goes nowhere').toBe('player');
+    expect(evening[0].text).toMatch(/asked after you/);
+  });
+
+  /*
+     The evening on its own is not a briefing. A boss who had a completely
+     quiet week should not be handed a page whose only content is that nobody
+     at home has seen him — that is a nag with a heading on it.
+
+     It is allowed to be the only line once it is loud enough to matter, which
+     is the case above; this is the quieter one below that bar.
+  */
+  it('does not raise a briefing for the evening alone when nothing else happened', () => {
+    const state = fresh();
+    const snap = snapshot(state);
+    home(state).lastVisitDay = state.day - 30;
+    const report = buildReport(snap, state);
+    expect(
+      report && report.lines.every((l) => l.part === 'evening'),
+      'a quiet week produced a briefing that only said nobody has seen you',
+    ).not.toBe(true);
+  });
+
+  it('keeps every part in the order a day happens', () => {
+    expect(DAY_PARTS.map((p) => p.id)).toEqual(['overnight', 'today', 'evening']);
+    expect(DAY_PARTS.every((p) => p.label.length > 0)).toBe(true);
   });
 });

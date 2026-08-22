@@ -27,6 +27,8 @@ import { AGENCY_BY_ID, STAGE_BY_ID } from '../config/lawEnforcement';
 import { TERRITORY_BY_ID } from '../config/territories';
 import { WORLD_CONDITION_BY_ID } from '../config/world';
 import { houseName } from '../sim/houses';
+import { homeRead } from '../sim/personal';
+import { HOME } from '../config/personal';
 
 export interface Snapshot {
   day: number;
@@ -76,12 +78,38 @@ export function snapshot(state: GameState): Snapshot {
 
 export type LineTone = 'good' | 'bad' | 'money' | 'neutral';
 
+/**
+ * Which part of the day a line belongs to.
+ *
+ * The vision asks for a day with a shape — you read what came in overnight,
+ * you work, and the evening is the part that is not the business. The
+ * simulation already runs in that order and always has; what was missing was
+ * anywhere the player could feel it, because the briefing was one
+ * undifferentiated list in which a man dying and your family asking after you
+ * were the same kind of line.
+ *
+ * Deliberately a property of the *report* rather than of the simulation. The
+ * clock is unchanged, the tick order is unchanged, and nothing in `sim/` knows
+ * this exists — which is the same rule the rest of this file follows and the
+ * reason it lives in `ui/`.
+ */
+export type DayPart = 'overnight' | 'today' | 'evening';
+
 export interface ReportLine {
   text: string;
   tone: LineTone;
   /** Where to go to do something about it. Null when there is nothing to do. */
   panel: PanelId | null;
+  /** Defaults to `overnight` — most of what a briefing carries already happened. */
+  part?: DayPart;
 }
+
+/** The three parts, in the order a day happens. */
+export const DAY_PARTS: { id: DayPart; label: string }[] = [
+  { id: 'overnight', label: 'While you were not looking' },
+  { id: 'today', label: 'Waiting on you' },
+  { id: 'evening', label: 'This evening' },
+];
 
 export interface DayReport {
   from: number;
@@ -112,8 +140,12 @@ const NARRATIVE_LIMIT = 3;
 export function buildReport(before: Snapshot, state: GameState): DayReport | null {
   const lines: ReportLine[] = [];
   const now = snapshot(state);
-  const push = (text: string, tone: LineTone, panel: PanelId | null = null) =>
-    lines.push({ text, tone, panel });
+  const push = (
+    text: string,
+    tone: LineTone,
+    panel: PanelId | null = null,
+    part: DayPart = 'overnight',
+  ) => lines.push({ text, tone, panel, part });
 
   // --- the line of succession ------------------------------------------
   // First, above everything, because if this changed you are not the same
@@ -331,6 +363,60 @@ export function buildReport(before: Snapshot, state: GameState): DayReport | nul
         : `Heat down ${-heat}, to ${Math.round(now.heat)}.`,
       heat > 0 ? 'bad' : 'good',
       null,
+    );
+  }
+
+  /*
+     And the part of the day that is not the business.
+
+     This is the whole reason the roadmap put day-parts *after* the personal
+     life rather than before it: an evening with nothing in it is worse than no
+     evening. The house is the only thing that goes here, it only speaks when
+     it has actually noticed, and it is a way through to the screen rather than
+     a number.
+  */
+  const somethingHappened = lines.length > 0;
+  const house = homeRead(state);
+  if (house.neglect >= HOME.depositionFrom) {
+    // Loud enough to be the only thing on the page, because at this point it
+    // is costing the boss something real.
+    push(
+      `${house.people[0] ?? 'Somebody'} asked after you. It has been ${house.since} days.`,
+      'bad',
+      'player',
+      'evening',
+    );
+  } else if (somethingHappened && house.since >= HOME.intervalDays * 6) {
+    /*
+       And the quiet version only ever rides along.
+
+       Its own test caught the first half of this: a boss who had a completely
+       uneventful week was handed a briefing whose single line was that nobody
+       at home had seen him. That is a nag with a heading on it, and the surest
+       way to teach somebody to dismiss the briefing without reading it.
+
+       Round 15 caught the second half — it still appeared on almost every
+       briefing for two hundred days, because "something happened" is true most
+       weeks. Six weeks away rather than three, so the line is an observation
+       about a real absence rather than a running total.
+    */
+    push(`Nobody at home has said anything. It has been ${house.since} days.`, 'neutral', 'player', 'evening');
+  }
+
+  /*
+     Anything still on the desk belongs to today rather than to last night.
+
+     A memo is the one thing in a briefing that has not happened yet, and
+     reading it under the same heading as a death is what made the old
+     briefing feel like a list rather than a morning.
+  */
+  if (state.pendingEvents.length > 0) {
+    const n = state.pendingEvents.length;
+    push(
+      n === 1 ? 'Something is waiting for an answer.' : `${n} things are waiting for an answer.`,
+      'neutral',
+      null,
+      'today',
     );
   }
 

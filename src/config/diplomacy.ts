@@ -78,7 +78,52 @@ export const BOND = {
    */
   respectFromStrength: 0.6,
   respectFromDistricts: 4,
-  respectSettlePerWeek: 1.4,
+  /**
+   * ...and having been looked at and walked away from it.
+   *
+   * The third term this comment always claimed was here. Strength and ground
+   * are both the war player's axis, so a career that ran fronts, kept quiet
+   * and never fought could not move a rival's opinion of it at all — the best
+   * respect any of thirty-six careers ever reached was 29, 29 and 31 at the
+   * 40th, median and 75th, which is not a distribution, it is a constant with
+   * noise on it.
+   *
+   * Capped, because a boss who has beaten nine cases is a boss the other
+   * families have been watching get investigated nine times, and there is a
+   * point past which that stops being impressive.
+   */
+  respectFromCaseBeaten: 5,
+  respectFromCasesCap: 20,
+  /**
+   * ...and what the street says about you, which is the only continuous term.
+   *
+   * Districts move in whole numbers and cases move in whole numbers, so a
+   * target built only from those lands on the same handful of values for most
+   * careers: the measured distribution was 27 / 27 / 36 and a bar at 28 caught
+   * thirteen careers while a bar at 27 caught all thirty-six. That is a cliff,
+   * not a threshold, and no number placed on it is a decision.
+   *
+   * `org.respect` is standing — what people will do for you because they want
+   * to — and it moves a point at a time. A family reading the street to decide
+   * how seriously to take somebody is the plainest possible reading of the
+   * word this field is named after.
+   */
+  respectFromStanding: 0.04,
+  /**
+   * How fast respect walks toward that target.
+   *
+   * Was 1.4, which is twenty-one weeks to cross the twenty-nine points between
+   * nothing and the demand-tribute bar. A career that takes its fifth district
+   * on day 200 therefore never arrives, and the probe duly reported the door
+   * open in twelve careers out of thirty-six while the *target* was met by
+   * half of them. A quantity that cannot reach its own target inside the
+   * horizon a person plays is the same defect as a bar set above the range.
+   *
+   * 2.6 crosses it in a season, which is the pace the rest of this file works
+   * at — `driftPerWeek` in the civic network, the sentiment recovery, the
+   * grudge decay.
+   */
+  respectSettlePerWeek: 2.6,
 
   /** Alliance needs somebody you can rely on, not merely somebody you like. */
   allianceTrust: 40,
@@ -255,8 +300,29 @@ export const DIPLOMATIC_ACTIONS: DiplomaticActionDef[] = [
     name: 'Propose an alliance',
     blurb:
       'A standing arrangement. They stop taking your districts, and will come in on your side against a common enemy.',
-    cost: 100_000,
-    minRelationship: 40,
+    /*
+       Was $100,000 against a relationship of 40, and **open in zero careers
+       out of thirty-six**.
+
+       Two walls stacked, both sized for a career that has already succeeded.
+       `ladder.probe` measures the best standing any family ever reaches at
+       9 / 20 / 22 for the 40th, median and 75th, and the best estate a career
+       ever holds at day 300 at a median of $28,870. Forty was above the range
+       of the quantity; a hundred thousand was above the range of the wallet.
+       Round 13 read this screen four times and wrote *"I never found anything
+       on it I could press"*.
+
+       Sized the way `config/economy.ts` sizes the rank table: standing just
+       under the 75th of the measured distribution — 9 / 9 / 21 for the 40th,
+       median and 75th — which makes it the top quarter of careers on the axis
+       the action is actually about. At 22 it was open in one career out of
+       thirty-six, which is dead content wearing a button. The money comes down to something the same careers
+       can hold, so there is **one** gate rather than three — an alliance
+       should be a thing you have earned with the other family, not a thing you
+       have earned with the other family and also happen to be rich enough for.
+    */
+    cost: 15_000,
+    minRelationship: 20,
     requiresWar: false,
   },
   {
@@ -302,7 +368,39 @@ export const DIPLOMACY = {
    * every time it asks for something, and one that has never done anything
    * does — even at the same headcount.
    */
-  demandRespect: 55,
+  /*
+     Was 55, and reachable in two careers out of thirty-six.
+
+     Three things were wrong and the first two hid the third.
+
+     `ladder.probe` had never looked at this quantity, so nobody knew that the
+     best respect any family holds for a player runs 27 / 35 / 44 across the
+     population. The bar sat above the 75th of a distribution nobody had
+     plotted.
+
+     The distribution itself was nearly flat — 29 / 29 / 31 before the two
+     repairs below — because the target respect settles toward was built only
+     from strength and districts, both of which are the war player's axis and
+     both of which move in whole numbers. A career that ran fronts and kept
+     quiet could not move it at all, and no bar on a constant is a decision.
+
+     And `STARTING_RESPECT_FOR` is **30**. Every family begins with that much
+     respect for a boss who has done nothing, so any bar under thirty opens the
+     door on the first morning — which is what a bar of 28 did, and what
+     `diplomacy.test.ts` caught within the minute.
+
+     35 is the median of the measured distribution — 32 / 35 / 48 — and sits
+     above the starting 30, so it is a thing a career earns back after the
+     opening months rather than a thing it is handed. The lower end of the
+     sanctioned band on purpose, for the same reason the police captain's bar
+     is: **this is the only door a career that never goes to war has.** At the
+     75th it was open in thirteen careers out of thirty-six, which is a door
+     for the quarter of players who least need one. The
+     other way over — being clearly stronger — stays at 15: the median career
+     trails the families it is talking to by forty, and that route is meant to
+     be the hard one.
+  */
+  demandRespect: 35,
 
   /**
    * Peace is a promise, and they price it on whether your promises hold.

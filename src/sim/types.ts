@@ -9,6 +9,7 @@ import type { RngState } from './rng';
 import type { FactionId, FactionPersonality } from '../config/factions';
 import type { LawyerLevel, StageId } from '../config/lawEnforcement';
 import type { TieCause } from '../config/ties';
+import type { PressureId } from '../config/pressure';
 import type { IncidentKind } from '../config/beliefs';
 import type { MemoryKind } from '../config/memories';
 import type { PromiseKind } from '../config/promises';
@@ -462,7 +463,52 @@ export interface Leak {
  * query is "what have I got outstanding" — a boss with nine promises out is in
  * a different position from one with nine men, and only this shape says so.
  */
+/**
+ * Something somebody told you.
+ *
+ * `truth` is stored and must never be read by anything the player can see.
+ * The mechanic is deciding without knowing; a panel that leaked it would turn
+ * the feed into a to-do list. `readWhispers` is the only intended reader of
+ * this shape and it does not carry the field.
+ */
+export interface Whisper {
+  day: number;
+  kind: string;
+  text: string;
+  /** What it is about — an npc id, a territory:faction pair, or 'law'. */
+  subject: string;
+  /** 0..1, how sure the source is. Independent of whether they are right. */
+  confidence: number;
+  /** Whether it is actually so. Hidden. */
+  truth: boolean;
+  /** Set once a second whisper about the same subject has hardened it. */
+  corroborated: boolean;
+}
+
 /** One person outside the family, and where you stand with them. */
+/**
+ * Somebody at home.
+ *
+ * Deliberately not an `Npc`. An `Npc` is a person the game assigns to jobs,
+ * pays a wage, tracks courage and skill for, and puts on the crew sheet, and
+ * none of that is true of a brother-in-law — reusing the type would have put
+ * the whole household on the payroll. Three fields is what this needs.
+ */
+export interface HouseholdMember {
+  name: string;
+  /** An id from `config/personal.ts`. */
+  relationId: string;
+}
+
+export interface Home {
+  /** Where you actually live, which is a district like any other. */
+  districtId: string;
+  people: HouseholdMember[];
+  lastVisitDay: number;
+  /** 0..100. How long it has been, from their side. */
+  neglect: number;
+}
+
 export interface CivicStanding {
   id: string;
   /** 0..100. Drifts toward what they watch; never set directly. */
@@ -869,6 +915,14 @@ export interface Business {
    */
   health: number;
   status: 'operating' | 'shuttered';
+  /**
+   * How hard you lean on it.
+   *
+   * Optional, so a save written before the dial existed loads unchanged — an
+   * absent value reads as `normal`, whose every multiplier is 1 or 0, so an
+   * existing front behaves exactly as it did.
+   */
+  pressure?: PressureId;
 }
 
 // ------------------------------------------------------------ contraband ---
@@ -1221,6 +1275,24 @@ export interface GameState {
    * once. Same reasoning as `promises` above.
    */
   civic?: CivicStanding[];
+  /**
+   * The half of a boss that is not the business.
+   *
+   * Optional with a lazy initialiser in `personal.ts`, the same idiom as
+   * `promises`, `civic` and `whispers` — so `SAVE_VERSION` does not move and a
+   * save written before this existed loads with a family it turns out it
+   * always had. Not in `validate()`, for the same reason none of the others
+   * are.
+   */
+  home?: Home;
+
+  /**
+   * What has reached you, and how sure whoever brought it was.
+   *
+   * Optional and lazily created, so a save written before this existed loads
+   * as nobody having told you anything — which for those saves is true.
+   */
+  whispers?: Whisper[];
 
   /**
    * What the other side has turned out to know, newest first.

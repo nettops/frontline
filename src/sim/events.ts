@@ -19,6 +19,9 @@ import type {
   Territory,
 } from './types';
 import { addEvidence, addLog, pushEvent, weightedPick, withArticle } from './util';
+import { askable, money, oneOf, payable, shortOf } from './memo';
+import { GEN_DEFS, isGenerated, resolveGenerated } from './eventgen';
+import { GEN_CHANCE_PER_DAY } from '../config/eventgen';
 import { addNote, crewList, generateNpc } from './npc';
 import { informFromMemory, remember } from './memory';
 import { recordTie } from './ties';
@@ -70,16 +73,26 @@ const EVENT_CHANCE_PER_DAY = 0.16;
 /** Never stack more than this many unanswered events. */
 const MAX_PENDING = 3;
 
-interface EventContext {
+export interface EventContext {
   npc?: Npc;
   other?: Npc;
   territory?: Territory;
   business?: Business;
   faction?: Faction;
   investigation?: Investigation;
+  /**
+   * A civic figure, by id.
+   *
+   * Not an object like the others because the roster is state and the
+   * catalogue is config — `eventgen.ts` carries the id and looks both up. The
+   * generated memos are the only thing that needs it.
+   */
+  civicId?: string;
+  /** Set when the memo is about the house rather than the business. */
+  atHome?: true;
 }
 
-interface EventDef {
+export interface EventDef {
   id: string;
   weight: number;
   cooldownDays: number;
@@ -101,115 +114,6 @@ function pickWhere(
 ): Npc | null {
   const matches = activeCrew(state).filter(predicate);
   return matches.length ? rng.pick(matches) : null;
-}
-
-function money(n: number): string {
-  return `$${Math.round(n).toLocaleString('en-US')}`;
-}
-
-/**
- * One of several ways of saying the same thing.
- *
- * The events that fire most often are on ten-to-fifteen day cooldowns, which
- * over a long game means the same paragraph six or seven times with only a
- * figure changed — a playtester could recite the opening line of the recruit
- * offer by their second run, and said so. The mechanics were fine; the seam
- * was that the prose was a constant.
- *
- * Drawn from the same seeded stream as everything else, so a reloaded save
- * tells the same story rather than a differently-worded one. Variants must be
- * interchangeable: same facts, same choices, same consequences, different
- * mouth.
- */
-function oneOf(rng: Rng, lines: string[]): string {
-  return rng.pick(lines);
-}
-
-/**
- * An asking price the player could conceivably meet.
- *
- * Offers used to be priced off standing alone, which is a reasonable measure
- * of what somebody thinks you are worth and a terrible measure of what is in
- * the safe. A playtester was shown the same opportunity at $8,154, then
- * $19,078, then $19,842, while holding a four-figure balance the whole time —
- * three pop-ups, three guaranteed declines, no decision in any of them.
- *
- * So the ask is bounded by what is actually on hand. The share is the tuning:
- * at four fifths the balance probe's greedy player, which accepts everything
- * it can afford, started dying a year early — it could stake almost the whole
- * treasury on a coin flip every fortnight. Under half leaves the choice
- * genuinely expensive without being able to end a run on its own. The floor
- * keeps it from degenerating into a trivial offer when broke; below that the
- * man simply does not come.
- */
-function askable(state: GameState, ideal: number, floor: number): number {
-  const ceiling = Math.round(totalFunds(state) * 0.45);
-  return Math.max(floor, Math.min(ideal, Math.max(floor, ceiling)));
-}
-
-// ---------------------------------------------------------- definitions ----
-
-/**
- * A choice that costs money, with its price and its guard in one place.
- *
- * Twelve memo choices quoted a price. One of them checked whether the player
- * could pay it — the front purchase, which had been guarded after an earlier
- * playtester marked the unexplained failure as the game's worst moment. The
- * other eleven rendered enabled at any balance, took the click, failed inside
- * `spend`, logged a line and consumed the memo.
- *
- * Round 8 found it on the one that matters most: $12,000 to buy back a
- * neighbourhood is the only repair for a district that has turned against you,
- * and a boss holding $10,698 could spend the memo on it and get nothing back.
- *
- * Returning both fields together is the whole point. A hint and a guard
- * written as separate lines drift apart the moment somebody adds a thirteenth
- * choice, which is exactly how eleven of them came to be wrong.
- */
-/*
-   A priced option, and what it says when you cannot afford it.
-
-   `disabledReason` used to be the bare words "You cannot cover it", and
-   `MemoModal` renders the refusal in place of the hint — so the price went to
-   the hint, the hint was replaced, and the figure vanished at exactly the
-   moment it decided something. Round 14 hit it five times across four memo
-   families and read the DOM to prove the number was not there: "being poor is
-   the state where you most need to know whether you are $50 short or $20,000
-   short, because that decides whether you sell an asset or give up."
-
-   The refusal now names what is in hand, and the hint beside it still names
-   the price, which the panel keeps on screen rather than replacing. Between
-   them the player has both halves of the subtraction.
-
-   `totalFunds` rather than `state.org.cash`, because that is what the check
-   above compares against — a refusal quoting a different pot than the guard
-   would be a new way to be confusing.
-*/
-/*
-   The refusal half of `payable`, for choices that build their own label.
-
-   The same three lines were written out eight times in this file and the words
-   "You cannot cover it" thirteen times across the sim. Copies drift: round 14
-   found the memo version silently dropping its figure while the sit-down
-   version four files away said "You have not got $4,000" and had always been
-   right. One helper, so the next fix lands everywhere at once.
-*/
-function shortOf(state: GameState, amount: number): string | undefined {
-  const inHand = totalFunds(state);
-  return inHand < amount ? `You have ${money(inHand)}` : undefined;
-}
-
-function payable(
-  state: GameState,
-  amount: number,
-  note: string,
-): { hint: string; disabledReason: string | undefined; cost: number } {
-  const inHand = totalFunds(state);
-  return {
-    hint: `${money(amount)} — ${note}`,
-    disabledReason: inHand < amount ? `You have ${money(inHand)}` : undefined,
-    cost: amount,
-  };
 }
 
 const EVENT_DEFS: EventDef[] = [
@@ -1059,6 +963,7 @@ const EVENT_DEFS: EventDef[] = [
             label: `Put real counsel on them — ${money(cost)}`,
             hint: 'The offer stops looking attractive',
             disabledReason: shortOf(state, cost),
+            cost,
           },
           {
             id: 'reassure',
@@ -1135,6 +1040,7 @@ const EVENT_DEFS: EventDef[] = [
             label: `Take the meeting — ${money(price)}`,
             hint: 'You will see the file. They will know you are paying them',
             disabledReason: shortOf(state, price),
+            cost: price,
           },
           { id: 'refuse', label: 'Do not go', hint: 'It could be a test. Some of them are' },
         ],
@@ -1202,6 +1108,7 @@ const EVENT_DEFS: EventDef[] = [
             label: `Answer it — ${money(cost)}`,
             hint: 'Takes ground back. Attention, and they will remember',
             disabledReason: shortOf(state, cost),
+            cost,
           },
           { id: 'concede', label: 'Let them have the block', hint: 'Costs you standing there. Cools things' },
           { id: 'ignore', label: 'Do nothing', hint: 'They will read that as an answer' },
@@ -1292,6 +1199,7 @@ const EVENT_DEFS: EventDef[] = [
             label: 'Send money instead — $40,000',
             hint: 'Keeps your people home. Buys less goodwill than blood would',
             disabledReason: shortOf(state, 40_000),
+            cost: 40_000,
           },
           {
             id: 'refuse',
@@ -1347,7 +1255,13 @@ const EVENT_DEFS: EventDef[] = [
         npcId: null,
         data: { factionId: faction!.id, tribute },
         choices: [
-          { id: 'accept', label: `Pay the courtesy — ${money(tribute)}`, hint: 'Buys goodwill that is worth something later', disabledReason: shortOf(state, tribute) },
+          {
+            id: 'accept',
+            label: `Pay the courtesy — ${money(tribute)}`,
+            hint: 'Buys goodwill that is worth something later',
+            disabledReason: shortOf(state, tribute),
+            cost: tribute,
+          },
           { id: 'decline', label: 'Decline politely', hint: 'Nothing changes, for now' },
           { id: 'insult', label: 'Send them back with nothing', hint: 'Costs you badly with them. Standing on the street' },
         ],
@@ -1584,32 +1498,87 @@ function wrap(npc: Npc | null): EventContext | null {
    a row, and waiting for the dice to do it would be a slow test that sometimes
    measures nothing.
 */
+/**
+ * The authored table on its own, for the first of the two draws in
+ * `tickEvents`. Everything below this line treats the two halves as one
+ * catalogue, which is what `EVENT_DEF_BY_ID` is for — it is how
+ * `refusals.test.ts` and `variation.test.ts` reach the generated memos.
+ */
+const AUTHORED_DEFS: EventDef[] = [...EVENT_DEFS];
+EVENT_DEFS.push(...GEN_DEFS);
+
 export const EVENT_DEF_BY_ID: Record<string, EventDef> = Object.fromEntries(
   EVENT_DEFS.map((d) => [d.id, d]),
 );
 
 // ------------------------------------------------------------- rolling ----
 
-export function tickEvents(state: GameState, rng: Rng): void {
-  if (state.pendingEvents.length >= MAX_PENDING) return;
-
-  const diff = DIFFICULTY_BY_ID[state.difficulty];
-  if (!rng.chance(EVENT_CHANCE_PER_DAY * diff.eventPressure)) return;
-
-  const candidates: { def: EventDef; ctx: EventContext; weight: number }[] = [];
-  for (const def of EVENT_DEFS) {
+/**
+ * Which definitions could fire today, out of the half of the table asked for.
+ *
+ * Cooldown, one-at-a-time, and the definition's own view of whether the world
+ * can produce it. Shared by both draws below so the two halves cannot drift
+ * apart on what "eligible" means.
+ */
+function eligible(
+  state: GameState,
+  rng: Rng,
+  pool: EventDef[],
+): { def: EventDef; ctx: EventContext; weight: number }[] {
+  const out: { def: EventDef; ctx: EventContext; weight: number }[] = [];
+  for (const def of pool) {
     const lastFired = state.flags[`evt_${def.id}`] ?? -9999;
     if (state.day - lastFired < def.cooldownDays) continue;
     if (state.pendingEvents.some((e) => e.defId === def.id)) continue;
 
     const ctx = def.applies(state, rng);
-    if (ctx) candidates.push({ def, ctx, weight: def.weight });
+    if (ctx) out.push({ def, ctx, weight: def.weight });
   }
-  if (candidates.length === 0) return;
+  return out;
+}
 
+function raise(
+  state: GameState,
+  rng: Rng,
+  candidates: { def: EventDef; ctx: EventContext; weight: number }[],
+): boolean {
+  if (candidates.length === 0) return false;
   const chosen = weightedPick(candidates, rng.next());
   state.flags[`evt_${chosen.def.id}`] = state.day;
   pushEvent(state, chosen.def.build(state, rng, chosen.ctx));
+  return true;
+}
+
+/**
+ * The day's memo, if there is one.
+ *
+ * **Two draws, not one, and the second only runs when the first produced
+ * nothing.** The generated half was originally appended to the authored table
+ * and drawn from the same roll, which is tidy and was wrong: there is one memo
+ * slot a day, so every generated memo cost an authored one. `scorecard.probe`
+ * put a number on it — Pacing fell from 3.8 to 2.4 and the longest stretch
+ * without a first grew by 246 days — because the authored events are what
+ * carry the firsts.
+ *
+ * Lowering the generated weights protected pacing and gutted the supply the
+ * generator exists for: it ended up supplying 15% of the new situations in the
+ * back half of a career, which is a rounding error on somebody else's work.
+ *
+ * So they no longer compete. The authored pool draws first and keeps every
+ * slot it can fill. The generated half gets the days the pool has nothing for,
+ * which is precisely the hole round 14 fell into — by day 180 the authored
+ * events are all on cooldown or already answered, and the game goes quiet.
+ */
+export function tickEvents(state: GameState, rng: Rng): void {
+  if (state.pendingEvents.length >= MAX_PENDING) return;
+
+  const diff = DIFFICULTY_BY_ID[state.difficulty];
+  if (rng.chance(EVENT_CHANCE_PER_DAY * diff.eventPressure)) {
+    if (raise(state, rng, eligible(state, rng, AUTHORED_DEFS))) return;
+  }
+
+  if (!rng.chance(GEN_CHANCE_PER_DAY * diff.eventPressure)) return;
+  raise(state, rng, eligible(state, rng, GEN_DEFS));
 }
 
 // ----------------------------------------------------------- resolution ----
@@ -1630,6 +1599,13 @@ export function resolveEvent(
   state.pendingEvents.splice(index, 1);
 
   const npc = event.npcId ? state.npcs[event.npcId] : null;
+
+  // The generated half resolves itself. Everything it does moves a number an
+  // existing system already owns, so it needs no case in the table below.
+  if (isGenerated(event.defId)) {
+    resolveGenerated(state, rng, event, choiceId);
+    return;
+  }
 
   switch (event.defId) {
     // ---------------------------------------------------- rank promotion --

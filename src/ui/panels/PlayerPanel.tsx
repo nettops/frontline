@@ -1,7 +1,10 @@
-import { useGame } from '../../store';
+import { useGame, mutate } from '../../store';
 import { Panel, Bar, KeyValue } from '../components';
 import { nextRank, rankRequirements } from '../../sim/player';
 import { estate } from '../../sim/estate';
+import { careerShape, legitimacy } from '../../sim/legacy';
+import { authorityRead } from '../../sim/authority';
+import { canGoHome, goHome, homeRead } from '../../sim/personal';
 import { controlledTerritories } from '../../sim/territory';
 import { formatMoney } from '../../sim/util';
 import {
@@ -77,6 +80,9 @@ export default function PlayerPanel() {
   const next = nextRank(state);
   const reqs = rankRequirements(state);
   const difficulty = DIFFICULTY_BY_ID[state.difficulty];
+  const authorityNow = authorityRead(state);
+  const houseNow = homeRead(state);
+  const goingHome = canGoHome(state);
 
   return (
     <>
@@ -162,6 +168,78 @@ export default function PlayerPanel() {
              Removed rather than repointed: the real one is already on this
              page and carries more.
           */}
+          {/*
+             How the outside reads you, and what the career is shaping into.
+
+             On the living screen as well as the death screen, because a
+             verdict you only see once you have lost is a verdict you cannot
+             steer by. Round 14 played 180 days "grinding a position I could
+             not win" with nothing on any screen naming what the position was.
+          */}
+          <KeyValue label="How legitimate it looks" value={`${legitimacy(state)} of 100`} />
+          {/*
+             Authority, and the one thing holding it down.
+
+             A number on its own would be the eleventh statistic on this screen
+             and `config/authority.ts` says plainly that is the way this
+             feature fails. The reading names its own worst term, so the row is
+             a thing to go and do something about rather than a thing to look
+             at — the same standard `rankRequirements` is held to above.
+          */}
+          <KeyValue
+            label="Whether you are obeyed"
+            value={`${authorityNow.value} of 100 — ${authorityNow.label}`}
+            tone={authorityNow.value < 45 ? 'hot' : undefined}
+          />
+          <KeyValue
+            label="Weakest of the four"
+            value={`${authorityNow.because[0].term} (${authorityNow.because[0].value})`}
+          />
+          {/*
+             And the half of the man that is not the organization.
+
+             Read-only on purpose. There is no button here and there is not
+             going to be one: `config/personal.ts` argues that a pull toward
+             home has to arrive as something asking, on a week that had other
+             plans, rather than sit on a panel as a bar to be topped up. This
+             row is so the player can see what the memo was about.
+          */}
+          <KeyValue label="At home" value={`${houseNow.where} — ${houseNow.label}`} />
+          <KeyValue
+            label="Who is there"
+            value={houseNow.people.join('; ')}
+          />
+          <KeyValue
+            label="Last evening at home"
+            value={houseNow.since === 0 ? 'Today' : `${houseNow.since} days ago`}
+            tone={houseNow.neglect >= 50 ? 'hot' : undefined}
+          />
+          {/*
+             And a way to actually go.
+
+             There was no button here at first, on the reasoning that a pull
+             toward home should arrive rather than sit on a panel as a bar to
+             top up. Round 15 waited **233 days** for the memo to arrive while
+             the briefing counted upward at them the whole time — "for 230 days
+             the game showed me a rising counter I had no way to act on" — and
+             that reasoning turned out to describe a tax rather than a life.
+             The memo stays; this is for a boss who does not need inviting.
+          */}
+          <button
+            className="btn"
+            style={{ marginTop: 10 }}
+            disabled={!goingHome.ok}
+            title={goingHome.reason ?? 'An evening at home'}
+            onClick={() => mutate((g) => goHome(g), true)}
+          >
+            Go home for the evening
+          </button>
+          {!goingHome.ok && (
+            <p className="faint tiny" style={{ marginTop: 6, marginBottom: 0 }}>
+              {goingHome.reason}
+            </p>
+          )}
+          <KeyValue label="Shaping into" value={careerShape(state).name} tone="brass" />
           <KeyValue label="Operations completed" value={player.opsCompleted} tone="good" />
           <KeyValue label="Operations failed" value={player.opsFailed} tone="hot" />
           <KeyValue label="People you can command" value={rank.maxCrew} />

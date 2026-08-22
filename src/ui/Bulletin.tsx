@@ -1,4 +1,4 @@
-import type { DayReport } from './report';
+import { DAY_PARTS, type DayReport } from './report';
 import type { PanelId } from './Rail';
 import { formatShortDay } from '../sim/util';
 
@@ -36,19 +36,45 @@ export default function Bulletin({
           dismiss
         </button>
       </header>
-      <ul className="bulletin-lines">
-        {report.lines.map((line, i) => (
-          <li key={i} className={`bulletin-line ${line.tone}`} style={{ animationDelay: `${i * 45}ms` }}>
-            {line.panel ? (
-              <button className="bulletin-go" onClick={() => onGo(line.panel as PanelId)}>
-                {line.text}
-              </button>
-            ) : (
-              <span>{line.text}</span>
+      {/*
+         Grouped by part of the day, and a heading only where there is
+         something under it.
+
+         Every line used to sit in one list, so a man dying overnight, a memo
+         still waiting for an answer, and your family asking after you read as
+         the same kind of thing. They are not: one has happened, one has not
+         happened yet, and one is not the business at all. Printing a heading
+         over an empty part would be worse than no headings, so an absent part
+         prints nothing — most mornings have exactly one.
+      */}
+      {DAY_PARTS.map((part) => {
+        const lines = report.lines.filter((l) => (l.part ?? 'overnight') === part.id);
+        if (lines.length === 0) return null;
+        return (
+          <div key={part.id} className="bulletin-part">
+            {report.lines.some((l) => (l.part ?? 'overnight') !== part.id) && (
+              <h3 className="bulletin-part-head">{part.label}</h3>
             )}
-          </li>
-        ))}
-      </ul>
+            <ul className="bulletin-lines">
+              {lines.map((line, i) => (
+                <li
+                  key={i}
+                  className={`bulletin-line ${line.tone}`}
+                  style={{ animationDelay: `${i * 45}ms` }}
+                >
+                  {line.panel ? (
+                    <button className="bulletin-go" onClick={() => onGo(line.panel as PanelId)}>
+                      {line.text}
+                    </button>
+                  ) : (
+                    <span>{line.text}</span>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </div>
+        );
+      })}
     </aside>
   );
 }
