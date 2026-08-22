@@ -1947,3 +1947,80 @@ no lawyer and earns no pull. Opening the diplomatic route is the honest repair a
 runs through F5.
 
 `tsc` clean. 648 tests, 56 files, 647 passing and one failing on purpose.
+
+---
+
+## The favour network, first slice — 2026-08-21
+
+The first code in this repository that belongs to the developer's Mafia-boss
+vision rather than to its prerequisites.
+
+**And it was ordered wrongly by me one commit earlier.** The blueprint update put
+F17 ahead of this on the reasoning that "the game has no working way to build a
+relationship outside the family." That conflated the diplomatic route to *Influence*
+being shut with the favour network *needing* that route. It does not — the network is
+its own route, and it reads Influence as a gate that counsel now supplies. Corrected,
+and the network built.
+
+### What it is
+
+`config/civic.ts` and `sim/civic.ts`. Four figures, each watching one quantity the
+simulation already maintains:
+
+    a police captain    street heat            buries a case
+    a union boss        districts held         quiets a street
+    a judge             notoriety              opens a door
+    somebody in office  public feeling         loses the paperwork
+
+**It generalises the two one-offs the blueprint identified rather than sitting beside
+them.** `PATRON` was an anonymous ninety-day timer for $120,000; the alderman is that
+arrangement with a relationship in front of it. The agency contacts were booleans you
+bought; standing here cannot be purchased at all — it drifts toward what the figure
+sees, so a player who never opens the screen still builds standing with somebody,
+because standing with a captain *is* a low heat number seen from the other side.
+
+**A favour is spent on a problem, not on a stat.** Nothing it does adds to a bar.
+
+### The property that mattered
+
+Reachability, and it is asserted rather than hoped: thirteen quiet weeks put a
+captain over the bar. Round 14 on the system this replaces: *"the system I most
+wanted and it is priced for a run that has already succeeded."*
+
+`driftPerWeek` was sized against that, not picked. At 3.5 the net was 2.7 a week and
+thirteen weeks reached 35.1 against a bar of 40 — the network would have opened after
+a person stopped playing, which is the exact defect it exists to fix. 4.5 reaches 48.
+
+The union favour lifts a district over `SENTIMENT_HOSTILE_BELOW`, pointing it at F10,
+F12 and F15 at once: a district under the bar sells no fronts, and fronts are the fork
+25 of 36 careers never cross.
+
+### Three faults caught in my own work
+
+- **The test helper never ran the tick.** `weeks()` did `state.day += 7` from a day-1
+  start, landing on 8, 15, 22 — never a multiple of seven — so `tickCivic`
+  early-returned every time and thirteen weeks moved nothing. **That is the trap
+  HANDOFF section 3 names explicitly**, and my instrument guard was too weak to catch
+  it: it asserted `owed === 0` at the start, which passes trivially. There is now a
+  `ticked at all` test that fails if the helper steps the clock wrongly.
+- **Two refusals, one assertion.** The test demanded the standing-0 refusal name
+  `owesAbove`. At standing 0 the honest refusal is the *stranger* bar, and telling a
+  stranger "they start owing above 40" would be F10 again — a true sentence about the
+  wrong number. Split into two tests, one per bar.
+- **`voice.test.ts` caught my copy.** "Nothing you do is his business until it is in
+  the paper." Fixed to "their".
+
+### What is not done
+
+No bot exercises it, so it is invisible to every probe — F7, again. No blind round has
+seen it.
+
+**And the browser check is half done.** The panel was verified rendering on the
+isolated instance with all four figures and their refusals as visible body text
+naming the bar, no console errors. **The live half could not run: the Browser pane was
+not displayed, so the page stopped compositing and the clock would not advance.** That
+is round 12's failure mode in a new place, and it is recorded rather than papered
+over — accruing standing across a season is proven by the twelve sim tests, not by
+having watched it.
+
+`tsc` clean. 660 tests, 57 files, 659 passing and one failing on purpose.

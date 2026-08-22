@@ -462,6 +462,17 @@ export interface Leak {
  * query is "what have I got outstanding" — a boss with nine promises out is in
  * a different position from one with nine men, and only this shape says so.
  */
+/** One person outside the family, and where you stand with them. */
+export interface CivicStanding {
+  id: string;
+  /** 0..100. Drifts toward what they watch; never set directly. */
+  standing: number;
+  /** How many they owe you right now. Capped by CIVIC.maxOwed. */
+  owed: number;
+  /** Last day they decided they owed you one, for the interval gate. */
+  lastFavourDay: number;
+}
+
 export interface Promised {
   npcId: Id;
   kind: PromiseKind;
@@ -1197,6 +1208,19 @@ export interface GameState {
    * those saves is exactly true.
    */
   promises?: Promised[];
+
+  /**
+   * People outside the family, and what they owe you.
+   *
+   * Optional, so a save written before the favour network existed still loads
+   * — an absent list reads as nobody outside the family knowing who you are,
+   * which for those saves is exactly true.
+   *
+   * A flat list rather than a field on anything, because the interesting
+   * question is "who owes me one" and that is a question about all of them at
+   * once. Same reasoning as `promises` above.
+   */
+  civic?: CivicStanding[];
 
   /**
    * What the other side has turned out to know, newest first.
