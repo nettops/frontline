@@ -30,6 +30,8 @@ import {
 import { ROLE_ORDER } from '../config/economy';
 import { addLog } from './util';
 import { addNote, crewList, wageExpectation } from './npc';
+import { authority } from './authority';
+import { AUTHORITY } from '../config/authority';
 import { remember } from './memory';
 import { earnDirty } from './economy';
 import { addInfluence, adjustSentiment, playerInfluence, territoryDef, territoryList } from './territory';
@@ -164,6 +166,21 @@ function appetite(state: GameState, npc: Npc, t: Territory, action: StewardActio
     // Well paid pulls him off it; a grudge puts him back on.
     score -= clamp(paidWell - 1, 0, 1) * DELEGATION.paidWellBonus;
     score += (npc.stats.grievance / 100) * DELEGATION.grievanceUnbrake;
+    /*
+       And whether he thinks anybody is counting.
+
+       The two terms above are both about *him* — what he is paid and what he
+       is carrying. Neither asks the question a man alone in a district
+       actually asks, which is what happens if this comes back to the boss.
+       That question is `authority`, and until it existed there was nothing in
+       the game it could be read off.
+
+       This is the whole mechanical weight of that reading. A family run well
+       is a family whose stewards do not try it; a boss whose word does not
+       hold, whose men are aggrieved and whose payroll is a month behind finds
+       out what his districts are worth to him.
+    */
+    score -= (authority(state) / 100) * AUTHORITY.skimBrake;
   }
 
   // A district that already hates you is a poor place to squeeze harder.

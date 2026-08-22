@@ -60,11 +60,18 @@ import {
   doDiplomacy,
   factionStrength,
   playerStrength,
+  relationship,
+  relationshipLabelFor,
 } from '../diplomacy';
 import { CASE_CLOSED_BELOW, type LawyerLevel } from '../../config/lawEnforcement';
 import { retainLawyer, weeklyLegalCost } from '../investigation';
 import { AI, RIVAL_IDS } from '../../config/factions';
-import { BOND } from '../../config/diplomacy';
+import {
+  BOND,
+  DIPLOMACY,
+  DIPLOMATIC_ACTIONS,
+  DIPLOMATIC_ACTION_BY_ID,
+} from '../../config/diplomacy';
 import {
   availableRegisters,
   canSitDownWith,
@@ -97,6 +104,17 @@ import { DRIFT, DRIFT_INTERVAL_DAYS } from '../../config/npcs';
 import { wageExpectation } from '../npc';
 import type { RankId } from '../types';
 import { answerCheaply, ev, idle, median } from './helpers';
+import { borrow, canBorrow } from '../market';
+import { readWhispers } from '../whispers';
+import { isGenerated } from '../eventgen';
+import { civicRead, spendFavour } from '../civic';
+import { careerShape, legitimacy } from '../legacy';
+import { CIVIC, CIVIC_FIGURES } from '../../config/civic';
+import { SENTIMENT_HOSTILE_BELOW } from '../../config/territories';
+import { activeCases, worstStage } from '../investigation';
+import { stageIndex } from '../../config/lawEnforcement';
+import { ownedBusinesses } from '../business';
+import type { PressureId } from '../../config/pressure';
 
 interface Climb {
   days: number;
@@ -333,6 +351,137 @@ interface Climb {
     /** The four things wearing a front down, averaged per front-week. */
     kill: { sentiment: number; exposure: number; rivals: number; city: number; weeks: number };
   };
+  /**
+   * The five systems shipped in the Mafia-boss cycle, measured for the first
+   * time.
+   *
+   * All five went in without a single probe touching them, which is F7 five
+   * times over: a system no instrument plays is a system nobody has measured,
+   * however many unit tests it carries. Their tests prove the code does what
+   * the code says. Nothing until now has said whether a career ever meets any
+   * of it.
+   *
+   * Everything in here is read-only against the baseline bot. `readWhispers`,
+   * `civicRead`, `legitimacy` and `careerShape` all derive rather than roll —
+   * none of them touch the `rng` stream — so recording them cannot move a
+   * single number the rest of this file reports. That property is what makes
+   * it safe to add to the existing population instead of standing up a second
+   * one, and it is asserted below rather than assumed.
+   */
+  newSystems: {
+    whispers: {
+      /** Distinct claims that ever appeared in the feed. */
+      received: number;
+      /** Weeks where the player had anything at all to read. */
+      weeksWithAny: number;
+      meanConfidence: number;
+      /** The weekly sample the two above are shares of. */
+      weeks: number;
+    };
+    civic: {
+      /**
+       * The best standing any figure ever reached, against bars of 40 to 60.
+       *
+       * A maximum over four people, and on its own it says almost nothing —
+       * the first version of this readout reported 99 for every career and was
+       * read as "the network saturates", when all it established was that
+       * *one* of the four got there. Which one matters: the captain watches
+       * heat and the judge watches the papers, and those are different games.
+       * So `byFigure` is the reading and this is the headline.
+       */
+      peakStanding: number;
+      byFigure: Record<string, { peak: number; everOwed: boolean }>;
+      /** What the judge watches, and what the alderman watches. */
+      peakNotoriety: number;
+      meanSentiment: number;
+      /** First day anybody owed the player anything. Null means never. */
+      firstOwedDay: number | null;
+      weeksOwed: number;
+      /** Weeks where at least one favour was actually spendable. */
+      weeksSpendable: number;
+    };
+    /** The reading at the end, and the range it moved across. */
+    legitimacy: { final: number; peak: number; low: number };
+    /** What the career would be called if it stopped here. */
+    shape: string;
+    /**
+     * What an active player did with any of it.
+     *
+     * Zero on the baseline bot by construction — it does not know these
+     * systems exist. Non-zero only in the active population, which is the
+     * half that actually closes F7 rather than merely measuring around it.
+     */
+    favoursSpent: number;
+    dialTurns: number;
+    /** Weeks the active policy asked for each setting, so it can be read back. */
+    dialWeeks: Record<PressureId, number>;
+  };
+  /**
+   * How much the game found to say, and when.
+   *
+   * Round 14's second MUST FIX is a supply number and it had never been
+   * measured: *"Between day 180 and day 300 I met exactly one memo I had not
+   * seen before."* Counted by distinct **body** rather than by definition id,
+   * because two instances of one shape against two different men are two
+   * situations — which is the whole claim the generative half makes, and
+   * exactly what counting ids would hide.
+   */
+  /** Loans taken to reach a front. See `Policy.financeFronts`. */
+  borrowed: number;
+  /**
+   * The other families, and whether anything was ever open against them.
+   *
+   * F5: *"the rival families never did anything"* — strengths of 84, 100 and
+   * 100 and a Neutral stance for 224 days. F17: both diplomatic doors shut for
+   * every career, all 300 days. Neither had ever been counted; the probe
+   * watched wars and grudges and never once asked what the player could
+   * actually press.
+   */
+  rivals: {
+    weeks: number;
+    /** Rival-weeks spent at the neutral label, out of `weeks` times three. */
+    neutralWeeks: number;
+    /** Rivals whose stance ever left neutral in either direction. */
+    everMoved: number;
+    /** Weeks each diplomatic action was open against at least one family. */
+    open: Record<string, number>;
+    /** Weeks at least one action of any kind was open. */
+    anyOpenWeeks: number;
+    /** The best the three bars were ever approached, against any family. */
+    peakStanding: number;
+    peakRespect: number;
+    peakLead: number;
+    /** Rival-weeks spent on each objective kind. F5 asks whether they act. */
+    doing: Record<string, number>;
+    /** And whether they could afford to act. */
+    meanWealth: number;
+    brokeWeeks: number;
+    wealthSamples: number;
+  };
+  memos: {
+    seen: number;
+    generated: number;
+    /**
+     * Distinct *situations*, keyed on the shape and who it was about.
+     *
+     * The first version of this counted distinct memo **bodies** and reported
+     * that a career meets fifteen new ones after day 180 — with the generator
+     * switched off. It was counting `oneOf` variants: every authored event
+     * carries two to four ways of arriving, so the same memo about the same
+     * man reads as new content three times. Round 14 was not fooled by that
+     * and neither should the instrument be.
+     *
+     * A situation is the shape plus its subject. `gen_wants_a_word` about
+     * Rocco and the same shape about Gina are two situations; the promotion
+     * demand reworded is one.
+     */
+    early: number;
+    lateAndNew: number;
+    /** How many of those late situations the generator supplied. */
+    lateGenerated: number;
+    /** Definition ids never met before day 180, which is round 14's count. */
+    lateNewShapes: number;
+  };
 }
 
 /**
@@ -345,7 +494,39 @@ interface Climb {
  * never makes an obviously stupid decision, because the question is whether the
  * ladder is climbable at all, not how fast an expert climbs it.
  */
-function climb(seed: number, days: number): Climb {
+/**
+ * What the bot knows about.
+ *
+ * The default is deliberately the bot exactly as it was before the Mafia-boss
+ * cycle: it does not know the favour network or the pressure dial exist. That
+ * is not laziness, it is the control. The 300-day distribution in this file is
+ * what the rank table was sized against, and a bot that quietly started
+ * spending favours would move every number in it while looking like a
+ * measurement of the same game.
+ *
+ * `active` is the other arm. Same bot, same seeds, plus the two systems a
+ * player can actually operate.
+ */
+interface Policy {
+  active?: boolean;
+  /**
+   * Borrows to buy a front when the money is short.
+   *
+   * F15 says the economy forks on fronts: front income compounds into
+   * holdings, so a family that never gets a second one never starts, and the
+   * probe reports the gate as **money in 98% of the weeks a career owns
+   * nothing**. What no instrument in this project has ever checked is whether
+   * the game already answers that — `LENDERS[0]` is a man at the back of a
+   * restaurant with a $40,000 ceiling, `minRespect: 0`, `minBusinesses: 0`,
+   * available from the first morning.
+   *
+   * So before touching the economy, the question is whether the route exists
+   * and nobody walks it. This arm walks it.
+   */
+  financeFronts?: boolean;
+}
+
+function climb(seed: number, days: number, policy: Policy = {}): Climb {
   const state = newGame({ name: 'Ladder', difficulty: 'normal', seed });
   const rng = new Rng(state.rng);
   const reachedOn = new Map<string, number>();
@@ -391,6 +572,25 @@ function climb(seed: number, days: number): Climb {
   };
   /** Weeks the bot was paying for representation, so the readout can say so. */
   let legalWeeks = 0;
+  /** Loans taken to reach a front. Zero on every arm but `financeFronts`. */
+  let borrowed = 0;
+  const rivalWatch = {
+    weeks: 0,
+    neutralWeeks: 0,
+    open: Object.fromEntries(DIPLOMATIC_ACTIONS.map((a) => [a.id, 0])) as Record<string, number>,
+    anyOpenWeeks: 0,
+    /* What the three bars are actually sized against. */
+    peakStanding: -100,
+    peakRespect: 0,
+    peakLead: -999,
+    /** What the other families were doing, by rival-week. */
+    doing: {} as Record<string, number>,
+    wealthSum: 0,
+    wealthSamples: 0,
+    brokeWeeks: 0,
+  };
+  /** Rivals seen away from neutral at any point. */
+  const movedStance = new Set<string>();
   /** Clean money moved out of the wallet, and dragged back out of it. */
   let banked = 0;
   let soldBack = 0;
@@ -422,6 +622,49 @@ function climb(seed: number, days: number): Climb {
     weeksNone: 0,
     weeksAllDead: 0,
     kill: { sentiment: 0, exposure: 0, rivals: 0, city: 0, weeks: 0 },
+  };
+  /*
+     The five systems from the Mafia-boss cycle, watched once a week.
+
+     Whispers are counted by text rather than by feed length because the feed
+     is a ring buffer that drops the oldest and hides the stale, so its length
+     answers "how much is on the desk today" when the question is "how much
+     ever arrived". Confidence is summed over arrivals for the same reason.
+  */
+  const heard = new Set<string>();
+  let whisperConfidence = 0;
+  /* Every memo the career was ever shown, captured before it is answered. */
+  const memoIds = new Set<string>();
+  const memoEarly = new Set<string>();
+  const memoLateNew = new Set<string>();
+  const memoLateGen = new Set<string>();
+  const shapesEarly = new Set<string>();
+  const shapesLateNew = new Set<string>();
+  const memos = { seen: 0, generated: 0 };
+  /** The shape plus who it was about. See the note on `memos` above. */
+  const situation = (e: { defId: string; npcId: string | null; data: Record<string, string | number> }) =>
+    `${e.defId}:${e.npcId ?? e.data.businessId ?? e.data.territoryId ?? e.data.civicId ?? e.data.caseId ?? ''}`;
+  /** The day the back half starts, matching what round 14 reported against. */
+  const BACK_HALF = 180;
+  const newSys = {
+    weeks: 0,
+    weeksWithAny: 0,
+    peakStanding: 0,
+    byFigure: Object.fromEntries(
+      CIVIC_FIGURES.map((f) => [f.id, { peak: 0, everOwed: false }]),
+    ) as Record<string, { peak: number; everOwed: boolean }>,
+    firstOwedDay: null as number | null,
+    weeksOwed: 0,
+    weeksSpendable: 0,
+    legPeak: 0,
+    legLow: 100,
+    /* What the judge and the alderman are actually looking at. */
+    notoriety: 0,
+    sentimentSum: 0,
+    sentimentWeeks: 0,
+    favoursSpent: 0,
+    dialTurns: 0,
+    dialWeeks: { clean: 0, normal: 0, hard: 0 } as Record<PressureId, number>,
   };
   const firstFront = {
     day: null as number | null,
@@ -458,6 +701,28 @@ function climb(seed: number, days: number): Climb {
   reachedOn.set(state.player.rank, 0);
 
   for (let d = 0; d < days; d++) {
+    /*
+       Read before answering, because answering removes it. A first version
+       counted `state.pendingEvents` after the run and reported that a career
+       met three memos.
+    */
+    for (const e of state.pendingEvents) {
+      if (memoIds.has(e.id)) continue;
+      memoIds.add(e.id);
+      memos.seen += 1;
+      if (isGenerated(e.defId)) memos.generated += 1;
+      const key = situation(e);
+      if (state.day < BACK_HALF) {
+        memoEarly.add(key);
+        shapesEarly.add(e.defId);
+      } else {
+        if (!memoEarly.has(key)) {
+          memoLateNew.add(key);
+          if (isGenerated(e.defId)) memoLateGen.add(key);
+        }
+        if (!shapesEarly.has(e.defId)) shapesLateNew.add(e.defId);
+      }
+    }
     clean('events', () => answerCheaply(state, rng));
 
     /*
@@ -609,6 +874,46 @@ function climb(seed: number, days: number): Climb {
          catalogue is written cheapest first on purpose and the panel reads it
          that way.
       */
+      /*
+         Borrow the shortfall, when the policy says to.
+
+         Only for the cheapest front on the board and only when nothing is
+         affordable outright, because this is a bot modelling somebody who
+         wants a second front rather than somebody leveraging themselves into
+         the ground. The shark takes no collateral and asks nothing, so the
+         only question is whether the repayments can be lived with — which is
+         precisely what `tickLoans` is there to answer.
+      */
+      if (policy.financeFronts && Object.keys(state.market?.loans ?? {}).length === 0) {
+        const affordable = territoryList(state).some((t) =>
+          BUSINESSES.some((def) => {
+            const c = canAcquire(state, def.id, t.id);
+            return c.ok && c.cost + reserve <= totalFunds(state);
+          }),
+        );
+        if (!affordable) {
+          let want = 0;
+          for (const t of territoryList(state)) {
+            for (const def of BUSINESSES) {
+              const c = canAcquire(state, def.id, t.id);
+              if (!c.ok) continue;
+              if (want === 0 || c.cost < want) want = c.cost;
+            }
+          }
+          if (want > 0) {
+            const facts = {
+              respect: state.org.respect,
+              businesses: ownedBusinesses(state).length,
+              friendlyFactionId: null,
+            };
+            if (canBorrow(state, 'shark', facts).ok) {
+              const short = Math.ceil(want + reserve - totalFunds(state));
+              if (short > 0 && borrow(state, 'shark', short).ok) borrowed += 1;
+            }
+          }
+        }
+      }
+
       const catalogue = [...BUSINESSES].sort((a, b) => b.cost - a.cost);
       for (const t of territoryList(state)) {
         let bought = false;
@@ -1115,6 +1420,153 @@ function climb(seed: number, days: number): Climb {
         }
       }
     }
+
+    /*
+       The other families, once a week: where they stand and what is open.
+    */
+    if (state.day % 7 === 0) {
+      rivalWatch.weeks += 1;
+      let anyOpen = false;
+      for (const id of RIVAL_IDS) {
+        const value = relationship(state, 'player', id);
+        const label = relationshipLabelFor(value);
+        if (label === 'Neutral') rivalWatch.neutralWeeks += 1;
+        else movedStance.add(id);
+        rivalWatch.peakStanding = Math.max(rivalWatch.peakStanding, value);
+        // Their respect for the player, which is what `canDo` gates on — the
+        // first version read this the other way round, copying an inversion
+        // that was in `canDo` itself.
+        rivalWatch.peakRespect = Math.max(rivalWatch.peakRespect, bond(state, id, 'player').respect);
+        rivalWatch.peakLead = Math.max(
+          rivalWatch.peakLead,
+          playerStrength(state) - factionStrength(state, id),
+        );
+      }
+      for (const id of RIVAL_IDS) {
+        const kind = state.factions[id]?.currentObjective?.kind;
+        if (kind) rivalWatch.doing[kind] = (rivalWatch.doing[kind] ?? 0) + 1;
+        // F5's remaining hypothesis: the families are chronically broke, and
+        // `scoreConsolidate` carries a flat 0.45 whenever they are.
+        const wealth = state.factions[id]?.wealth ?? 0;
+        rivalWatch.wealthSum += wealth;
+        rivalWatch.wealthSamples += 1;
+        if (wealth < AI.pressure.cost) rivalWatch.brokeWeeks += 1;
+      }
+      for (const action of DIPLOMATIC_ACTIONS) {
+        const openHere = RIVAL_IDS.some((id) => canDo(state, action.id, id).ok);
+        if (openHere) {
+          rivalWatch.open[action.id] += 1;
+          anyOpen = true;
+        }
+      }
+      if (anyOpen) rivalWatch.anyOpenWeeks += 1;
+    }
+
+    /*
+       And the five that nobody had ever watched.
+
+       Strictly a reading. Every call in here derives rather than rolls, which
+       is asserted by its own test — if that ever stops being true this block
+       silently reshuffles the whole file.
+    */
+    if (state.day % 7 === 0) {
+      newSys.weeks += 1;
+
+      const feed = readWhispers(state);
+      if (feed.length) newSys.weeksWithAny += 1;
+      for (const w of feed) {
+        if (heard.has(w.text)) continue;
+        heard.add(w.text);
+        whisperConfidence += w.confidence;
+      }
+
+      const civic = civicRead(state);
+      let owed = false;
+      let spendable = false;
+      for (const f of civic) {
+        newSys.peakStanding = Math.max(newSys.peakStanding, f.standing);
+        const mine = newSys.byFigure[f.id];
+        if (mine) {
+          mine.peak = Math.max(mine.peak, f.standing);
+          if (f.owed > 0) mine.everOwed = true;
+        }
+        if (f.owed > 0) owed = true;
+        if (!f.blocked) spendable = true;
+      }
+      if (owed) {
+        newSys.weeksOwed += 1;
+        if (newSys.firstOwedDay === null) newSys.firstOwedDay = state.day;
+      }
+      if (spendable) newSys.weeksSpendable += 1;
+
+      newSys.notoriety = Math.max(newSys.notoriety, state.city?.notoriety ?? 0);
+      const worked = territoryList(state).filter((t) => playerInfluence(t) >= 10);
+      if (worked.length) {
+        newSys.sentimentSum += worked.reduce((n, t) => n + t.sentiment, 0) / worked.length;
+        newSys.sentimentWeeks += 1;
+      }
+
+      const leg = legitimacy(state);
+      newSys.legPeak = Math.max(newSys.legPeak, leg);
+      newSys.legLow = Math.min(newSys.legLow, leg);
+
+      /*
+         And the half that actually plays them.
+
+         Competent, not optimal — the same standard as the rest of this bot. It
+         calls a favour in when there is something for it to do, and when the
+         stock is at its cap, because a favour that accrues past `maxOwed` is a
+         favour thrown away. It does not hoard for a rainy day and it does not
+         plan; it answers the week in front of it.
+      */
+      if (policy.active) {
+        const cases = activeCases(state);
+        const inside = crewList(state).filter((n) => n.status === 'arrested').length > 0;
+        const hostile = territoryList(state).some(
+          (t) => playerInfluence(t) >= 10 && t.sentiment < SENTIMENT_HOSTILE_BELOW,
+        );
+        for (const f of civic) {
+          if (f.blocked) continue;
+          const worthIt =
+            f.owed >= CIVIC.maxOwed ||
+            (f.id === 'captain' && cases.length > 0) ||
+            (f.id === 'judge' && inside) ||
+            (f.id === 'union' && hostile) ||
+            (f.id === 'alderman' && state.org.heat >= 50);
+          if (!worthIt) continue;
+          if (spendFavour(state, f.id).ok) newSys.favoursSpent += 1;
+        }
+
+        /*
+           And the dial, on the only question it asks: how dirty do I want this
+           business this week.
+
+           The first version of this policy went clean on any case above 25
+           strength or heat above 60, and the probe reported that using the
+           dial cost 73% of everything the career ever laundered. That reading
+           was about the bot, not the dial: median peak case strength across
+           this population is 100, so the condition was true almost every week
+           and the measurement was "always clean" against "always normal"
+           wearing the costume of a policy.
+
+           So the trigger is now the thing a boss would actually react to —
+           a case far enough along that somebody is about to knock, or heat in
+           its top band — and the weeks are counted by setting, so the readout
+           says what the policy did rather than only what happened afterwards.
+        */
+        const worst = worstStage(state);
+        const closing = worst ? stageIndex(worst) >= stageIndex('warrants') : false;
+        const backedUp = state.org.dirtyCash > 20_000;
+        const want: PressureId =
+          closing || state.org.heat >= 75 ? 'clean' : backedUp && state.org.heat < 40 ? 'hard' : 'normal';
+        newSys.dialWeeks[want] += 1;
+        for (const b of ownedBusinesses(state)) {
+          if ((b.pressure ?? 'normal') === want) continue;
+          b.pressure = want;
+          newSys.dialTurns += 1;
+        }
+      }
+    }
     /*
        Did the family keep its rank when it lost its boss?
 
@@ -1315,6 +1767,57 @@ function climb(seed: number, days: number): Climb {
     frontLife: {
       ...frontLife,
       shuttered: Object.values(state.businesses).filter((b) => b.status === 'shuttered').length,
+    },
+    newSystems: {
+      whispers: {
+        received: heard.size,
+        weeksWithAny: newSys.weeksWithAny,
+        meanConfidence: heard.size ? whisperConfidence / heard.size : 0,
+        weeks: newSys.weeks,
+      },
+      civic: {
+        peakStanding: newSys.peakStanding,
+        byFigure: newSys.byFigure,
+        peakNotoriety: newSys.notoriety,
+        meanSentiment: newSys.sentimentWeeks ? newSys.sentimentSum / newSys.sentimentWeeks : 0,
+        firstOwedDay: newSys.firstOwedDay,
+        weeksOwed: newSys.weeksOwed,
+        weeksSpendable: newSys.weeksSpendable,
+      },
+      legitimacy: {
+        final: legitimacy(state),
+        peak: newSys.legPeak,
+        // A career that ended on day one never sampled, and 100 would read as
+        // a spotless boss rather than as no reading at all.
+        low: newSys.weeks ? newSys.legLow : 0,
+      },
+      shape: careerShape(state).id,
+      favoursSpent: newSys.favoursSpent,
+      dialTurns: newSys.dialTurns,
+      dialWeeks: newSys.dialWeeks,
+    },
+    borrowed,
+    rivals: {
+      weeks: rivalWatch.weeks,
+      neutralWeeks: rivalWatch.neutralWeeks,
+      everMoved: movedStance.size,
+      open: rivalWatch.open,
+      anyOpenWeeks: rivalWatch.anyOpenWeeks,
+      peakStanding: rivalWatch.peakStanding,
+      peakRespect: rivalWatch.peakRespect,
+      peakLead: rivalWatch.peakLead,
+      doing: rivalWatch.doing,
+      meanWealth: rivalWatch.wealthSamples ? rivalWatch.wealthSum / rivalWatch.wealthSamples : 0,
+      brokeWeeks: rivalWatch.brokeWeeks,
+      wealthSamples: rivalWatch.wealthSamples,
+    },
+    memos: {
+      seen: memos.seen,
+      generated: memos.generated,
+      early: memoEarly.size,
+      lateAndNew: memoLateNew.size,
+      lateGenerated: memoLateGen.size,
+      lateNewShapes: shapesLateNew.size,
     },
     reachedOn,
     casesOpened: state.law.casesOpened,
@@ -1960,6 +2463,74 @@ describe('the ladder, over the 300 days a person plays', () => {
   });
 
   /*
+     Round 14's second MUST FIX, as a number.
+
+     *"The memo pool exhausts, and after Capo it is the only source of new
+     content. Between day 180 and day 300 I met exactly one memo I had not seen
+     before."* Twenty-two authored events cannot carry three hundred days, and
+     no amount of writing fixes that — a twenty-third is met once too.
+
+     Careers that ended before day 180 are excluded rather than counted as
+     zero: a family that was wiped out in month five has no back half, and
+     folding those in would report a content problem as whatever the death rate
+     happens to be.
+  */
+  it('keeps finding something to say in the back half of a career', () => {
+    const lived = RUNS_300.filter((r) => r.days >= 240);
+    const late = lived.map((r) => r.memos.lateAndNew);
+    const mid = median(late);
+
+    const fromGenerator = lived.reduce((n, r) => n + r.memos.lateGenerated, 0);
+    const allLate = lived.reduce((n, r) => n + r.memos.lateAndNew, 0);
+
+    // eslint-disable-next-line no-console
+    console.log(
+      `memos: ${lived.length}/${RUNS_300.length} careers reached day 240\n` +
+        `       distinct situations before day 180, 40th / median / 75th: ` +
+        `${pct(lived.map((r) => r.memos.early), 0.4)} / ${median(lived.map((r) => r.memos.early))} / ` +
+        `${pct(lived.map((r) => r.memos.early), 0.75)}\n` +
+        `       new situations after day 180: ` +
+        `${pct(late, 0.4)} / ${mid} / ${pct(late, 0.75)}\n` +
+        `       shapes never seen before day 180: ` +
+        `${median(lived.map((r) => r.memos.lateNewShapes))} (round 14 reported 1)\n` +
+        `       share of the late ones the generator supplied: ` +
+        `${Math.round((100 * fromGenerator) / Math.max(1, allLate))}%`,
+    );
+
+    /*
+       Pre-committed, and stated about the mechanism rather than as a count.
+
+       A count was the wrong shape and it went green before any of this was
+       built: counting memo *bodies* counted `oneOf` variants, so a career read
+       as meeting fifteen new memos after day 180 on the authored pool alone.
+       The number that was supposed to be the finding was measuring the prose.
+
+       What the generative half actually claims is that it carries the back
+       half of a career — that when the authored pool has been round twice, the
+       new situations are coming from the simulation. A third is the line: below
+       that the generator is a rounding error on somebody else's supply, and
+       there is no point having built it.
+
+       **This currently fails at about 27%, and it is left failing.** Raising
+       the generation rate from 0.07 to 0.11 moved it by one point, because the
+       authored pool keeps producing new situations too — the same memo about a
+       different man counts for them exactly as it counts for these. So the
+       shortfall is not a rate that needs turning up; it is the claim being
+       larger than what six shapes against twenty-two can carry.
+
+       The bar stays where it was written. Moving it to 25% would make the suite
+       green and would mean nothing, and this project has a rule about that
+       which exists because the alternative has cost it four rounds.
+    */
+    expect(lived.length, 'nothing lived long enough to have a back half').toBeGreaterThan(8);
+    expect(allLate, 'no late situations at all, so the share below is meaningless').toBeGreaterThan(20);
+    expect(
+      fromGenerator / allLate,
+      'the generated half is not carrying the back end of a career',
+    ).toBeGreaterThanOrEqual(1 / 3);
+  });
+
+  /*
      The other side of the same condition. A ladder re-sized until everything
      is reachable has not been fixed, it has been flattened, and Crime Lord is
      the rung that would show it first. It stays a thing you play a long career
@@ -1970,5 +2541,409 @@ describe('the ladder, over the 300 days a person plays', () => {
       RUNS_300.filter((r) => r.reachedOn.has('crime_lord')).length,
       'Crime Lord has stopped being a stretch',
     ).toBeLessThanOrEqual(3);
+  });
+});
+
+/*
+   The five systems nobody has ever measured.
+
+   Whispers, the favour network, legitimacy, career shapes and the pressure
+   dial all shipped inside one cycle, and not one instrument in this project
+   touched any of them. That is F7 — "every instrument here plays the same
+   narrow game" — five times over, and it is worse than an unmeasured feature:
+   a system the bot cannot see is a system whose absence from the numbers
+   proves nothing at all.
+
+   This block asks the first question, which is not "is it good" but "does a
+   career ever meet it". Read-only, against the population that already exists.
+*/
+describe('the systems nobody had measured', () => {
+  /*
+     The instrument, and it has to come first.
+
+     Everything below is a share of a weekly sample. If the sample is zero the
+     shares are all zero and every assertion under it passes or fails for a
+     reason that has nothing to do with the game.
+  */
+  it('actually looked', () => {
+    const looked = RUNS_300.filter((r) => r.newSystems.whispers.weeks > 0).length;
+    expect(
+      looked,
+      'no career recorded a single weekly reading, so nothing below measures anything',
+    ).toBe(RUNS_300.length);
+  });
+
+  /*
+     The property that makes it safe to measure these on the existing
+     population rather than a second one.
+
+     `readWhispers`, `civicRead`, `legitimacy` and `careerShape` are all
+     derivations. If any of them ever rolls, adding this measurement silently
+     reshuffles every number in this file, and the ladder distribution that
+     the rank table was sized against stops describing the same game. Cheap to
+     assert, and the exact mistake whispers made on the day it was written —
+     it took an `Rng`, and wiring it into the clock broke two unrelated tests
+     about operations.
+  */
+  it('measures without touching the random stream', () => {
+    const state = newGame({ name: 'Observer', difficulty: 'normal', seed: 4242 });
+    for (let i = 0; i < 120; i++) advanceDay(state);
+
+    const before = state.rng.calls;
+    readWhispers(state);
+    civicRead(state);
+    legitimacy(state);
+    careerShape(state);
+    expect(
+      state.rng.calls,
+      'reading these systems advanced the random stream, so measuring them changes the game',
+    ).toBe(before);
+  });
+
+  it('says whether a whisper ever reaches a career', () => {
+    const w = RUNS_300.map((r) => r.newSystems.whispers);
+    const withAny = w.filter((x) => x.received > 0).length;
+
+    // eslint-disable-next-line no-console
+    console.log(
+      `whispers: ${withAny}/${RUNS_300.length} careers ever heard anything\n` +
+        `         median claims over ${HUMAN_DAYS} days: ${median(w.map((x) => x.received))}\n` +
+        `         weeks with something to read: ` +
+        `${Math.round((100 * w.reduce((n, x) => n + x.weeksWithAny, 0)) / Math.max(1, w.reduce((n, x) => n + x.weeks, 0)))}%\n` +
+        `         mean stated confidence: ` +
+        `${Math.round(median(w.filter((x) => x.received > 0).map((x) => x.meanConfidence)) || 0)}%`,
+    );
+
+    /*
+       The pre-committed condition. `WHISPERS` rolls weekly at 0.55, so across
+       roughly forty-two weeks a career that never hears anything means the
+       feed is not reaching the player at all — a supply fault, not a balance
+       one. This is a target for the config, not a threshold on the probe.
+    */
+    expect(withAny, 'a career can play 300 days and never hear a whisper').toBe(RUNS_300.length);
+  });
+
+  it('says whether the favour network is reachable by an ordinary career', () => {
+    const c = RUNS_300.map((r) => r.newSystems.civic);
+    const everOwed = c.filter((x) => x.firstOwedDay !== null);
+
+    // eslint-disable-next-line no-console
+    console.log(
+      `civic: ${everOwed.length}/${RUNS_300.length} careers were ever owed a favour\n` +
+        (everOwed.length
+          ? `       median day the first one arrived: ${median(everOwed.map((x) => x.firstOwedDay!))}\n`
+          : '') +
+        `       by figure, median best standing and careers ever owed:\n` +
+        CIVIC_FIGURES.map(
+          (f) =>
+            `         ${f.id.padEnd(9)} ` +
+            `${Math.round(median(c.map((x) => x.byFigure[f.id]?.peak ?? 0)))}` +
+            ` (bar ${f.owesAbove}, needs Influence ${f.needsInfluence})` +
+            `, owed in ${c.filter((x) => x.byFigure[f.id]?.everOwed).length}/${c.length}`,
+        ).join('\n') +
+        `\n` +
+        `       what they are looking at: peak notoriety ` +
+        `${Math.round(median(c.map((x) => x.peakNotoriety)))} (the judge reads 100 minus this), ` +
+        `mean sentiment where working ${Math.round(median(c.map((x) => x.meanSentiment)))} ` +
+        `(the alderman reads this)
+` +
+        `       weeks with a favour actually spendable: ` +
+        `${c.reduce((n, x) => n + x.weeksSpendable, 0)}`,
+    );
+
+    /*
+       The pre-committed condition, and the one most likely to come back red.
+
+       `config/civic.ts` states its own design claim: "13 quiet weeks reach 48
+       vs a bar of 40". A 300-day career is about forty-two weeks. If half of
+       them cannot get a single figure to owe them anything, the network is
+       priced for a run that has already succeeded — which is the exact
+       complaint round 14 made about police contacts, rebuilt.
+
+       A target for `CIVIC`, not a threshold on this file.
+    */
+    expect(
+      everOwed.length,
+      'most careers never get a single civic figure to owe them anything',
+    ).toBeGreaterThanOrEqual(Math.ceil(RUNS_300.length / 2));
+
+    /*
+       And the same question of each figure, which is the one that matters.
+
+       The headline above went green while two of the four were broken in
+       opposite directions, because it is a maximum over four people: the judge
+       owes every career in the population and the alderman has never owed
+       anybody, and "36/36 were owed something" reports both as success.
+
+       Two conditions, and they are about content rather than balance. A figure
+       no career ever reaches is content nobody will see. A figure every career
+       reaches whatever they do is not a relationship, it is a fixture. Both
+       are targets for `config/civic.ts`; neither may be moved to make the
+       config pass.
+    */
+    for (const f of CIVIC_FIGURES) {
+      const owed = c.filter((x) => x.byFigure[f.id]?.everOwed).length;
+      expect(owed, `the ${f.id} is out of reach of almost every career`).toBeGreaterThanOrEqual(9);
+      expect(owed, `the ${f.id} owes you regardless of how you play`).toBeLessThanOrEqual(33);
+    }
+  });
+
+  it('says what legitimacy reads across a population', () => {
+    const l = RUNS_300.map((r) => r.newSystems.legitimacy);
+    const shapes = new Map<string, number>();
+    for (const r of RUNS_300) shapes.set(r.newSystems.shape, (shapes.get(r.newSystems.shape) ?? 0) + 1);
+
+    // eslint-disable-next-line no-console
+    console.log(
+      `legitimacy at day ${HUMAN_DAYS}, 40th / median / 75th: ` +
+        `${Math.round(pct(l.map((x) => x.final), 0.4))} / ` +
+        `${Math.round(median(l.map((x) => x.final)))} / ` +
+        `${Math.round(pct(l.map((x) => x.final), 0.75))}\n` +
+        `         range walked by the median career: ` +
+        `${Math.round(median(l.map((x) => x.low)))} to ${Math.round(median(l.map((x) => x.peak)))}\n` +
+        `         career shapes: ` +
+        [...shapes].sort((a, b) => b[1] - a[1]).map(([k, n]) => `${k} ${n}`).join(', '),
+    );
+
+    /*
+       Two ways this reading could be worthless, both checked.
+
+       Pinned at one value across thirty-six different careers means it is not
+       reading the careers. Outside 0..100 means the weights do not sum the way
+       `LEGITIMACY` says they do.
+    */
+    /*
+       The horoscope condition, at the population level.
+
+       `config/legacy.ts` opens by saying a shape must be able to fail to
+       match, and `legacy.test.ts` checks that one career at a time. Neither
+       can see the failure that matters: a bar set below the population median
+       hands the same verdict to most of the game. `unremarkable` is exempt —
+       it is the floor, and most careers being unremarkable at day 300 is the
+       system working.
+
+       A target for `SHAPE_BARS`, not a threshold on this file.
+    */
+    const named = [...shapes].filter(([k]) => k !== 'unremarkable').sort((a, b) => b[1] - a[1]);
+    if (named.length) {
+      expect(
+        named[0][1] / RUNS_300.length,
+        `"${named[0][0]}" is the verdict on ${named[0][1]} of ${RUNS_300.length} careers`,
+      ).toBeLessThanOrEqual(0.4);
+    }
+
+    const distinct = new Set(l.map((x) => Math.round(x.final))).size;
+    expect(distinct, 'every career reads the same legitimacy, so it is not reading them').toBeGreaterThan(3);
+    expect(l.every((x) => x.final >= 0 && x.final <= 100)).toBe(true);
+  });
+});
+
+/*
+   The half that closes F7 rather than measuring around it.
+
+   Everything above is a career that never touches the new systems. It answers
+   "does a player meet them", which is worth knowing and is not the same
+   question as "does using them do anything". Nothing in this project had ever
+   asked the second question about any of the five.
+
+   Same seeds, same bot, plus favours and the dial. The comparison against
+   RUNS_300 is a comparison of two populations rather than two runs, because
+   any change reshuffles the stream and a single-run diff here would be noise
+   with a decimal point on it.
+*/
+const RUNS_ACTIVE = Array.from({ length: 36 }, (_, i) => climb(700 + i, HUMAN_DAYS, { active: true }));
+
+/*
+   F15's arm: the same bot, allowed to borrow its way to a front.
+
+   The finding says the economy forks on fronts and the gate is money in 98% of
+   the weeks a career owns nothing. Before changing the economy, this asks
+   whether the game already answers it — the first lender in the catalogue is a
+   man at the back of a restaurant with a $40,000 ceiling, no collateral, no
+   respect requirement and no business requirement, reachable on the first
+   morning of the game.
+*/
+const RUNS_FINANCED = Array.from({ length: 36 }, (_, i) =>
+  climb(700 + i, HUMAN_DAYS, { financeFronts: true }),
+);
+
+describe('the other families', () => {
+  it('says whether they ever move, and whether anything is ever open', () => {
+    const weeks = RUNS_300.reduce((n, r) => n + r.rivals.weeks, 0);
+    const neutral = RUNS_300.reduce((n, r) => n + r.rivals.neutralWeeks, 0);
+    const anyOpen = RUNS_300.reduce((n, r) => n + r.rivals.anyOpenWeeks, 0);
+
+    // eslint-disable-next-line no-console
+    console.log(
+      `rivals: ${RUNS_300.length} careers, ${weeks} weeks each side of three families\n` +
+        `        rival-weeks spent at Neutral: ` +
+        `${Math.round((100 * neutral) / Math.max(1, weeks * 3))}%\n` +
+        `        careers where any family ever left Neutral: ` +
+        `${RUNS_300.filter((r) => r.rivals.everMoved > 0).length}/${RUNS_300.length}\n` +
+        `        weeks with any diplomatic option open: ` +
+        `${Math.round((100 * anyOpen) / Math.max(1, weeks))}%\n` +
+        DIPLOMATIC_ACTIONS.map((a) => {
+          const w = RUNS_300.reduce((n, r) => n + r.rivals.open[a.id], 0);
+          const careers = RUNS_300.filter((r) => r.rivals.open[a.id] > 0).length;
+          return `          ${a.id.padEnd(17)} open in ${careers}/${RUNS_300.length} careers, ` +
+            `${Math.round((100 * w) / Math.max(1, weeks))}% of weeks`;
+        }).join('\n'),
+    );
+
+    // eslint-disable-next-line no-console
+    console.log(
+      `        the three bars, 40th / median / 75th of the best any career reached:
+` +
+        `          standing (alliance wants 40)  ` +
+        `${Math.round(pct(RUNS_300.map((r) => r.rivals.peakStanding), 0.4))} / ` +
+        `${Math.round(median(RUNS_300.map((r) => r.rivals.peakStanding)))} / ` +
+        `${Math.round(pct(RUNS_300.map((r) => r.rivals.peakStanding), 0.75))}
+` +
+        `          respect (demand wants ${DIPLOMACY.demandRespect})       ` +
+        `${Math.round(pct(RUNS_300.map((r) => r.rivals.peakRespect), 0.4))} / ` +
+        `${Math.round(median(RUNS_300.map((r) => r.rivals.peakRespect)))} / ` +
+        `${Math.round(pct(RUNS_300.map((r) => r.rivals.peakRespect), 0.75))}
+` +
+        `        what the families were doing, by rival-week: ` +
+        (() => {
+          const all: Record<string, number> = {};
+          for (const r of RUNS_300) {
+            for (const [k, n] of Object.entries(r.rivals.doing)) all[k] = (all[k] ?? 0) + n;
+          }
+          const total = Object.values(all).reduce((a, b) => a + b, 0) || 1;
+          return Object.entries(all)
+            .sort((a, b) => b[1] - a[1])
+            .map(([k, n]) => `${k} ${Math.round((100 * n) / total)}%`)
+            .join(', ');
+        })() +
+        `
+` +
+        `        rival-weeks spent short of the ${'$'}${AI.pressure.cost.toLocaleString('en-US')} a push costs: ` +
+        `${Math.round((100 * RUNS_300.reduce((n, r) => n + r.rivals.brokeWeeks, 0)) / Math.max(1, RUNS_300.reduce((n, r) => n + r.rivals.wealthSamples, 0)))}%` +
+        `, mean wealth ${'$'}${Math.round(median(RUNS_300.map((r) => r.rivals.meanWealth))).toLocaleString('en-US')}
+` +
+        `          careers whose peak standing cleared the alliance bar of ` +
+        `${DIPLOMATIC_ACTION_BY_ID['propose_alliance'].minRelationship}: ` +
+        `${RUNS_300.filter((r) => r.rivals.peakStanding >= DIPLOMATIC_ACTION_BY_ID['propose_alliance'].minRelationship).length}/${RUNS_300.length}
+` +
+        `          strength lead (wants ${DIPLOMACY.demandStrengthLead})    ` +
+        `${Math.round(pct(RUNS_300.map((r) => r.rivals.peakLead), 0.4))} / ` +
+        `${Math.round(median(RUNS_300.map((r) => r.rivals.peakLead)))} / ` +
+        `${Math.round(pct(RUNS_300.map((r) => r.rivals.peakLead), 0.75))}`,
+    );
+
+    expect(weeks, 'nothing was sampled').toBeGreaterThan(0);
+  });
+
+  /*
+     F17, pre-committed.
+
+     Round 13 read the Diplomacy screen four times and wrote *"shows strengths
+     and stances but I never found anything on it I could press"*. A screen
+     with nothing pressable on it for three hundred days is not a system, and
+     the two doors it offers a peaceful career — asking for tribute and
+     proposing an alliance — were shut in every career the probe has run.
+
+     The condition is deliberately weak: **one** of the two, in **half** the
+     careers, at some point in three hundred days. A target for
+     `config/diplomacy.ts`, never a threshold to be moved.
+  */
+  it('opens at least one door to a career that is not at war', () => {
+    const reached = RUNS_300.filter(
+      (r) => r.rivals.open['demand_tribute'] > 0 || r.rivals.open['propose_alliance'] > 0,
+    ).length;
+    expect(
+      reached,
+      'no career could ever demand tribute or propose an alliance',
+    ).toBeGreaterThanOrEqual(RUNS_300.length / 2);
+  });
+});
+
+describe('the front fork', () => {
+  /*
+     F15, and the question nobody had asked about it.
+
+     The instrument first: an arm that never actually borrows would report that
+     borrowing changes nothing, which is the shape of half the entries in
+     HANDOFF section 3.
+  */
+  it('actually borrowed', () => {
+    const loans = RUNS_FINANCED.reduce((n, r) => n + r.borrowed, 0);
+    expect(loans, 'no career ever took a loan, so the arm measures nothing').toBeGreaterThan(0);
+    expect(
+      RUNS_300.reduce((n, r) => n + r.borrowed, 0),
+      'the baseline borrowed, so it is not a control',
+    ).toBe(0);
+  });
+
+  it('says whether borrowing reaches the compounding half', () => {
+    const side = (rs: Climb[]) => {
+      const compounded = rs.filter((r) => r.bestEstate >= 100_000);
+      return {
+        n: compounded.length,
+        fronts: median(rs.map((r) => r.fronts)),
+        estate: Math.round(median(rs.map((r) => r.bestEstate))),
+        ended: rs.filter((r) => r.days < HUMAN_DAYS).length,
+      };
+    };
+    const base = side(RUNS_300);
+    const fin = side(RUNS_FINANCED);
+
+    // eslint-disable-next-line no-console
+    console.log(
+      `the front fork: ${RUNS_FINANCED.reduce((n, r) => n + r.borrowed, 0)} loans taken\n` +
+        `         careers reaching $100,000:  ${base.n}/${RUNS_300.length} → ${fin.n}/${RUNS_FINANCED.length}\n` +
+        `         median fronts held:         ${base.fronts} → ${fin.fronts}\n` +
+        `         median best estate:         ${base.estate.toLocaleString('en-US')} → ` +
+        `${fin.estate.toLocaleString('en-US')}\n` +
+        `         careers that ended early:   ${base.ended} → ${fin.ended}`,
+    );
+
+    expect(RUNS_FINANCED.length).toBe(36);
+  });
+});
+
+describe('a career that uses what the cycle built', () => {
+  /*
+     The instrument, and for once it is the whole point rather than a guard on
+     it: a bot that never manages to spend a favour or turn a dial is exactly
+     the F7 state this block exists to leave behind.
+  */
+  it('actually used them', () => {
+    const favours = RUNS_ACTIVE.reduce((n, r) => n + r.newSystems.favoursSpent, 0);
+    const dials = RUNS_ACTIVE.reduce((n, r) => n + r.newSystems.dialTurns, 0);
+
+    expect(favours, 'no career ever managed to spend a favour').toBeGreaterThan(0);
+    expect(dials, 'no career ever turned the pressure dial').toBeGreaterThan(0);
+    expect(
+      RUNS_300.reduce((n, r) => n + r.newSystems.favoursSpent + r.newSystems.dialTurns, 0),
+      'the baseline population used the new systems, so it is not a control',
+    ).toBe(0);
+  });
+
+  it('says what using them is worth', () => {
+    const cmp = (pick: (r: Climb) => number) =>
+      `${Math.round(median(RUNS_300.map(pick)))} → ${Math.round(median(RUNS_ACTIVE.map(pick)))}`;
+
+    // eslint-disable-next-line no-console
+    console.log(
+      `using them: ${RUNS_ACTIVE.length} careers, ${HUMAN_DAYS} days, same seeds as the baseline\n` +
+        `         favours spent: ${RUNS_ACTIVE.reduce((n, r) => n + r.newSystems.favoursSpent, 0)}` +
+        `, dial turns: ${RUNS_ACTIVE.reduce((n, r) => n + r.newSystems.dialTurns, 0)}\n` +
+        `         weeks the policy asked for each setting: ` +
+        (['clean', 'normal', 'hard'] as PressureId[])
+          .map((id) => `${id} ${RUNS_ACTIVE.reduce((n, r) => n + r.newSystems.dialWeeks[id], 0)}`)
+          .join(', ') +
+        `\n         median, baseline → active:\n` +
+        `           estate       ${cmp((r) => r.bestEstate)}\n` +
+        `           heat-weeks   ${cmp((r) => r.danger.heat)}\n` +
+        `           case weight  ${cmp((r) => r.danger.peakCase)}\n` +
+        `           laundered    ${cmp((r) => r.wash.laundered)}\n` +
+        `           legitimacy   ${cmp((r) => r.newSystems.legitimacy.final)}\n` +
+        `           ended early  ${RUNS_300.filter((r) => r.days < HUMAN_DAYS).length} → ` +
+        `${RUNS_ACTIVE.filter((r) => r.days < HUMAN_DAYS).length}`,
+    );
+
+    expect(RUNS_ACTIVE.length).toBe(36);
   });
 });

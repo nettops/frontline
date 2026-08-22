@@ -21,6 +21,7 @@
  */
 
 import { addLog } from './util';
+import { activeCases } from './investigation';
 import { clamp } from './rng';
 import { crewList } from './npc';
 import { territoryList, territoryDef, adjustSentiment, playerInfluence } from './territory';
@@ -85,8 +86,22 @@ function scoreFor(state: GameState, def: CivicFigureDef): number {
       if (worked.length === 0) return 0;
       return clamp(worked.reduce((sum, t) => sum + t.sentiment, 0) / worked.length, 0, 100);
     }
-    case 'discretion':
-      return clamp(100 - (state.city?.notoriety ?? 0), 0, 100);
+    case 'discretion': {
+      /*
+         Two terms, because one of them does not move.
+
+         Notoriety is the papers, and across 300 days it peaks at 3 — so the
+         judge spent the whole game reading 97 and owing everybody. What a
+         judge is actually exposed to is a live file with your name in it, and
+         that runs the full range.
+      */
+      const worst = activeCases(state).reduce((n, c) => Math.max(n, c.strength), 0);
+      return clamp(
+        100 - (state.city?.notoriety ?? 0) - worst * CIVIC.discretionCaseWeight,
+        0,
+        100,
+      );
+    }
   }
 }
 

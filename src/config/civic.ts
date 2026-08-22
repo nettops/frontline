@@ -92,7 +92,21 @@ export const CIVIC_FIGURES: CivicFigureDef[] = [
       'Runs a division and would like it to be boring. Nothing you do is their business until it is in the paper.',
     watches: 'quiet',
     grants: 'bury_a_case',
-    owesAbove: 40,
+    /*
+       Was 40, and the generated memos moved the ground under it.
+
+       `gen_paper_moving` walks in and offers to put everybody indoors for a
+       while, and the probe's bot — which never laid low in its life, F7's
+       oldest complaint — takes it, because it is free. Heat across a career
+       fell, the captain reads `100 - heat`, and the figure went from a median
+       best standing of 52 to 69 against a bar of 40. Owed in 34 careers out of
+       36: a fixture rather than a relationship.
+
+       Sized the way `config/economy.ts` sizes the rank table — between the
+       median and the 75th of the measured distribution — rather than by eye,
+       which is how it came to be 40.
+    */
+    owesAbove: 55,
     needsInfluence: 0,
   },
   {
@@ -102,7 +116,21 @@ export const CIVIC_FIGURES: CivicFigureDef[] = [
       'Owns who gets hired on every site in three districts. Wants to know the ground is held by somebody who answers.',
     watches: 'ground',
     grants: 'quiet_the_street',
-    owesAbove: 40,
+    /*
+       Was 40, against a quantity whose median best is 24.
+
+       The union counts the districts you hold at Foothold or better, over
+       four — so a bar of 40 wants roughly two districts held, and the median
+       career at day 300 holds one. It was the last of the four figures still
+       sized by eye rather than against the distribution, and it survived the
+       first pass only because it happened to read 14 careers out of 36 that
+       afternoon; after the rival and economy work it read 8.
+
+       32 sits between the median and the ground the compounding half of the
+       population actually holds, which is the same method the other three
+       were re-sized by.
+    */
+    owesAbove: 32,
     needsInfluence: 0,
   },
   {
@@ -121,7 +149,19 @@ export const CIVIC_FIGURES: CivicFigureDef[] = [
       'The building takes their calls. The same arrangement the City screen sells for money, reached the other way.',
     watches: 'standing',
     grants: 'lose_the_paperwork',
-    owesAbove: 60,
+    /*
+       Was 60, and never once reached in 36 careers.
+
+       The alderman reads the average public feeling across the districts you
+       work, and `ladder.probe` measures that at 38 across the population, with
+       the best week of the median career at 46. A bar of 60 was not demanding,
+       it was outside the range of the quantity it was set against — the figure
+       was unreachable content in every career the probe has ever run.
+
+       45 sits just above the median career's best, so keeping a neighbourhood
+       on side is what buys it, which is what the figure is for.
+    */
+    owesAbove: 45,
     needsInfluence: 6,
   },
 ];
@@ -143,12 +183,19 @@ export const CIVIC = {
    * should not.
    *
    * Sized against `owesAbove` and the 300-day window, not picked. Net of
-   * `decayPerWeek` this is 3.7 a week, so thirteen quiet weeks reach 48 and a
-   * captain at 40 owes you one inside a season. At 3.5 it reached 35.1 and the
+   * `decayPerWeek` this is 4.4 a week, so thirteen quiet weeks reach 57 and a
+   * captain at 55 owes you one inside a season. At 3.5 it reached 35.1 and the
    * whole network opened after a person had stopped playing, which is the
    * defect it exists to fix.
+   *
+   * Was 4.5, against a captain who wanted 40. Both moved together: the probe
+   * found the captain owing 34 careers out of 36 and raising the bar to 55
+   * would otherwise have pushed the first favour past the season this number
+   * exists to guarantee. The promise is unchanged — a quiet family has
+   * somebody in the division inside thirteen weeks — and it is now a harder
+   * thirteen weeks.
    */
-  driftPerWeek: 4.5,
+  driftPerWeek: 5.2,
 
   /**
    * Standing lost each week they are not owed anything and nothing is going
@@ -169,6 +216,24 @@ export const CIVIC = {
 
   /** Standing below which they stop taking your calls at all. */
   coldBelow: 15,
+
+  /**
+   * How much an open case counts against you in the judge's reading.
+   *
+   * The judge used to watch notoriety alone. `ladder.probe` measures peak
+   * notoriety at **3** across a 300-day career, so `100 - notoriety` read 97
+   * every week of every game and the judge owed all 36 careers in the
+   * population regardless of how any of them were played. A relationship
+   * nothing can move is a fixture.
+   *
+   * A judge's actual exposure is not the newspaper, it is whether there is a
+   * live file with your name in it. That number does move — case strength runs
+   * the full range across this population — so it is the half of discretion
+   * that makes the figure a relationship. Weighted rather than subtracted
+   * outright, because a boss under investigation should become harder for a
+   * judge to know, not radioactive.
+   */
+  discretionCaseWeight: 0.6,
 } as const;
 
 /**

@@ -13,14 +13,27 @@
  */
 import { describe, expect, it } from 'vitest';
 import eventsSource from '../events.ts?raw';
+import generatedSource from '../eventgen.ts?raw';
 import { newGame } from '../state';
 import { Rng } from '../rng';
 import { EVENT_DEF_IDS } from '../events';
 
 const SOURCE: string = eventsSource;
+/*
+   The generated half is a second file and the same rule applies to it.
 
-/** Splits the file into one chunk per event definition. */
-function definitions(): { id: string; body: string }[] {
+   It went in with no variants at all and this file caught it on the first run,
+   which is exactly the job: six shapes drawn against twenty men produce a lot
+   of situations and would still have produced one sentence each.
+
+   Its definitions are top-level consts rather than entries in an array
+   literal, so the ids sit two spaces in rather than four. That is the only
+   difference, and it is why the scan takes an indent.
+*/
+const GENERATED: string = generatedSource;
+
+/** Splits a file into one chunk per event definition. */
+function definitionsIn(source: string, indent: number): { id: string; body: string }[] {
   const out: { id: string; body: string }[] = [];
   /*
      Anchored on the id and confirmed by a nearby `cooldownDays`, rather than on
@@ -33,15 +46,19 @@ function definitions(): { id: string; body: string }[] {
      matches less than it should is the same class of bug as the probe that
      quietly played no game.
   */
-  const re = /^ {4}id: '([a-z_]+)',$/gm;
+  const re = new RegExp(`^ {${indent}}id: '([a-z_]+)',$`, 'gm');
   let m: RegExpExecArray | null;
   const starts: { id: string; at: number }[] = [];
-  while ((m = re.exec(SOURCE)) !== null) starts.push({ id: m[1], at: m.index });
+  while ((m = re.exec(source)) !== null) starts.push({ id: m[1], at: m.index });
   starts.forEach((entry, i) => {
-    const end = i + 1 < starts.length ? starts[i + 1].at : SOURCE.length;
-    out.push({ id: entry.id, body: SOURCE.slice(entry.at, end) });
+    const end = i + 1 < starts.length ? starts[i + 1].at : source.length;
+    out.push({ id: entry.id, body: source.slice(entry.at, end) });
   });
   return out;
+}
+
+function definitions(): { id: string; body: string }[] {
+  return [...definitionsIn(SOURCE, 4), ...definitionsIn(GENERATED, 2)];
 }
 
 describe('the event catalogue', () => {

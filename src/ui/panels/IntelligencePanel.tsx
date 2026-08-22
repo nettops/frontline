@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useGame, mutate } from '../../store';
-import { Panel, KeyValue } from '../components';
+import { Panel, Empty, KeyValue } from '../components';
 import {
   activeCases,
   buyContact,
@@ -13,6 +13,7 @@ import {
   weeklyLegalCost,
 } from '../../sim/investigation';
 import { accuse, canAccuse, readLeaks, timesPresent } from '../../sim/informants';
+import { readWhispers } from '../../sim/whispers';
 import { formatMoney, formatShortDay } from '../../sim/util';
 import { AGENCIES, LAWYERS, CONTACT } from '../../config/lawEnforcement';
 
@@ -24,6 +25,7 @@ export default function IntelligencePanel() {
   const leaks = readLeaks(state);
   const present = timesPresent(state);
   const size = footprint(state);
+  const whispers = readWhispers(state);
 
   return (
     <>
@@ -36,6 +38,57 @@ export default function IntelligencePanel() {
         and lets you see what gets filed. Somebody inside tells you what the file
         actually says — and is a person who knows you are paying them.
       </p>
+
+      {/*
+         What reached you this week.
+
+         Above representation because it is the thing a boss opens this screen
+         for. Round 14 found the best panel in the game — the reconstructed
+         nights the police have — on day 300, because the nav badge counted
+         something and never said what. This is the part that should be
+         costing you sleep.
+
+         The percentage is deliberate and it is the only one in the game. Every
+         other reading is banded because it describes a fact the player is not
+         entitled to know precisely; this describes how sure somebody else is,
+         which is a thing a person can be told exactly — and the number is the
+         whole decision.
+      */}
+      <Panel title="What you have been told">
+        {whispers.length === 0 ? (
+          <Empty>Nobody has brought you anything worth repeating.</Empty>
+        ) : (
+          <div className="table-wrap">
+            <table className="data">
+              <thead>
+                <tr>
+                  <th>Heard</th>
+                  <th className="num">How sure</th>
+                  <th>Reading</th>
+                </tr>
+              </thead>
+              <tbody>
+                {whispers.map((w) => (
+                  <tr key={`${w.day}-${w.text}`}>
+                    <td>
+                      <div>{w.text}</div>
+                      <div className="tiny faint">{formatShortDay(w.day)}</div>
+                    </td>
+                    <td className="num mono">{w.confidence}%</td>
+                    <td className="tiny faint">
+                      {w.certainty}
+                      {w.corroborated && ' · and heard again since'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+        <p className="tiny faint" style={{ margin: '10px 14px 0' }}>
+          Some of this is wrong. Nothing here will ever tell you which.
+        </p>
+      </Panel>
 
       <Panel title="Representation">
         <div className="choice-list">

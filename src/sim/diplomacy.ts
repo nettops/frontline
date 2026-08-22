@@ -13,11 +13,11 @@
 
 import { Rng, clamp } from './rng';
 import type { Faction, FactionBond, GameState, Npc } from './types';
-import { addEvidence, addLog } from './util';
+import { addEvidence, addLog, formatMoney } from './util';
 import { addHeat } from './heat';
 import { addNote, crewList } from './npc';
 import { remember } from './memory';
-import { spend } from './economy';
+import { takeBack, spend } from './economy';
 import { playerInfluence, territoryDef, territoryList } from './territory';
 import type { Territory } from './types';
 import {
@@ -240,10 +240,36 @@ export function tickBonds(state: GameState, districtsOf: (id: FactionId) => numb
         record.trust = clamp(record.trust - BOND.trustDecayPerWeek, -100, 100);
       }
 
-      // Respect tracks what they can do, not what they once did.
+      /*
+         Respect tracks what they can do, not what they once did — and until
+         now "what they can do" meant strength and ground and nothing else.
+
+         `config/diplomacy.ts` says respect is for *"an organization that has
+         beaten a case, survived a war and holds half the city"*. Two of those
+         three were in the formula. The third was the one a career that never
+         goes to war can actually earn, and it was not there — so
+         `ladder.probe` measured the best respect any family ever holds for a
+         player at 29 / 29 / 31 across thirty-six careers, a distribution flat
+         enough that no bar on it could be a decision. The demand-tribute door
+         it gates was open in two careers out of thirty-six.
+
+         Beating a case is the peaceful half of a reputation. Only the player
+         is ever investigated in this game, so the term only applies to them —
+         which is honest rather than lopsided: the other families are read on
+         what the player can see of them, and a rival's court record is not
+         something the player has.
+      */
+      const beaten =
+        to === 'player'
+          ? Object.values(state.law.investigations).filter(
+              (i) => i.status === 'closed' || i.verdict === 'acquitted',
+            ).length
+          : 0;
       const target = clamp(
         factionStrength(state, to) * BOND.respectFromStrength +
-          districtsOf(to) * BOND.respectFromDistricts,
+          districtsOf(to) * BOND.respectFromDistricts +
+          Math.min(BOND.respectFromCasesCap, beaten * BOND.respectFromCaseBeaten) +
+          (to === 'player' ? state.org.respect * BOND.respectFromStanding : 0),
         -100,
         100,
       );
@@ -802,7 +828,22 @@ export function canDo(
 
   const standing = relationship(state, 'player', target);
   if (standing < def.minRelationship) {
-    return { ok: false, message: 'They will not hear it from you.' };
+    /*
+       Names the bar, because every refusal in this project has to.
+
+       This said "They will not hear it from you." and stopped — no number, on
+       the gate that shut `propose_alliance` in all thirty-six careers the
+       probe has run. `refusals.test.ts` walked past it: its detector wants a
+       comparison against a named constant and this one compares against
+       `def.minRelationship`, a lowercase field. Same blind spot that hid the
+       front purchase.
+    */
+    return {
+      ok: false,
+      message:
+        `They will not hear it from you. Standing with them is ${Math.round(standing)}; ` +
+        `this needs ${def.minRelationship}.`,
+    };
   }
   if (action === 'declare_war' && war) {
     return { ok: false, message: 'You are already at war with them.' };
@@ -811,7 +852,10 @@ export function canDo(
     // Either they can see you are stronger, or they already take you
     // seriously enough not to need showing.
     const lead = playerStrength(state) - factionStrength(state, target);
-    const standing = bond(state, 'player', target).respect;
+    // Their respect for you. `bond` is symmetric across the player — there is
+    // no `state.factions['player']`, so both orderings return the one record
+    // the rival keeps — but reading it in this direction says what it means.
+    const standing = bond(state, target, 'player').respect;
     if (lead < DIPLOMACY.demandStrengthLead && standing < DIPLOMACY.demandRespect) {
       /*
          Round 13 read this screen four times and wrote it down as "shows
@@ -829,9 +873,24 @@ export function canDo(
     }
   }
 
+  /*
+     What you can put on the table, and holdings count toward it.
+
+     The same argument `canAcquire` makes about buying a front: front income is
+     paid into holdings so it compounds rather than being spent on the next
+     job, and a family with every dollar of its legitimate earnings put away
+     was being told it could not afford the thing that money exists to buy.
+     Measured: ten careers in thirty-six reach the standing an alliance asks
+     for and **one** could ever press the button, because the liquid cash was
+     never there on the same afternoon.
+  */
   const cost = diplomaticCost(state, action, target);
-  if (cost > 0 && state.org.cash + state.org.dirtyCash < cost) {
-    return { ok: false, message: 'You cannot cover it.' };
+  const inHand = state.org.cash + state.org.dirtyCash + (state.org.holdings ?? 0);
+  if (cost > 0 && inHand < cost) {
+    return {
+      ok: false,
+      message: `${formatMoney(cost)}, and you have ${formatMoney(inHand)}.`,
+    };
   }
   return { ok: true, message: def.name };
 }
@@ -855,8 +914,21 @@ export function doDiplomacy(
   const faction = state.factions[target];
   const name = houseShort(state, target);
   const cost = diplomaticCost(state, action, target);
-  if (cost > 0 && !spend(state, cost)) {
-    return { ok: false, message: 'You cannot cover it.' };
+  if (cost > 0) {
+    /*
+       Pull it back out of holdings if that is where it is.
+
+       `takeBack` charges for the privilege, which is the point — money you had
+       put somewhere safe costs something to reach — and it is the same trade
+       the Finances screen describes. Without this the affordability check
+       above would let the button light up and `spend` would refuse it, which
+       is the exact failure `loyalty_gesture` carries a comment about.
+    */
+    const liquid = state.org.cash + state.org.dirtyCash;
+    if (liquid < cost) takeBack(state, cost - liquid);
+    if (!spend(state, cost)) {
+      return { ok: false, message: `${formatMoney(cost)} could not be raised.` };
+    }
   }
 
   /*

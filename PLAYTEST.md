@@ -146,6 +146,46 @@ whether the mid-game still stops giving them things around day 60, whether they
 ever hold a real hoard, and whether they find the Nights column or the Put away
 panel on their own.
 
+**Round 15 (2026-08-22).** The first round since the Mafia-boss build, and the
+largest gap between two rounds in the project's history. What differs from
+round 14, none of it said to the tester:
+
+- *Five systems round 14 never saw.* The favour network, whispers, legitimacy,
+  career shapes and the per-front pressure dial all shipped after that round
+  and were measured for the first time only afterwards. Two of the four civic
+  figures were misconfigured against quantities nobody had plotted — the judge
+  owed every career, the alderman owed none.
+- *The simulation writes its own memos.* Ten shapes drawn against real subjects,
+  on a second daily roll that only fires when the authored pool has nothing.
+  Round 14's second MUST FIX was that the pool exhausts and the back half of a
+  career goes quiet.
+- *The other families act.* They spent 69% of their weeks going quiet and now
+  spend 61%; leaning on somebody went 7% to 9%, talking 2% to 9%. Round 13 said
+  they never did anything.
+- *Doors that were shut.* A career that never goes to war can now press
+  something in 19 of 36 measured careers, against 2 before.
+- *Authority*, and one thing it changes: a steward decides whether to help
+  himself partly on whether he thinks anybody is counting.
+- *A life outside the work.* A home, three people, and a boss who is never there
+  is easier to depose.
+- *The day has a shape.* The briefing separates what happened overnight, what is
+  waiting, and the evening.
+- *The front gate is signposted.* The refusal names the shortfall, and a tip
+  names the lender who would cover it.
+
+What to watch for in the report, without asking the tester about any of it:
+whether the middle of the game still stops giving them things around day 90;
+whether they notice the families doing anything; whether they find the lender
+before the front gate stops them; and whether the evening reads as a life or as
+a chore.
+
+**And the open question this round exists to settle.** Making the rivals act
+cost ladder speed — `ladder.probe` reads Capo in 13 careers of 36 against a
+pre-committed 24, and `scorecard.probe`'s Pacing axis sits under its floor
+because a bot that has run every job kind and stopped gaining rank has no firsts
+left. Whether an active city is worth a slower climb is not a thing a probe can
+answer.
+
 **A note on the URL for this round.** The brief points at :5174, not :5173.
 There is a real save in the :5173 autosave slot and a Career overwrites it.
 

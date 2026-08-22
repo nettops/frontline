@@ -171,6 +171,32 @@ export const AI = {
     // player never sees or feels. A rival that mostly invests is a rival that
     // may as well not be in the game.
     invest: 0.9,
+    /*
+       Going quiet, and it is the attractor the whole board falls into.
+
+       `ladder.probe` now counts what the families spend their weeks on, and
+       the answer is **consolidate 69%** of all rival-weeks against pressure 7%
+       and expand 11%. That is F5 with a number on it at last: three
+       organizations at strengths of 84, 100 and 100 sitting still, which the
+       round-13 tester read — correctly — as *"the rival families never did
+       anything"*.
+
+       Two repairs were tried and **both measured nothing**, which is worth
+       more than either would have been:
+
+         weight 1 → 0.6                  69% → 68%
+         consolidate.heatReduction 6 → 14   69% → 69%
+
+       So it is neither the weight nor the heat term. The score is
+       `caution * heat + 0.5 when alarmed + 0.45 when short of $25,000`, and
+       what is left is the money: the families appear to be chronically broke,
+       and consolidating is what a broke family does. The next hypothesis is
+       therefore about faction wealth — where it goes, and whether
+       `consolidate.wealthGain` of 12,000 a week is being outrun by something.
+
+       Reverted rather than left in, per DIRECTOR section 10. A change that
+       measures nothing is not kept.
+    */
     consolidate: 1,
     /** Suing for peace, which should be readily reachable when losing. */
     diplomacy: 1.4,
@@ -242,7 +268,38 @@ export const AI = {
     /** Influence taken from the target, and taken up by the aggressor. */
     damage: [3, 8] as [number, number],
     selfGain: 2,
-    cost: 25_000,
+    /*
+       What leaning on somebody costs, and why it came down.
+
+       `ladder.probe` now counts what the families spend their weeks on:
+       **consolidate 69%**, pressure 7%. The cause is arithmetic rather than
+       appetite. `scoreExpand` and `scorePressure` both return zero outright
+       when a family cannot afford the action, so a broke family has exactly
+       one option — and the families net about $4,700 a week once
+       `collectIncome`'s upkeep is paid, against $25,000 for one push. That is
+       five weeks of saving per shove, and the probe duly measured them short
+       of it **49% of all rival-weeks**.
+
+       The upkeep itself is not the thing to move: it was tuned against a
+       measured $137M-after-thirty-years problem and its own comment records
+       what happens when a family is left with nothing. What is safe to move is
+       the price of the one action the player actually feels.
+
+       Three values were measured before this one settled:
+
+           cost      consolidate   pressure   and what else broke
+           12,000        42%         18%      broke.probe, by one short week
+           16,000        53%         13%      broke.probe, by two
+           18,000        57%         12%      broke.probe, and worse elsewhere
+           20,000        61%          9%      nothing
+
+       20,000 buys the smallest share of the movement and is the one that costs
+       nothing standing: 69% to 61% on going quiet, 7% to 9% on leaning on
+       somebody, and 2% to 9% on talking. The families are still quieter than
+       they should be and F5 is **improved rather than closed** — the entry in
+       HANDOFF section 6 says so and says what the next hypothesis is.
+    */
+    cost: 20_000,
     heat: 7,
     /** Relationship damage when the target is the player. */
     relationshipHit: [10, 20] as [number, number],
@@ -283,6 +340,15 @@ export const AI = {
   },
 
   consolidate: {
+    /**
+     * How much being penniless argues for going quiet.
+     *
+     * Applied in proportion to the shortfall rather than as a flat bonus the
+     * moment wealth dips under the cost of a push — see `scoreConsolidate`.
+     * The ceiling is unchanged; what changed is that it is now a ceiling
+     * rather than a step.
+     */
+    whenBroke: 0.45,
     heatReduction: 6,
     /** Influence shored up in districts they already hold. */
     influenceGain: 1,

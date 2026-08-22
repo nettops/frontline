@@ -338,7 +338,22 @@ function scoreConsolidate(state: GameState, faction: Faction, rng: Rng): Option 
 
   const heatPressure = clamp(faction.heat / 100, 0, 1);
   const alarmed = faction.heat > AI.heatAlarmAbove ? 0.5 : 0;
-  const broke = faction.wealth < AI.pressure.cost ? 0.45 : 0;
+  /*
+     How short they are, not merely whether they are short.
+
+     This was a flat 0.45 the moment wealth fell under the cost of one push,
+     and `ladder.probe` measures the families below that line **46% of all
+     rival-weeks** — so nearly half of every decision on the board carried a
+     large constant in favour of doing nothing. A family a dollar short of one
+     action is not in trouble; it is a family that cannot afford one action
+     this week, and `consolidate.wealthGain` puts that right in a fortnight.
+
+     Proportional removes the cliff without removing the term: broke is still
+     worth the whole 0.45 to a family with nothing, and almost nothing to one
+     that is nearly there.
+  */
+  const shortfall = clamp((AI.pressure.cost - faction.wealth) / AI.pressure.cost, 0, 1);
+  const broke = shortfall * AI.consolidate.whenBroke;
 
   const score =
     (personality.caution * heatPressure + alarmed + broke) * AI.weights.consolidate;

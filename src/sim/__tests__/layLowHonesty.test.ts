@@ -124,36 +124,108 @@ describe('the screens agree that quiet work moves', () => {
     expect(Object.keys(SOURCES).length).toBeGreaterThan(40);
   });
 
-  it('nowhere claims that laying low stops everything', () => {
-    const claims: string[] = [];
+  /**
+   * Every player-facing line that mentions going dark.
+   *
+   * Comments are allowed to quote the old wording — the entry above this one
+   * does, and a check that forbade explaining itself would be a check nobody
+   * could document. Tracked as a block state rather than by the leading
+   * character, because the first draft only skipped lines starting with `*`
+   * and so flagged its own explanation.
+   */
+  function sentencesAboutGoingDark(): { where: string; text: string }[] {
+    const out: { where: string; text: string }[] = [];
     for (const [file, text] of Object.entries(SOURCES)) {
-      /*
-         Comments are allowed to quote the old wording — the entry above this
-         one does, and a check that forbade explaining itself would be a check
-         nobody could document. Tracked as a block state rather than by the
-         leading character, because the first draft only skipped lines starting
-         with `*` and so flagged its own explanation.
-      */
+      // Probes print their own console summaries and are not screens. Matched
+      // on the filename because a sibling test resolves as `./x.test.ts`,
+      // which contains no directory to match on.
+      if (file.includes('__tests__') || /\.test\.tsx?$/.test(file)) continue;
       let inBlock = false;
-      text.split(String.fromCharCode(10)).forEach((line, i) => {
+      for (const [i, line] of text.split(String.fromCharCode(10)).entries()) {
         const code = line.trim();
         const opens = code.includes('/*');
         const closes = code.includes('*/');
         const wasInBlock = inBlock;
         if (opens && !closes) inBlock = true;
         if (closes) inBlock = false;
-        if (wasInBlock || opens || code.startsWith('//') || code.startsWith('*')) return;
-        if (/nothing earns|Nothing earns|Everything stops/.test(line)) {
-          claims.push(`${file}:${i + 1} ${code}`);
+        if (wasInBlock || opens || code.startsWith('//') || code.startsWith('*')) continue;
+
+        const lower = code.toLowerCase();
+        if (!lower.includes('laying low') && !lower.includes('lay low') && !lower.includes('going dark')) {
+          continue;
         }
-      });
+        out.push({ where: `${file}:${i + 1}`, text: code });
+      }
     }
+    return out;
+  }
+
+  /*
+     The instrument, and this one has earned its place.
+
+     Round 15 chose Go dark believing quiet work would continue, then read "No
+     operations can be launched" on the Overview and "Nothing can be launched
+     until day N. That is the point of it." on the Operations page — and did
+     not try. They lost fourteen days of income, missed payroll, lost counsel,
+     and filed it as the MUST FIX that decided their run.
+
+     The check that existed was built for exactly that defect and matched
+     neither string, because it hunted three specific sentences rather than the
+     claim. **A guard with a blind spot shaped like the bug it hunts** is
+     HANDOFF section 3's whole subject.
+
+     The replacement was two regular expressions and it went green with the
+     defect reinstated — five rounds of instrumenting later, `totalStop.test`
+     was returning false inside the test on a line it matched everywhere else.
+     Whatever the cause, a check nobody can predict is worse than none. Plain
+     lowercase string matching cannot surprise anybody.
+  */
+  it('finds the sentences it is meant to be checking', () => {
+    const found = sentencesAboutGoingDark();
+    expect(found.length, 'no screen mentions going dark at all').toBeGreaterThan(3);
+  });
+
+  const STOP_CLAIMS = [
+    'nothing can be launched',
+    'no operations can be launched',
+    'nothing earns',
+    'earns nothing',
+    'everything stops',
+    'nothing moves',
+    'nothing runs',
+    'no work',
+  ];
+
+  it('nowhere claims that laying low stops everything', () => {
+    const claims = sentencesAboutGoingDark().filter((s) =>
+      STOP_CLAIMS.some((claim) => s.text.toLowerCase().includes(claim)),
+    );
 
     expect(
-      claims,
-      'quiet work moves while dark, so no screen may say otherwise:' +
-        String.fromCharCode(10) +
-        claims.join(String.fromCharCode(10)),
+      claims.map((c) => `${c.where} ${c.text}`),
+      'quiet work moves while dark, so no screen may say otherwise',
+    ).toEqual([]);
+  });
+
+  /*
+     And the half that does not depend on anybody having thought of the
+     wording. A screen that describes the mechanic without describing the
+     exception is the defect however it is phrased.
+
+     Only sentences that make a claim about what happens — a bare status badge
+     reading " · laying low" describes nothing and needs no exception.
+  */
+  it('says what still moves wherever it describes going dark', () => {
+    const CLAIMS_ABOUT_WORK = ['launch', 'earn', 'work', 'job', 'operation', 'moves', 'runs'];
+    const silent = sentencesAboutGoingDark().filter((s) => {
+      const lower = s.text.toLowerCase();
+      if (!CLAIMS_ABOUT_WORK.some((w) => lower.includes(w))) return false;
+      return !lower.includes('quiet');
+    });
+
+    expect(
+      silent.map((c) => `${c.where} ${c.text}`),
+      'a screen describes going dark without saying quiet work still moves',
     ).toEqual([]);
   });
 });
