@@ -19,7 +19,7 @@ operations, crew, territory, rival families, and law enforcement.
     npx tsc -b         # types
     npm run playtest   # namespaced instance for blind testers
 
-**Current verified state: `tsc` clean, 639 tests, 55 files — 638 passing and one
+**Current verified state: `tsc` clean, 645 tests, 56 files — 644 passing and one
 failing on purpose.** `ladder.probe.test.ts` carries a pre-committed pacing
 target the rank table does not meet; see §9. 53,553 lines
 across 160 source files, after the audit in §8.
@@ -114,17 +114,23 @@ come back to the developer" condition has been reached and reported.
 
 ### Blind round scores
 
-    axis           r10   r11   r12   r13
-    First hour       8     8     8     8
-    Clarity          9     6     6     9
-    Feedback         9     7     8     8
-    Depth            8     6     8     8
-    Pacing           6     4     5     5
-    Difficulty       8     6     6     7
-    Writing          9     8     9     9
-    Interface        8     6     7*    7
-    Standing in it   -     5     6     6
-    Fun              7     6     6     6
+    axis           r10   r11   r12   r13   r14
+    First hour       8     8     8     8     9
+    Clarity          9     6     6     9     8
+    Feedback         9     7     8     8     8
+    Depth            8     6     8     8     8
+    Pacing           6     4     5     5     6
+    Difficulty       8     6     6     7     7
+    Writing          9     8     9     9     9
+    Interface        8     6     7*    7     8
+    Standing in it   -     5     6     6     7
+    Fun              7     6     6     6     5
+
+**Round 14 is the high-water mark on seven axes and the low on Fun.** The tester
+was explicit about why: *"The first sixty days were gripping. The last hundred
+and eighty were grinding a position I could not win, with the same four jobs."*
+First hour has now been 8 or better in five consecutive rounds and is the most
+stable thing in this record.
 
 Round 13 is fully scored — screenshots worked from the first call, so **Interface
 covers the visual half again for the first time since round 11**.
@@ -242,6 +248,15 @@ Ranked. F10 outranks everything else in this list.
   than the door to a three-exchange scene. This is F10's exact shape — a good
   thing nobody can see is there — and F10 is the one finding this project has
   actually closed.
+- **F16 — `org.influence` was a stat the game showed and could not change.
+  FIXED.** Initialised from `STARTING_INFLUENCE` (0) and never assigned
+  anywhere else, while `PlayerPanel` rendered it as "Influence" on the Standing
+  block — a few rows above the *attribute* of the same name, which is what every
+  gate actually reads. Two numbers, one label, one screen, and the prominent one
+  was a constant zero. Deleted along with `STARTING_INFLUENCE` and the row.
+  `deadState.test.ts` now fails if any field on `Org` is declared and never
+  assigned. **Second time dead state has shipped here** — see §8.
+
 - **F15 — the economy is bimodal and it forks on fronts. NEW, and it now
   outranks the rest of this list.** At day 300, twenty-five careers of thirty-six
   end under $48,000 and eleven end between $134,000 and $2,827,000, with almost
@@ -260,8 +275,34 @@ Ranked. F10 outranks everything else in this list.
   clicked a disabled "Buy it" and nothing happened. SHOULD FIX.
 - **F1 — the loop closes.** Decisions stop changing around day 90–119. Round 12
   suggests F1 is downstream of F10: the loop did not close, it never opened.
-- **F2 — Influence never reaches a player in 300 days, and the round 12
-  diagnosis was wrong.** That entry blamed the faucet: accrual comes from a
+- **F2 — Influence never reaches a player in 300 days. Three separate causes
+  now found; two fixed, the rate itself still open.** The supply is not merely
+  low, it is a wall with a hole in it, and neither half was where the earlier
+  diagnoses looked.
+
+  1. **`tickEconomy` skipped the retainer entirely when nobody was payable.**
+     The function opened with a payroll guard and the legal block sat below it,
+     so a boss whose crew were all in a cell stopped paying the firm and
+     stopped accruing the one route the game advertises. That is the exact
+     position a player who has bothered to retain counsel is in — round 14 had
+     five of six men in custody on day 153 with a lawyer on the books. **Fixed**;
+     the ladder probe went from *18 weeks a career on retainer* to **83**.
+  2. **The approach credit had no cooldown.** `demand_tribute` costs nothing and
+     `doDiplomacy` paid `INFLUENCE_FROM.approach` per call. Twenty demands in one
+     afternoon were credited **10.7 times over**, on the attribute the game
+     presents as the hard one to train. **Fixed** with a 14-day per-family
+     cooldown on the credit, not on the action.
+  3. **The rate is still wrong, and this is now measured rather than argued.**
+     `ladder.probe` reports *influence at day 300, 40th / median / 75th:
+     **0 / 0 / 3*** — after both fixes. The patron wants 9 and a task-force
+     contact wants 5. **Open, and it is a balance decision needing a
+     pre-committed target under §5.**
+
+  Caveat that limits all three: the probe's bot retains only the cheapest tier
+  of counsel and **never approaches a family**, so 0/0/3 is a floor on what a
+  career reaches, not a measure of what is reachable. That is F7.
+
+- **F2 (historical) — the round 12 diagnosis was wrong.** That entry blamed the faucet: accrual comes from a
   *paid* counsel retainer, and round 12 cancelled counsel on day 84. **Round 13
   kept counsel, including the top tier at $5,863/wk, and still finished at
   Influence 0.** So the rate is the defect, not the closed tap. It costs the

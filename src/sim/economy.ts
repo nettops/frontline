@@ -309,7 +309,21 @@ export function tickEconomy(state: GameState): void {
   if (state.day % PAYDAY_INTERVAL !== 0) return;
 
   const crew = crewList(state).filter(payable);
-  if (crew.length === 0) return;
+
+  /*
+     The retainer is yours, not your crew's.
+
+     This function used to open `if (crew.length === 0) return;`, and the legal
+     block below it is where counsel is paid and where the one route to
+     Influence an ordinary career keeps is credited. So a boss whose people
+     were all in a cell stopped paying the firm that was trying to get them
+     out — which is not an edge case, it is the exact position a player who has
+     bothered to retain counsel is in. Round 14 had five of six men in custody
+     on day 153 with a lawyer on the books.
+
+     The payroll half still returns early below. Nobody to pay is a real
+     reason to skip wages; it was never a reason to skip everything else.
+  */
 
   // Lawyers are paid before the crew — they are the ones keeping you out of a
   // cell, and they do not accept late payment.
@@ -337,6 +351,9 @@ export function tickEconomy(state: GameState): void {
       INFLUENCE_FROM.counselPerWeek * LAWYER_BY_LEVEL[state.law.lawyer].costMultiplier,
     );
   }
+
+  // Nobody to pay is a reason to skip wages, and only wages.
+  if (crew.length === 0) return;
 
   /*
      Payroll is a debt, not a gate.

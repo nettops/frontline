@@ -447,6 +447,24 @@ export const INFLUENCE_FROM = {
   counselPerWeek: 0.12,
   /** Per diplomatic approach that is made and paid for, refused or not. */
   approach: 0.6,
+  /*
+     Days before the same family builds you any more pull.
+
+     `demand_tribute` costs nothing, and the credit above was paid per call
+     with nothing in `canDo` rate-limiting it — twenty demands in one afternoon
+     were credited ten times over, on the attribute the game presents as the
+     hard one to train. Anybody optimising would have found it in a minute.
+
+     A fortnight, and it limits the *credit* rather than the action: you may
+     talk as often as you like, and the tribute or the refusal lands either
+     way. Standing in the same room twice in a week is simply not twice the
+     standing.
+
+     Sized against the window a person plays, per HANDOFF section 5. Three
+     families across 300 days is about twenty rooms a family, which is a real
+     route to the middle of the scale and nowhere near the top of it.
+  */
+  approachCooldownDays: 14,
 };
 
 /**

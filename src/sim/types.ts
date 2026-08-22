@@ -664,6 +664,19 @@ export interface FactionBond {
    * it is a decision.
    */
   warSince: number | null;
+  /**
+   * The last day an approach to them was credited as pull.
+   *
+   * Optional, so a save written before this loads — an absent day reads as
+   * "you have never stood in a room with them", which for those saves is
+   * either true or close enough that one free credit is not worth a version
+   * bump.
+   *
+   * Here rather than on the player because pull is built with *somebody*.
+   * Talking to three families in a week is three rooms; walking back into the
+   * same one twice is one.
+   */
+  lastApproachDay?: number;
 }
 
 /**

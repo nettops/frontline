@@ -873,7 +873,12 @@ export function doDiplomacy(
      relationship below, so this is not free — it is the difference between
      being nobody and being somebody who was turned down.
   */
-  trainAttribute(state, 'influence', INFLUENCE_FROM.approach);
+  const b = bond(state, 'player', target);
+  const since = state.day - (b.lastApproachDay ?? -Infinity);
+  if (since >= INFLUENCE_FROM.approachCooldownDays) {
+    b.lastApproachDay = state.day;
+    trainAttribute(state, 'influence', INFLUENCE_FROM.approach);
+  }
 
   switch (action) {
     case 'sue_for_peace': {

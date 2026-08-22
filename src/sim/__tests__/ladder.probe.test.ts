@@ -107,6 +107,18 @@ interface Climb {
   weeksSinceHandover: number | null;
   /** Day each rank was first held. Missing means never reached. */
   reachedOn: Map<string, number>;
+  /**
+   * Pull, at the end. Named `pull` because `influence` on this record is
+   * already the per-district faction share, which is a different quantity
+   * entirely.
+   *
+   * Here because four blind rounds reported not understanding this attribute
+   * and no instrument in the project had ever looked at it. The bot retains
+   * counsel, which is one of the two routes; it never approaches a family,
+   * which is the other. So this is a floor on what a career reaches, not a
+   * measure of what is reachable.
+   */
+  pull: number;
   /** Cases the agencies opened across the career. */
   casesOpened: number;
   banked: number;
@@ -1290,6 +1302,7 @@ function climb(seed: number, days: number): Climb {
     legalQuoted,
     legalQuotes,
     wageAtQuote,
+    pull: state.player.attributes.influence,
     finalRank: state.player.rank,
     finalCrew: crewList(state).filter((n) => n.status !== 'dead').length,
     peakClean,
@@ -1814,6 +1827,9 @@ describe('the ladder, over the 300 days a person plays', () => {
           .sort((a, b) => b[1] - a[1])
           .map(([k, n]) => `${k} ${n}`)
           .join(', ') +
+        `
+         influence at day ${HUMAN_DAYS}, 40th / median / 75th: ` +
+        `${col((r) => r.pull)} (the patron wants 9, a task-force contact 5)` +
         `
          careers that ended before day ${HUMAN_DAYS}: ` +
         `${RUNS_300.filter((r) => r.days < HUMAN_DAYS).length}/${RUNS_300.length}` +

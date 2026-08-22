@@ -1820,3 +1820,83 @@ Proved by reinstating the Dashboard string and watching it fail by file and
 line.
 
 `tsc` clean. **639 tests, 55 files, 638 passing and one failing on purpose.**
+
+---
+
+## Influence supply — three causes, two fixed — 2026-08-21
+
+Build item 1 from the blueprint. F2 has been open four rounds and every previous
+diagnosis looked in the wrong place: round 12 blamed the faucet being closed,
+round 13 disproved that by keeping top-tier counsel and finishing at 0.
+
+**The supply is not low. It is a wall with a hole in it.**
+
+### Cause 1 — the retainer was skipped whenever nobody was payable
+
+`tickEconomy` opened with `if (crew.length === 0) return;`, and the legal block —
+where counsel is paid and where influence accrues — is written below it. So a boss
+whose people were all in a cell stopped paying the firm that was trying to get them
+out.
+
+That is not an edge case. It is the exact position a player who has bothered to
+retain counsel occupies; round 14 had five of six men in custody on day 153 with a
+lawyer on the books.
+
+Fixed by moving the guard below the legal block: nobody to pay is a reason to skip
+wages, and only wages. **The ladder probe went from `18 weeks a career on retainer`
+to `83`.**
+
+### Cause 2 — the approach credit had no cooldown
+
+`demand_tribute` costs $0 and `canDo` rate-limits nothing, while `doDiplomacy` paid
+`INFLUENCE_FROM.approach` per call. Measured: **twenty demands in one afternoon
+credited 10.7 times over** — on the attribute the game presents as the hard one to
+train, and the one whose config comment already records a previous failed attempt to
+unwall it.
+
+Fixed with `approachCooldownDays: 14` on a new optional `FactionBond.lastApproachDay`.
+**The cooldown limits the credit, not the action** — the tribute or the refusal lands
+either way. Standing in the same room twice in a week is not twice the standing.
+
+### Cause 3 — the rate itself, still open
+
+With both fixed, `ladder.probe` now reports:
+
+    influence at day 300, 40th / median / 75th: 0 / 0 / 3
+    (the patron wants 9, a task-force contact 5)
+
+**The median career still ends on zero.** This is a balance decision and it needs a
+pre-committed target under §5, so it is left open rather than guessed at.
+
+**And the instrument is a floor, not a measure.** The bot retains only the cheapest
+tier of counsel (×1 of 5.5) and never approaches a family, so it exercises one of the
+two routes at its weakest setting. That is F7, and it means 0/0/3 understates what is
+reachable by an unknown amount.
+
+### Method
+
+Both fixes test-first in `influenceSupply.test.ts`, and both reinstated afterwards to
+demand red. **The first reinstatement was inconclusive and nearly passed as proof**:
+the anchor string matched twice and the injected defect landed in `payrollForecast`
+rather than `tickEconomy`, so the suite stayed green and the check looked confirmed.
+Caught by grepping for the line actually inserted. Re-done against `tickEconomy`'s own
+opening line, and both assertions then failed for the right reasons.
+
+The test also asserts the *other* direction on purpose: a fix that closed the hole
+without opening the wall would have made the reported problem worse, so a season of
+talking to all three families must still build real pull.
+
+### Also, in the same pass
+
+`org.influence` deleted — a field initialised to 0, never assigned anywhere, and
+rendered as "Influence" on the Standing block a few rows above the attribute of the
+same name. `deadState.test.ts` guards the class: it parses the `Org` interface and
+fails on any declared field nothing assigns. **Second time dead state has shipped
+here**; the round-11 audit removed seven config keys read by nothing.
+
+That check was also wrong twice before it worked — it built its matcher with
+`new RegExp` through a template string and threw `Nothing to repeat`, then walked into
+the inline `record?: { … }` object and reported five of its keys as dead fields of
+`Org`.
+
+`tsc` clean. 645 tests, 56 files, 644 passing and one failing on purpose.
