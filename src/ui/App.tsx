@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useOptionalGame, getState, mutate, setGame } from '../store';
 import { advanceDay, advanceDays } from '../sim/clock';
+import { careerShape, postMortem } from '../sim/legacy';
 import { buildReport, snapshot, type DayReport } from './report';
 import { play } from './audio';
 import TitleScreen from './TitleScreen';
@@ -101,15 +102,46 @@ export default function App() {
     // and then lost it did not have the same game as somebody who folded in
     // year one, and the screen should not tell them the same thing.
     const generations = state.succession.line.length;
+    const shape = careerShape(state);
     return (
       <div className="title-screen">
         <div className="title-card">
           <div className="title-mark">It ends here</div>
           <div className="title-rule" />
           <p className="title-sub">Day {state.gameOver.day}</p>
-          <p className="dim" style={{ marginBottom: generations > 0 ? 16 : 28 }}>
+          <p className="dim" style={{ marginBottom: 18 }}>
             {state.gameOver.reason}
           </p>
+
+          {/*
+             F11: "the death screen has no post-mortem. 495 bytes and one
+             button. No rank, no net worth, no roster, no week it turned. The
+             moment the player most needs to be shown what he missed shows him
+             the least."
+
+             The verdict first, because a rank is not an ending — "Crew Leader"
+             is the same word whether you got there with seven fronts and no
+             violence or at heat 99 with two men left, and the game used to
+             tell both of those the same way.
+          */}
+          <div className="title-verdict">
+            <div className="title-verdict-name">{shape.name}</div>
+            <p className="dim" style={{ margin: '6px 0 4px' }}>
+              {shape.verdict}
+            </p>
+            <p className="tiny faint" style={{ margin: 0 }}>
+              {shape.because}
+            </p>
+          </div>
+
+          <div className="title-postmortem">
+            {postMortem(state).map((line) => (
+              <div key={line.label} className="title-postmortem-row">
+                <span className="tiny faint">{line.label}</span>
+                <span className="tiny mono">{line.value}</span>
+              </div>
+            ))}
+          </div>
           {generations > 0 && (
             <div style={{ marginBottom: 28 }}>
               <p className="tiny faint" style={{ marginBottom: 6 }}>

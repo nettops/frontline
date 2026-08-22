@@ -2042,3 +2042,91 @@ solve the problem through your network"), so the panel is right and the sentence
 wrong. Corrected to say the same arrangement reached the other way.
 
 `tsc` clean. 660 tests, 57 files, 659 passing and one failing on purpose.
+
+---
+
+## The four absent systems, built — 2026-08-21
+
+The developer's vision named twelve layers. Nine already existed. This closes the
+other five — the favour network in the previous entry, and these four.
+
+### Legitimacy, and what a career turns out to have been
+
+Both derived readings rather than stored state, in the spirit of `estate.ts`.
+
+Legitimacy is four terms a person outside the family would actually notice: what
+you visibly own, whether the police are interested, whether the papers use your
+name, and whether the money on hand can be explained.
+
+Eight career shapes, read off what happened, with `unremarkable` at weight 0 as a
+floor — because most careers are, and a system that always finds something
+flattering to say is a horoscope with the game's own numbers in it. **F11 closes
+with it**: the death screen had 495 bytes and one button, and now carries a
+verdict, the evidence for it, and a post-mortem that reports peaks as well as
+final values.
+
+**The screen caught what the tests did not.** A career with 0 operations and 0
+respect was being told it was shaping into The Diplomat, because favours accrue
+from how the family is run and a captain watches how quiet you keep things — so
+doing nothing earns them. Exactly the horoscope failure this file has a test
+against, and it got past it. The Diplomat now needs the pull to have gone and got
+them, and there is a test for the do-nothing career.
+
+**And a test that proved nothing.** "Takes the heavier shape when two of them fit"
+passed with the sort removed, because the claims happened to be written in
+descending weight order. Reordered so declaration order and weight order disagree
+on purpose; the sort is now load-bearing and the test fails without it.
+
+### Whispers
+
+Confidence-rated claims generated from real state — somebody talking, somebody
+about to go, a file being opened, a rival counting doors, a take that does not
+add up. Round 14's MUST FIX 2 was that the memo pool exhausts; an authored pool
+has a size and this does not.
+
+**A whisper can be wrong, and the read cannot say which.** `truth` is stored and
+never surfaced. Asserted by *shape* rather than by inspecting today's fields, so a
+`truth` added later fails the test — proved by adding one and watching it go red.
+
+**It must not touch the causal stream.** The first version took an `Rng` and
+rolled weekly, and wiring it into the clock broke two unrelated tests about
+operations. That is not a test problem: a system that only reports on the world
+must not change what happens in it, which is the rule `trace.ts` states for
+itself. Redrawn on `Rng.stableNoise` keyed on day and seed — the same discipline
+`perceive` follows — and both collateral failures went away.
+
+**And every test bypassed the clock.** All of them drove `tickWhispers` by hand,
+so all would have passed with it never wired into `advanceDay` — which is the
+state the first browser check found it in. There is now an integration test that
+plays 200 days through the clock.
+
+### How hard you lean on a front
+
+The vision asks for gambling, inspections, staff, unions, theft. Most of that
+already exists here under other names — exposure is the investigators' interest,
+health is whether it is a going concern, sentiment is the neighbourhood,
+`informants.ts` is somebody talking. So rather than a second copy per front there
+is **one dial**, and it is the question the vision actually poses: how dirty do
+you want this business?
+
+Three settings feeding four existing systems. The default is the old behaviour in
+every term — every multiplier on it is 1 or 0 — asserted as arithmetic rather
+than trusted, so an existing save is untouched.
+
+### The clock trap, three times in one session
+
+`tickCivic`, `tickBusinesses` and nearly `tickWhispers`. Each gates on
+`day % interval`, each test helper stepped the clock by the interval from a day-1
+start, and each therefore ran the tick **zero times** while reporting that the
+feature changed nothing. Every one of those files now has an instrument guard
+that fails if the helper steps wrongly.
+
+### Measured before fixed
+
+Adding the pressure column put the businesses table 237px into horizontal
+overflow with a 118px row. Before assuming that was mine, the column was hidden
+and re-measured: **the table already overflowed by 49px**, and the column was 189
+of the remainder. Round 13's lesson applied — the row height was the real damage
+and is now 57px, matching its neighbours; the wrap scrolls horizontally by design.
+
+`tsc` clean. 687 tests, 60 files, 686 passing and one failing on purpose.

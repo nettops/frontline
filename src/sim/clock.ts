@@ -29,6 +29,7 @@ import { tickAging, type AgingHooks } from './aging';
 import { ageCapos, tickCapos } from './capos';
 import { tickPerception } from './perception';
 import { tickCivic } from './civic';
+import { tickWhispers } from './whispers';
 import { tickEvents } from './events';
 import { tickWorld } from './world';
 import { tickFear, tickPlayer, tickRecord, tickStanding } from './player';
@@ -99,7 +100,13 @@ export function advanceDay(state: GameState): void {
   tickDelegation(state, rng);
   // 7. Influence bleeds where you stopped showing up; feeling drifts back.
   if (state.day % 7 === 0) tickTerritory(state);
-  // 7a. The people outside the family form an opinion.
+  // 7a. Whatever reached you this week, and how sure whoever brought it was.
+  //
+  //     Before the civic tick only because it reads nothing that tick writes;
+  //     it takes the world as it stands at the end of the day's events, which
+  //     is what somebody would actually be repeating.
+  tickWhispers(state);
+  // 7b. The people outside the family form an opinion.
   //
   //     After `tickTerritory` on purpose: a union boss counts the ground you
   //     hold and a judge reads the districts you work, so they should be

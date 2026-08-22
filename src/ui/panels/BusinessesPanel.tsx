@@ -17,6 +17,7 @@ import {
   totalWeeklyRevenue,
   weeklyRevenue,
 } from '../../sim/business';
+import { DEFAULT_PRESSURE, PRESSURES } from '../../config/pressure';
 import { territoryDef } from '../../sim/territory';
 import { formatMoney, formatShortDay, formatPercent } from '../../sim/util';
 import { HEALTH, EXPOSURE_ALARMING_ABOVE, SHUTTER_REFUND_SHARE } from '../../config/businesses';
@@ -230,6 +231,7 @@ export default function BusinessesPanel() {
                   <th className="num">Last week</th>
                   <th>Exposure</th>
                   <th>Trade</th>
+                  <th>Run as</th>
                   <th />
                 </tr>
               </thead>
@@ -282,6 +284,58 @@ export default function BusinessesPanel() {
                         {struggling && (
                           <div className="tiny hot">{worstProblem(pressure)}</div>
                         )}
+                      </td>
+                      {/*
+                         How hard you are leaning on it.
+
+                         The question the whole front economy turns on and the
+                         one the game never asked: do you want this to be a
+                         business, or do you want it to move money. Rendered as
+                         three buttons rather than a menu because it is a
+                         standing decision about the place, not a command — and
+                         the cost of each is on the button, since round 14's
+                         loudest complaint was options that hide their price.
+                      */}
+                      <td style={{ minWidth: 132 }}>
+                        <div className="row" style={{ gap: 3, whiteSpace: 'nowrap' }}>
+                          {PRESSURES.map((p) => (
+                            <button
+                              key={p.id}
+                              className={
+                                (b.pressure ?? DEFAULT_PRESSURE) === p.id
+                                  ? 'district selected'
+                                  : 'district'
+                              }
+                              title={`${p.name} — ${p.blurb}`}
+                              /*
+                                 Compact, because `.district` is sized for the
+                                 job screen's picker and three of them at that
+                                 padding is 189px in a table that had 49px of
+                                 slack. The wrap scrolls by design — round 13
+                                 established that — but a column does not get
+                                 to be the widest thing on the row for free.
+                              */
+                              style={{ padding: '4px 7px', fontSize: 11 }}
+                              onClick={() =>
+                                mutate((s) => {
+                                  const front = s.businesses[b.id];
+                                  if (front) front.pressure = p.id;
+                                })
+                              }
+                            >
+                              {p.short}
+                            </button>
+                          ))}
+                        </div>
+                        {/*
+                           No sub-line saying what it washes.
+
+                           The Capacity column two cells to the left already
+                           shows the actual figure, and the sentence was the
+                           widest thing in this cell — measured at 189px of
+                           column against a table that only had 49px of slack
+                           before this control existed.
+                        */}
                       </td>
                       <td style={{ minWidth: 150 }}>
                         {/*
