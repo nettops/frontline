@@ -1900,3 +1900,50 @@ the inline `record?: { … }` object and reported five of its keys as dead field
 `Org`.
 
 `tsc` clean. 645 tests, 56 files, 644 passing and one failing on purpose.
+
+---
+
+## The Influence rate, and F17 — 2026-08-21
+
+Cause 3 from the previous entry, closed against a pre-committed target — and the
+instrument built to measure it produced a bigger finding than the fix.
+
+**The target was written first.** `ladder.probe` gained an assertion demanding a
+median influence of 4 to 8 at day 300 before `INFLUENCE_FROM` was touched: the
+median career opens a task-force contact, city hall stays work. It failed at 0.
+
+**F7 closed for this vertical.** The bot now approaches a family every week — the
+first instrument in this project ever to make a diplomatic approach. It was added
+because a rate tuned against a bot that pulls one of two taps is tuned for a player
+who does not exist.
+
+**What it measured is that the tap is welded shut.** Every approach across 36
+careers is refused with the same sentence, for all 300 days:
+
+    "You lead them by -72 strength and would need 15 — or 55 standing
+     with them, against 29."
+
+The paid courtesy wants $25,000 spare against an economy money-blocked in 97% of
+idle weeks. Both doors, closed, always. That is **F17**, and it is F5 wearing another
+hat — the player runs 40 to 80 strength behind every rival the whole game.
+
+**The instrument distorted what it measured, and that was caught.** The first bot
+policy also paid `offer_tribute` when money looked spare. Careers that compounded
+fell from 12 in 36 to 8, because the treasury went on courtesies instead of fronts —
+$25,000 for 0.6 of an attribute is not a play a boss makes. Removed; the fork
+returned to 12/24 and the ladder to its prior values.
+
+**And the comment nearly shipped with numbers from a different instrument.** The
+rate table in `config/economy.ts` was measured while the tribute branch was still
+live. Re-measured all three under the shipped probe before committing:
+
+    0.12   0 / 0 / 3     the reported state
+    1.2    2 / 3 / 6
+    2.4    4 / 5 / 9     shipped
+
+**What the fix does not fix.** `counselPerWeek` is now carrying a vertical it should
+be sharing, and the consequence is backwards: a boss who is never investigated keeps
+no lawyer and earns no pull. Opening the diplomatic route is the honest repair and it
+runs through F5.
+
+`tsc` clean. 648 tests, 56 files, 647 passing and one failing on purpose.

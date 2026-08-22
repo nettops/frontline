@@ -19,7 +19,7 @@ operations, crew, territory, rival families, and law enforcement.
     npx tsc -b         # types
     npm run playtest   # namespaced instance for blind testers
 
-**Current verified state: `tsc` clean, 645 tests, 56 files — 644 passing and one
+**Current verified state: `tsc` clean, 648 tests, 56 files — 647 passing and one
 failing on purpose.** `ladder.probe.test.ts` carries a pre-committed pacing
 target the rank table does not meet; see §9. 53,553 lines
 across 160 source files, after the audit in §8.
@@ -292,15 +292,31 @@ Ranked. F10 outranks everything else in this list.
      afternoon were credited **10.7 times over**, on the attribute the game
      presents as the hard one to train. **Fixed** with a 14-day per-family
      cooldown on the credit, not on the action.
-  3. **The rate is still wrong, and this is now measured rather than argued.**
-     `ladder.probe` reports *influence at day 300, 40th / median / 75th:
-     **0 / 0 / 3*** — after both fixes. The patron wants 9 and a task-force
-     contact wants 5. **Open, and it is a balance decision needing a
-     pre-committed target under §5.**
+  3. **The rate. FIXED, against a pre-committed target.** `counselPerWeek`
+     0.12 → **2.4**, sized on the 300-day window per §5. Measured over 36
+     careers, influence at day 300 as 40th / median / 75th:
 
-  Caveat that limits all three: the probe's bot retains only the cheapest tier
-  of counsel and **never approaches a family**, so 0/0/3 is a floor on what a
-  career reaches, not a measure of what is reachable. That is F7.
+         0.12   0 / 0 / 3     the reported state
+         1.2    2 / 3 / 6
+         2.4    4 / 5 / 9     shipped
+
+     The target was written into `ladder.probe` *before* the number was
+     touched: a median of 4 to 8, so the median career opens a task-force
+     contact and city hall stays something to work for. The top quartile does
+     reach 9, which is a distribution rather than a guarantee.
+
+  **F7 is closed for this vertical, and what it found is worse than a gap.**
+  The probe's bot now approaches a family every week — the first instrument in
+  this project ever to do so. **Every approach is refused, all 300 days, in the
+  same sentence**: *"you lead them by -72 strength and would need 15 — or 55
+  standing with them, against 29."* The paid courtesy wants $25,000 spare in an
+  economy money-blocked in 97% of idle weeks.
+
+  **So both diplomatic doors are shut and `counselPerWeek` is carrying a
+  vertical it should be sharing.** The consequence is backwards: a boss who is
+  never investigated keeps no lawyer and earns no political pull at all. That
+  is **F17**, and it is downstream of F5 — the player runs 40 to 80 strength
+  behind every rival for the whole game.
 
 - **F2 (historical) — the round 12 diagnosis was wrong.** That entry blamed the faucet: accrual comes from a
   *paid* counsel retainer, and round 12 cancelled counsel on day 84. **Round 13
