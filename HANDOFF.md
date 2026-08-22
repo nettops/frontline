@@ -19,14 +19,14 @@ operations, crew, territory, rival families, and law enforcement.
     npx tsc -b         # types
     npm run playtest   # namespaced instance for blind testers
 
-**Current verified state: `tsc` clean, 726 tests, 63 files — 724 passing and
+**Current verified state: `tsc` clean, 732 tests, 63 files — 730 passing and
 two failing.** Both are the same finding seen from two angles: the rank ladder
 is slow. `ladder.probe`'s pre-committed pacing target reads Capo in 13 careers
 of 36 against a target of 24, and `scorecard.probe`'s Pacing axis reads 2.7
 against a floor of 3 because a bot that has run every job kind, worked every
 district and stopped gaining rank has no firsts left. **The two pre-commits
 written during the Mafia-boss build are now met** — see section 6. `ladder.probe.test.ts` carries a pre-committed pacing
-target the rank table does not meet; see §9. 61,839 lines
+target the rank table does not meet; see §9. 62,066 lines
 across 183 source files, counted 2026-08-22.
 
 ---
@@ -477,6 +477,33 @@ Three things it cost, all found and fixed:
   nouns, so it walked past. The labels now say the relation rather than the
   person — "the one you married", "your youngest" — which is both correct and
   better writing, and `personal.test.ts` guards it.
+
+### Task 6 — the day has a shape
+
+`ui/report.ts`, `ui/Bulletin.tsx`. **No simulation change**, which was the whole
+design: the clock already runs in this order and always has — the night
+resolves, the desk fills, and what is left is the part of a boss's life that is
+not the business. What was missing was anywhere the player could feel it.
+
+The briefing was one undifferentiated list in which a man dying overnight, a
+memo still waiting for an answer, and your family asking after you were the
+same kind of line. It now groups into three parts, and prints a heading only
+where there is something under it — most mornings have one part, and a heading
+over the only thing on the page is furniture.
+
+    WHILE YOU WERE NOT LOOKING   Down $150 over 4 days.
+    WAITING ON YOU               Something is waiting for an answer.
+    THIS EVENING                 Nobody at home has said anything. It has been 23 days.
+
+**This is why the roadmap put day-parts after the personal life rather than
+before it.** An evening with nothing in it is worse than no evening, and the
+house is the only thing that goes there.
+
+Its own test caught the obvious failure mode on the first run: a boss who had a
+completely uneventful week was handed a briefing whose single line was that
+nobody at home had seen him. That is a nag with a heading on it. The quiet
+version now only ever rides along with real news; the loud one — once being
+away is actually costing him — is allowed to stand alone.
 
 ### The two Mafia-boss pre-commits, and how they were met
 

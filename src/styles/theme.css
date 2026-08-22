@@ -1559,6 +1559,23 @@ th.sortable:hover {
   color: var(--text);
 }
 
+/* A part of the day, and the small heading over it.
+
+   Only printed when the briefing carries more than one part — most mornings
+   have one, and a heading over the only thing on the page is furniture. */
+.bulletin-part + .bulletin-part {
+  margin-top: 10px;
+}
+
+.bulletin-part-head {
+  margin: 0 0 4px;
+  font-size: 10px;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  font-weight: 500;
+  color: var(--text-faint);
+}
+
 .bulletin-lines {
   list-style: none;
   margin: 0;
