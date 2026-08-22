@@ -68,7 +68,22 @@ import { availableCrew, crewList } from '../npc';
 import { RANKS, rankIndex } from '../../config/economy';
 import type { GameState } from '../types';
 
-const WORLDS = 12;
+/*
+   Twelve until an unrelated change moved Pacing from 3.8 to 2.6 and the axis
+   read as collapsed.
+
+   It had not collapsed. Re-run at 48 the same two builds read 3.4 against 3.4,
+   with the longest quiet stretch at 406 days against 403 — the entire apparent
+   drop was the random stream being reshuffled, which every change to this
+   project does. Pacing is the axis most exposed to it: `longestGap` is a mean
+   of *per-career maxima*, and a mean of maxima at twelve samples moves further
+   on noise than most real changes move it on purpose.
+
+   So the bar of 3 was being read off an instrument whose noise band is wider
+   than the bar. Raising the sample is not moving the threshold — it is making
+   the threshold mean something. Costs about twenty seconds.
+*/
+const WORLDS = 48;
 const DAYS = 1460;
 
 interface Run {

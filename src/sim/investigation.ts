@@ -29,6 +29,8 @@ import { remember } from './memory';
 import { spend, totalFunds } from './economy';
 import { ownedBusinesses } from './business';
 import { seizeStock } from './contraband';
+import { seizeOnePossession } from './possessions';
+import { POSSESSION_BY_ID } from '../config/possessions';
 import { gainFear, gainRespect } from './player';
 import { removePlayer } from './succession';
 import { worldMod } from './world';
@@ -530,9 +532,27 @@ function applyStageEffect(
         `They came through the doors and took $${seized.toLocaleString('en-US')}.`,
         true,
       );
-      // And whatever was in the building. Stock is the only asset in this
-      // game that physically exists somewhere, and this is the price of that.
+      // And whatever was in the building. Stock and the boss's own things are
+      // the assets in this game that physically exist somewhere, and this is
+      // the price of that.
       seizeStock(state, rng, agency.shortName);
+      /*
+         One thing, the best one, and nothing comes back.
+
+         Deliberately not the lot. A raid that empties a man out in a single
+         visit ends a career rather than pressuring it, and the whole reason
+         for having possessions at all is that losing one is specific — the
+         Lincoln, taken on day 212 — which a list of four is not.
+      */
+      const took = seizeOnePossession(state, agency.shortName);
+      if (took) {
+        record(
+          state,
+          investigation,
+          `They took ${POSSESSION_BY_ID[took.defId]?.name.toLowerCase() ?? 'property of yours'} as well.`,
+          true,
+        );
+      }
       cover(state, rng, 'raid', { named: true });
       return;
     }

@@ -35,6 +35,9 @@ import { canBorrow, totalOwed } from '../sim/market';
 import { canAcquire } from '../sim/business';
 
 import { BUSINESSES } from '../config/businesses';
+import { POSSESSIONS } from '../config/possessions';
+import { cards, tableRead } from '../sim/cards';
+import { canBuyPossession, heldPossessions } from '../sim/possessions';
 import { isLayingLow } from '../sim/heat';
 import { eligibleStewards } from '../sim/delegation';
 import { playerInfluence, territoryList } from '../sim/territory';
@@ -270,6 +273,55 @@ export const TIPS: Tip[] = [
           return !check.ok && /short\.$/.test(check.reason ?? '');
         }),
       ),
+  },
+  {
+    /*
+       The one thing in the game that is yours rather than the organization's.
+
+       It lives on the Yourself page, which is the page a player visits to read
+       their attributes and then does not visit again — so this fires the first
+       time there is clean money sitting there with nothing claiming it, rather
+       than on the first morning when it would be noise.
+
+       `clean` rather than total funds on purpose, and the tip says so, because
+       the whole rule of the catalogue is that dirty money does not buy things
+       in your own name and a player who does not know that will read the
+       refusal as a bug.
+    */
+    id: 'something_of_your_own',
+    only: ['career', 'sandbox'],
+    label: 'Yours',
+    text:
+      'The fronts belong to the organization. Nothing belongs to you. Yourself has a catalogue now — a car, a watch, three rooms with your own name on the door. They count toward what the family is worth exactly as money put away does, so buying one costs you no rank; what it costs is that the money has stopped being money. Clean money only. What people can see makes you look more legitimate and puts your name in the paper, and those are not the same thing.',
+    panel: 'player',
+    when: (s) =>
+      heldPossessions(s).length === 0 &&
+      // Something in the catalogue is actually within reach, so this is advice
+      // at the moment it becomes true rather than a standing advertisement.
+      POSSESSIONS.some((def) => canBuyPossession(s, def.id).ok),
+  },
+  {
+    /*
+       The card game, and it is a tip rather than a memo for one reason: it is
+       already on a page, and a memo would be the fourth thing competing for
+       the one daily slot the pacing work spent a day protecting.
+
+       Fires when a room is actually open *and* somebody worth an evening is
+       sitting in it — a standing advertisement for a weekly game would be
+       noise 51 weeks a year. The favour half is what the tip is really for:
+       losing on purpose is the one route to a favour that does not involve
+       waiting thirteen weeks for standing to drift, and nobody works that out
+       from a button labelled "Lose to them".
+    */
+    id: 'the_game',
+    only: ['career', 'sandbox'],
+    label: 'The game',
+    text:
+      'There is a card game every week, and the cards are the least of it. Who is sitting opposite is on The City page before you commit — and losing to a man who decides things is how money reaches him without either of you having said anything. It is the fast road to a favour. The slow one is thirteen quiet weeks.',
+    panel: 'city',
+    when: (s) =>
+      cards(s).hands === 0 &&
+      tableRead(s).some((room) => room.ok && room.seat.kind !== 'nobody'),
   },
   {
     id: 'step_up',

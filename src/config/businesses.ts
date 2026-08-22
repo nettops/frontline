@@ -286,3 +286,41 @@ export const SHUTTER_REFUND_SHARE = 0.35;
 
 /** Buying costs more where you are weaker — you are paying somebody off. */
 export const ACQUISITION_PREMIUM_CONTESTED = 1.35;
+
+/**
+ * What a small organization can actually get in at.
+ *
+ * F15, and the one number in the game that decides the middle of it.
+ *
+ * Front income is paid into holdings, where it compounds. So the *second*
+ * front is the step that decides a career, and `ladder.probe` measures 30
+ * careers in 36 finishing under $100,000 holding exactly one, against six that
+ * hold five. Across every week a career owns no front the blocker is **money
+ * in 97% of them** — not control, not slots, not public feeling. Round 15 said
+ * the same thing in prose after 245 days: *"the two things that would have
+ * opened new decisions were both gated behind capital I could no longer
+ * accumulate."*
+ *
+ * The catalogue price is what a going concern is worth to a real buyer. It is
+ * not what a man with two soldiers and a laundromat is being sold. He is being
+ * sold a share of something struggling, by somebody who wants out, and the
+ * price reflects who is standing in the room — which is exactly what
+ * `wealthScale` already does for the district and `haggle` already does for
+ * negotiation.
+ *
+ * So the discount is largest for a family that has never been worth anything
+ * and gone by the time one is. It reads the **high-water mark** rather than
+ * today's balance, for the same reason the rank table does: a family that has
+ * been somebody does not get to be sold to as though it has not.
+ *
+ * Deliberately not a discount on the first front. That one already arrives on
+ * day 42 in 35 careers of 36 and needs no help; this is priced on what the
+ * family has *ever* been worth, so it fades exactly as the organization stops
+ * being small.
+ */
+export const ACQUISITION_SCALE = {
+  /** High-water estate at which a family pays the catalogue price. */
+  fullPriceAt: 150_000,
+  /** The most that can come off, for a family that has never held anything. */
+  maxDiscount: 0.45,
+} as const;

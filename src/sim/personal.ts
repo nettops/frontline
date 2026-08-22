@@ -21,6 +21,8 @@ import { FIRST_NAMES } from '../config/npcs';
 import { HOME_TERRITORY } from '../config/territories';
 import { territoryDef } from './territory';
 import { addLog } from './util';
+import { ownsHome } from './possessions';
+import { POSSESSION } from '../config/possessions';
 import type { GameState, Home, HouseholdMember } from './types';
 
 /**
@@ -97,7 +99,17 @@ export function canGoHome(state: GameState): { ok: boolean; reason?: string } {
 export function goHome(state: GameState): void {
   if (!canGoHome(state).ok) return;
   const house = home(state);
-  house.neglect = clamp(house.neglect - HOME.clearedByVisit, 0, 100);
+  /*
+     An evening under your own roof is worth more than an evening in a rented
+     room you are never in.
+
+     The one place possessions reach into this layer, and it is deliberately
+     the smallest hook that is not decoration — no new number for the player to
+     manage, just a better return on a thing they were already deciding whether
+     to do. See `config/possessions.ts`.
+  */
+  const cleared = ownsHome(state) ? POSSESSION.clearedByVisitAtHome : HOME.clearedByVisit;
+  house.neglect = clamp(house.neglect - cleared, 0, 100);
   house.lastVisitDay = state.day;
   addLog(
     state,

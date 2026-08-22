@@ -509,6 +509,55 @@ export interface Home {
   neglect: number;
 }
 
+/**
+ * One thing the boss owns, as against one thing the organization trades out of.
+ *
+ * The design note is in `config/possessions.ts`. Two fields here are worth a
+ * word.
+ *
+ * `paid` is kept rather than recomputed because prices move: `priced()` runs
+ * every catalogue figure through the market phase, so a car bought in a cheap
+ * year and sold in an expensive one is a different transaction from the one
+ * the player made. The resale line has to be able to say what it cost.
+ *
+ * Sold and seized ones stay on the list rather than being spliced out. A
+ * career is partly a record of what happened to it, the Legacy screen reads
+ * that record, and "the Lincoln, taken in the raid on day 212" is worth more
+ * than a shorter array.
+ */
+export interface Possession {
+  id: Id;
+  defId: string;
+  boughtDay: number;
+  /** What was actually handed over, in that year's money. */
+  paid: number;
+  /**
+   * `lost` is losing it at cards, and it is a separate word from `sold` on
+   * purpose: the Legacy screen reads this record, and "lost at cards on day
+   * 212" is a different sentence about a career from "sold on day 212".
+   */
+  status: 'held' | 'sold' | 'seized' | 'lost';
+  /** Set when it stopped being yours, whichever way that happened. */
+  goneDay?: number;
+}
+
+/**
+ * The standing card game, as a record of how you have been playing it.
+ *
+ * Four numbers and no table state — who is sitting opposite is derived from
+ * the seed and the week by `seatedAt`, never stored, so this holds only the
+ * things that are actually consequences.
+ *
+ * `suspicion` is the whole anti-grind mechanism. See `config/cards.ts`.
+ */
+export interface CardPlay {
+  lastPlayedDay: number;
+  /** 0..100. How closely people are watching your hands. Decays weekly. */
+  suspicion: number;
+  hands: number;
+  won: number;
+}
+
 export interface CivicStanding {
   id: string;
   /** 0..100. Drifts toward what they watch; never set directly. */
@@ -1293,6 +1342,27 @@ export interface GameState {
    * as nobody having told you anything — which for those saves is true.
    */
   whispers?: Whisper[];
+
+  /**
+   * The things that are yours rather than the organization's.
+   *
+   * Optional with the same lazy idiom as `promises`, `civic`, `home` and
+   * `whispers` — so `SAVE_VERSION` does not move and a save written before
+   * this existed loads as a boss who owns nothing personally, which for those
+   * saves is exactly true. Not in `validate()`, for the same reason none of
+   * the others are.
+   */
+  possessions?: Possession[];
+
+  /**
+   * How the card game has been going.
+   *
+   * Optional with the same lazy idiom as `promises`, `civic`, `home`,
+   * `whispers` and `possessions` — so `SAVE_VERSION` does not move and a save
+   * written before this existed loads as a boss who has never sat down, which
+   * for those saves is exactly true. Not in `validate()`.
+   */
+  cards?: CardPlay;
 
   /**
    * What the other side has turned out to know, newest first.

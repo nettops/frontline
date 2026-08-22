@@ -29,7 +29,8 @@ export type CoverageKind =
   | 'conviction'
   | 'acquittal'
   | 'corruption'
-  | 'charity';
+  | 'charity'
+  | 'display';
 
 export interface CoverageDef {
   kind: CoverageKind;
@@ -137,6 +138,30 @@ export const COVERAGE: Record<CoverageKind, CoverageDef> = {
     headlines: [
       'Official suspended over payments',
       'Inquiry into department "ties" announced',
+    ],
+  },
+  /*
+     A boss buying something everybody can see.
+
+     Low outrage and high notoriety, which is the opposite shape to everything
+     else in this table and the reason possessions are a decision rather than a
+     purchase. Nobody is angry that a man bought a car. Everybody now knows his
+     name, and `legitimacy` and every civic figure's discretion both read
+     notoriety.
+
+     Scaled by the thing's `visibility` at the call site, so the watch prints
+     nothing anybody reads and the Merriweather place prints at full volume.
+  */
+  display: {
+    kind: 'display',
+    prominence: 34,
+    outrage: 0.015,
+    notoriety: 0.1,
+    tone: 'politics',
+    headlines: [
+      'Who is buying up {where}?',
+      'A new name on an old address in {where}',
+      'Society: the quiet arrival of a {where} fortune',
     ],
   },
   charity: {
