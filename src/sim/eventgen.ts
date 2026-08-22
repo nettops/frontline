@@ -61,13 +61,22 @@ function active(state: GameState): Npc[] {
  * `memories` already holds exactly that: one event, on a date, sometimes about
  * somebody in particular. This is the whole difference between the two.
  */
-function grievanceOf(npc: Npc): string | null {
-  // Memories are newest-first, and their text is a verb phrase with an implied
-  // subject — "were not paid, and remember the week" — so it reads straight
-  // into a sentence about them.
-  const bad = npc.memories.find((m) => MEMORIES[m.kind]?.tone === 'bad');
+function grievanceOf(npc: Npc, day: number): string | null {
+  /*
+     Memories are newest-first, and their text is a verb phrase with an implied
+     subject — "were not paid, and remember the week" — so it reads straight
+     into a sentence about them.
+
+     Only recent ones. Round 15 watched a man raise the same injury from day 9
+     on days 45, 101, 174 and 226. The memory is real and `memory.ts` keeps it
+     on purpose, but a man walking in to raise a two-hundred-day-old grievance
+     for the fourth time reads as a bug because it is one.
+  */
+  const bad = npc.memories.find(
+    (m) => MEMORIES[m.kind]?.tone === 'bad' && day - m.day <= GEN_WHEN.grievanceStaleAfterDays,
+  );
   if (bad) return MEMORIES[bad.kind].text;
-  const note = npc.notes.find((n) => n.kind === 'bad');
+  const note = npc.notes.find((n) => n.kind === 'bad' && day - n.day <= GEN_WHEN.grievanceStaleAfterDays);
   return note ? note.text : null;
 }
 
@@ -86,13 +95,16 @@ const wantsAWord: EventDef = {
   applies(state, rng) {
     const sore = active(state).filter(
       (n) =>
-        n.stats.grievance >= GEN_WHEN.grievance || n.stats.loyalty <= GEN_WHEN.loyaltyUnder,
+        (n.stats.grievance >= GEN_WHEN.grievance || n.stats.loyalty <= GEN_WHEN.loyaltyUnder) &&
+        // Dealt with recently, whatever the answer was. See
+        // `GEN_WHEN.askedAgainAfterDays` for what this cost round 15.
+        state.day - (state.flags[`asked_${n.id}`] ?? -9999) >= GEN_WHEN.askedAgainAfterDays,
     );
     return sore.length ? { npc: rng.pick(sore) } : null;
   },
   build(state, rng, ctx) {
     const npc = ctx.npc!;
-    const about = grievanceOf(npc);
+    const about = grievanceOf(npc, state.day);
     const ask = Math.max(500, Math.round(npc.wage * GEN_EFFECT.payWages));
     const carrying = about
       ? `They have not forgotten it: they ${about}.`
@@ -118,7 +130,7 @@ const wantsAWord: EventDef = {
         {
           id: 'pay',
           label: 'Put something in their hand',
-          ...payable(state, ask, 'and the matter is closed'),
+          ...payable(state, ask, 'and it is settled'),
         },
         {
           id: 'refuse',
@@ -656,6 +668,14 @@ export function resolveGenerated(
   switch (event.defId) {
     case 'gen_wants_a_word': {
       if (!npc) return;
+      /*
+         Whatever you decide, this person has been dealt with for a while.
+
+         Set before the branches rather than inside each of them, so a branch
+         added later cannot forget it — which is exactly how this became a
+         subscription in the first place.
+      */
+      state.flags[`asked_${npc.id}`] = state.day;
       if (choiceId === 'pay') {
         const ask = Math.max(500, Math.round(npc.wage * GEN_EFFECT.payWages));
         if (!spend(state, ask)) {

@@ -19,14 +19,16 @@ operations, crew, territory, rival families, and law enforcement.
     npx tsc -b         # types
     npm run playtest   # namespaced instance for blind testers
 
-**Current verified state: `tsc` clean, 732 tests, 63 files — 730 passing and
-two failing.** Both are the same finding seen from two angles: the rank ladder
+**Current verified state: `tsc` clean, 740 tests, 63 files — 739 passing and
+one failing on purpose** — `ladder.probe`'s pre-committed pacing target, which
+the rank table has never met. Both pre-commits written during the Mafia-boss
+build are met, and `scorecard.probe`'s Pacing axis is back above its floor. Both are the same finding seen from two angles: the rank ladder
 is slow. `ladder.probe`'s pre-committed pacing target reads Capo in 13 careers
 of 36 against a target of 24, and `scorecard.probe`'s Pacing axis reads 2.7
 against a floor of 3 because a bot that has run every job kind, worked every
 district and stopped gaining rank has no firsts left. **The two pre-commits
 written during the Mafia-boss build are now met** — see section 6. `ladder.probe.test.ts` carries a pre-committed pacing
-target the rank table does not meet; see §9. 62,066 lines
+target the rank table does not meet; see §9. 62,453 lines
 across 183 source files, counted 2026-08-22.
 
 ---
@@ -63,7 +65,20 @@ across 183 source files, counted 2026-08-22.
 ## 3. The recurring failure mode
 
 **Instruments that return believable numbers while measuring nothing.** This
-project has produced **28 instances** of it. Recent examples:
+project has produced **29 instances** of it, and round 15 found the newest one.
+Recent examples:
+
+- **`layLowHonesty` had a blind spot shaped like the bug it hunts.** It was
+  written to stop any screen claiming that going dark stops everything, and it
+  hunted three specific sentences — `nothing earns`, `Nothing earns`,
+  `Everything stops`. Round 15 read *"No operations can be launched"* on the
+  Overview and *"Nothing can be launched until day N. That is the point of
+  it."* on the Operations page, believed them, and lost the run. **Neither
+  matched.** The replacement was two regular expressions and it went green with
+  the defect reinstated — five rounds of instrumenting later, `totalStop.test`
+  was still returning false inside the test on a line it matched everywhere
+  else. It is now plain lowercase string matching, and it was proved red
+  against the reinstated defect before being fixed.
 
 - **A diplomatic bar set below the value every game starts at.** Sizing
   `demandRespect` against the measured distribution of rival respect gave 28,
@@ -477,6 +492,67 @@ Three things it cost, all found and fixed:
   nouns, so it walked past. The labels now say the relation rather than the
   person — "the one you married", "your youngest" — which is both correct and
   better writing, and `personal.test.ts` guards it.
+
+### Round 15 — the first blind round since the Mafia-boss build
+
+245 days, stopped deliberately at heat 100 under indictment. Scores: First hour
+9, Clarity 8, Feedback 9, Depth 8, Pacing 7, Difficulty 8, **Writing 10**,
+Interface 9, Fun 7 (their own split: 8 for the first ninety days, 4 after).
+
+**Writing took a 10 for the first time.** So did the causal legibility: *"The
+Why page is remarkable — a full decision ledger for the three AI families with
+the utility scores of the options they rejected. I have not seen another
+management game show its opponents' working."*
+
+**Both MUST FIX items were confirmed in the code, and both are fixed.**
+
+- **"Go dark" promised quiet work would continue and two screens said it would
+  not.** The sim was right all along — `canLaunch` blocks only non-quiet
+  approaches. The Overview said "No operations can be launched" and the
+  Operations page said "Nothing can be launched until day N. That is the point
+  of it." The tester chose it believing the option text, lost fourteen days of
+  income, missed payroll, lost counsel, and never recovered. A third instance
+  was then found in the heat tip: *"Laying low drops it fast and earns
+  nothing."* All three fixed; the guard rewritten and proved red first.
+
+- **Paying somebody off said "the matter is closed" and it was not.** The shape
+  fires on grievance **or** low loyalty, and paying moved loyalty by seven — so
+  a man at "looking for the door" was still there afterwards and the loyalty
+  branch re-armed immediately. *"It turned the whole crew-management layer into
+  a subscription. I stopped believing that anything I did for my people
+  mattered."* Now: a sixty-day cooldown per person set before the branches, a
+  payment large enough to clear the bar that raised the memo, and the memo no
+  longer cites a grievance from another year — the tester was shown the same
+  day-9 injury on days 45, 101, 174 and 226.
+
+**The severest SHOULD FIX was the personal life, and it was mine.** *"For 230
+days the game showed me a rising counter I had no way to act on. I assumed for
+most of the run that I was missing a screen."* The only way home was a memo on
+a weighted draw and it arrived on **day 233**. `config/personal.ts` had argued
+against a button on the grounds that it would become a bar to top up; the round
+showed that the alternative was a tax with a name on it. There is now a control
+on Yourself with a seven-day cooldown that names its own bar.
+
+**Also fixed, all verified in the code first:** the favour panel rendered above
+The City's own page heading, so the page began mid-thought — mine, from PR #5.
+And the Influence blurb now says how Influence is earned, which is the fourth
+round to circle that.
+
+**Could not reproduce: the succession rank mismatch.** *"With Enzo Adderly
+named and clearly listed as Soldier, the handover box read 'They start as
+Enforcer'."* `inheritRank` reads the **player's** rank, not the heir's crew
+role — Crew Leader minus `HANDOVER.ranksLost` is Enforcer, and the player was
+Crew Leader at both observations. The number was right both times. The label is
+what is wrong, and it is a copy fix rather than a defect.
+
+**And the finding the round was run to settle is not settled.** The tester's
+decisions stopped changing around **day 100**, which is the same place F1 has
+reported since round 7 — the rival work did not move it. They never noticed the
+families doing anything, because they shared ground with nobody. They found the
+lender only in desperation on day 139, after the tip's own condition had been
+true for weeks. **An active city did not buy a better middle game**, and the
+slower ladder was not the reason: they reached Crew Leader on day 52 and then
+stalled on capital, not on rank.
 
 ### Task 6 — the day has a shape
 

@@ -399,7 +399,22 @@ export const ATTRIBUTE_BLURB: Record<AttributeId, string> = {
   streetSmarts: 'Reading a room, spotting a setup, staying clean.',
   business: 'Legitimate fronts, laundering throughput and exposure.',
   strategy: 'Large, complex operations.',
-  influence: 'Pull with people who matter. Contacts, counsel, favours.',
+  /*
+     The only attribute whose blurb has to say how to earn it.
+
+     Every other one is trained by doing the obvious matching thing —
+     shakedowns raise intimidation, complex jobs raise strategy — and a
+     player works that out inside an hour. Influence is trained by keeping
+     counsel on retainer and by going and talking to the other families,
+     neither of which is a guess anybody makes.
+
+     Round 15: "I could never find out how to raise Influence. It sat at
+     0/20 for 190 days while gating the judge, city hall, and two of the
+     four inside men. It eventually went to 7 through some mechanism I
+     still cannot identify." That is the fourth round to circle this.
+  */
+  influence:
+    'Pull with people who matter. Contacts, counsel, favours. Grows while you keep a lawyer on retainer, and every time you go and talk to another family.',
 };
 
 export const STARTING_ATTRIBUTES: Attributes = {

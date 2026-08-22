@@ -24,10 +24,21 @@
  * the chair that is entirely the player's own work"* — which is exactly what
  * this is.
  *
- * **And it asks rather than nags.** The pull toward home arrives as a memo
- * through the generative event system, at a moment the simulation chose,
- * carrying a name. A panel that quietly accrued a penalty while the player
- * looked at other screens would be a tax, not a life.
+ * **And it asks rather than nags** — but the player can also just go.
+ *
+ * The first version had no button anywhere. The pull toward home arrived only
+ * as a memo, on a weighted draw, on a day the authored pool had nothing, and
+ * round 15 waited **233 days** for it while the daily card counted upward at
+ * them the whole time:
+ *
+ *   *"For 230 days the game showed me a rising counter I had no way to act on.
+ *   I assumed for most of the run that I was missing a screen."*
+ *
+ * That was a tax with a name on it, which is precisely what the paragraph
+ * above said not to build. The memo stays — it is the part that has a person
+ * in it and arrives when the simulation chose — and there is now a plain
+ * button on the Yourself screen, because a boss deciding to go home should not
+ * have to be invited.
  */
 
 export interface RelationDef {
@@ -92,6 +103,16 @@ export const HOME = {
   perWeekAway: 3.5,
   /** ...and what one evening actually clears. */
   clearedByVisit: 22,
+
+  /**
+   * Days before going home again is worth anything.
+   *
+   * Not a cooldown on the button so much as on the *effect*: an evening at
+   * home is worth an evening, and standing in the doorway four times on a
+   * Tuesday is not worth four. Without this the panel control would be a bar
+   * to top up, which is the failure the header describes.
+   */
+  visitAgainAfterDays: 7,
 
   /**
    * Where the multiplier on being deposed starts, and where it ends up.
