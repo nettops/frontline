@@ -3,6 +3,8 @@ import { Panel, Bar, KeyValue } from '../components';
 import { nextRank, rankRequirements } from '../../sim/player';
 import { estate } from '../../sim/estate';
 import { careerShape, legitimacy } from '../../sim/legacy';
+import { authorityRead } from '../../sim/authority';
+import { homeRead } from '../../sim/personal';
 import { controlledTerritories } from '../../sim/territory';
 import { formatMoney } from '../../sim/util';
 import {
@@ -78,6 +80,8 @@ export default function PlayerPanel() {
   const next = nextRank(state);
   const reqs = rankRequirements(state);
   const difficulty = DIFFICULTY_BY_ID[state.difficulty];
+  const authorityNow = authorityRead(state);
+  const houseNow = homeRead(state);
 
   return (
     <>
@@ -172,6 +176,43 @@ export default function PlayerPanel() {
              not win" with nothing on any screen naming what the position was.
           */}
           <KeyValue label="How legitimate it looks" value={`${legitimacy(state)} of 100`} />
+          {/*
+             Authority, and the one thing holding it down.
+
+             A number on its own would be the eleventh statistic on this screen
+             and `config/authority.ts` says plainly that is the way this
+             feature fails. The reading names its own worst term, so the row is
+             a thing to go and do something about rather than a thing to look
+             at — the same standard `rankRequirements` is held to above.
+          */}
+          <KeyValue
+            label="Whether you are obeyed"
+            value={`${authorityNow.value} of 100 — ${authorityNow.label}`}
+            tone={authorityNow.value < 45 ? 'hot' : undefined}
+          />
+          <KeyValue
+            label="Weakest of the four"
+            value={`${authorityNow.because[0].term} (${authorityNow.because[0].value})`}
+          />
+          {/*
+             And the half of the man that is not the organization.
+
+             Read-only on purpose. There is no button here and there is not
+             going to be one: `config/personal.ts` argues that a pull toward
+             home has to arrive as something asking, on a week that had other
+             plans, rather than sit on a panel as a bar to be topped up. This
+             row is so the player can see what the memo was about.
+          */}
+          <KeyValue label="At home" value={`${houseNow.where} — ${houseNow.label}`} />
+          <KeyValue
+            label="Who is there"
+            value={houseNow.people.join('; ')}
+          />
+          <KeyValue
+            label="Last evening at home"
+            value={houseNow.since === 0 ? 'Today' : `${houseNow.since} days ago`}
+            tone={houseNow.neglect >= 50 ? 'hot' : undefined}
+          />
           <KeyValue label="Shaping into" value={careerShape(state).name} tone="brass" />
           <KeyValue label="Operations completed" value={player.opsCompleted} tone="good" />
           <KeyValue label="Operations failed" value={player.opsFailed} tone="hot" />

@@ -188,6 +188,16 @@ export function tickWhispers(state: GameState): void {
 export interface WhisperRead {
   day: number;
   text: string;
+  /**
+   * Who or what it is about, as an id.
+   *
+   * Not a leak: the name is in `text` already, and this is only here so a
+   * consumer can find the person rather than parse the sentence. `truth` is
+   * the field that must never appear on this interface, and the test for that
+   * checks the *shape* of the read rather than a list of allowed fields,
+   * precisely so adding this one cannot quietly turn into adding that one.
+   */
+  subject: string;
   /** 0..100, said as a number because how sure somebody is can be stated. */
   confidence: number;
   /** The phrase for that number, for anybody who does not read percentages. */
@@ -208,6 +218,7 @@ export function readWhispers(state: GameState): WhisperRead[] {
     .map((w) => ({
       day: w.day,
       text: w.text,
+      subject: w.subject,
       confidence: Math.round(w.confidence * 100),
       certainty:
         WHISPER_CONFIDENCE_LABEL.find(([bar]) => w.confidence >= bar)?.[1] ?? 'They are guessing',

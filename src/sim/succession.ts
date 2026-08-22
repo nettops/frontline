@@ -25,6 +25,7 @@ import type {
   NpcStatId,
   RankId,
 } from './types';
+import { neglectRisk } from './personal';
 import { addLog, pushEvent, withArticle } from './util';
 import { addNote, crewList, isOutOfReach, perceive } from './npc';
 import { goalEffect } from './goals';
@@ -729,9 +730,24 @@ export function tickDeposition(state: GameState, rng: Rng): void {
   }
 
   const named = heirOf(state);
+  /*
+     And whether the man in the chair has anything outside it.
+
+     `config/personal.ts` argues this rather than asserts it: a boss who is
+     only ever seen in the back room is a boss his own people know only as the
+     work, and when the room turns there is nobody in it with a personal reason
+     to stand with him. `neglectRisk` is 1 for any boss who goes home
+     occasionally, so this is a thing the player can be wrong about rather than
+     a tax everybody pays.
+
+     It goes here because this file already calls deposition the only way out
+     of the chair that is entirely the player's own work, and that is exactly
+     what a life nobody kept is.
+  */
   const chance =
     DEPOSITION.chancePerWeek *
-    (named && named.id === mover.id ? DEPOSITION.namedHeirMultiplier : 1);
+    (named && named.id === mover.id ? DEPOSITION.namedHeirMultiplier : 1) *
+    neglectRisk(state);
   if (!rng.chance(chance)) return;
 
   removePlayer(

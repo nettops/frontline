@@ -12,6 +12,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { newGame } from '../state';
+import { runDays } from './helpers';
 import { advanceDays } from '../clock';
 import { availableCrew } from '../npc';
 import { approachOf, launchOperation, successBreakdown } from '../operations';
@@ -64,15 +65,45 @@ describe('the approaches differ in the ways the panel says they do', () => {
     const quiet = fresh(21);
     const heavy = fresh(21);
     const where = operableTerritories(quiet)[0].territory.id;
+    /*
+       The high-water mark, not the closing balance.
+
+       Heat decays every quiet day, and sixteen days of it is enough to take
+       both worlds to zero — so reading `org.heat` at the end compares two
+       floors. The original passed only because `advanceDays` truncates on a
+       new memo and the loop therefore never ran its full length; once the
+       simulation started writing its own memos there were enough of them to
+       change how far it truncated, and the comparison read 0 against 0.
+    */
+    let peakQuiet = 0;
+    let peakHeavy = 0;
     for (let i = 0; i < 8; i++) {
       const q = availableCrew(quiet);
       const h = availableCrew(heavy);
       if (q.length) launchOperation(quiet, 'corner_shakedown', [q[0].id], where, 'quiet');
       if (h.length) launchOperation(heavy, 'corner_shakedown', [h[0].id], where, 'heavy');
-      advanceDays(quiet, 2);
-      advanceDays(heavy, 2);
+      /*
+         `runDays`, not `advanceDays`, and the difference decides whether this
+         test measures anything.
+
+         `advanceDays` stops the moment a memo needs answering — correct for
+         the UI, and the trap `helpers.ts` documents in its own header. Once
+         the simulation started writing its own memos there were enough of them
+         that these two worlds stopped advancing two days each, drifted apart,
+         and the assertion below read heat 0 against heat 0.
+
+         Memos are deliberately left unanswered. The whole design of this test
+         is two worlds identical apart from the approach, and answering a memo
+         about whoever happens to be aggrieved in one of them is a second
+         difference. The pending queue caps itself at three and stops, which
+         costs this comparison nothing.
+      */
+      runDays(quiet, 2, undefined, { answer: () => {} });
+      runDays(heavy, 2, undefined, { answer: () => {} });
+      peakQuiet = Math.max(peakQuiet, quiet.org.heat);
+      peakHeavy = Math.max(peakHeavy, heavy.org.heat);
     }
-    expect(heavy.org.heat).toBeGreaterThan(quiet.org.heat);
+    expect(peakHeavy, 'the loud approach never generated more heat than the quiet one').toBeGreaterThan(peakQuiet);
     expect(heavy.org.fear).toBeGreaterThanOrEqual(quiet.org.fear);
     expect(heavy.territories[where].sentiment).toBeLessThan(quiet.territories[where].sentiment);
   });

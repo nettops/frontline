@@ -29,6 +29,7 @@ import { tickAging, type AgingHooks } from './aging';
 import { ageCapos, tickCapos } from './capos';
 import { tickPerception } from './perception';
 import { tickCivic } from './civic';
+import { tickHome } from './personal';
 import { tickWhispers } from './whispers';
 import { tickEvents } from './events';
 import { tickWorld } from './world';
@@ -106,6 +107,12 @@ export function advanceDay(state: GameState): void {
   //     it takes the world as it stands at the end of the day's events, which
   //     is what somebody would actually be repeating.
   tickWhispers(state);
+  // 7a2. And the people who are not in the family at all.
+  //
+  //      Reads nothing any other tick writes and writes only its own record,
+  //      so it can sit anywhere in the week. Here, beside the other opinions
+  //      being formed about you.
+  tickHome(state);
   // 7b. The people outside the family form an opinion.
   //
   //     After `tickTerritory` on purpose: a union boss counts the ground you
