@@ -28,6 +28,7 @@ import { addNote, driftNpcs, tickNpcs, crewList } from './npc';
 import { tickAging, type AgingHooks } from './aging';
 import { ageCapos, tickCapos } from './capos';
 import { tickPerception } from './perception';
+import { tickCivic } from './civic';
 import { tickEvents } from './events';
 import { tickWorld } from './world';
 import { tickFear, tickPlayer, tickRecord, tickStanding } from './player';
@@ -98,6 +99,13 @@ export function advanceDay(state: GameState): void {
   tickDelegation(state, rng);
   // 7. Influence bleeds where you stopped showing up; feeling drifts back.
   if (state.day % 7 === 0) tickTerritory(state);
+  // 7a. The people outside the family form an opinion.
+  //
+  //     After `tickTerritory` on purpose: a union boss counts the ground you
+  //     hold and a judge reads the districts you work, so they should be
+  //     looking at this week's map rather than last week's. Reads state and
+  //     writes only its own roster, so nothing downstream depends on it.
+  tickCivic(state);
   // 8. Anybody at war fights this week, before decisions are taken — a family
   //    that has just been beaten should be deciding with that in front of it.
   if (state.day % 7 === 0) tickWars(state, rng);

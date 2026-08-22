@@ -19,7 +19,7 @@ operations, crew, territory, rival families, and law enforcement.
     npx tsc -b         # types
     npm run playtest   # namespaced instance for blind testers
 
-**Current verified state: `tsc` clean, 648 tests, 56 files — 647 passing and one
+**Current verified state: `tsc` clean, 660 tests, 57 files — 659 passing and one
 failing on purpose.** `ladder.probe.test.ts` carries a pre-committed pacing
 target the rank table does not meet; see §9. 53,553 lines
 across 160 source files, after the audit in §8.
@@ -256,6 +256,32 @@ Ranked. F10 outranks everything else in this list.
   was a constant zero. Deleted along with `STARTING_INFLUENCE` and the row.
   `deadState.test.ts` now fails if any field on `Org` is declared and never
   assigned. **Second time dead state has shipped here** — see §8.
+
+- **The favour network — FIRST SLICE BUILT, unmeasured.** `config/civic.ts`,
+  `sim/civic.ts`, and a panel at the top of The City. Four figures — a police
+  captain, a union boss, a judge, somebody in office — each watching one
+  quantity the simulation already keeps, each owing favours you spend on a
+  problem rather than on a stat.
+
+  **It generalises two existing one-offs rather than sitting beside them.**
+  `PATRON` was an anonymous 90-day timer for $120,000; the alderman is that
+  arrangement with a relationship in front of it. The `contactCost` agencies
+  were booleans you bought; standing here accumulates from how the family is
+  run and cannot be purchased at all.
+
+  **The reachability property is the point and it is asserted:** thirteen quiet
+  weeks put a police captain over the bar, so the network opens inside the 300
+  days a person plays. Round 14 on the old system: *"the system I most wanted
+  and it is priced for a run that has already succeeded."*
+
+  The union favour lifts a district's public feeling over
+  `SENTIMENT_HOSTILE_BELOW`, which points it straight at F10, F12 and F15 — a
+  district under the bar sells no fronts, and fronts are the fork the whole
+  economy turns on.
+
+  **Not yet done:** no bot exercises it, so it is invisible to every probe
+  (F7). No blind round has seen it. The live-game half of the browser check
+  could not run — see below.
 
 - **F15 — the economy is bimodal and it forks on fronts. NEW, and it now
   outranks the rest of this list.** At day 300, twenty-five careers of thirty-six
