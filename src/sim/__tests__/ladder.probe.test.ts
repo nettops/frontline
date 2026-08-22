@@ -110,6 +110,21 @@ import { isGenerated } from '../eventgen';
 import { civicRead, spendFavour } from '../civic';
 import { careerShape, legitimacy } from '../legacy';
 import { CIVIC, CIVIC_FIGURES } from '../../config/civic';
+import { POSSESSIONS } from '../../config/possessions';
+import { possessionValue } from '../possessions';
+import { TABLES, TABLE_BY_ID } from '../../config/cards';
+
+/**
+ * The rungs the weekly respect distribution is read against.
+ *
+ * Exists so a threshold on respect can be placed off a plotted distribution
+ * rather than off an intuition. This project has now put a bar in the wrong
+ * place three times for want of exactly this: `demandRespect` went in at 28
+ * against a starting value of 30, and the card room's invitation went in at
+ * 55 and turned out to be cleared in 77% of weeks.
+ */
+const RESPECT_BARS = [25, 55, 85, 120, 150, 180, 220, 260];
+import { canSit, seatedAt } from '../cards';
 import { SENTIMENT_HOSTILE_BELOW } from '../../config/territories';
 import { activeCases, worstStage } from '../investigation';
 import { stageIndex } from '../../config/lawEnforcement';
@@ -405,6 +420,66 @@ interface Climb {
     /** What the career would be called if it stopped here. */
     shape: string;
     /**
+     * Whether the possessions catalogue is reachable at all.
+     *
+     * The blueprint's own objection to building it: *"a sink only bites
+     * somebody with money, and 30 of 36 careers finish under $100,000.
+     * Shipped before the fork moves, this is content for the sixth of players
+     * who least need content."* The bot does not buy anything — it is not
+     * being asked to — so these are counts of *opportunity*, which is the
+     * thing actually in question.
+     *
+     * Clean cash rather than total funds, because that is the pool the
+     * catalogue is priced against: dirty money does not buy a car in your own
+     * name, and a reading that counted it would report a door open that is
+     * shut.
+     */
+    /**
+     * Whether the card game is a room anybody gets into.
+     *
+     * Same question the possessions reading asks and the same answer shape:
+     * the bot does not gamble, so these count *opportunity*. A weekly game
+     * whose bottom table nobody can afford is a panel, and its top table is
+     * supposed to be somewhere you are eventually invited rather than
+     * somewhere you can go — so the interesting figure is the gap between
+     * them.
+     */
+    tables: {
+      /** Weeks each room would have let the player sit, by table id. */
+      weeksOpen: Record<string, number>;
+      /** Weeks the top table seated somebody who decides things. */
+      weeksWorthSitting: number;
+      /**
+       * The weekly respect distribution, as shares clearing a set of bars.
+       *
+       * Kept separately from `weeksOpen` because the first version of this
+       * reading could not tell the two gates apart: it asserted the top room
+       * opens less often than the bottom one, which stayed true with the
+       * respect bar set to **zero** — $12,000 is more than $400 and that was
+       * all it was measuring. A tier that only bites through its price is not
+       * a tier.
+       *
+       * A ladder of bars rather than one, so the next person to size a respect
+       * threshold reads the distribution off the log instead of guessing and
+       * discovering it later. `RESPECT_BARS` below is the ladder; the first
+       * bar this table produced was 55, which turned out to be cleared in 77%
+       * of weeks and was therefore no gate at all.
+       */
+      respectAtLeast: Record<number, number>;
+      weeks: number;
+    };
+    ownable: {
+      /** Weeks with the cheapest item's price in clean cash. */
+      weeksAnyAffordable: number;
+      /** Weeks with the cheapest *home* affordable — the personal-life hook. */
+      weeksHomeAffordable: number;
+      /** First day anything at all was in reach. Null means never. */
+      firstDay: number | null;
+      /** The dearest catalogue item ever affordable, by price. */
+      bestReached: number;
+      weeks: number;
+    };
+    /**
      * What an active player did with any of it.
      *
      * Zero on the baseline bot by construction — it does not know these
@@ -663,6 +738,13 @@ function climb(seed: number, days: number, policy: Policy = {}): Climb {
     sentimentSum: 0,
     sentimentWeeks: 0,
     favoursSpent: 0,
+    tableWeeks: Object.fromEntries(TABLES.map((t) => [t.id, 0])) as Record<string, number>,
+    worthSitting: 0,
+    respectAtLeast: Object.fromEntries(RESPECT_BARS.map((b) => [b, 0])) as Record<number, number>,
+    ownWeeks: 0,
+    ownHomeWeeks: 0,
+    ownFirstDay: null as number | null,
+    ownBest: 0,
     dialTurns: 0,
     dialWeeks: { clean: 0, normal: 0, hard: 0 } as Record<PressureId, number>,
   };
@@ -1511,6 +1593,40 @@ function climb(seed: number, days: number, policy: Policy = {}): Climb {
       newSys.legLow = Math.min(newSys.legLow, leg);
 
       /*
+         And whether the boss could have owned anything this week.
+
+         `possessionValue` derives — it is `priced()` and nothing else — so
+         this stays inside the no-rolling rule the whole block is held to.
+      */
+      const clean = state.org.cash;
+      let bestNow = 0;
+      let homeNow = false;
+      for (const def of POSSESSIONS) {
+        if (possessionValue(state, def) > clean) continue;
+        bestNow = Math.max(bestNow, def.cost);
+        if (def.kind === 'home') homeNow = true;
+      }
+      if (bestNow > 0) {
+        newSys.ownWeeks += 1;
+        newSys.ownBest = Math.max(newSys.ownBest, bestNow);
+        if (newSys.ownFirstDay === null) newSys.ownFirstDay = state.day;
+      }
+      if (homeNow) newSys.ownHomeWeeks += 1;
+
+      /*
+         And the card game. `canSit` and `seatedAt` both derive — `seatedAt`
+         is `stableNoise` by construction — so this stays inside the
+         no-rolling rule the whole block is held to.
+      */
+      for (const t of TABLES) {
+        if (canSit(state, t.id).ok) newSys.tableWeeks[t.id] += 1;
+      }
+      if (seatedAt(state, 'upstairs').kind !== 'nobody') newSys.worthSitting += 1;
+      for (const bar of RESPECT_BARS) {
+        if (state.org.respect >= bar) newSys.respectAtLeast[bar] += 1;
+      }
+
+      /*
          And the half that actually plays them.
 
          Competent, not optimal — the same standard as the rest of this bot. It
@@ -1792,6 +1908,19 @@ function climb(seed: number, days: number, policy: Policy = {}): Climb {
         low: newSys.weeks ? newSys.legLow : 0,
       },
       shape: careerShape(state).id,
+      tables: {
+        weeksOpen: newSys.tableWeeks,
+        weeksWorthSitting: newSys.worthSitting,
+        respectAtLeast: newSys.respectAtLeast,
+        weeks: newSys.weeks,
+      },
+      ownable: {
+        weeksAnyAffordable: newSys.ownWeeks,
+        weeksHomeAffordable: newSys.ownHomeWeeks,
+        firstDay: newSys.ownFirstDay,
+        bestReached: newSys.ownBest,
+        weeks: newSys.weeks,
+      },
       favoursSpent: newSys.favoursSpent,
       dialTurns: newSys.dialTurns,
       dialWeeks: newSys.dialWeeks,
@@ -2900,6 +3029,197 @@ describe('the front fork', () => {
     );
 
     expect(RUNS_FINANCED.length).toBe(36);
+  });
+});
+
+describe('owning something of your own', () => {
+  /*
+     Whether the possessions catalogue is content anybody meets.
+
+     The blueprint argued against building this third rather than first, on the
+     grounds that *"a sink only bites somebody with money, and 30 of 36 careers
+     finish under $100,000. Shipped before the fork moves, this is content for
+     the sixth of players who least need content"* — which is exactly the
+     mistake that put the diplomatic doors at the 75th percentile of a
+     distribution nobody had plotted, twice.
+
+     So the distribution is plotted here, before anybody claims the layer
+     works. The bot buys nothing; these count weeks where it *could* have,
+     against clean cash, which is the pool the catalogue is priced in.
+
+     One pre-committed condition and it is deliberately modest: **most careers
+     must be able to own something**. Not a house, not the Merriweather place —
+     something. A catalogue the median career never opens is a panel.
+  */
+  it('is reachable by an ordinary career', () => {
+    const own = RUNS_300.map((r) => r.newSystems.ownable);
+    const ever = own.filter((o) => o.firstDay !== null);
+    const share = (n: number, d: number) => (d ? Math.round((n / d) * 100) : 0);
+
+    // eslint-disable-next-line no-console
+    console.log(
+      `something of your own: ${ever.length}/${own.length} careers could ever afford anything, ` +
+        `median first day ${ever.length ? median(ever.map((o) => o.firstDay as number)) : '—'}\n` +
+        `         weeks affordable: any ` +
+        `${share(own.reduce((n, o) => n + o.weeksAnyAffordable, 0), own.reduce((n, o) => n + o.weeks, 0))}%` +
+        `, a home of your own ` +
+        `${share(own.reduce((n, o) => n + o.weeksHomeAffordable, 0), own.reduce((n, o) => n + o.weeks, 0))}%\n` +
+        `         dearest ever in reach, median ` +
+        `$${Math.round(median(own.map((o) => o.bestReached))).toLocaleString('en-US')}` +
+        `, best $${Math.max(...own.map((o) => o.bestReached)).toLocaleString('en-US')}`,
+    );
+
+    expect(
+      ever.length,
+      'most careers can never afford anything in the catalogue, so it is a panel rather than a decision',
+    ).toBeGreaterThanOrEqual(Math.ceil(own.length / 2));
+
+    /*
+       And the hook specifically.
+
+       A home of your own is the one item that reaches into the personal-life
+       layer, and the first pricing put it above the median career's ceiling —
+       36/36 could afford *something*, but the dearest thing the median career
+       could ever reach was $14,000 against an apartment at $22,000. This
+       condition exists because that price was corrected after seeing the
+       reading rather than before it, which is the weaker kind of evidence and
+       should not be left resting on a comment.
+    */
+    const homes = own.filter((o) => o.weeksHomeAffordable > 0).length;
+    expect(
+      homes,
+      'half the careers in the game never get within reach of a place of their own',
+    ).toBeGreaterThanOrEqual(Math.ceil(own.length / 2));
+  });
+});
+
+describe('the game every week', () => {
+  /*
+     Whether the card tables are rooms anybody gets into.
+
+     The blueprint asked for gambling as *"a sink with teeth, once there is
+     money to sink"*, and the qualifier is the whole risk: a sink priced for
+     the twelve careers in thirty-six that compound is a panel for the other
+     twenty-four. The bot never sits down, so this counts weeks it *could*
+     have.
+
+     Two pre-committed conditions, both about shape rather than about size.
+     **The bottom room has to be open most of the time** — it is the one that
+     is supposed to be available from the first morning. And **the top room has
+     to be mostly shut**, because a room you are eventually invited to that
+     turns out to be open all along is just another button.
+  */
+  it('opens the bottom room to everybody and the top room to almost nobody', () => {
+    const t = RUNS_300.map((r) => r.newSystems.tables);
+    const weeks = t.reduce((n, x) => n + x.weeks, 0);
+    const open = (id: string) => t.reduce((n, x) => n + x.weeksOpen[id], 0);
+    const share = (n: number) => (weeks ? Math.round((n / weeks) * 100) : 0);
+
+    // eslint-disable-next-line no-console
+    console.log(
+      `the game every week: weeks each room would have seated you — ` +
+        TABLES.map((def) => `${def.name} ${share(open(def.id))}%`).join(', ') +
+        `\n         the top table seated somebody worth an evening in ` +
+        `${share(t.reduce((n, x) => n + x.weeksWorthSitting, 0))}% of weeks`,
+    );
+
+    /*
+       The respect gate on its own, with the money taken out of it.
+
+       The first version of this test asserted only that the top room opens
+       less often than the bottom one, and that stayed true with the respect
+       bar set to zero — $12,000 is more than $400, which is all it was
+       measuring. Two conditions instead, and they pull against each other:
+       the invitation has to be **earnable** and it has to be **earned**.
+    */
+    const atLeast = (bar: number) => share(t.reduce((n, x) => n + x.respectAtLeast[bar], 0));
+    const welcome = atLeast(TABLE_BY_ID.upstairs.respectAbove);
+    // eslint-disable-next-line no-console
+    console.log(
+      `         weekly respect, share of weeks at or above: ` +
+        RESPECT_BARS.map((b) => `${b} ${atLeast(b)}%`).join(', ') +
+        `\n         the top room asks for ${TABLE_BY_ID.upstairs.respectAbove}, ` +
+        `which ${welcome}% of weeks clear`,
+    );
+
+    expect(
+      share(open('back_room')),
+      'the room that is meant to be open on the first morning is mostly shut',
+    ).toBeGreaterThanOrEqual(50);
+    /*
+       And how many careers ever got in, which a share of weeks hides.
+
+       27% of weeks is the same number whether a quarter of careers are welcome
+       always or every career is welcome eventually, and those are completely
+       different features. An invitation should be the second one.
+    */
+    const everWelcome = t.filter((x) => x.respectAtLeast[TABLE_BY_ID.upstairs.respectAbove] > 0).length;
+    // eslint-disable-next-line no-console
+    console.log(`         careers ever invited upstairs: ${everWelcome}/${t.length}`);
+
+    expect(
+      everWelcome,
+      'nobody in thirty-six careers is ever respected enough for the top room, so it is scenery',
+    ).toBeGreaterThan(0);
+    expect(
+      welcome,
+      'the top room lets everybody in, so the tiers are decoration',
+    ).toBeLessThan(70);
+  });
+});
+
+describe('the second front', () => {
+  /*
+     F15's pre-committed condition, written before the pricing was touched.
+
+     The middle of the game goes quiet because it runs out of capital, not
+     because it runs out of content: `ladder.probe` puts the blocker on a
+     career with no front at **money in 97% of those weeks**, and round 15 said
+     the same thing in prose — *"the two things that would have opened new
+     decisions were both gated behind capital I could no longer accumulate."*
+
+     Front income compounds into holdings, so the second one is the step that
+     decides a career. Today 30 careers in 36 finish under $100,000 holding one
+     front, and the six that compound hold five.
+
+     Two conditions, and the second matters as much as the first. **A majority
+     of careers should own more than one front**, which is a median of two. And
+     **the top must not run further away while that happens** — a repair that
+     doubles the estate of the six who are already fine and leaves the thirty
+     where they are has widened the fork rather than closed it.
+
+     Targets for `config/businesses.ts`, not thresholds on this file.
+  */
+  it('is reachable by an ordinary career', () => {
+    const fronts = RUNS_300.map((r) => r.fronts);
+    const compounded = RUNS_300.filter((r) => r.bestEstate >= 100_000).length;
+
+    // eslint-disable-next-line no-console
+    console.log(
+      `the second front: median fronts ${median(fronts)}, ` +
+        `compounding careers ${compounded}/${RUNS_300.length}, ` +
+        `estate 40th/median/75th ` +
+        `${Math.round(pct(RUNS_300.map((r) => r.bestEstate), 0.4)).toLocaleString('en-US')} / ` +
+        `${Math.round(median(RUNS_300.map((r) => r.bestEstate))).toLocaleString('en-US')} / ` +
+        `${Math.round(pct(RUNS_300.map((r) => r.bestEstate), 0.75)).toLocaleString('en-US')}`,
+    );
+
+    expect(median(fronts), 'the median career still never gets a second front').toBeGreaterThanOrEqual(2);
+    expect(
+      compounded,
+      'the compounding half of the economy is still out of reach of most careers',
+    ).toBeGreaterThanOrEqual(12);
+  });
+
+  /*
+     And the other side of it. The 75th percentile of the estate is what the
+     already-comfortable careers reach; if this repair moves that more than it
+     moves the median, it has made the fork worse in the name of closing it.
+  */
+  it('does not simply pay the careers that were already fine', () => {
+    const mid = median(RUNS_300.map((r) => r.bestEstate));
+    const top = pct(RUNS_300.map((r) => r.bestEstate), 0.75);
+    expect(top / Math.max(1, mid), 'the top pulled away from the middle').toBeLessThan(4);
   });
 });
 

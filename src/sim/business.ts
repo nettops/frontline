@@ -36,6 +36,7 @@ import {
 import { RIVAL_IDS } from '../config/factions';
 import {
   ACQUISITION_PREMIUM_CONTESTED,
+  ACQUISITION_SCALE,
   BUSINESSES,
   BUSINESS_BY_ID,
   HEALTH,
@@ -267,7 +268,18 @@ export function acquisitionCost(state: GameState, def: BusinessDef, t: Territory
   // Buying in somewhere you do not securely hold means paying somebody off.
   const premium = isContested(t) ? ACQUISITION_PREMIUM_CONTESTED : 1;
   const haggle = 1 - Math.min(0.2, state.player.attributes.negotiation * 0.01);
-  return Math.round(base * premium * haggle);
+  /*
+     And who is standing in the room. See `ACQUISITION_SCALE`.
+
+     Reads `org.record.estate` — the high-water mark — rather than calling
+     `estate()`, and that is not only about the fiction. `estate.ts` imports
+     `acquisitionCost` from this file to value a front, so asking it what the
+     family is worth from inside the pricing function would be a cycle.
+  */
+  const ever = state.org.record?.estate ?? 0;
+  const grown = clamp(ever / ACQUISITION_SCALE.fullPriceAt, 0, 1);
+  const small = 1 - ACQUISITION_SCALE.maxDiscount * (1 - grown);
+  return Math.round(base * premium * haggle * small);
 }
 
 export interface AcquireCheck {

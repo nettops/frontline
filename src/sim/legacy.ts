@@ -13,6 +13,8 @@ import { clamp } from './rng';
 import { estate } from './estate';
 import { territoryList, playerInfluence } from './territory';
 import { figure } from './civic';
+import { possessions } from './possessions';
+import { POSSESSION_BY_ID } from '../config/possessions';
 import { CIVIC_FIGURES } from '../config/civic';
 import {
   CAREER_SHAPES,
@@ -35,8 +37,11 @@ export function legitimacy(state: GameState): number {
   const worth = estate(state);
   const total = Math.max(1, worth.total);
 
-  // What you visibly own, against what is in a drawer.
-  const visible = clamp((worth.fronts + worth.ground) / total, 0, 1);
+  // What you visibly own, against what is in a drawer. `estate` works the
+  // share out, because it is the module that knows what the family owns —
+  // and because a possessions field added here and not there would have
+  // grown the denominator without the numerator.
+  const visible = clamp(worth.visible / total, 0, 1);
   const quiet = clamp(1 - state.org.heat / 100, 0, 1);
   const unnamed = clamp(1 - (state.city?.notoriety ?? 0) / 100, 0, 1);
 
@@ -170,6 +175,9 @@ export function postMortem(state: GameState): LegacyLine[] {
   const record = state.org.record;
   const held = territoryList(state).filter((t) => playerInfluence(t) >= 25).length;
   const money = (n: number) => `$${Math.round(n).toLocaleString('en-US')}`;
+  // Everything ever owned, not only what survived — a career is partly a
+  // record of what was taken off it.
+  const everOwned = possessions(state);
 
   return [
     { label: 'Worth at the end', value: money(worth.total) },
@@ -180,6 +188,36 @@ export function postMortem(state: GameState): LegacyLine[] {
       value: `${Math.round(state.org.respect)} now, ${Math.round(record?.respect ?? state.org.respect)} at the most`,
     },
     { label: 'Operations run', value: `${state.player.opsCompleted} done, ${state.player.opsFailed} not` },
+    /*
+       What was yours, and what happened to it.
+
+       This row is the reason possessions exist. Round 15 was asked what would
+       have gone if it had all gone and answered *"honestly: not much, and that
+       is the damning part"* — $673 and a laundromat. A career that ends with a
+       house on the hill and a Lincoln the Bureau took in a raid has an answer
+       to that question, and this is where it gets given.
+
+       Silent for a career that never bought anything, rather than a row
+       reading "nothing" for the two thirds of players who never open the
+       catalogue.
+    */
+    ...(everOwned.length
+      ? [
+          {
+            label: 'Yours, not the family\'s',
+            value: everOwned
+              .map((p) => {
+                const def = POSSESSION_BY_ID[p.defId];
+                const name = def ? def.name.toLowerCase() : 'something';
+                if (p.status === 'seized') return `${name} (taken on day ${p.goneDay})`;
+                if (p.status === 'lost') return `${name} (lost at cards on day ${p.goneDay})`;
+                if (p.status === 'sold') return `${name} (sold on day ${p.goneDay})`;
+                return name;
+              })
+              .join('; '),
+          },
+        ]
+      : []),
     { label: 'How legitimate it looked', value: `${legitimacy(state)} out of 100` },
     { label: 'Heat at the end', value: `${Math.round(state.org.heat)} out of 100` },
   ];

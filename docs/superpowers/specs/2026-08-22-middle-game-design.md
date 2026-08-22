@@ -205,6 +205,121 @@ notoriety, estate, seizure and the personal life. Worth real design time.
 
 ---
 
+## 3a. What was built, and what it measured
+
+Added after the build, so the document does not go on describing a plan that
+has been overtaken.
+
+**1. The second front — done.** `ACQUISITION_SCALE` prices a front against the
+family's high-water estate rather than the catalogue, so the discount is
+largest for an organization that has never been worth anything and gone by the
+time one is. Median fronts **1 → 2**, compounding careers **6 → 12 of 36**,
+first front on day 35 in 36 of 36. Capo 13 → 19, still short of the
+pre-committed 24.
+
+**2. Obstacles with a non-cash answer — done.** `obstacles.test.ts` encodes the
+rule as a property of the catalogue: *every event that asks for money must also
+offer something that does not, and the free answer has to change the world.*
+It went red on `opportunity_score`, whose decline branch was
+`if (choiceId !== 'take') return;` — a button that did nothing, which is
+exactly what round 15 described as "a cutscene with a button". That memo now
+offers **sending your own people instead**: no money, a smaller cut, worse
+odds, and on failure somebody comes back hurt.
+
+The first version of that answer locked two men out as `busy` for three days
+and the soak refused it — `busy` means *on an operation*, and a man marked busy
+with no operation is a hole in the model. The refusal was right for a better
+reason than it gave. Time was a weak price; people are the right one, and round
+15 said so directly.
+
+**3. Possessions — done, and measured before being believed.** Nine items
+across property, cars and jewellery. The four properties the section above
+asked for, each falling out of a system that already existed:
+
+- Counted at face in `estate`, exactly as `holdings` is, so buying one moves
+  rank **not at all**. What it costs is that the money has stopped being money.
+- Sells back at 0.6, worse than holdings' 0.85, because a bond is a bond and a
+  two-year-old car is a two-year-old car.
+- The **visible share** feeds `legitimacy`, which already asks what proportion
+  of a family's worth is out where people can see it.
+- The **same visibility** runs a newspaper item, which raises notoriety, which
+  `legitimacy` punishes and every civic figure reads as a reason to keep their
+  distance. So the flashy car is genuinely two-sided and nothing was built to
+  make it so.
+- A warrant takes the best single thing in the house, and nothing comes back.
+- Clean money only. A house bought out of a suitcase is a laundry, and
+  laundering is what fronts are for.
+
+And the reachability question this document raised against itself — *"content
+for the sixth of players who least need content"* — was answered by plotting it
+rather than by asserting it. Across 36 careers of 300 days:
+
+    careers that could ever afford anything     36/36, median first day 7
+    weeks something was affordable              61%
+    weeks a home of your own was affordable     14%
+    dearest ever in reach                       median $14,000, best $75,000
+
+The first pricing put the cheapest home at $22,000, **above the median
+career's ceiling of $14,000** — so half of all careers would never have reached
+the one item that hooks into the personal-life layer. It is $13,000 now, and
+`ladder.probe` carries a standing condition on home reachability rather than
+trusting the comment, because the price was corrected *after* seeing the
+reading rather than before it and that is the weaker kind of evidence.
+
+The Merriweather place at $160,000 is reachable by nobody in 300 days. That is
+deliberate and it is recorded here rather than discovered later.
+
+**4. Gambling — done, and it is not a slot machine.** A standing weekly game in
+three rooms, and the whole design is one sentence: *you choose the room, you
+choose how to play it, and somebody specific is sitting opposite you.*
+
+Three postures, and they are genuinely different decisions:
+
+- **Straight** is a sink. `maxWin × payout` is under 1 at the *ceiling* of the
+  attribute that helps, not merely at the average — checked by a test, because
+  a house edge that dies against a good player is a delayed exploit.
+- **Lose on purpose** always costs the stake, and buys a favour from the person
+  opposite. This is the mechanic the section above did not anticipate and it is
+  the best thing here: civic standing *drifts toward a target* every week, so a
+  one-off boost would be gone inside a fortnight — the durable thing a judge can
+  give you is a favour owed. Capped by the same `CIVIC.maxOwed` every other
+  route respects, so it is a **faster** road to a favour and never a bigger
+  stock of them. The slow road is thirteen quiet weeks.
+- **Play hard** pays 1.4 to 1 against straight's 0.8, deliberately. A "risky
+  option" that returns less in every currency is a trap with a label, not a
+  choice. The price is standing, notoriety, and being watched: suspicion rises
+  every time you try it and a great deal when it lands, so the profitable line
+  is self-limiting — twice a year never meets the mechanism and every week is
+  caught most weeks.
+
+And the tie-in the section above asked for: **heirlooms fold in as possessions.**
+You may put something of your own up when the money will not cover the stake,
+which is the obstacles rule applied to an opportunity instead of a threat. Lose
+it and the post-mortem says *"the necklace with a history (lost at cards on day
+212)"*.
+
+The tiers were sized against a plotted distribution, and the first attempt was
+not. They went in at respect 0 / 25 / 55 on intuition; the probe now prints the
+share of weeks a career spends at or above a ladder of bars:
+
+    respect at least   25    55    85   120   150   180   220
+    share of weeks     89%   77%   62%   46%   36%   27%   21%
+
+At 55 the "invitation you cannot ask for" was cleared in **77% of weeks**. The
+club sits at 85 and the room upstairs at 180 now, which measures as:
+
+    weeks each room would have seated you   96% / 48% / 14%
+    careers ever invited upstairs           28 of 36
+
+That last figure is the one that matters and a share of weeks hides it: 27% of
+weeks is the same number whether a quarter of careers are welcome always or
+every career is welcome eventually, and only the second is an invitation.
+
+**Perks remain unbuilt**, and the argument against them in 2.4 stands
+unchallenged.
+
+---
+
 ## 4. Constraints any of this must satisfy
 
 From `HANDOFF.md` §2, unchanged:

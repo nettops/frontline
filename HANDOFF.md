@@ -65,8 +65,55 @@ across 183 source files, counted 2026-08-22.
 ## 3. The recurring failure mode
 
 **Instruments that return believable numbers while measuring nothing.** This
-project has produced **29 instances** of it, and round 15 found the newest one.
-Recent examples:
+project has produced **33 instances** of it. Recent examples:
+
+- **A test that claimed to prove the card tiers meant something was measuring
+  the price.** It asserted the top room opens in fewer weeks than the bottom
+  room, which is true — and stayed true with the top room's respect bar set to
+  **zero**, because $12,000 is more than $400 and that was the entire content
+  of the claim. Caught by mutating the bar rather than by reading the test. The
+  fix separated the two gates and immediately found a real defect behind the
+  fake one: the bar had gone in at 55 on intuition and was cleared in **77% of
+  weeks**, so the "invitation you cannot ask for" was an invitation almost
+  everybody already had. The probe now prints the whole weekly respect
+  distribution against a ladder of bars, so the next person sizing a threshold
+  on respect reads it off the log. That is three bars this project has put in
+  the wrong place for want of plotting first.
+
+- **The clock trap, met again, and it would have passed.** `cards.test.ts`
+  built its fixture on day 40 and stepped by 7, so `tickCards` — gated on
+  `day % 7 === 0` — never ran once. It was caught only because the assertion
+  happened to be `toBe(0)` rather than `toBeLessThan(before)`; the weaker
+  assertion would have gone green against a decay that never executed. **When a
+  tick is gated on an interval, the fixture has to sit on the boundary**, and
+  the assertion should name the endpoint rather than the direction.
+
+- **The possessions layer went green on its first run, all sixteen tests.**
+  Which is how instance 27 happened, so every claim was re-checked by
+  reinstating the defect it names — clean-money-only replaced with `spend`, the
+  estate term dropped, the resale share set to 1, the visible share dropped,
+  the newspaper item cut, the seizure left unmarked. Nine of ten went red.
+  **The tenth did not: `warrant-takes-it`.** The test called
+  `seizeOnePossession` directly, so deleting the call from the warrants stage
+  changed nothing it could see — the unit worked and nothing reached it. Two
+  more turned up the same way afterwards, both on the new tip's predicate,
+  which could be replaced with `true` because the bot that exercises tips is
+  handed a million dollars every morning. **A unit test and a wiring test are
+  different tests, and this project keeps writing the first and reporting the
+  second.**
+
+- **The scorecard's Pacing axis has a noise band wider than its own bar.**
+  Building the second half of the middle game moved Pacing from 3.8 to 2.6, and
+  the axis reported itself collapsed. It had not. Re-measured at 48 careers
+  instead of 12, the two builds read **3.4 against 3.4** — longest quiet stretch
+  406 days against 403 — so the entire drop was the random stream reshuffling,
+  which *every* change to this project does. `longestGap` is a mean of
+  **per-career maxima**, and at twelve samples that statistic moves further on
+  noise than most deliberate changes move it on purpose. The sample is now 48.
+  Note what the fix was not: the bar stayed at 3. A bar being read off an
+  instrument that cannot resolve it is an instrument problem, and the two hours
+  lost to a Capo shift of 16 → 10 that turned out to be 34 → 29 at 96 seeds were
+  the same lesson arriving in a different costume.
 
 - **`layLowHonesty` had a blind spot shaped like the bug it hunts.** It was
   written to stop any screen claiming that going dark stops everything, and it

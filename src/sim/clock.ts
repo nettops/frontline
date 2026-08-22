@@ -30,6 +30,7 @@ import { ageCapos, tickCapos } from './capos';
 import { tickPerception } from './perception';
 import { tickCivic } from './civic';
 import { tickHome } from './personal';
+import { tickCards } from './cards';
 import { tickWhispers } from './whispers';
 import { tickEvents } from './events';
 import { tickWorld } from './world';
@@ -113,6 +114,12 @@ export function advanceDay(state: GameState): void {
   //      so it can sit anywhere in the week. Here, beside the other opinions
   //      being formed about you.
   tickHome(state);
+  // 7a3. And the room slowly stops watching your hands.
+  //
+  //      Decay only — sitting down is a player action, never a tick. Touches
+  //      nothing but its own record, so it sits with the other quiet weekly
+  //      readings rather than anywhere load-bearing.
+  tickCards(state);
   // 7b. The people outside the family form an opinion.
   //
   //     After `tickTerritory` on purpose: a union boss counts the ground you

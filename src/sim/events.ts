@@ -22,7 +22,7 @@ import { addEvidence, addLog, pushEvent, weightedPick, withArticle } from './uti
 import { askable, money, oneOf, payable, shortOf } from './memo';
 import { GEN_DEFS, isGenerated, resolveGenerated } from './eventgen';
 import { GEN_CHANCE_PER_DAY } from '../config/eventgen';
-import { addNote, crewList, generateNpc } from './npc';
+import { addNote, creditOperation, crewList, generateNpc } from './npc';
 import { informFromMemory, remember } from './memory';
 import { recordTie } from './ties';
 import { earnDirty, refund, spend, spendSplit, totalFunds } from './economy';
@@ -70,6 +70,39 @@ import { houseDef, houseShort } from './houses';
 
 /** Base chance per day that *something* happens, before difficulty pressure. */
 const EVENT_CHANCE_PER_DAY = 0.16;
+
+/**
+ * Sending people instead of money, on the short-notice job.
+ *
+ * Kept beside the event rather than in `config/`, because every other number
+ * in this file is, and one balance constant living somewhere else is a thing
+ * the next person has to go and find.
+ */
+const SHORT_NOTICE = {
+  crewNeeded: 2,
+  /** Labour is worth less than a stake, and everybody in the room knows it. */
+  rewardShare: 0.55,
+  /** And nobody is smoothing anything over on the night. */
+  oddsPenalty: 0.08,
+  /*
+     The actual price, and it is not the money.
+
+     The first version of this locked the two men out as `busy` for three days,
+     which the soak in `sim.test.ts` correctly refused: `busy` means *on an
+     operation*, and a man marked busy with no operation behind him is a hole
+     in the model. That was the right refusal for a better reason than the one
+     it gave. Time was a weak price anyway. What a boss with no money is really
+     staking here is people, and round 15 was explicit about which of his
+     holdings he would have missed:
+
+       "What I would actually have lost was Little Sicily... and four men whose
+       loyalty readings I could recite from memory. The money and the rank I
+       would not have missed at all."
+
+     So a rushed job that goes wrong hurts whoever was standing in it.
+  */
+  hurtDays: 9,
+} as const;
 /** Never stack more than this many unanswered events. */
 const MAX_PENDING = 3;
 
@@ -105,6 +138,17 @@ export interface EventDef {
 
 function activeCrew(state: GameState): Npc[] {
   return crewList(state).filter((n) => n.status === 'active' || n.status === 'busy');
+}
+
+/**
+ * The people who could actually be sent somewhere tonight.
+ *
+ * Not `activeCrew`, which counts the busy ones — it is used to decide whether
+ * a memo is worth raising at all, and a man on a job is still a man you have.
+ * This is the narrower question: who is standing there right now.
+ */
+function freeCrew(state: GameState): Npc[] {
+  return crewList(state).filter((n) => n.status === 'active');
 }
 
 function pickWhere(
@@ -526,6 +570,34 @@ const EVENT_DEFS: EventDef[] = [
             disabledReason:
               totalFunds(state) < cost ? 'You cannot cover the up-front cost' : undefined,
             cost: cost,
+          },
+          {
+            /*
+               And the answer for a boss who has people but no money.
+
+               Round 15 spent 126 days watching every priced option grey out:
+               "the only clickable option was 'Leave them to it.' That is not a
+               decision, it is a cutscene with a button." This memo was the one
+               `obstacles.test.ts` caught — its free choice ran
+               `if (choiceId !== 'take') return;`, which is a button that does
+               nothing dressed as a decision.
+
+               A man who cannot put money in can put bodies in. It pays less,
+               because a stake is worth more than labour and everybody in the
+               room knows it, and it costs the two things an organization with
+               no money still has: people for a few days, and the attention
+               that comes of doing a rushed job with your own name on it.
+            */
+            id: 'send',
+            label: 'Send your own people instead',
+            hint:
+              `No money up front. A smaller cut, worse odds, and it is ` +
+              `${SHORT_NOTICE.crewNeeded} of your own people in the room`,
+            disabledReason:
+              freeCrew(state).length < SHORT_NOTICE.crewNeeded
+                ? `You would need ${SHORT_NOTICE.crewNeeded} people free tonight; ` +
+                  `you have ${freeCrew(state).length}`
+                : undefined,
           },
           { id: 'pass', label: 'Pass', hint: 'Nothing gained, nothing noticed' },
         ],
@@ -1876,17 +1948,73 @@ export function resolveEvent(
 
     // ------------------------------------------------------- opportunity --
     case 'opportunity_score': {
-      if (choiceId !== 'take') return;
       const cost = event.data.cost as number;
       const reward = event.data.reward as number;
       const heat = event.data.heat as number;
+
+      if (choiceId === 'send') {
+        const free = freeCrew(state);
+        if (free.length < SHORT_NOTICE.crewNeeded) {
+          addLog(state, 'There was nobody free to send, so it went to somebody else.', 'failure');
+          return;
+        }
+        const sent = free.slice(0, SHORT_NOTICE.crewNeeded);
+        const names = sent.map((n) => n.name).join(' and ');
+        const odds =
+          0.5 + state.player.attributes.streetSmarts * 0.012 - SHORT_NOTICE.oddsPenalty;
+
+        if (rng.chance(odds)) {
+          const paid = Math.round(reward * SHORT_NOTICE.rewardShare);
+          earnDirty(state, paid);
+          addHeat(state, heat * 0.6, 'street', 'short-notice job');
+          gainRespect(state, 3);
+          for (const npc of sent) {
+            creditOperation(npc, state.day, true, 'a short-notice job');
+            addNote(npc, state.day, 'Went out on nothing but your word, and it worked.', 'good');
+          }
+          addLog(state, `${names} went instead of the money. It paid ${money(paid)}.`, 'success');
+          return;
+        }
+
+        addHeat(state, heat, 'street', 'short-notice job went wrong');
+        addEvidence(state, {
+          day: state.day,
+          source: 'operation',
+          strength: 15,
+          npcIds: sent.map((n) => n.id),
+          detail: 'An unplanned job went wrong and left a great deal behind.',
+        });
+        // The price, paid by the man who was standing closest to it.
+        const hurt = sent[0];
+        hurt.status = 'injured';
+        hurt.unavailableUntilDay = state.day + SHORT_NOTICE.hurtDays;
+        for (const npc of sent) {
+          creditOperation(npc, state.day, false, 'a short-notice job');
+          addNote(
+            npc,
+            state.day,
+            npc === hurt
+              ? 'Was hurt on something nobody had planned properly.'
+              : 'Was sent out on something nobody had planned properly.',
+            'bad',
+          );
+        }
+        addLog(
+          state,
+          `It fell apart with ${names} standing in it. ${hurt.name} took the worst of it.`,
+          'failure',
+        );
+        return;
+      }
+
+      if (choiceId !== 'take') return;
       if (!spend(state, cost)) {
         addLog(state, 'The money was not there when it came to it.', 'failure');
         return;
       }
       // Deliberately close to a coin flip — street smarts tilt it slightly.
-      const chance = 0.5 + state.player.attributes.streetSmarts * 0.012;
-      if (rng.chance(chance)) {
+      const staked = 0.5 + state.player.attributes.streetSmarts * 0.012;
+      if (rng.chance(staked)) {
         earnDirty(state, reward);
         addHeat(state, heat * 0.6, 'street', 'short-notice job');
         gainRespect(state, 5);

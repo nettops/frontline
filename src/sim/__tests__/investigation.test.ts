@@ -10,6 +10,7 @@ import { describe, expect, it } from 'vitest';
 
 import { Rng } from '../rng';
 import { newGame } from '../state';
+import { buyPossession, heldPossessions } from '../possessions';
 import { runDaysSolvent } from './helpers';
 import { addEvidence } from '../util';
 import { crewList } from '../npc';
@@ -381,6 +382,39 @@ describe('what a case does to you', () => {
     }
     expect(stageIndex(investigation.stage)).toBeGreaterThanOrEqual(stageIndex('warrants'));
     expect(state.org.cash + state.org.dirtyCash).toBeLessThan(before);
+  });
+
+  /*
+     The wiring, not the unit.
+
+     `possessions.test.ts` proves `seizeOnePossession` takes the best thing in
+     the house, and that test stayed green when the call was cut out of the
+     warrants stage entirely — the unit worked and nothing reached it. That is
+     the project's recurring failure mode wearing its most ordinary costume, so
+     the claim is made here, where a case can actually be walked to a warrant.
+  */
+  it('takes the boss\'s own things when a warrant lands', () => {
+    const state = fresh();
+    state.org.cash = 500_000;
+    expect(buyPossession(state, new Rng(state.rng), 'roadster').ok).toBe(true);
+    expect(heldPossessions(state).length).toBe(1);
+
+    const investigation = openCaseFor(state, 'city_police', 70);
+    investigation.stage = 'witnesses';
+    investigation.stageSince = 0;
+    investigation.strength = 70;
+    state.day = 700;
+
+    const rng = new Rng(state.rng);
+    for (let i = 0; i < 40 && stageIndex(investigation.stage) < stageIndex('warrants'); i++) {
+      state.day += 7;
+      investigation.strength = 80;
+      tickInvestigations(state, rng);
+    }
+    expect(stageIndex(investigation.stage)).toBeGreaterThanOrEqual(stageIndex('warrants'));
+    expect(heldPossessions(state)).toEqual([]);
+    // And it is on the case record, not only in the log.
+    expect(investigation.history.some((h) => /italian car/i.test(h.text))).toBe(true);
   });
 
   it('reports the furthest any live case has got', () => {
