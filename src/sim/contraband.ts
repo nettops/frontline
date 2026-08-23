@@ -34,6 +34,7 @@ import {
   type SupplierDef,
   SUPPLIERS,
   SUPPLIER_BY_ID,
+  SUPPLY_TRUST,
   TRADES,
   TRADE_IDS,
   UNITS_PER_CREW,
@@ -201,6 +202,57 @@ export function unitValue(state: GameState, trade: TradeId): number {
   return Math.round(priced(state, TRADES[trade].unitValue) * activity(state));
 }
 
+/** What an arrangement thinks of you, 0..100. Zero for one you have not kept. */
+export function supplierTrust(state: GameState, supplierId: string): number {
+  return state.contraband?.supplierTrust?.[supplierId] ?? 0;
+}
+
+/**
+ * The chance this arrangement simply stops, this week.
+ *
+ * Trust only ever reduces it. At nothing the figure is exactly the config's
+ * own `failureChancePerWeek`, which is what every career sees today and what
+ * makes this change unable to move a probe — the bot runs pegged at heat 100
+ * and earns none. At full trust it is a fifth of that.
+ */
+export function walkChance(state: GameState, supplier: SupplierDef): number {
+  const trust = clamp(supplierTrust(state, supplier.id), 0, 100);
+  return supplier.failureChancePerWeek * (1 - (trust / 100) * SUPPLY_TRUST.maxReduction);
+}
+
+/**
+ * A week of dealing, and what it does to the relationship.
+ *
+ * Drifts toward a target rather than adding, which is the idiom `tickCivic`
+ * already uses for the other standing in this game. The target is how long you
+ * have kept them, gated on how much attention you are drawing: at or above
+ * `heatCeiling` it is nothing, so a loud career never gets the discount
+ * however long it has been buying.
+ */
+function tickSupplierTrust(state: GameState, supplierId: string, sinceDay: number): void {
+  const c = state.contraband;
+  if (!c) return;
+  if (!c.supplierTrust) c.supplierTrust = {};
+
+  const weeks = Math.max(0, (state.day - sinceDay) / 7);
+  const kept = Math.min(1, weeks / SUPPLY_TRUST.weeksToFull);
+  const quiet = clamp(1 - state.org.heat / SUPPLY_TRUST.heatCeiling, 0, 1);
+  const target = 100 * kept * quiet;
+
+  const now = c.supplierTrust[supplierId] ?? 0;
+  const step = Math.sign(target - now) * Math.min(SUPPLY_TRUST.driftPerWeek, Math.abs(target - now));
+  c.supplierTrust[supplierId] = clamp(now + step, 0, 100);
+}
+
+/** A raid makes them nervous, whatever the relationship was. */
+export function shakeSupplierTrust(state: GameState): void {
+  const c = state.contraband;
+  if (!c?.supplierTrust) return;
+  for (const id of Object.keys(c.supplierTrust)) {
+    c.supplierTrust[id] = clamp(c.supplierTrust[id] - SUPPLY_TRUST.seizureCost, 0, 100);
+  }
+}
+
 /** The arms arrangement, or null. Separate from the product one entirely. */
 export function armsSupplier(state: GameState): SupplierDef | null {
   const id = state.contraband?.armsSupplierId;
@@ -280,6 +332,10 @@ export function openSupply(state: GameState, supplierId: string): TradeAction {
 
   state.contraband.supplierId = supplierId;
   state.contraband.supplierSince = state.day;
+  // From nothing. The thing being rewarded is having kept them, so walking out
+  // and back in does not restore what you had.
+  if (!state.contraband.supplierTrust) state.contraband.supplierTrust = {};
+  state.contraband.supplierTrust[supplierId] = 0;
   addLog(state, `${supplier.name} will deal with you now.`, 'money');
   return { ok: true, message: supplier.name };
 }
@@ -320,6 +376,8 @@ export function openArmsSupply(state: GameState, supplierId: string): TradeActio
   }
   state.contraband.armsSupplierId = supplierId;
   state.contraband.armsSupplierSince = state.day;
+  if (!state.contraband.supplierTrust) state.contraband.supplierTrust = {};
+  state.contraband.supplierTrust[supplierId] = 0;
   addLog(state, `${supplier.name} will deal with you now.`, 'money');
   return { ok: true, message: supplier.name };
 }
@@ -435,7 +493,8 @@ export function tickContraband(state: GameState, rng: Rng): void {
   // --- the source ---------------------------------------------------------
   if (c.supplierId) {
     const supplier = SUPPLIER_BY_ID[c.supplierId];
-    if (supplier && rng.chance(supplier.failureChancePerWeek)) {
+    if (supplier) tickSupplierTrust(state, supplier.id, c.supplierSince);
+    if (supplier && rng.chance(walkChance(state, supplier))) {
       c.supplierId = null;
       addLog(
         state,
@@ -506,8 +565,10 @@ export function tickContraband(state: GameState, rng: Rng): void {
         detail: 'Crates arriving from outside the city, on somebody else’s manifest.',
       });
     }
-    // The arrangement can simply stop, the same way the product one can.
-    if (rng.chance(armsSource.failureChancePerWeek)) {
+    // The arrangement can simply stop, the same way the product one can — and
+    // it is held off by the same relationship.
+    tickSupplierTrust(state, armsSource.id, c.armsSupplierSince ?? state.day);
+    if (rng.chance(walkChance(state, armsSource))) {
       c.armsSupplierId = null;
       addLog(state, `${armsSource.name} has stopped taking your calls.`, 'failure');
     }
@@ -712,6 +773,17 @@ export function seizeStock(state: GameState, rng: Rng, agency: string): void {
       detail: `${agency} recovered goods from premises connected to the organization.`,
     });
     addLog(state, `${agency} took what was in the building. All of it was yours.`, 'failure');
+
+    /*
+       And the people who sold it to you read the same newspaper.
+
+       A customer whose stock keeps being carried out of a building is a
+       liability rather than a good account, so a raid costs the relationship
+       whatever it had built. This is where the trust discount is actually lost
+       in play — heat holds it at nothing while you are hot, and a raid takes
+       back what a quiet year earned.
+    */
+    shakeSupplierTrust(state);
   }
 
   if (c.workshops.length > 0 && rng.chance(SEIZURE.workshopChance)) {

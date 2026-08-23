@@ -8,6 +8,8 @@ import {
   armsSupplier,
   canOpenArmsSupply,
   canOpenSupply,
+  supplierTrust,
+  walkChance,
   dropArmsSupply,
   openArmsSupply,
   canSellArms,
@@ -321,6 +323,8 @@ function ArmsSupply() {
             <th className="num">Per crate</th>
             <th className="num">Ceiling</th>
             <th className="num">Retainer</th>
+            <th className="num">Standing</th>
+            <th className="num">They walk</th>
             <th />
           </tr>
         </thead>
@@ -341,6 +345,21 @@ function ArmsSupply() {
                 </td>
                 <td className="num mono">{def.ceiling}/wk</td>
                 <td className="num mono">{formatMoney(def.retainer)}</td>
+                <td style={{ minWidth: 90 }}>
+                  {mine ? (
+                    <>
+                      <Bar value={supplierTrust(state, def.id)} />
+                      <span className="tiny faint">{Math.round(supplierTrust(state, def.id))}/100</span>
+                    </>
+                  ) : (
+                    <span className="tiny faint">&mdash;</span>
+                  )}
+                </td>
+                <td className="num mono">
+                  {mine
+                    ? `${(walkChance(state, def) * 100).toFixed(1)}%`
+                    : `${(def.failureChancePerWeek * 100).toFixed(1)}%`}
+                </td>
                 <td>
                   <button
                     className={mine ? 'btn small danger' : 'btn small'}
@@ -394,6 +413,18 @@ function Supply() {
             <th className="num">Per unit</th>
             <th className="num">Ceiling</th>
             <th className="num">Retainer</th>
+            {/*
+               The relationship, where the player can see it.
+
+               `failureChancePerWeek` used to be a constant nobody could move —
+               dockside lasted a mean of 18.4 weeks and was gone inside a year
+               in 21 of 24 careers, for reasons the player never caused and
+               could never prevent. Trust is the lever, so it has to be on the
+               same row as the arrangement it protects, with the odds it is
+               buying stated as a number rather than implied.
+            */}
+            <th className="num">Standing</th>
+            <th className="num">They walk</th>
             <th />
           </tr>
         </thead>
@@ -411,6 +442,21 @@ function Supply() {
               <td className="num mono">{formatMoney(price)}</td>
               <td className="num mono">{def.ceiling}/wk</td>
               <td className="num mono">{formatMoney(def.retainer)}</td>
+              <td style={{ minWidth: 90 }}>
+                {current ? (
+                  <>
+                    <Bar value={supplierTrust(state, def.id)} />
+                    <span className="tiny faint">{Math.round(supplierTrust(state, def.id))}/100</span>
+                  </>
+                ) : (
+                  <span className="tiny faint">&mdash;</span>
+                )}
+              </td>
+              <td className="num mono">
+                {current
+                  ? `${(walkChance(state, def) * 100).toFixed(1)}%`
+                  : `${(def.failureChancePerWeek * 100).toFixed(1)}%`}
+              </td>
               <td>
                 {/*
                   Both halves of this were silent. Opening can fail on rank or
