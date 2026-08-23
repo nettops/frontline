@@ -1045,6 +1045,15 @@ export interface Contraband {
    */
   armsSupplierId?: string | null;
   armsSupplierSince?: number;
+  /**
+   * What each arrangement thinks of you, 0..100, keyed by supplier id.
+   *
+   * Optional so saves written while suppliers were a flat dice roll still
+   * load. Belongs to the arrangement rather than to you — dropping a supplier
+   * and coming back starts again, because the thing being rewarded is having
+   * kept them.
+   */
+  supplierTrust?: Record<string, number>;
   /** Machine shops. Capital with an address. */
   workshops: { territoryId: string; since: number }[];
   /** Districts each trade is running through. */

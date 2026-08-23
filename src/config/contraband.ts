@@ -202,6 +202,68 @@ export const SUPPLIERS: SupplierDef[] = [
   },
 ];
 
+/**
+ * What a supplier who has kept you thinks of you.
+ *
+ * `failureChancePerWeek` was a flat number and a flat number is not a
+ * relationship. Measured over 24 careers running each arrangement for a year:
+ * dockside lasted a mean of 18.4 weeks and was gone inside the year in 21 of
+ * 24 of them. Pay $40,000, buy for four months, and one morning a coin comes
+ * up. Nothing the player did caused it and nothing could have prevented it.
+ *
+ * ## Trust only ever helps, and that is a measurement rather than a mercy
+ *
+ * Three inputs were plotted and all three are degenerate under the probe's
+ * bot: volume runs 3% to 4% of the supplier's own ceiling, heat sits pegged at
+ * a median of 100, and time is the same for everybody. The bot cannot be told
+ * apart from any other career on any axis this reads.
+ *
+ * So trust reduces the chance they walk and can never raise it. A loud career
+ * earns none and behaves exactly as it does today — which is why no probe can
+ * move — and a careful one gets an arrangement that holds. The price of being
+ * loud is losing something good rather than being handed something worse, and
+ * once you have had it that is a real price.
+ *
+ * Accrual is time, because time is the one input the plot did not find
+ * degenerate, and heat is the gate on it. That makes the lever the thing a
+ * player controls and the bot never does: keeping your head down.
+ */
+export const SUPPLY_TRUST = {
+  /**
+   * Weeks of an unbroken, quiet arrangement to reach full trust.
+   *
+   * Sized against the measured lifetime, and the first attempt was not. At 26
+   * this sat *past* dockside's mean life of 18.4 weeks, so the reward was
+   * beyond the median arrangement and almost nobody would ever have collected
+   * it — a discount for surviving longer than most arrangements survive. The
+   * measured lives are 18.4, 26.9 and 28.8 weeks, so twelve puts full trust
+   * comfortably inside all three and lets it do the thing it is for, which is
+   * to extend them.
+   */
+  weeksToFull: 12,
+  /**
+   * The most trust can cut the weekly chance they walk.
+   *
+   * At 0.8 a maintained dockside arrangement runs at 1% a week rather than 5%,
+   * which turns a mean life of 18 weeks into something worth defending. Below
+   * about a half the discount is not worth protecting and the lever is
+   * decoration.
+   */
+  maxReduction: 0.8,
+  /** Heat at or above this holds trust at nothing, however long you have dealt. */
+  heatCeiling: 60,
+  /**
+   * Points trust moves toward its target each week.
+   *
+   * Ten rather than six because at six the drift, not the target, was the
+   * binding constraint — full trust took seventeen weeks however short
+   * `weeksToFull` was set, which quietly undid the retune above.
+   */
+  driftPerWeek: 10,
+  /** Trust lost outright when a raid takes stock off you. */
+  seizureCost: 35,
+} as const;
+
 export const SUPPLIER_BY_ID: Record<string, SupplierDef> = Object.fromEntries(
   SUPPLIERS.map((s) => [s.id, s]),
 );
