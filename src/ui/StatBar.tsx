@@ -8,9 +8,7 @@ import { isLayingLow } from '../sim/heat';
 import { activeWars, factionStrength } from '../sim/diplomacy';
 import { rivals } from '../sim/faction';
 import { districtOwner, territoryList } from '../sim/territory';
-import { SkinToggle } from './components';
 import { setTipsOff, tipsOff } from './tips';
-import { RANK_BY_ID } from '../config/economy';
 import { CAREER_STEPS, MODE_BY_ID, SIMULATION_STEPS } from '../config/modes';
 import { heatTier } from '../config/heat';
 import { houseShort } from '../sim/houses';
@@ -142,10 +140,27 @@ export default function StatBar({ onStep }: { onStep: (days: number) => void }) 
     <header className="statbar">
       <div className="statbar-identity">
         <div className="statbar-name">{watching ? 'The city' : player.name}</div>
-        <div className="statbar-rank">
-          {watching ? MODE_BY_ID[state.mode].name : RANK_BY_ID[player.rank].name}
-          {state.mode === 'sandbox' && ' · sandbox'}
-        </div>
+        {/*
+           No rank under the name. You are the boss of this outfit from the
+           first morning and a caption calling you a Street Criminal argues
+           with that every time you look at the screen.
+
+           The line itself stays for the two things it says that are not rank:
+           which mode you are watching in Simulation, where there is no player
+           to have a rank, and the sandbox marker. Rendered only when it has
+           something to say, so career mode gets no empty row.
+
+           The simulation is untouched. Rank still gates operations, the trade,
+           the crew cap and the top role you can promote to — see the
+           Advancement panel under Yourself, which is now the only place it is
+           named.
+        */}
+        {(watching || state.mode === 'sandbox') && (
+          <div className="statbar-rank">
+            {watching ? MODE_BY_ID[state.mode].name : ''}
+            {state.mode === 'sandbox' && (watching ? ' · sandbox' : 'sandbox')}
+          </div>
+        )}
       </div>
 
       {watching ? (
@@ -208,14 +223,7 @@ export default function StatBar({ onStep }: { onStep: (days: number) => void }) 
           sound
         </button>
         {/*
-          Sits beside sound because it is the same kind of setting: a thing you
-          set once, on a whim, that the simulation never hears about. There is
-          no settings screen in this game and adding one for two booleans would
-          be a worse interface than two buttons.
-        */}
-        <SkinToggle />
-        {/*
-          Unlike sound and the skin this one is per-save, because what it
+          Unlike sound this one is per-save, because what it
           really switches is a body of advice the save is halfway through —
           turning tips on in a fresh career and off in a five-year-old one is
           the behaviour you want, not a preference to be argued with.

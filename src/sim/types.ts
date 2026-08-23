@@ -17,6 +17,7 @@ import type { TradeId } from '../config/contraband';
 import type { CyclePhaseId } from '../config/market';
 import type { ApproachId } from '../config/operations';
 import type { HeatChannel } from '../config/heat';
+import type { NationalityId } from '../config/nationalities';
 
 export type Id = string;
 
@@ -45,6 +46,16 @@ export type Attributes = Record<AttributeId, number>;
 
 export interface Player {
   name: string;
+  /**
+   * Which community you came up in.
+   *
+   * Optional, with a lazy default, because every save written before the
+   * picker existed has to load — the same idiom the nine other optional
+   * fields on this state use. It changes names and nothing else: there is no
+   * attribute, no bonus, and no rule anywhere that reads this and decides you
+   * are better or worse at something.
+   */
+  nationality?: NationalityId;
   rank: RankId;
   attributes: Attributes;
   /** Progress toward the next point in each attribute, 0..1. */
@@ -72,6 +83,26 @@ export interface Org {
    * save written before this loads with nothing owed, which is correct.
    */
   wagesOwed?: number;
+  /**
+   * A rival family that owns a share of everything you earn.
+   *
+   * Optional with no initialiser, like the nine other late additions to this
+   * state — most careers never take the deal and a save written before it
+   * existed has to load. See `config/partner.ts` for why it is equity from a
+   * rival rather than a loan from a stranger.
+   */
+  partner?: {
+    factionId: FactionId;
+    share: number;
+    /** What they put in, which is what the buy-out is priced off. */
+    stake: number;
+    sinceDay: number;
+    /** Everything they have taken since, for the panel to report. */
+    taken: number;
+  };
+  /** Day an offer was last turned down, so they do not ask every morning. */
+  partnerRefusedDay?: number;
+
   /** Laundered, freely spendable. */
   cash: number;
   /**
@@ -362,6 +393,20 @@ export interface OpsBoard {
   crew: number;
   /** Times each job has been run, keyed by `OperationDef.id`. */
   opsBy: Record<string, number>;
+
+  /*
+     Who you know, which is the second axis a job can open on.
+
+     Rank is a clean-money threshold wearing a title, and F15 has 34 of 36
+     careers held by that line — so a board gated on rank alone stops moving
+     around day 90 and stays stopped. These are the facts a job can ask about
+     instead. Everything here is already kept somewhere else; the board just
+     carries it so `opens.met` stays a pure function of one argument.
+  */
+  /** Favours each civic figure currently owes, keyed by their id. */
+  favoursOwed: Record<string, number>;
+  /** The best trust any surviving rival family holds toward the player. */
+  bestRivalTrust: number;
 }
 
 export interface OperationDef {
@@ -987,9 +1032,19 @@ export interface Business {
 export interface Contraband {
   /** Units on hand, by trade. */
   stock: Record<TradeId, number>;
-  /** The product arrangement, or null. Arms are made, not bought. */
+  /** The product arrangement, or null. */
   supplierId: string | null;
   supplierSince: number;
+  /**
+   * The arms arrangement, or null. Optional so saves written while arms were
+   * only ever manufactured still load — see HANDOFF §2.
+   *
+   * Arms are still *made* in a workshop, and that is still the better way to
+   * run the trade. This is the second door, added because the first costs
+   * $120,000 and under one career in ten ever holds that.
+   */
+  armsSupplierId?: string | null;
+  armsSupplierSince?: number;
   /** Machine shops. Capital with an address. */
   workshops: { territoryId: string; since: number }[];
   /** Districts each trade is running through. */

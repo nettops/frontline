@@ -5,7 +5,11 @@ import {
   armsSaleValue,
   buildWorkshop,
   canBuildWorkshop,
+  armsSupplier,
+  canOpenArmsSupply,
   canOpenSupply,
+  dropArmsSupply,
+  openArmsSupply,
   canSellArms,
   closeRoute,
   dropSupply,
@@ -20,7 +24,15 @@ import {
 import { people, prosperity, territoryDef } from '../../sim/territory';
 import { formatMoney } from '../../sim/util';
 import { rivals } from '../../sim/faction';
-import { TRADES, TRADE_IDS, WORKSHOP, ARMS_SALE, type TradeId } from '../../config/contraband';
+import {
+  ARMS_SALE,
+  ARMS_SUPPLIERS,
+  TRADES,
+  TRADE_IDS,
+  WORKSHOP,
+  type TradeId,
+} from '../../config/contraband';
+import { priced } from '../../sim/market';
 import { RANK_BY_ID } from '../../config/economy';
 import { CONTROL_LABEL } from '../../config/territories';
 import { houseName, houseShort } from '../../sim/houses';
@@ -171,7 +183,20 @@ export default function ContrabandPanel() {
             </Panel>
           </div>
 
-          {tab === 'product' ? <Supply /> : <Workshops />}
+          {tab === 'product' ? (
+            <Supply />
+          ) : (
+            <>
+              {/*
+                 Both doors into the arms trade, in the order a career meets
+                 them. A workshop is $120,000 and measured peak funds run p90
+                 $94,345, so for most careers the source above is the only one
+                 of these two that will ever be a real choice.
+              */}
+              <ArmsSupply />
+              <Workshops />
+            </>
+          )}
 
           <Panel title="Where it runs">
             <p className="faint" style={{ marginTop: 0 }}>
@@ -278,6 +303,74 @@ function districtShare(
 }
 
 /** Where product comes from, and what the waterfront is doing to the price. */
+/** Somewhere to buy finished crates, beside the shops that make them. */
+function ArmsSupply() {
+  const state = useGame();
+  const current = armsSupplier(state);
+  const [message, setMessage] = useState<string | null>(null);
+
+  return (
+    <Panel title="Buying them in">
+      <p className="dim" style={{ marginTop: 0 }}>
+        Dearer per crate than making them, and there is no building for anybody to raid.
+      </p>
+      <table className="table">
+        <thead>
+          <tr>
+            <th>Arrangement</th>
+            <th className="num">Per crate</th>
+            <th className="num">Ceiling</th>
+            <th className="num">Retainer</th>
+            <th />
+          </tr>
+        </thead>
+        <tbody>
+          {ARMS_SUPPLIERS.map((def) => {
+            const mine = current?.id === def.id;
+            const check = canOpenArmsSupply(state, def.id);
+            return (
+              <tr key={def.id}>
+                <td>
+                  <div className="name-cell">
+                    <span className={mine ? 'name-main brass' : 'name-main'}>{def.name}</span>
+                    <span className="name-sub">{def.blurb}</span>
+                  </div>
+                </td>
+                <td className="num mono">
+                  {formatMoney(Math.round(priced(state, TRADES.arms.unitCost) * def.priceMultiplier))}
+                </td>
+                <td className="num mono">{def.ceiling}/wk</td>
+                <td className="num mono">{formatMoney(def.retainer)}</td>
+                <td>
+                  <button
+                    className={mine ? 'btn small danger' : 'btn small'}
+                    disabled={!mine && !check.ok}
+                    title={mine ? 'End this arrangement.' : check.message}
+                    onClick={() => {
+                      const result = mutate(
+                        (s) => (mine ? dropArmsSupply(s) : openArmsSupply(s, def.id)),
+                        true,
+                      );
+                      if (result) setMessage(result.message);
+                    }}
+                  >
+                    {mine ? 'End it' : 'Open it'}
+                  </button>
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+      {message && (
+        <p className="dim" style={{ marginTop: 12 }}>
+          {message}
+        </p>
+      )}
+    </Panel>
+  );
+}
+
 function Supply() {
   const state = useGame();
   const suppliers = readSuppliers(state);

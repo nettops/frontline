@@ -15,6 +15,7 @@ import { remember } from './memory';
 import { retainLawyer, weeklyLegalCost } from './investigation';
 import { repaymentAgainst } from './market';
 import { trainAttribute } from './player';
+import { takeCut } from './partner';
 import { LAWYER_BY_LEVEL } from '../config/lawEnforcement';
 import {
   ARREARS_CLEARED_LOYALTY,
@@ -144,7 +145,29 @@ export function tickHoldings(state: GameState): void {
   state.org.holdings = held * (1 + HOLDINGS.yieldPerWeek);
 }
 
+/**
+ * Criminal income, less anybody's share of it.
+ *
+ * The partner's cut is taken here rather than at each of the eight call sites,
+ * because this is the funnel every dirty dollar already passes through and one
+ * guard in a shared function cannot be forgotten by the ninth caller.
+ *
+ * Use `refundDirty` for money that is being handed back rather than earned.
+ */
 export function earnDirty(state: GameState, amount: number): void {
+  if (amount <= 0) return;
+  state.org.dirtyCash += amount - takeCut(state, amount);
+}
+
+/**
+ * Money returning to the drawer that was never income.
+ *
+ * A cancelled job hands back most of its outlay, and a partner taking a share
+ * of your own returned stake is not a fee, it is a leak — and one that only
+ * ever shows up on a week that is already going badly. Same effect as
+ * `earnDirty` in every other respect.
+ */
+export function refundDirty(state: GameState, amount: number): void {
   if (amount <= 0) return;
   state.org.dirtyCash += amount;
 }

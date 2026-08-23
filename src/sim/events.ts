@@ -60,6 +60,7 @@ import {
 } from './diplomacy';
 import { activeCases, hasContact } from './investigation';
 import { borrow, loans, priced } from './market';
+import { partnerOffer, refusePartner, takePartner } from './partner';
 import { FEAR, ROLE_LABEL } from '../config/economy';
 import { type FactionId } from '../config/factions';
 import { AGENCY_BY_ID, CONTACT } from '../config/lawEnforcement';
@@ -819,6 +820,34 @@ const EVENT_DEFS: EventDef[] = [
       };
     },
   },
+
+  /*
+     PARKED: the partner offer is built and not wired.
+
+     `sim/partner.ts`, `config/partner.ts` and fourteen tests are green, and
+     the mechanism does what it says. The event definition that put it in front
+     of a player has been taken back out, because it could not be shipped
+     without pushing a pre-committed axis under its bar.
+
+     Measured on `scorecard.probe`, 48 careers, against a 3.4 baseline and a
+     bar of 3:
+
+         weight 22, share 18%, permanent .......... Pacing 2.5, quiet 535 days
+         share 12%, total take capped at 3x ....... Pacing 2.6, quiet 536 days
+         no cut at all on jobs under $800 ......... Pacing 2.7, quiet 500 days
+         weight dropped 22 -> 4 ................... Pacing 2.8, quiet 480 days
+
+     Four changes, four readings inside 0.3 of each other, none of them over
+     the bar. That drift is the shape of stream noise rather than of an effect
+     being tuned, and the honest reading is that the cause was never isolated.
+     Two things are known and neither is the whole story: `dailyMemo` fills one
+     slot a day and a new definition costs an authored one, and the probe's own
+     bot signs every deal it is offered and never buys out — so it measures the
+     worst possible use of the feature and none of the good ones (F7).
+
+     What it would take to wire this up: a bot that can decline, and can buy
+     out when it can afford to. Until then the reading is not about the design.
+  */
 
   // -- territory ----------------------------------------------------------
   {
@@ -2121,6 +2150,26 @@ export function resolveEvent(
           'neutral',
         );
       }
+      return;
+    }
+
+    /*
+       Kept while the definition above is parked, so re-wiring is one edit
+       rather than two. Unreachable until a `partner_offer` def exists again.
+    */
+    case 'partner_offer': {
+      /*
+         Re-read rather than carried on the event, because the offer is a
+         function of the day it is answered. A player who sits on this for a
+         week and earns their way out of the hole in the meantime should not
+         be able to sign a deal they no longer qualify for.
+      */
+      const offer = partnerOffer(state);
+      if (choiceId !== 'sign' || !offer) {
+        refusePartner(state);
+        return;
+      }
+      takePartner(state, offer);
       return;
     }
 

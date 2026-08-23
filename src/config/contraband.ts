@@ -114,7 +114,7 @@ export const TRADES: Record<TradeId, TradeDef> = {
     name: 'The arms trade',
     unit: ['crate', 'crates'],
     blurb:
-      'A machine shop that makes parts nobody asks about, and a way out of the city for what it produces. Lower volume, far higher value, and the only trade whose customers can point it back at you.',
+      'A machine shop that makes parts nobody asks about, or a freight agent who will sell you crates already full. Lower volume, far higher value, and the only trade whose customers can point it back at you.',
     minRank: 'capo',
     minControl: 'control',
 
@@ -207,6 +207,63 @@ export const SUPPLIER_BY_ID: Record<string, SupplierDef> = Object.fromEntries(
 );
 
 /**
+ * Somewhere to buy finished crates, instead of building somewhere to make them.
+ *
+ * Arms are still *made* in a workshop and that is still the good way to run the
+ * trade — the structural difference the header defends is intact. What this
+ * adds is a second door, because the first one is priced for a career that has
+ * already won. Measured peak funds over 24 careers that play: p75 $69,175,
+ * p90 $94,345. A workshop is $120,000, and the trade wants Capo before that.
+ * Under one career in ten can ever open it.
+ *
+ * The fork, and neither side dominates:
+ *
+ *     making   $120,000 up front, $5,200 a crate, and a building with an
+ *              address a warrant can name
+ *     buying   a small retainer, a much worse unit price, and nothing anybody
+ *              can raid
+ *
+ * Cheap in and thin margins against dear in and fat margins. A buyer gets into
+ * the trade in the middle of a career and never gets rich on it; a maker needs
+ * the fortune first and then owns the whole spread. The exposure numbers say
+ * the same thing from the other side — a workshop is a fixed address and this
+ * is not, which is the one respect in which buying is strictly better.
+ */
+export const ARMS_SUPPLIERS: SupplierDef[] = [
+  {
+    id: 'crated',
+    name: 'A freight agent with a loose manifest',
+    blurb:
+      'Sells finished crates by the pallet and asks nothing. Dear per unit, nothing to raid, and gone the moment it stops being worth their while.',
+    /*
+       Above 1 on purpose. `unitCost` multiplies the trade's own figure, so a
+       multiplier under one would make buying cheaper than making in every
+       respect and no career would ever build a workshop again.
+    */
+    priceMultiplier: 1.55,
+    ceiling: 14,
+    retainer: 26_000,
+    failureChancePerWeek: 0.045,
+    exposure: 0.9,
+  },
+  {
+    id: 'surplus',
+    name: 'A quartermaster with a paperwork problem',
+    blurb:
+      'Crates that were written off somewhere else. Steadier and dearer, and every one of them is on a list in a filing cabinet.',
+    priceMultiplier: 1.85,
+    ceiling: 22,
+    retainer: 48_000,
+    failureChancePerWeek: 0.02,
+    exposure: 1.6,
+  },
+];
+
+export const ARMS_SUPPLIER_BY_ID: Record<string, SupplierDef> = Object.fromEntries(
+  ARMS_SUPPLIERS.map((s) => [s.id, s]),
+);
+
+/**
  * Coming in through the port.
  *
  * The waterfront supplier is cheapest and sits on ground somebody else owns,
@@ -287,6 +344,41 @@ export const ARMS_SALE = {
   /** Evidence: a crate with your name on it in somebody else's hands. */
   evidence: 12,
 };
+
+/**
+ * Crates you did not sell.
+ *
+ * `ARMS_SALE` above gives a buyer `strengthPerCrate` of strength and says, in
+ * as many words, that a player funding a war with arms sales is arming the
+ * people they will fight. That was only half a mechanic: keeping the crates
+ * did nothing. `playerStrength` counts bodies and their quality and reads no
+ * stock at all, so an armoury was inventory waiting for a buyer.
+ *
+ * The rate is deliberately the same number a buyer gets. A crate cannot be
+ * worth one thing in a rival's hands and another in yours, and pinning the two
+ * together is what makes the sale a genuine trade rather than free money —
+ * every crate sold moves the same quantity from your column to theirs.
+ *
+ * Capped, and the cap is the important part. A stockpile is meant to make a
+ * crew harder to beat, not to replace one; without a ceiling the answer to
+ * every war is a warehouse. `armsStrength` also returns nothing when there is
+ * nobody left to carry any of it, which is enforced where strength is summed
+ * rather than here.
+ */
+export const ARMED = {
+  /** Strength per crate on hand. Same rate a buyer gets — see above. */
+  strengthPerCrate: ARMS_SALE.strengthPerCrate,
+  /**
+   * The most an armoury can ever be worth.
+   *
+   * `playerStrength` is clamped to 100 and a serious crew sits well under it,
+   * so this is a meaningful supplement without being the whole answer. Forty
+   * crates reaches the ceiling; everything past that is stock for selling.
+   */
+  maxStrength: 22,
+  /** Crates burned per week, per war being fought. */
+  spentPerWarWeek: 3,
+} as const;
 
 // ------------------------------------------------------------- pressure ---
 

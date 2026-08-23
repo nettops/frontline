@@ -18,7 +18,7 @@ import type {
 } from './types';
 import { addEvidence, addLog, nextId, weightedPick } from './util';
 import { addHeat, heatSuccessPenalty, isLayingLow } from './heat';
-import { earnDirty, spend, totalFunds } from './economy';
+import { earnDirty, refundDirty, spend, totalFunds } from './economy';
 import { ownedBusinesses } from './business';
 import {
   addNote,
@@ -85,6 +85,9 @@ import {
 import { LAWYER_BY_LEVEL } from '../config/lawEnforcement';
 import { CANCEL_OPERATION_HEAT } from '../config/heat';
 import { ATTRIBUTE_MAX, FEAR, ROLE_ORDER, rankIndex } from '../config/economy';
+import { civicRoster } from './civic';
+import { bond } from './diplomacy';
+import { rivals } from './faction';
 import { FAMILIARITY_PER_OPERATION, BEHAVIOUR } from '../config/npcs';
 import { DIFFICULTY_BY_ID } from '../config/difficulty';
 
@@ -100,12 +103,32 @@ function opsBoard(state: GameState): OpsBoard {
   for (const r of state.operationHistory) {
     opsBy[r.defId] = (opsBy[r.defId] ?? 0) + 1;
   }
+  /*
+     Who you know, gathered here so `opens.met` stays a pure function of the
+     board. Both are read straight off state that already exists — a favour a
+     figure owes you, and the warmest a surviving rival feels toward you.
+
+     `owed` rather than `standing` for the civic half, and that is a design
+     decision rather than a convenience: standing drifts toward a target every
+     week in `tickCivic`, so a job gated on it would open and shut with nothing
+     the player did. A favour owed is the durable thing, and it is capped by
+     `CIVIC.maxOwed`, so this cannot become free.
+  */
+  const favoursOwed: Record<string, number> = {};
+  for (const f of civicRoster(state)) favoursOwed[f.id] = f.owed;
+
+  const bestRivalTrust = rivals(state)
+    .filter((f) => f.strength > 0)
+    .reduce((best, f) => Math.max(best, bond(state, 'player', f.id).trust), -100);
+
   return {
     rank: rankIndex(state.player.rank),
     districtsHeld: controlledTerritories(state).length,
     fronts: ownedBusinesses(state).length,
     crew: crewList(state).filter((n) => n.status !== 'dead').length,
     opsBy,
+    favoursOwed,
+    bestRivalTrust,
   };
 }
 
@@ -498,7 +521,10 @@ export function cancelOperation(state: GameState, opId: string): void {
       npc.unavailableUntilDay = null;
     }
   }
-  earnDirty(state, Math.round(op.investment * 0.7));
+  // Handed back, not earned — see `refundDirty`. A partner taking a share of
+  // your own returned stake is a leak, and one that only shows up on a week
+  // that is already going badly.
+  refundDirty(state, Math.round(op.investment * 0.7));
   delete state.activeOperations[opId];
   addHeat(state, CANCEL_OPERATION_HEAT, 'street', 'aborted job');
   addLog(state, `${def?.name ?? 'An operation'} was called off. Not cleanly.`, 'neutral');
@@ -664,7 +690,8 @@ function resolveOperation(state: GameState, rng: Rng, op: ActiveOperation): void
     );
   } else {
     const recovered = Math.round(op.investment * FAILURE_INVESTMENT_RECOVERY);
-    earnDirty(state, recovered);
+    // Recovered outlay, not takings. See the note on the cancel path above.
+    refundDirty(state, recovered);
     const heat =
       def.heatOnFailure *
       approach.heat *

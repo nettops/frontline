@@ -23,6 +23,8 @@
 import { addLog } from './util';
 import { activeCases } from './investigation';
 import { clamp } from './rng';
+import { priced } from './market';
+import { earnDirty } from './economy';
 import { crewList } from './npc';
 import { territoryList, territoryDef, adjustSentiment, playerInfluence } from './territory';
 import {
@@ -30,6 +32,7 @@ import {
   CIVIC_ATTRIBUTE,
   CIVIC_BY_ID,
   CIVIC_FIGURES,
+  CIVIC_WORK,
   FAVOUR_EFFECT,
   type CivicFigureDef,
 } from '../config/civic';
@@ -48,6 +51,11 @@ function roster(state: GameState): CivicStanding[] {
     }));
   }
   return state.civic;
+}
+
+/** Everybody, for callers that need the whole set rather than one figure. */
+export function civicRoster(state: GameState): CivicStanding[] {
+  return roster(state);
 }
 
 export function figure(state: GameState, id: string): CivicStanding {
@@ -243,6 +251,46 @@ export function spendFavour(state: GameState, id: string, target?: string): Favo
   held.owed -= 1;
   addLog(state, done.message, 'crew');
   return done;
+}
+
+/**
+ * Whether they will find you work, and why not.
+ *
+ * Same three gates as calling in the favour for anything else — they must know
+ * you, take meetings at your level, and actually owe you one. Deliberately not
+ * a looser set: this is a second use of one currency, not a cheaper one.
+ */
+export function canAskForWork(state: GameState, id: string): FavourCheck {
+  return canSpendFavour(state, id);
+}
+
+/**
+ * Call in a favour as money instead of as protection.
+ *
+ * Spends the favour and takes `CIVIC_WORK.standingCost` off the relationship,
+ * which is the actual price — see the note in `config/civic.ts` for why the
+ * favour alone is not one. The money is dirty: it is a job, not a gift.
+ */
+export function askForWork(state: GameState, id: string): FavourResult {
+  const check = canAskForWork(state, id);
+  if (!check.ok) return { ok: false, message: check.reason ?? 'No.' };
+
+  const def = CIVIC_BY_ID[id];
+  const held = figure(state, id);
+
+  const pay = Math.round(
+    priced(state, CIVIC_WORK.basePay + def.owesAbove * CIVIC_WORK.payPerOwesAbove),
+  );
+
+  held.owed -= 1;
+  held.standing = clamp(held.standing - CIVIC_WORK.standingCost, 0, 100);
+  earnDirty(state, pay);
+
+  const message =
+    `${def.title} put something your way. $${pay.toLocaleString('en-US')}, and they ` +
+    `will remember that you asked for it.`;
+  addLog(state, message, 'money');
+  return { ok: true, message };
 }
 
 function apply(state: GameState, def: CivicFigureDef, target?: string): FavourResult {

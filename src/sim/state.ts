@@ -16,6 +16,11 @@ import type {
   GameState,
   Territory,
 } from './types';
+import {
+  DEFAULT_NATIONALITY,
+  nationalityDef,
+  type NationalityId,
+} from '../config/nationalities';
 import { CHARACTER_JITTER } from '../config/houses';
 import {
   HOME_TERRITORY,
@@ -86,6 +91,8 @@ export interface NewGameOptions {
   sandboxStart?: string;
   /** Omit for a random world. Pass one to reproduce a specific game. */
   seed?: number;
+  /** Which community you came up in. Defaults to Italian. Names only. */
+  nationality?: NationalityId;
 }
 
 /**
@@ -215,6 +222,26 @@ export function newGame(opts: NewGameOptions): GameState {
       ? (SANDBOX_START_BY_ID[opts.sandboxStart ?? ''] ?? SANDBOX_STARTS[0])
       : null;
 
+  /*
+     Your own name, when you did not give one.
+
+     "Nobody" was a decent joke and a poor introduction: the first thing the
+     game says about you should be that you are from somewhere. Drawn from the
+     chosen community instead, so an Irish start opens on a Coughlin.
+
+     Built with `stableNoise` rather than off `rng`, so naming you does not
+     consume draws the city is about to be built from. Two calls into the same
+     stream would have quietly re-rolled every founding boss.
+  */
+  const nationality = opts.nationality ?? DEFAULT_NATIONALITY;
+  const pool = nationalityDef(nationality);
+  const pickStable = (list: string[], key: string) =>
+    list[Math.floor(Rng.stableNoise(`${key}:${seed}`, 0) * list.length)];
+  const defaultName =
+    mode === 'simulation'
+      ? 'Nobody at all'
+      : `${pickStable(pool.first, 'boss:first')} ${pickStable(pool.last, 'boss:last')}`;
+
   const attributes = { ...STARTING_ATTRIBUTES };
   if (start) {
     for (const key of Object.keys(attributes) as (keyof Attributes)[]) {
@@ -240,7 +267,8 @@ export function newGame(opts: NewGameOptions): GameState {
     gameOver: null,
 
     player: {
-      name: opts.name.trim() || (mode === 'simulation' ? 'Nobody at all' : 'Nobody'),
+      name: opts.name.trim() || defaultName,
+      nationality,
       rank: start?.rank ?? 'street_criminal',
       attributes,
       attributeProgress: zeroAttributes(),

@@ -145,9 +145,28 @@ describe('through heatScale, as the game calls it', () => {
  * they must not become is the same wall a fortnight later.
  */
 describe('the behavioural routes', () => {
-  const BEHAVIOURAL = OPERATIONS.filter((o) => o.opens);
+  /*
+     Two kinds of `opens` route now, and they answer different questions.
 
-  const ZERO: OpsBoard = { rank: 0, districtsHeld: 0, fronts: 0, crew: 0, opsBy: {} };
+     The behavioural ones are a way past a **rank** the player cannot afford
+     yet — do the work, skip the promotion. The connected ones are a way past
+     rank entirely: they sit at `crime_lord` and open on who you know, so the
+     board differs between two bosses on the same rung. Splitting them keeps
+     the coverage assertion below meaningful; lumped together it would have
+     been satisfied by any ten jobs with a clause on them.
+  */
+  const BEHAVIOURAL = OPERATIONS.filter((o) => o.opens && o.minRank === 'crew_leader');
+  const CONNECTED = OPERATIONS.filter((o) => o.opens && o.minRank === 'crime_lord');
+
+  const ZERO: OpsBoard = {
+    rank: 0,
+    districtsHeld: 0,
+    fronts: 0,
+    crew: 0,
+    opsBy: {},
+    favoursOwed: {},
+    bestRivalTrust: -100,
+  };
   const MINIMAL: Record<string, OpsBoard> = {
     backroom_game: { ...ZERO, districtsHeld: 1, opsBy: { protection_racket: 4 } },
     counterfeit_run: { ...ZERO, fronts: 1, opsBy: { fence_goods: 5 } },
@@ -155,7 +174,17 @@ describe('the behavioural routes', () => {
     debt_collection: { ...ZERO, crew: 4, opsBy: { freelance_muscle: 6 } },
     union_local: { ...ZERO, districtsHeld: 2, opsBy: { protection_racket: 3 } },
     rent_the_crew: { ...ZERO, crew: 6, opsBy: { freelance_muscle: 4 } },
+
+    // The connected four. Each is one relationship and nothing else, which is
+    // the claim `connections.test.ts` makes and this file re-checks from the
+    // config side.
+    fix_a_case: { ...ZERO, favoursOwed: { judge: 1 } },
+    union_walkout: { ...ZERO, favoursOwed: { union: 1 } },
+    police_escort: { ...ZERO, favoursOwed: { captain: 1 } },
+    joint_venture: { ...ZERO, bestRivalTrust: 60 },
   };
+
+  const ROUTED = [...BEHAVIOURAL, ...CONNECTED];
 
   function boardSatisfying(op: (typeof OPERATIONS)[number]): OpsBoard {
     const board = MINIMAL[op.id];
@@ -172,14 +201,21 @@ describe('the behavioural routes', () => {
     expect(BEHAVIOURAL.map((o) => o.id).sort()).toEqual(gated.map((o) => o.id).sort());
   });
 
+  it('accounts for every routed job, of either kind', () => {
+    // The loud failure this file is built around: a new route with no minimal
+    // board written for it throws rather than being silently untested.
+    const withClause = OPERATIONS.filter((o) => o.opens).map((o) => o.id).sort();
+    expect(ROUTED.map((o) => o.id).sort()).toEqual(withClause);
+  });
+
   it('says what it wants in words as well as in code', () => {
-    for (const op of BEHAVIOURAL) {
+    for (const op of ROUTED) {
       expect(op.opens!.need.length, `${op.id} has no readable condition`).toBeGreaterThan(10);
     }
   });
 
   it('opens on nothing when you have done nothing', () => {
-    for (const op of BEHAVIOURAL) {
+    for (const op of ROUTED) {
       expect(op.opens!.met(ZERO), `${op.id} opens for free`).toBe(false);
     }
   });
@@ -187,7 +223,7 @@ describe('the behavioural routes', () => {
   it('each condition is satisfied by the board written for it', () => {
     // Guards the guard below: a MINIMAL entry that does not actually satisfy
     // its own job would make the separation test pass by testing nothing.
-    for (const op of BEHAVIOURAL) {
+    for (const op of ROUTED) {
       expect(op.opens!.met(boardSatisfying(op)), `${op.id}'s own board does not open it`).toBe(
         true,
       );
@@ -202,7 +238,7 @@ describe('the behavioural routes', () => {
        specific enough that a board satisfying one leaves most of the others
        shut.
     */
-    for (const op of BEHAVIOURAL) {
+    for (const op of ROUTED) {
       const board = boardSatisfying(op);
       const alsoOpen = BEHAVIOURAL.filter((o) => o.id !== op.id && o.opens!.met(board));
       expect(

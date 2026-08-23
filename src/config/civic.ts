@@ -259,4 +259,32 @@ export const FAVOUR_EFFECT = {
  *
  * One place, so the gate cannot drift away from the thing the panel says.
  */
+/**
+ * Asking the people who owe you for money rather than for protection.
+ *
+ * A second thing to spend a favour on, added because the first one was not
+ * being spent at all. Measured over 36 careers: favours are granted about six
+ * times in 300 days and **held at six** — identical numbers, so across every
+ * career in the sample not one favour was ever called in. The network accrues
+ * to near its ceiling and sits there.
+ *
+ * That is what makes this additive rather than a new system. The currency
+ * already exists and is idle; this is somewhere to spend it.
+ *
+ * The price is standing, not the favour, and that distinction is the whole
+ * design. Because `owed` pegs at `maxOwed` and regenerates, consuming one
+ * costs nothing anybody feels — so the trade has to be against the
+ * relationship itself. Standing at day 300 runs p25 4, median 24, p75 34, so
+ * nine points is better than a third of a typical relationship and the choice
+ * between money tonight and the judge next spring is a real one.
+ */
+export const CIVIC_WORK = {
+  /** Base payout before the price index and the figure's own weight. */
+  basePay: 5_000,
+  /** Added per point of their `owesAbove`, so bigger people bring bigger work. */
+  payPerOwesAbove: 130,
+  /** What it costs you with them. See the distribution above. */
+  standingCost: 9,
+} as const;
+
 export const CIVIC_ATTRIBUTE: AttributeId = 'influence';
