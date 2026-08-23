@@ -29,6 +29,9 @@ import {
   CONTROL_THROUGHPUT,
   PORT,
   SEIZURE,
+  ARMED,
+  ARMS_SUPPLIER_BY_ID,
+  type SupplierDef,
   SUPPLIERS,
   SUPPLIER_BY_ID,
   TRADES,
@@ -198,9 +201,24 @@ export function unitValue(state: GameState, trade: TradeId): number {
   return Math.round(priced(state, TRADES[trade].unitValue) * activity(state));
 }
 
+/** The arms arrangement, or null. Separate from the product one entirely. */
+export function armsSupplier(state: GameState): SupplierDef | null {
+  const id = state.contraband?.armsSupplierId;
+  return id ? (ARMS_SUPPLIER_BY_ID[id] ?? null) : null;
+}
+
 export function unitCost(state: GameState, trade: TradeId): number {
   const def = TRADES[trade];
-  if (trade === 'arms') return priced(state, def.unitCost);
+  if (trade === 'arms') {
+    /*
+       Bought crates cost more than made ones, always. `priceMultiplier` is
+       above 1 on every arms source for exactly that reason — a cheaper door
+       that also had the better margin would retire the workshop, and the
+       capital half of this trade is where its drama lives.
+    */
+    const bought = armsSupplier(state);
+    return Math.round(priced(state, def.unitCost) * (bought ? bought.priceMultiplier : 1));
+  }
 
   const supplier = state.contraband?.supplierId
     ? SUPPLIER_BY_ID[state.contraband.supplierId]
@@ -264,6 +282,54 @@ export function openSupply(state: GameState, supplierId: string): TradeAction {
   state.contraband.supplierSince = state.day;
   addLog(state, `${supplier.name} will deal with you now.`, 'money');
   return { ok: true, message: supplier.name };
+}
+
+/**
+ * Whether a source of finished crates can be opened, and why not.
+ *
+ * Same shape as `canOpenSupply` and deliberately so: same rank gate the trade
+ * itself carries, same named price on refusal. F10 closed by naming the
+ * figure, the bar and the remedy at the point of refusal, and every gate added
+ * since has had to do the same.
+ */
+export function canOpenArmsSupply(state: GameState, supplierId: string): TradeAction {
+  const supplier = ARMS_SUPPLIER_BY_ID[supplierId];
+  if (!supplier) return { ok: false, message: 'No such arrangement.' };
+  if (!tradeUnlocked(state, 'arms')) {
+    return {
+      ok: false,
+      message: `Nobody will deal with a ${state.player.rank.replace('_', ' ')}.`,
+    };
+  }
+  const retainer = priced(state, supplier.retainer);
+  if (funds(state) < retainer) {
+    return {
+      ok: false,
+      message: `The retainer is ${formatMoney(retainer)} and you have ${formatMoney(funds(state))}.`,
+    };
+  }
+  return { ok: true, message: `$${retainer.toLocaleString('en-US')} to open.` };
+}
+
+export function openArmsSupply(state: GameState, supplierId: string): TradeAction {
+  const check = canOpenArmsSupply(state, supplierId);
+  if (!check.ok) return check;
+  const supplier = ARMS_SUPPLIER_BY_ID[supplierId]!;
+  if (!pay(state, priced(state, supplier.retainer))) {
+    return { ok: false, message: 'You cannot cover the retainer.' };
+  }
+  state.contraband.armsSupplierId = supplierId;
+  state.contraband.armsSupplierSince = state.day;
+  addLog(state, `${supplier.name} will deal with you now.`, 'money');
+  return { ok: true, message: supplier.name };
+}
+
+export function dropArmsSupply(state: GameState): TradeAction {
+  const held = armsSupplier(state);
+  if (!held) return { ok: false, message: 'There is no arrangement to end.' };
+  state.contraband.armsSupplierId = null;
+  addLog(state, `You are no longer buying from ${held.name}.`, 'neutral');
+  return { ok: true, message: held.name };
 }
 
 export function dropSupply(state: GameState): TradeAction {
@@ -403,6 +469,47 @@ export function tickContraband(state: GameState, rng: Rng): void {
         npcIds: [],
         detail: 'Regular deliveries arriving on a schedule somebody has noticed.',
       });
+    }
+  }
+
+  // --- bought crates ------------------------------------------------------
+  /*
+     The second door into the arms trade, and it delivers the same way the
+     product arrangement does: buy up to what the routes can carry, capped by
+     what the source can actually supply and what you can pay for.
+
+     Deliberately beside the workshops rather than instead of them. Both can
+     run at once — a career that buys its way in and later builds a shop keeps
+     the source until it stops being worth the price, which is the shape of
+     every other supply decision in this file.
+  */
+  const armsSource = armsSupplier(state);
+  if (armsSource && tradeUnlocked(state, 'arms')) {
+    const price = unitCost(state, 'arms');
+    const want = Math.min(
+      armsSource.ceiling,
+      Math.max(0, Math.ceil(throughput(state, 'arms').total) - c.stock.arms),
+      TRADES.arms.stockCap - c.stock.arms,
+    );
+    const affordable = Math.floor((state.org.cash + state.org.dirtyCash) / price);
+    const bought = Math.max(0, Math.min(want, affordable));
+    if (bought > 0 && pay(state, bought * price)) {
+      c.stock.arms += bought;
+      report.arms.bought += bought;
+    }
+    if (armsSource.exposure > 0) {
+      addEvidence(state, {
+        day: state.day,
+        source: 'violence',
+        strength: armsSource.exposure,
+        npcIds: [],
+        detail: 'Crates arriving from outside the city, on somebody else’s manifest.',
+      });
+    }
+    // The arrangement can simply stop, the same way the product one can.
+    if (rng.chance(armsSource.failureChancePerWeek)) {
+      c.armsSupplierId = null;
+      addLog(state, `${armsSource.name} has stopped taking your calls.`, 'failure');
     }
   }
 
@@ -686,3 +793,31 @@ export function portMultiplier(state: GameState): number {
   return 1;
 }
 
+
+/**
+ * What the armoury is worth in a fight.
+ *
+ * A pure read, so `playerStrength` can add it without this module knowing
+ * anything about how a war is scored. Returns zero for an empty shelf and
+ * never more than `ARMED.maxStrength`.
+ */
+export function armsStrength(state: GameState): number {
+  const crates = state.contraband?.stock.arms ?? 0;
+  if (crates <= 0) return 0;
+  return Math.min(crates * ARMED.strengthPerCrate, ARMED.maxStrength);
+}
+
+/**
+ * A week of war, off the shelf.
+ *
+ * Called once a week with the number of wars actually being fought, so two at
+ * once costs twice as much. This is what stops a stockpile being a one-off
+ * purchase of a permanent bonus: crates are spent by the thing they are for,
+ * and the decision is sell them now or hold them for a war that may not come.
+ */
+export function spendWarStock(state: GameState, wars: number): void {
+  if (wars <= 0) return;
+  const c = state.contraband;
+  if (!c || c.stock.arms <= 0) return;
+  c.stock.arms = Math.max(0, c.stock.arms - ARMED.spentPerWarWeek * wars);
+}

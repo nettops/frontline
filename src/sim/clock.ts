@@ -21,7 +21,7 @@ import { tickDeposition } from './succession';
 import { tickFactions } from './faction';
 import { tickInvestigations } from './investigation';
 import { tickWars } from './diplomacy';
-import { spend, tickEconomy, tickHoldings, totalFunds } from './economy';
+import { spend, tickEconomy, tickHoldings } from './economy';
 import { tickLoans, tickMarket, type LoanHooks } from './market';
 import { tickHeat } from './heat';
 import { addNote, driftNpcs, tickNpcs, crewList } from './npc';
@@ -35,7 +35,7 @@ import { tickWhispers } from './whispers';
 import { tickEvents } from './events';
 import { tickWorld } from './world';
 import { tickFear, tickPlayer, tickRecord, tickStanding } from './player';
-import { recruitCost, refreshRecruits } from './crew';
+import { refreshRecruits } from './crew';
 import { addInfluence, territoryDef } from './territory';
 import { bond } from './diplomacy';
 import { DRIFT_INTERVAL_DAYS } from '../config/npcs';
@@ -181,7 +181,6 @@ export function advanceDay(state: GameState): void {
     tickPlayer(state);
   }
 
-  checkGameOver(state);
 }
 
 /**
@@ -304,27 +303,22 @@ export function advanceDays(state: GameState, days: number): number {
   return days;
 }
 
-/**
- * The last way to lose that is not somebody removing you.
- *
- * Conviction and assassination go through `removePlayer`, which only ends the
- * game when there is nobody left to hand it to. This is the other floor: no
- * people, and no money to get any.
- *
- * Neither applies outside a career. Sandbox exists to be experimented with and
- * Simulation has no organization to lose in the first place — it would end on
- * day one, every time, having started with nothing by design.
- */
-function checkGameOver(state: GameState): void {
-  if (state.mode !== 'career') return;
-  const crew = crewList(state).length;
-  const hasActiveWork = Object.keys(state.activeOperations).length > 0;
-  if (crew === 0 && !hasActiveWork && totalFunds(state) < recruitCost(state)) {
-    state.gameOver = {
-      reason:
-        'Nobody left and nothing to pay anyone with. Whatever this was, it is over.',
-      day: state.day,
-    };
-    addLog(state, 'The organization is finished.', 'failure');
-  }
-}
+/*
+   There is no bankruptcy ending any more, and there never should have been.
+
+   `checkGameOver` used to stop a career with no crew, no work running and less
+   money than a recruit costs. It read as a floor and it was a declaration: the
+   game deciding, on the player's behalf, that a bad run was a finished one.
+
+   It was also not true. `work_it_yourself` asks for no crew, no investment and
+   one day, pays $180 to $420 at 82%, and is open from the first rank. Every
+   morning that function fired, the player had something they could do — the
+   run was taken away at the exact point it got interesting.
+
+   A career now ends the two ways a 1935 boss's career ends: a conviction, or
+   somebody kills you. Both go through `removePlayer` in succession.ts, and
+   both still only stop the game when there is nobody left to hand it to.
+   `careerEnd.test.ts` holds all of that, including the part that makes it
+   safe — that there is always a job on the board.
+*/
+

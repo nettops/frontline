@@ -1,45 +1,9 @@
 /** Shared presentational pieces. No game logic lives here. */
 
-import { useState, type ReactNode } from 'react';
+import type { ReactNode } from 'react';
 import type { Npc, NpcStatId } from '../sim/types';
 import { perceive } from '../sim/npc';
-import { currentSkin, setSkin } from './skin';
 import { ROLE_WAGE } from '../config/economy';
-
-/**
- * The skin toggle, wherever the game happens to be.
- *
- * It used to live only in the stat bar, which renders only during a game —
- * so anyone who left the terminal skin on and then quit to the title screen
- * had no way back to the ledger short of clearing localStorage. A setting
- * that persists across sessions has to be reachable from every screen that
- * can be the first one you see, and this game has three.
- */
-export function SkinToggle() {
-  const [skin, setSkinState] = useState(currentSkin);
-
-  const toggle = () => {
-    // Read from the module rather than from `skin`, which is a render behind.
-    // Two clicks inside one frame — a double-click, a held key — both computed
-    // the next value from the same stale state and cancelled each other out.
-    const next = currentSkin() === 'crt' ? 'ledger' : 'crt';
-    setSkin(next);
-    setSkinState(next);
-  };
-
-  return (
-    <button
-      className={skin === 'crt' ? 'statbar-mute' : 'statbar-mute off'}
-      onClick={toggle}
-      aria-pressed={skin === 'crt'}
-      title={
-        skin === 'crt' ? 'Terminal. Click for the ledger.' : 'The ledger. Click for a terminal.'
-      }
-    >
-      crt
-    </button>
-  );
-}
 
 export function Panel({
   title,
@@ -100,6 +64,58 @@ export function Bar({
   return (
     <div className="bar">
       <div className={tone ? `bar-fill ${tone}` : 'bar-fill'} style={{ width: `${pct}%` }} />
+    </div>
+  );
+}
+
+/**
+ * A reading on a scale that has named bands, drawn as those bands.
+ *
+ * The difference from `Bar` is what the unfilled part says. A bar's empty
+ * remainder is blank, so it answers "how far along am I" and nothing else —
+ * but the question a player actually asks about heat is "am I in the red",
+ * and they ask it long before they ask what the number is. Segments carry
+ * their band's colour whether or not they are lit, so the danger ahead is
+ * visible from a reading that has not reached it yet.
+ *
+ * `severityAt` is asked about the middle of each segment rather than about
+ * the current value, which is what makes the unlit half meaningful. Callers
+ * pass the band function belonging to whatever they are drawing; heat passes
+ * `heatSeverity`, which derives its edges from the tiers rather than from
+ * thirds. See the note on that function.
+ *
+ * Hidden from assistive technology on purpose. Everywhere this is used the
+ * figure and its band name are already printed beside it in text, so the
+ * gauge is a second telling of something a screen reader has just read.
+ */
+export function Gauge({
+  value,
+  max = 100,
+  segments = 20,
+  severityAt,
+}: {
+  value: number;
+  max?: number;
+  segments?: number;
+  severityAt: (at: number) => 'ok' | 'warn' | 'hot';
+}) {
+  const share = Math.max(0, Math.min(1, value / max));
+  /*
+     Rounded, not floored. A floor leaves the gauge completely dark for the
+     whole of the first band — nought to ten on a twenty-segment scale is less
+     than one segment — and a meter that reads empty while the number beside it
+     reads eight is the meter being wrong.
+  */
+  const lit = value > 0 ? Math.max(1, Math.round(share * segments)) : 0;
+
+  return (
+    <div className="gauge" aria-hidden="true">
+      {Array.from({ length: segments }, (_, i) => {
+        const middle = ((i + 0.5) / segments) * max;
+        const classes = ['gauge-seg', severityAt(middle)];
+        if (i < lit) classes.push('lit');
+        return <i key={i} className={classes.join(' ')} />;
+      })}
     </div>
   );
 }

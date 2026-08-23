@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useGame, mutate } from '../../store';
-import { Panel, Empty, KeyValue, Bar } from '../components';
+import { Panel, Empty, KeyValue, Bar, Gauge } from '../components';
 import type { PanelId } from '../Rail';
 import { crewList, availableCrew } from '../../sim/npc';
 import { payrollForecast, weeklyWageBill } from '../../sim/economy';
@@ -14,7 +14,12 @@ import { rivals } from '../../sim/faction';
 import { districtOwner, territoryList } from '../../sim/territory';
 import { OPERATION_BY_ID } from '../../config/operations';
 import { PAYDAY_INTERVAL, RANK_BY_ID } from '../../config/economy';
-import { heatTier, LAY_LOW_DURATION_DAYS, LAY_LOW_RESPECT_COST } from '../../config/heat';
+import {
+  heatSeverity,
+  heatTier,
+  LAY_LOW_DURATION_DAYS,
+  LAY_LOW_RESPECT_COST,
+} from '../../config/heat';
 import { houseShort } from '../../sim/houses';
 
 /**
@@ -227,7 +232,15 @@ export default function Dashboard({ onNavigate }: { onNavigate: (id: PanelId) =>
               </span>
             </span>
           </div>
-          <Bar value={org.heat} tone={org.heat > 40 ? 'hot' : 'cold'} />
+          {/*
+            A banded gauge rather than a bar, because the bands are the thing
+            the player is actually reading. The old bar was one colour that
+            flipped at forty, which said "bad now" and nothing about what was
+            coming; the segments carry their tier's colour unlit, so the red
+            stretch is visible from Quiet. Edges come from HEAT_TIERS, so this
+            cannot drift away from the name printed beside it.
+          */}
+          <Gauge value={org.heat} severityAt={heatSeverity} />
           <p className="dim" style={{ marginTop: 10, marginBottom: 0 }}>
             {tier.description}
           </p>
@@ -294,7 +307,9 @@ export default function Dashboard({ onNavigate }: { onNavigate: (id: PanelId) =>
             </button>
           }
         >
-          <KeyValue label="Rank" value={RANK_BY_ID[state.player.rank].name} tone="brass" />
+          {/* Rank is not named here any more. The crew cap below still comes
+              from it, because a cap is a fact about the outfit rather than a
+              title. */}
           <KeyValue label="Respect" value={Math.floor(org.respect)} />
           <KeyValue
             label="Operations"

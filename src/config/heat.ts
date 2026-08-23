@@ -111,6 +111,30 @@ export function heatTier(heat: number): HeatTier {
   return tier;
 }
 
+/**
+ * How bad a reading is, in the three colours anything drawing a scale has.
+ *
+ * Indexes into `HEAT_TIERS` rather than comparing against numbers, so the
+ * bands and the colours can never drift apart. The gauge on the Overview
+ * colours twenty segments with this; the obvious alternative was to split the
+ * range into thirds, which would have put two colour changes inside a tier and
+ * invented boundaries the simulation does not have.
+ *
+ * The `hot` edge sits at the fourth tier — 41, Major Investigation — because
+ * that is where the rest of the interface already reddens. The stat bar has
+ * used `heat > 40` since long before this function existed, and two parts of
+ * one screen disagreeing about when heat is bad is worse than either of them
+ * choosing the wrong point.
+ */
+export type HeatSeverity = 'ok' | 'warn' | 'hot';
+
+export function heatSeverity(heat: number): HeatSeverity {
+  const index = HEAT_TIERS.indexOf(heatTier(heat));
+  if (index <= 1) return 'ok';
+  if (index === 2) return 'warn';
+  return 'hot';
+}
+
 /** Base points bled off per quiet day, before tier and difficulty scaling. */
 export const HEAT_DECAY_PER_DAY = 1.1;
 

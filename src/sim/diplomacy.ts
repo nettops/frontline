@@ -12,6 +12,7 @@
  */
 
 import { Rng, clamp } from './rng';
+import { armsStrength, spendWarStock } from './contraband';
 import type { Faction, FactionBond, GameState, Npc } from './types';
 import { addEvidence, addLog, formatMoney } from './util';
 import { addHeat } from './heat';
@@ -315,7 +316,19 @@ export function playerStrength(state: GameState): number {
     available.length /
     50;
 
-  return clamp(available.length * 2.2 * quality, 0, 100);
+  /*
+     Plus whatever is on the shelf.
+
+     Added after the same crate was worth 0.55 of strength to a family you sold
+     it to and exactly nothing to you — `ARMS_SALE` has always modelled the
+     buyer getting harder to fight and never modelled the seller getting
+     easier. Same rate both ways now, which is what makes a sale a trade.
+
+     Below the early return above on purpose: an armoury with nobody left to
+     carry it is worth nothing, or a boss alone in a room with forty crates
+     reads as a faction.
+  */
+  return clamp(available.length * 2.2 * quality + armsStrength(state), 0, 100);
 }
 
 export function factionStrength(state: GameState, id: FactionId): number {
@@ -618,6 +631,19 @@ export function tickWars(state: GameState, rng: Rng): void {
 
   // Wars cost money to keep running.
   const playerAtWar = playerWars(state);
+
+  /*
+     And they cost crates.
+
+     Charged here rather than inside `resolveClash`, beside the money, because
+     both are the standing price of being at war rather than the result of any
+     one week's fighting. Two wars burn twice as much. Without this an armoury
+     would be a one-off purchase of a permanent strength bonus, which is not a
+     decision — the decision is whether to sell the crates or keep them for a
+     war that may never come.
+  */
+  spendWarStock(state, playerAtWar.length);
+
   if (playerAtWar.length > 0) {
     const crew = crewList(state).filter((n) => n.status !== 'dead').length;
     const cost = crew * WAR.playerWarCostPerCrew * playerAtWar.length;

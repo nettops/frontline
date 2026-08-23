@@ -544,6 +544,50 @@ export const OPERATIONS: OperationDef[] = [
     attribute: 'influence',
     respect: 30,
   },
+
+  /* ============================================================== connected ==
+     PARKED: four relationship-gated jobs, built and measured, not shipped.
+
+     The design was a second axis for the board — jobs that open on who you
+     know rather than on rank — to attack the most-quoted line in the score
+     record, "the same four jobs". Fix a Case on a judge's favour, Union
+     Walkout on the union boss, Police Escort on a captain, Joint Venture on a
+     rival who trusts you.
+
+     It worked on the target it was aimed at. `ladder.probe` moved careers
+     reaching Capo inside 300 days from **19 of 36 to 23**, the largest move
+     that pre-committed figure has ever seen, and it did it without widening
+     the gap between the top and the middle once the payouts were cut to
+     mid-tier.
+
+     It is parked because the gate is not a gate. Measured across 24 careers:
+
+         held a favour owed by day 150 .................... 24 of 24
+         a connected job open at some point in 150 days ... 24 of 24
+
+     `owed >= 1` is not "who you know". It is a timer, and every career clears
+     it. That makes these four jobs a delayed rank unlock wearing a
+     relationship as a costume — the opposite of the thing they were for, which
+     was two bosses on the same rung looking at different boards.
+
+     This is the third bar this project has put in the wrong place for want of
+     plotting the distribution first, after `demandRespect` at 28 against a
+     starting 30 and the card room's invitation at 55 against 77% of weeks.
+     The lesson did not take.
+
+     What it needs, and it is a better design than the one measured: the job
+     should **consume** the favour. `civic.ts` already has `spendFavour`.
+     Holding one becomes the ticket and using it costs it, so the choice is
+     between fixing a case tonight and keeping the judge for the case against
+     you — which is a decision rather than an unlock. Then plot what share of
+     careers can afford that, and set the bar off the plot.
+
+     Everything else is done: `connections.test.ts` has eight tests, four
+     mutants die, `distance.test.ts` covers both route kinds, and `OpsBoard`
+     already carries `favoursOwed` and `bestRivalTrust`.
+     ========================================================================= */
+
+
 ];
 
 export const OPERATION_BY_ID: Record<string, OperationDef> = Object.fromEntries(

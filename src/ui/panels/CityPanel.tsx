@@ -4,7 +4,8 @@ import { Panel, Empty, KeyValue, Bar } from '../components';
 import { buyPatron, canBuyPatron, readCity } from '../../sim/perception';
 import { formatMoney, formatShortDay } from '../../sim/util';
 import { PATRON, CITY_INTEL } from '../../config/perception';
-import { civicRead, spendFavour } from '../../sim/civic';
+import { askForWork, civicRead, spendFavour } from '../../sim/civic';
+import { CIVIC_WORK } from '../../config/civic';
 import { Rng } from '../../sim/rng';
 import { cards, caughtOdds, sitDown, straightOdds, tableRead } from '../../sim/cards';
 import { canSit } from '../../sim/cards';
@@ -383,6 +384,30 @@ function Favours() {
                     }
                   >
                     Call it in
+                  </button>
+                  {/*
+                     The second thing a favour buys, beside the first.
+
+                     Measured over 36 careers, favours are granted about six
+                     times in 300 days and held at six — not one was ever
+                     spent. The network fills to its ceiling and stops. Two
+                     buttons on one favour is what turns a counter into a
+                     decision, so they sit together rather than on separate
+                     screens: the choice is only legible if both prices are
+                     visible at the moment of choosing.
+                  */}
+                  <button
+                    className="btn"
+                    disabled={!!p.blocked}
+                    style={{ marginLeft: 6 }}
+                    title={`Money now, and ${CIVIC_WORK.standingCost} standing off them`}
+                    onClick={() =>
+                      mutate((s) => {
+                        setNote(askForWork(s, p.id).message);
+                      })
+                    }
+                  >
+                    Ask for work
                   </button>
                   {/*
                      The reason renders as a refusal, in body text, not as a

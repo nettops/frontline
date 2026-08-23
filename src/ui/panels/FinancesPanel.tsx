@@ -33,6 +33,15 @@ import {
 import { formatMoney, formatShortDay } from '../../sim/util';
 import { OPERATION_BY_ID } from '../../config/operations';
 import { LENDERS, LENDER_BY_ID } from '../../config/market';
+import { PARTNER } from '../../config/partner';
+import {
+  buyOutPartner,
+  buyOutPrice,
+  partnerHouse,
+  partnerOffer,
+  partnerOutstanding,
+  takePartner,
+} from '../../sim/partner';
 import { houseName } from '../../sim/houses';
 
 /**
@@ -183,6 +192,8 @@ export default function FinancesPanel() {
         <h1 className="page-title">Finances</h1>
         <span className="tiny">{formatMoney(totalFunds(state))} on hand</span>
       </div>
+
+      <SilentPartner />
 
       <div className="grid-2">
         <Panel title="Money">
@@ -345,6 +356,86 @@ function TheCycle() {
         prices, so none of that is a change you can feel. Cash in a room does not move
         with anything.
       </p>
+    </Panel>
+  );
+}
+
+/**
+ * The other kind of money, and why it is a panel rather than a memo.
+ *
+ * This was an event first, and the event is what killed it: `dailyMemo` fills
+ * one slot a day, the authored memos are what carry the pacing "firsts", and
+ * a new definition costs one of them. `scorecard.probe` put Pacing at 2.5
+ * against a bar of 3 with the mean longest quiet stretch out from 413 days to
+ * 535. Four attempts to tune around it read 2.5, 2.6, 2.7, 2.8 — the shape of
+ * noise, not of an effect.
+ *
+ * As a standing option beside the lenders it costs the memo table nothing. It
+ * is also the discovery model this game already uses for credit, which round
+ * 15 found on day 139 without any help from an interruption.
+ *
+ * Why it is not simply a fourth lender: a loan has to be **serviced**.
+ * `REPAYMENT_SHARE` comes off every payday whether the week earned anything or
+ * not, so borrowing while genuinely stalled buys three weeks and a collections
+ * problem. Measured at day 300 across 24 careers that actually play, the
+ * median holds $1,610 — that is who this is for, and a share of nothing is
+ * nothing.
+ */
+function SilentPartner() {
+  const state = useGame();
+  const [note, setNote] = useState<string | null>(null);
+  const held = state.org.partner;
+  const offer = partnerOffer(state);
+
+  if (!held && !offer) return null;
+
+  if (held) {
+    const price = buyOutPrice(state);
+    const house = partnerHouse(state) ?? 'They';
+    const affordable = totalFunds(state) >= price;
+    return (
+      <Panel title="The silent partner">
+        <KeyValue label="Who" value={house} />
+        <KeyValue label="Their share" value={`${Math.round(held.share * 100)}% of what comes in`} />
+        <KeyValue label="Taken so far" value={formatMoney(Math.round(held.taken))} />
+        <KeyValue label="Before it closes itself" value={formatMoney(Math.round(partnerOutstanding(state)))} />
+        <p className="dim" style={{ marginBottom: 8 }}>
+          Nothing is taken from a job under {formatMoney(PARTNER.takesNothingBelow)}. Buying them
+          out ends it today for {formatMoney(price)}; waiting ends it at{' '}
+          {formatMoney(Math.round(held.stake * PARTNER.endsAtMultiple))} taken.
+        </p>
+        <button
+          className="btn"
+          disabled={!affordable}
+          onClick={() => mutate((s) => setNote(buyOutPartner(s) ? 'Bought out.' : 'Not enough.'))}
+        >
+          Buy them out — {formatMoney(price)}
+        </button>
+        {!affordable && (
+          <div className="tiny memo-choice-blocked">
+            You have {formatMoney(totalFunds(state))} and it costs {formatMoney(price)}.
+          </div>
+        )}
+        {note && <p className="tiny">{note}</p>}
+      </Panel>
+    );
+  }
+
+  return (
+    <Panel title="An offer">
+      <p style={{ marginTop: 0 }}>
+        {offer!.house} will put {formatMoney(offer!.stake)} into the organization today. They
+        take {Math.round(offer!.share * 100)} cents in every dollar from then on — no schedule,
+        no collection, nobody sent round. They simply own a piece.
+      </p>
+      <p className="dim">
+        Nothing comes off a job under {formatMoney(PARTNER.takesNothingBelow)}. They stop at{' '}
+        {formatMoney(Math.round(offer!.stake * PARTNER.endsAtMultiple))} taken, and you can buy
+        them out earlier for {formatMoney(Math.round(offer!.stake * PARTNER.buyoutMultiple))}.
+      </p>
+      <button className="btn primary" onClick={() => mutate((s) => takePartner(s, offer!))}>
+        Take the {formatMoney(offer!.stake)}
+      </button>
     </Panel>
   );
 }

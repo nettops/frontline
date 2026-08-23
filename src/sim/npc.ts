@@ -23,8 +23,6 @@ import {
   DRIFT,
   FAMILIARITY_MAX,
   FAMILIARITY_PER_DAY,
-  FIRST_NAMES,
-  LAST_NAMES,
   NICKNAMES,
   NICKNAME_CHANCE,
   PERCEPTION_TIERS,
@@ -38,6 +36,12 @@ import {
   TRAIT_COUNT,
   type TraitEffects,
 } from '../config/npcs';
+import {
+  CREW_MIX,
+  NATIONALITIES,
+  nationalityDef,
+  type NationalityDef,
+} from '../config/nationalities';
 import { GOAL_BY_ID, GOAL_CERTAIN_ABOVE, GOAL_VISIBLE_ABOVE } from '../config/goals';
 import { DAYS_PER_YEAR, FEAR, ROLE_WAGE, rankIndex } from '../config/economy';
 import { priced, prices } from './market';
@@ -47,9 +51,65 @@ const STAT_IDS = Object.keys(STAT_RANGE) as NpcStatId[];
 
 // ------------------------------------------------------------ generation ---
 
+/**
+ * Which community the next recruit comes out of.
+ *
+ * Mostly yours, because that is who is on your blocks and who your mother
+ * vouches for — and never only yours, because an outfit with nobody from
+ * anywhere else in it is a caricature rather than a family. `CREW_MIX` holds
+ * the range and the argument for it.
+ *
+ * The share is derived from the seed with `stableNoise` rather than rolled,
+ * so it is a fact about this city and not about how many people you happen to
+ * have hired. Rolling it would have made the eleventh recruit depend on
+ * whether you hired the previous ten, which is not a thing about the world.
+ *
+ * `crewShare` is exported and separately tested only because it could not be
+ * tested through this function. The first version of the "the mix varies by
+ * city" test inferred the share by counting a sampled crew, and a hardcoded
+ * 0.7 passed it — two hundred draws carry about a tenth of sampling spread on
+ * their own, which was the whole size of the effect being looked for. The
+ * test was reading its own noise. Measured directly there is no noise.
+ */
+export function crewShare(seed: number): number {
+  return CREW_MIX.min + Rng.stableNoise(`crewmix:${seed}`, 0) * (CREW_MIX.max - CREW_MIX.min);
+}
+
+function poolFor(state: GameState): NationalityDef {
+  const home = nationalityDef(state.player.nationality);
+
+  /*
+     Both draws below come off `stableNoise`, not off `rng`, and that is the
+     whole reason this function takes no Rng.
+
+     The first version rolled the pool with `rng.chance` and picked the
+     outsider's community with `rng.pick`, which added one or two draws to
+     every person the game creates. Names are generated during world setup, so
+     every later roll in the game shifted — and the probes moved with them:
+     careers reaching Capo in 300 days fell from 19 of 36 to 10, the floor
+     probe's stuck-career cash went from under 40k to 65k, and four other
+     population readings broke. None of that was a balance change. It was the
+     same simulation reading a different part of the stream.
+
+     Keyed on `rng.calls`, the position in the stream, so it still varies from
+     person to person without consuming any of it. Net draws per NPC: two,
+     exactly as before.
+  */
+  const at = state.rng.calls;
+  if (Rng.stableNoise(`crew:${state.rng.seed}:${at}`, 0) < crewShare(state.rng.seed)) return home;
+
+  const others = NATIONALITIES.filter((n) => n.id !== home.id);
+  if (!others.length) return home;
+  return others[Math.floor(Rng.stableNoise(`crewother:${state.rng.seed}:${at}`, 0) * others.length)];
+}
+
 export function generateNpc(state: GameState, rng: Rng, role: RoleId): Npc {
-  const first = rng.pick(FIRST_NAMES);
-  const last = rng.pick(LAST_NAMES);
+  // First name and surname come from the same pool: a Murphy is a Patrick far
+  // more often than a Stanislaw, and splitting them produced people who read
+  // as a random-name-generator rather than as somebody's cousin.
+  const pool = poolFor(state);
+  const first = rng.pick(pool.first);
+  const last = rng.pick(pool.last);
   const name = rng.chance(NICKNAME_CHANCE)
     ? `${first} "${rng.pick(NICKNAMES)}" ${last}`
     : `${first} ${last}`;
