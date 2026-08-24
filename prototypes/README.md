@@ -4,6 +4,73 @@ Not shipped. Nothing in `src/` imports anything here, and nothing here is in the
 build output — that is the point of the folder. These are things that were built
 to be looked at and then argued with.
 
+## pixel-rooms.html — the other side of the ten fronts
+
+The inside of every facade in `pixel-fronts.html`, which is the inside of every
+entry in `config/businesses.ts`. Ten rooms, 96 × 56, flat elevation, one wall
+and one floor line, composed from parts like everything else on this branch.
+
+### To look at it
+
+```bash
+open prototypes/pixel-rooms.html          # or: xdg-open
+```
+
+`?scale=3&light=off&only=sitdown` — `light` is `on` or `off` (after hours),
+and `only=sitdown` renders just the composite at the bottom.
+
+### Why the cell is 96 × 56
+
+`sitdown.ts` calls the sit-down *“the second verb”* and *“a conversation you
+act through”* — the one screen in the game that stops and looks at a person.
+The cast in `pixel-cast.html` is 32 × 40 and cut off at the waist, which has
+always been the obvious complaint about it.
+
+It stops being a complaint the moment there is a table. These rooms put the
+floor line at y=46 and the furniture top at y=35–38, so a cast figure dropped
+in at y=8 is cut exactly where a man sitting at a table is cut.
+
+The last section of the page is that: the social club back room with two
+`compose()` outputs from the cast sheet sitting across a card table. **Nothing
+was redrawn to make it.** The room is drawn, the figures are drawn over it, and
+then the room's own front rows are stamped again on top — so the table is in
+front of them and nobody has to draw a table twice.
+
+Those two sheets were made six commits apart and they compose without either
+of them moving, because both were built to an anchor rather than to taste. That
+is the argument for the whole method, and it is the first time on this branch
+it has been provable rather than asserted.
+
+### The rooms
+
+Same order and the same spine as the fronts — `legitimacy`, 80 down to 25 —
+because the inside of a place should agree with the outside about how much
+attention it wants. A real estate office is blinds, two desks and a plan of
+somewhere. A casino is baize, a cage and three chandeliers. The laundromat has
+a row of machines and a strip light and deliberately nothing else in it.
+
+Parts: wall (plain, paper, tile, panel, brick), floor (board, tile, concrete,
+carpet), pendant, bulb, strip light, counter, table, shelves, picture, clock,
+doorway, window, blinds, chair, stool.
+
+### Light is palette work
+
+`lit` and `after hours` are one sprite each. The two warm keys go cold and
+everything else drops a step — no second drawing, same as the states on the
+fronts sheet and the finishes on the armoury.
+
+### What it is for, and what it is not
+
+**For:** a backdrop behind the sit-down, which is the screen that most wants
+one, and a header image for a business panel. Both use `trading` state and
+existing data.
+
+**Not for:** walking around. There is no perspective here, no depth, no
+occlusion beyond one re-stamp, and nothing in the simulation moves a person
+through a place. These are stage flats. If the game ever wants a room the
+player is *in* rather than looking at, this is the wrong drawing and the
+sensible thing is to say so now rather than after twenty more of them.
+
 ## pixel-fronts.html — the ten in businesses.ts
 
 Not buildings somebody thought would look nice. These are the ten entries in
