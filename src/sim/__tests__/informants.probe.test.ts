@@ -148,7 +148,16 @@ function watch(seed: number, plant: boolean): Run | null {
   };
 }
 
-const SEEDS = 30;
+/*
+   Thirty worlds gave nineteen usable ones against a guard of twenty, and a
+   guard with no margin flaps on work that has nothing to do with it — the
+   evidence change reshuffled which families still had four men at day 150 and
+   knocked one world out.
+
+   Raised rather than the bar lowered. The claim below is unchanged; there are
+   simply more worlds for it to be true in.
+*/
+const SEEDS = 40;
 const talking = Array.from({ length: SEEDS }, (_, i) => watch(300 + i, true)).filter(
   (r): r is Run => r !== null,
 );

@@ -32,7 +32,7 @@ import { goalEffect } from './goals';
 import { passedOver, recordTie } from './ties';
 import { claimFromMemory } from './memory';
 import { territoryList } from './territory';
-import { ATTRIBUTE_IDS, RANKS, ROLE_LABEL, ROLE_ORDER, rankIndex } from '../config/economy';
+import { ATTRIBUTE_IDS, ROLE_LABEL, ROLE_ORDER } from '../config/economy';
 import { TIE_SUCCESSION } from '../config/ties';
 import {
   CLAIM,
@@ -436,7 +436,6 @@ function resolveSuccession(
     attributeProgress: zeroed(),
     opsCompleted: winner.opsCompleted,
     opsFailed: winner.opsFailed,
-    pendingRank: null,
   };
 
   applyHandoverCosts(state, rng, winner, usurped, contested, kind);
@@ -474,9 +473,24 @@ function resolveSuccession(
  * rank over intact — see `resolveSuccession`. Still exported so the panel can
  * show the player what they stand to lose by not naming anybody.
  */
+/*
+   The heir keeps the title and loses the ground, which is the other way round
+   from how this used to work.
+
+   `HANDOVER.ranksLost` docked the successor a rung, back when a rung decided
+   what jobs and trades they could touch and how many people they could hold.
+   All of that reads the board now, so docking a title would be a cosmetic
+   punishment for a real event — and the real punishment is already modelled
+   and always was: `HANDOVER.influenceKept` and `cleanCashKept` take ground and
+   money off them, and the job table, the trades and the crew cap all narrow on
+   their own the moment those fall. Losing districts *is* losing rank now.
+
+   Kept as an identity function rather than deleted so the Succession panel
+   still has something to show, and so a save written before this reads back
+   the same.
+*/
 export function inheritRank(rank: RankId): RankId {
-  const idx = Math.max(0, rankIndex(rank) - HANDOVER.ranksLost);
-  return RANKS[idx].id;
+  return rank;
 }
 
 function zeroed(): Attributes {

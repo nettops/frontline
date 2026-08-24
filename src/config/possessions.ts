@@ -57,7 +57,7 @@
  */
 
 /** What sort of thing it is. Cars and jewellery can be driven away by a raid. */
-export type PossessionKind = 'home' | 'car' | 'jewellery';
+export type PossessionKind = 'home' | 'car' | 'jewellery' | 'vessel' | 'club' | 'institution';
 
 export interface PossessionDef {
   id: string;
@@ -75,6 +75,32 @@ export interface PossessionDef {
    * thing people can see is a thing people can see.
    */
   visibility: number;
+  /**
+   * What it costs to keep, per week. Absent means nothing.
+   *
+   * The nine original items are bought once and held for free, and that is why
+   * they stopped being a decision the moment they were bought. Measured, a
+   * family earns $1,128,015 of clean money across a career and spends $142,297
+   * of it; the rest ends up in a savings account paying 26% a year. A one-off
+   * price cannot absorb a flow — it absorbs a few months and then the pile
+   * resumes.
+   *
+   * So the new tier costs money to hold, at 0.6% to 1.2% of its price a week.
+   * That is 30% to 60% a year, deliberately *worse* than what the same money
+   * would earn sitting in `holdings`, and the gap is the entire trade: you turn
+   * something that compounds into something that depreciates, and buy standing
+   * with the difference. A yacht has to be worth wanting again every quarter.
+   *
+   * Optional, so the original nine keep their terms exactly.
+   */
+  upkeep?: number;
+  /**
+   * What owning it does to the world, per week.
+   *
+   * One key so far. A second gets added when something earns it, not in
+   * anticipation.
+   */
+  effect?: { sentimentPerWeek?: number };
   blurb: string;
 }
 
@@ -199,6 +225,91 @@ export const POSSESSIONS: PossessionDef[] = [
     blurb:
       'Eleven rooms and a name the whole city knows, sold by a family that ran out of money before it ran out of pride. Buying it is a statement whether you meant one or not.',
   },
+
+  /*
+     The tier above, and the first things in this game that cost money to keep.
+
+     Priced off the plotted distribution rather than by eye. Peak clean purse
+     per career, 36 careers: 10th $190,234, 25th $455,551, median $982,554,
+     75th $1,678,087, 90th $1,908,305. Careers ever over $250,000: 31 of 36.
+     Over $750,000: 23. Over $2,000,000: two — which is why nothing here goes
+     near it, and why the aircraft, the hospital and the newspaper are deferred
+     until these four are measured as bought and lived with.
+
+     The other number that shaped this: the peak arrives on **day 294 of 300**.
+     Anything dear enough to need the whole career is affordable for a
+     fortnight, which is content priced for a run that has already succeeded.
+
+     So these are set against the purse *curve*, not against its peak. Median
+     clean purse reads 62k at day 120, 329k at 180, 418k at 210 and 700k at
+     240 — and the count of careers whose purse ever passes a figure by day 200
+     runs 150k:25, 250k:21, 400k:19, 500k:16, 700k:6 of 36.
+
+     The first draft priced this tier at 220k / 350k / 400k / 700k against the
+     peak, and the yacht was bought **zero times in thirty-six careers**. Every
+     figure below is the corrected one, chosen so an ordinary family reaches
+     each rung around day 180 to 210 and has a third of a career left to keep
+     it.
+  */
+  {
+    id: 'boat',
+    kind: 'vessel',
+    name: 'A boat at the marina',
+    cost: 120_000,
+    upkeep: 800,
+    visibility: 0.5,
+    blurb:
+      'Forty feet of teak and brass with a mooring somebody had to be persuaded to give up. You will use it four times a year and think about it constantly.',
+  },
+  {
+    id: 'country_club',
+    kind: 'club',
+    name: 'A membership at the country club',
+    cost: 250_000,
+    upkeep: 1_800,
+    visibility: 0.7,
+    blurb:
+      'Two men on the committee voted against you and one of them shook your hand afterwards. The golf is incidental; the eighteen holes are where the city decides things.',
+  },
+  {
+    id: 'yacht',
+    kind: 'vessel',
+    name: 'The yacht',
+    cost: 400_000,
+    upkeep: 3_200,
+    visibility: 0.9,
+    blurb:
+      'A crew of four, a name painted on the stern, and a berth that costs more than most men earn. Nobody buys one of these quietly and nobody is meant to.',
+  },
+  {
+    id: 'foundation',
+    kind: 'institution',
+    /*
+       The one thing on this tier that does something, and the only route into
+       the favour network the design permits.
+
+       `civic.ts` refuses purchased standing outright — "Nothing in this file is
+       spent or bought, which is the thing that distinguishes it from the
+       `contactCost` shop it replaces." A foundation does not buy the alderman.
+       It moves public sentiment in the districts the family works, and the
+       alderman watches sentiment, so his opinion drifts toward a world you
+       changed. That is the difference between a bribe and a reputation.
+
+       Sentiment is not only his. It feeds front health, territory control and
+       what the trades can move through a district, so this is an economic
+       instrument as much as a political one.
+
+       It costs nearly as much to run as the yacht at half the price, because
+       it works and the yacht does not.
+    */
+    name: 'A charitable foundation',
+    cost: 200_000,
+    upkeep: 3_000,
+    visibility: 0.6,
+    effect: { sentimentPerWeek: 1.2 },
+    blurb:
+      'Scholarships, a soup kitchen, a wing with your mother\'s name over the door. Everybody knows where the money came from and everybody takes it anyway.',
+  },
 ];
 
 export const POSSESSION_BY_ID: Record<string, PossessionDef> = Object.fromEntries(
@@ -209,6 +320,9 @@ export const POSSESSION_KIND_LABEL: Record<PossessionKind, string> = {
   home: 'Property',
   car: 'Cars',
   jewellery: 'Jewellery',
+  vessel: 'On the water',
+  club: 'Memberships',
+  institution: 'Institutions',
 };
 
 export const POSSESSION = {

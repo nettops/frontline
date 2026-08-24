@@ -32,7 +32,7 @@ import {
   type ApproachId,
 } from '../../config/operations';
 import { CONTROL_LABEL, SENTIMENT_HOSTILE_BELOW } from '../../config/territories';
-import { RANK_BY_ID, ROLE_LABEL } from '../../config/economy';
+import { ROLE_LABEL } from '../../config/economy';
 import type { OperationDef } from '../../sim/types';
 
 export default function OperationsPanel() {
@@ -537,7 +537,16 @@ export default function OperationsPanel() {
                 {locked.map((op) => (
                   <tr key={op.id}>
                     <td className="faint">{op.name}</td>
-                    <td className="faint">{RANK_BY_ID[op.minRank].name}</td>
+                    {/*
+                       The sentence, not a rank name.
+
+                       This column said "Underboss", which told a player who is
+                       already the boss of this outfit nothing they could act
+                       on — and after the rank caption came off the screen, it
+                       named a thing that appeared nowhere else in the game.
+                       Every gate now carries the words for its own row.
+                    */}
+                    <td className="faint">{op.opens?.need ?? '—'}</td>
                     <td className="num mono faint">{op.crewRequired}</td>
                     {/* Same dash the live table uses. "$0" reads as a bug. */}
                     <td className="num mono faint">

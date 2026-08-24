@@ -76,6 +76,22 @@ function world(seed = 88): GameState {
   }
 
   /*
+     And somebody running a street for you, a season into the job.
+
+     `gen_steward_asks` is the only shape whose subject is a delegation, and
+     this builder had no steward in it — so the shape read as dead against a
+     world that was supposed to have one of everything. Set directly rather
+     than through `putInCharge`, because the eligibility rules are a separate
+     thing being tested elsewhere and this fixture only needs the state.
+  */
+  const runner = Object.values(state.npcs).find((n) => n.status === 'active');
+  const street = state.territories[HOME_TERRITORY];
+  if (runner && street) {
+    street.stewardId = runner.id;
+    street.stewardSince = state.day - 120;
+  }
+
+  /*
      Nobody has been dealt with recently.
 
      The sixty days of warm-up above can raise and answer `gen_wants_a_word`

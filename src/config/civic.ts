@@ -84,6 +84,52 @@ export interface CivicFigureDef {
   needsInfluence: number;
 }
 
+/*
+   Re-derived after the heat and evidence work, all four together.
+
+   `owesAbove` is where somebody decides they owe you one, and every one of
+   these was plotted against a game whose heat sat at a median of 80 and whose
+   families held two districts. Making heat decay a share of the load took heat
+   to 49 and ground to three, so the people watching those two things thought
+   well of nearly everybody:
+
+       captain   watches quiet      owed by 35/36
+       union     watches ground     owed by 36/36
+       judge     watches discretion owed by 15/36
+       alderman  watches standing   owed by 34/36
+
+   A figure who owes every career is not a favour network, it is a
+   subscription. `ladder.probe` holds each of them to between 9 and 33 of 36.
+
+   ## Three of the four needed the thing they watch fixed, not the bar moved
+
+   Raising the bars alone was tried first and reverted, because `civic.test`
+   states the promise directly — thirteen weeks at heat 5 must earn the captain
+   — and any bar an exemplary quiet season can clear was being cleared by
+   thirty-two careers in thirty-six.
+
+   So the bar and the drift moved together, which is the same move this file
+   records making once before when the captain went from 40 to 55:
+
+     - `driftPerWeek` 5.2 -> 6.2, keeping the thirteen-week promise intact at a
+       higher bar. It is a harder thirteen weeks.
+     - captain `owesAbove` 48 -> 68. He reads `100 - heat`, and heat now spans
+       p25 27 to p75 71, so the bar sits where a genuinely quiet family is
+       rather than where the median one is.
+     - alderman `owesAbove` 45 -> 50. He was sitting *exactly* on the mean
+       sentiment his own score reads, which is a coin flip rather than a bar.
+     - the union counts **controlled** ground now, not footholds. `ground` read
+       influence at 25, and a family with three districts under control has a
+       toe in six or seven besides — so he was reading a number nearly every
+       career maxed out. Divisor 4 -> 6 with it.
+
+   After:  captain 23/36 · union 30/36 · judge 21/36 · alderman 15/36
+
+   The alderman is still the fragile one. His interquartile range was one point
+   before this and the repair here is a bar placement rather than a better
+   reading; mean sentiment across worked districts remains a nearly constant
+   number, and if it is ever asked to carry more it will need a sharper input.
+*/
 export const CIVIC_FIGURES: CivicFigureDef[] = [
   {
     id: 'captain',
@@ -105,8 +151,27 @@ export const CIVIC_FIGURES: CivicFigureDef[] = [
        Sized the way `config/economy.ts` sizes the rank table — between the
        median and the 75th of the measured distribution — rather than by eye,
        which is how it came to be 40.
+
+       Down to 48 when the rank ladder came out, and the mirror image of what
+       happened to the union on the same day. The captain reads `100 - heat`,
+       and a career that now expands across three districts instead of sitting
+       on one is a busier and louder career: the same bar that made this a
+       fixture at 34 of 36 made it unreachable at 7, against a floor of 9 that
+       `ladder.probe` holds as content nobody would otherwise see.
+
+       Both edits are the same method applied to a quantity that moved, in
+       opposite directions, which is what that method is for.
+
+       Left at 48 when orders went in, and worth recording why. Wiring
+       `tickOrders` into the pipeline drew one number a week from the shared
+       stream, every seeded career diverged, and this read 8 of 36 against a
+       floor of 9. Re-plotting put the bar at 44 — and then the draw was moved
+       onto a stream of its own (see `offerStream` in `sim/orders.ts`), the
+       populations came back, and 48 was correct again. The bar was never
+       wrong; the measurement had been disturbed by the thing being measured
+       against it.
     */
-    owesAbove: 55,
+    owesAbove: 68,
     needsInfluence: 0,
   },
   {
@@ -126,11 +191,23 @@ export const CIVIC_FIGURES: CivicFigureDef[] = [
        first pass only because it happened to read 14 careers out of 36 that
        afternoon; after the rival and economy work it read 8.
 
-       32 sits between the median and the ground the compounding half of the
-       population actually holds, which is the same method the other three
-       were re-sized by.
+       32 sat between the median and the ground the compounding half of the
+       population actually held, which is the same method the other three were
+       re-sized by.
+
+       Re-sized again when the rank ladder came out, by that same method and
+       for the same reason it was wrong at 40: the quantity underneath it
+       moved. `standingFor('ground')` is districts at influence 25 or better
+       over four, so 25 a district — and the measured career now holds 2 / 2 / 3
+       at the 40th, median and 75th, where it held one. Every one of the
+       thirty-six cleared 32, and `ladder.probe` calls that out directly: a
+       figure every career reaches whatever they do is not a relationship, it
+       is a fixture.
+
+       60 wants three districts, which is the 75th of the new distribution and
+       so sits where 32 sat in the old one.
     */
-    owesAbove: 32,
+    owesAbove: 60,
     needsInfluence: 0,
   },
   {
@@ -161,7 +238,7 @@ export const CIVIC_FIGURES: CivicFigureDef[] = [
        45 sits just above the median career's best, so keeping a neighbourhood
        on side is what buys it, which is what the figure is for.
     */
-    owesAbove: 45,
+    owesAbove: 50,
     needsInfluence: 6,
   },
 ];
@@ -173,6 +250,21 @@ export const CIVIC_BY_ID: Record<string, CivicFigureDef> = Object.fromEntries(
 export const CIVIC = {
   /** Everybody decides how they feel about you once a week. */
   intervalDays: 7,
+  /**
+   * Days before doing the same man a favour counts for anything again.
+   *
+   * A generated memo offers to fix a civic figure's problem for $9,000, and it
+   * paid +12 standing every time it was answered. The memo pool regenerates,
+   * so there was no ceiling on it at all — which is precisely the shop this
+   * file exists to refuse, wearing a memo's clothes.
+   *
+   * Nobody found it until the heat work tripled what a family holds and the
+   * probe bot started paying every time. `INFLUENCE_FROM` records the same
+   * bug in another form and fixed it the same way: a fortnight on the credit,
+   * not on the action. You may help as often as you like, and the money goes
+   * either way — what is capped is how often it *counts*.
+   */
+  helpCooldownDays: 14,
 
   /**
    * How fast standing moves toward what they see, per week.
@@ -195,7 +287,7 @@ export const CIVIC = {
    * somebody in the division inside thirteen weeks — and it is now a harder
    * thirteen weeks.
    */
-  driftPerWeek: 5.2,
+  driftPerWeek: 6.2,
 
   /**
    * Standing lost each week they are not owed anything and nothing is going

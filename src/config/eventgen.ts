@@ -109,6 +109,20 @@ export const GEN_SHAPES: GenShapeDef[] = [
   { id: 'gen_the_take_is_short', subject: 'district', weight: 5, cooldownDays: 10 },
   { id: 'gen_a_name_came_up', subject: 'crew', weight: 5, cooldownDays: 9 },
   /*
+     The man you put in charge of a street, asking for something.
+
+     Delegation was the largest late-career system with no memo surface at all.
+     Every other shape here fires on something an early family already has — a
+     man, a front, a district, a case — so the generated supply thinned exactly
+     where the authored pool had also been round twice. `ladder.probe` measured
+     the generated half carrying 31% of the situations that arrive after day
+     180 against a claim of a third.
+
+     Gated on a steward who has actually held the place for a season, so it is
+     a relationship reporting in rather than an introduction.
+  */
+  { id: 'gen_steward_asks', subject: 'district', weight: 5, cooldownDays: 12 },
+  /*
      Rarer than the rest, and a month apart, because it is the only shape whose
      subject is always there.
 
@@ -131,6 +145,8 @@ export const GEN_SHAPES: GenShapeDef[] = [
  * into the room.
  */
 export const GEN_WHEN = {
+  /** A steward has to have held the place a season before he asks for more. */
+  stewardSeasonDays: 90,
   /**
    * Aggrieved enough to come and say so.
    *
@@ -221,6 +237,12 @@ export const GEN_WHEN = {
  * same range so a generated memo cannot outweigh a written one.
  */
 export const GEN_EFFECT = {
+  /** What backing a steward's request costs, and what his loyalty does for it. */
+  stewardBackingCost: 14_000,
+  stewardBackedLoyalty: 9,
+  stewardBackedInfluence: 4,
+  /** ...and what refusing costs, which is a grievance rather than a number. */
+  stewardRefusedLoyalty: 7,
   /**
    * Hearing somebody out costs nothing and is worth something.
    *
@@ -305,7 +327,6 @@ export const GEN_EFFECT = {
   outsideDeclineStanding: -6,
 
   /** What counsel is worth against a file that is moving. */
-  paperLayLow: true,
   paperRideRespect: 2,
 
   /** Somebody of yours is in a cell. */

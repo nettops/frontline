@@ -43,7 +43,7 @@ import {
   type NationalityDef,
 } from '../config/nationalities';
 import { GOAL_BY_ID, GOAL_CERTAIN_ABOVE, GOAL_VISIBLE_ABOVE } from '../config/goals';
-import { DAYS_PER_YEAR, FEAR, ROLE_WAGE, rankIndex } from '../config/economy';
+import { DAYS_PER_YEAR, FEAR, ROLE_WAGE } from '../config/economy';
 import { priced, prices } from './market';
 import { DIFFICULTY_BY_ID } from '../config/difficulty';
 
@@ -518,14 +518,21 @@ export function driftNpcs(state: GameState, rng: Rng): void {
 
     npc.stats.loyalty = clamp(npc.stats.loyalty + loyaltyDelta, 0, 100);
 
-    // Standing with you tracks your rank; success is contagious.
-    npc.stats.respectForBoss = clamp(
-      npc.stats.respectForBoss +
-        (rankIndex(state.player.rank) * DRIFT.respectDriftPerRank) / 4 -
-        1,
-      0,
-      100,
-    );
+    /*
+       Standing with you decays, and nothing here builds it back.
+
+       This read `(rankIndex(player.rank) * DRIFT.respectDriftPerRank) / 4 - 1`
+       and the comment said "standing with you tracks your rank". `player.rank`
+       is pinned at the first rung, so `rankIndex` is 0 for every career ever
+       played and the whole expression was `-1`. The rank half was removed when
+       the ladder went; this term kept referencing it and kept compiling.
+
+       Left as the plain decay it has always actually been, rather than
+       repointed at `standing()` — what should build respect for the boss back
+       up is a design question, not a cleanup, and inventing an answer inside a
+       dead-code sweep is how the last one got missed.
+    */
+    npc.stats.respectForBoss = clamp(npc.stats.respectForBoss - 1, 0, 100);
 
     // --- behaviour thresholds -------------------------------------------
 

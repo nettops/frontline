@@ -124,9 +124,6 @@ export const CAREER_SHAPES: CareerShapeDef[] = [
   },
 ];
 
-export const SHAPE_BY_ID: Record<string, CareerShapeDef> = Object.fromEntries(
-  CAREER_SHAPES.map((s) => [s.id, s]),
-);
 
 /**
  * The bars each shape is tested against.
@@ -140,8 +137,37 @@ export const SHAPE_BY_ID: Record<string, CareerShapeDef> = Object.fromEntries(
 export const SHAPE_BARS = {
   /** Districts held for the Kingpin. The 75th percentile at day 300 is 4. */
   kingpinDistricts: 4,
-  /** Estate for the Financial Boss. */
-  financierEstate: 250_000,
+  /**
+   * Estate for the Financial Boss.
+   *
+   * Was 250,000, sized against a day-300 distribution whose median career
+   * held one front and about $30,000. Restaking the job table above the
+   * street tier moved that distribution a long way: `ladder.probe` now reads
+   * the estate at 120,067 / 483,657 / 852,354 for the 40th, median and 75th,
+   * so the old bar had fallen *below the median career* and handed 15 of 36
+   * careers the same name — the horoscope this file's header forbids, and the
+   * same way `legitimateAbove` failed before it.
+   *
+   * 750,000 was just under the 75th when it was set, which is where that bar
+   * was put and for the same reason: the quarter of careers that really did
+   * compound.
+   *
+   * **Re-plotted.** The heat work made decay a share of the load, and the
+   * estate distribution moved out from under this figure — 40th / median /
+   * 75th went from 476,920 / 541,253 / 863,865 to
+   * 1,300,875 / 1,484,565 / 2,261,574. A bar at 750,000 now sits well below
+   * the median, so "The Financial Boss" was the verdict on 15 careers in 36
+   * and the horoscope condition this file's header forbids had quietly come
+   * true again.
+   *
+   * Re-derived rather than nudged, and placed by DIRECTOR section 5 — between
+   * the median and the 75th — rather than by the original "just under the
+   * 75th". At the 75th the shape went nearly extinct, 1 career in 36, because
+   * the heavier-weighted shapes take most of the careers that clear it. This
+   * lands it at 3, with the most common shape at 14 of 36 and the horoscope
+   * bar clear.
+   */
+  financierEstate: 1_850_000,
   /**
    * Legitimacy for the Legitimate Boss, 0..100.
    *

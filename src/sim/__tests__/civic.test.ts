@@ -19,6 +19,7 @@ import {
   canSpendFavour,
   civicRead,
   figure,
+  helpFigure,
   spendFavour,
   tickCivic,
 } from '../civic';
@@ -268,5 +269,78 @@ describe('spending a favour', () => {
       home.sentiment,
       'the district is still below the bar that refuses to sell you a front',
     ).toBeGreaterThan(SENTIMENT_HOSTILE_BELOW);
+  });
+});
+
+/*
+   Doing a councilman a favour, and the shop that was hiding inside it.
+
+   `gen_someone_outside` offered $9,000 to fix a civic figure's problem, and
+   paid out +1 to the player's influence and +12 to that figure's standing. It
+   was uncapped and the memo pool regenerates, so nine of them bought the
+   patron's Influence 9 for $81,000 — in an economy whose median career peaks
+   at $982,554.
+
+   `INFLUENCE_FROM` already records this exact bug in another form:
+   `demand_tribute` cost nothing and "twenty demands in one afternoon were
+   credited ten times over, on the attribute the game presents as the hard one
+   to train." It was fixed with a fortnight's cooldown on the credit. The memo
+   route had the identical hole and nobody found it, because until the heat
+   work landed the bot was too poor to walk through it.
+
+   Two things changed. The influence grant is gone — helping a man makes *him*
+   think better of you, which is the fiction; it does not buy general political
+   pull, which is the shop `civic.ts` exists to refuse. And the standing is
+   rate-limited on the same terms `approach` is: the credit is capped, the
+   action is not. You may help as often as you like and the money goes either
+   way.
+*/
+describe('helping somebody outside the family', () => {
+  it('makes that man think better of you', () => {
+    const state = game();
+    const before = figure(state, 'captain').standing;
+    expect(helpFigure(state, 'captain', 12)).toBe(true);
+    expect(figure(state, 'captain').standing).toBeGreaterThan(before);
+  });
+
+  it('credits it once a fortnight and not twice', () => {
+    const state = game();
+    helpFigure(state, 'captain', 12);
+    const after = figure(state, 'captain').standing;
+
+    state.day += 1;
+    expect(helpFigure(state, 'captain', 12)).toBe(false);
+    expect(figure(state, 'captain').standing).toBe(after);
+  });
+
+  it('credits it again once the fortnight is up', () => {
+    const state = game();
+    helpFigure(state, 'captain', 12);
+    const after = figure(state, 'captain').standing;
+
+    state.day += CIVIC.helpCooldownDays;
+    expect(helpFigure(state, 'captain', 12)).toBe(true);
+    expect(figure(state, 'captain').standing).toBeGreaterThan(after);
+  });
+
+  it('is per person, so one man on the phone does not silence the rest', () => {
+    const state = game();
+    helpFigure(state, 'captain', 12);
+    expect(helpFigure(state, 'judge', 12)).toBe(true);
+  });
+
+  it('buys nothing at all in the way of general pull', () => {
+    /*
+       The whole point. A man you helped thinks better of you; the city does
+       not hand you influence for it. Influence is what `INFLUENCE_FROM` is
+       for, and it is deliberately the hard one.
+    */
+    const state = game();
+    const before = state.player.attributes.influence;
+    for (let i = 0; i < 12; i++) {
+      state.day += CIVIC.helpCooldownDays;
+      helpFigure(state, 'captain', 12);
+    }
+    expect(state.player.attributes.influence).toBe(before);
   });
 });

@@ -8,7 +8,7 @@
 import { describe, expect, it } from 'vitest';
 import { newGame } from '../state';
 import { estate } from '../estate';
-import { rankRequirements } from '../player';
+import { controlledTerritories } from '../territory';
 import { putAway } from '../economy';
 import { acquireBusiness, canAcquire, ownedBusinesses } from '../business';
 import { BUSINESSES } from '../../config/businesses';
@@ -120,16 +120,13 @@ describe('what the family is worth', () => {
     expect(held.length).toBeGreaterThan(0);
     expect(estate(state).ground).toBe(0);
     /*
-       And the requirement that does count ground is still there.
+       And ground is still counted, somewhere that is not the estate.
 
-       Read at a rank whose *next* rung actually asks for districts — the table
-       hides requirements of zero, and Enforcer asks for none, so a fresh boss
-       would show no such row and prove nothing.
+       This used to read the rank table's "Districts held" row, which is gone
+       with the table. `controlledTerritories` is what that row was asking, and
+       it is what the job gates, the crew cap and the trades ask now.
     */
-    state.player.rank = 'crew_leader';
-    const districts = rankRequirements(state).find((r) => r.label === 'Districts held');
-    expect(districts).toBeDefined();
-    expect(districts?.needed).toBeGreaterThan(0);
+    expect(controlledTerritories(state).length).toBe(held.length);
   });
 
   it('values a save that has never heard of holdings', () => {

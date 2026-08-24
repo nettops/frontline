@@ -31,11 +31,13 @@ import { availableCrew } from '../../sim/npc';
 import { TIPS } from '../tips';
 import { Rng } from '../../sim/rng';
 import { buyPossession } from '../../sim/possessions';
+import { acquireBusiness, canAcquire } from '../../sim/business';
+import { BUSINESSES } from '../../config/businesses';
 
 /** Reached by playing a career straightforwardly. */
 const ORDINARY = [
   'first_job', 'it_saves', 'reading_people', 'wages', 'dirty_money', 'heat',
-  'case_open', 'ground', 'step_up', 'sitdown', 'grievance', 'delegate',
+  'case_open', 'ground', 'sitdown', 'grievance', 'delegate',
   'leaks', 'rivals', 'war', 'heir', 'trade', 'why',
   'something_of_your_own', 'the_game',
 ];
@@ -76,6 +78,24 @@ describe('the advice', () => {
         if (canRecruit(s, id).ok) {
           recruit(s, id);
           break;
+        }
+      }
+      /*
+         Buys a front whenever one is for sale.
+
+         The bot did not, and did not need to: the trade used to open on rank,
+         which it reached by playing. The trade reads premises now — two of
+         them — so a bot that never buys any can never see the `trade` tip, and
+         the tip would have been filed as unreachable when in fact it is the
+         bot that is incomplete. Buying the cheapest thing on offer is well
+         inside "playing a career straightforwardly".
+      */
+      for (const t of Object.values(s.territories)) {
+        for (const def of BUSINESSES) {
+          if (canAcquire(s, def.id, t.id).ok) {
+            acquireBusiness(s, def.id, t.id);
+            break;
+          }
         }
       }
       const where =

@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import { useGame, mutate } from '../../store';
+import { readLedger, ledgerWeeks, unexplained } from '../../sim/ledger';
+import { LEDGER, LEDGER_LABEL } from '../../config/ledger';
 import { Panel, Empty, KeyValue, Bar } from '../components';
 import {
   payrollForecast,
@@ -194,6 +196,8 @@ export default function FinancesPanel() {
       </div>
 
       <SilentPartner />
+
+      <Ledger />
 
       <div className="grid-2">
         <Panel title="Money">
@@ -584,5 +588,126 @@ function Lender({ id, facts }: { id: string; facts: BorrowerFacts }) {
         </p>
       )}
     </div>
+  );
+}
+
+/**
+ * The book. Where it came from, where it went, and what nothing could explain.
+ *
+ * Built because answering "the trade earns a fortune and I am not getting
+ * richer" took a probe and four attempts, and a player has neither. Two
+ * columns — the last twelve weeks, and the whole career — because a family
+ * that is bleeding this quarter and rich overall is a different problem from
+ * one that has never made anything.
+ *
+ * The last row is the one to read first. Categories are attached at call sites
+ * and money moves through more of them than any one pass labels, so whatever
+ * was not recognised is reconciled against the real balance every week and
+ * shown. A book that quietly omitted what it did not understand would be worse
+ * than no book at all.
+ */
+function Ledger() {
+  const state = useGame();
+  const rows = readLedger(state, 12);
+  const weeks = ledgerWeeks(state);
+  const odd = unexplained(state, 12);
+  const by = (key: string) => rows.find((r) => r.key === key)!;
+
+  const sum = (keys: readonly string[], pick: 'recent' | 'lifetime') =>
+    keys.reduce((total, k) => total + by(k)[pick], 0);
+  const inRecent = sum(LEDGER.income, 'recent');
+  const outRecent = sum(LEDGER.outgoings, 'recent');
+  const inLife = sum(LEDGER.income, 'lifetime');
+  const outLife = sum(LEDGER.outgoings, 'lifetime');
+
+  if (weeks.length === 0) {
+    return (
+      <Panel title="The book">
+        <Empty>
+          Nothing is written down yet. The first week closes on the next payday.
+        </Empty>
+      </Panel>
+    );
+  }
+
+  const money = (n: number) => (n < 0 ? `-${formatMoney(-n)}` : formatMoney(n));
+  const tone = (n: number) => (n > 0 ? 'good' : n < 0 ? 'hot' : 'faint');
+
+  return (
+    <Panel
+      title="The book"
+      action={<span className="tiny">{weeks.length} weeks kept</span>}
+    >
+      <table className="table">
+        <thead>
+          <tr>
+            <th>Where it moved</th>
+            <th className="num">Last 12 weeks</th>
+            <th className="num">The whole run</th>
+          </tr>
+        </thead>
+        <tbody>
+          {[...LEDGER.income, ...LEDGER.outgoings].map((key) => {
+            const row = by(key);
+            if (row.lifetime === 0 && row.recent === 0) return null;
+            return (
+              <tr key={key}>
+                <td>
+                  <div className="name-cell">
+                    <span className="name-main">{LEDGER_LABEL[key].name}</span>
+                    <span className="name-sub">{LEDGER_LABEL[key].blurb}</span>
+                  </div>
+                </td>
+                <td className={`num mono ${tone(row.recent)}`}>{money(row.recent)}</td>
+                <td className={`num mono ${tone(row.lifetime)}`}>{money(row.lifetime)}</td>
+              </tr>
+            );
+          })}
+          <tr>
+            <td>
+              <span className="name-main">Everything in</span>
+            </td>
+            <td className="num mono good">{money(inRecent)}</td>
+            <td className="num mono good">{money(inLife)}</td>
+          </tr>
+          <tr>
+            <td>
+              <span className="name-main">Everything out</span>
+            </td>
+            <td className="num mono hot">{money(outRecent)}</td>
+            <td className="num mono hot">{money(outLife)}</td>
+          </tr>
+          <tr>
+            <td>
+              <div className="name-cell">
+                <span className="name-main brass">What you kept</span>
+                <span className="name-sub">
+                  In, less out. Not the same as what the family is worth — see Put away.
+                </span>
+              </div>
+            </td>
+            <td className={`num mono ${tone(inRecent + outRecent)}`}>
+              {money(inRecent + outRecent)}
+            </td>
+            <td className={`num mono ${tone(inLife + outLife)}`}>{money(inLife + outLife)}</td>
+          </tr>
+          {(odd.recent !== 0 || odd.lifetime !== 0) && (
+            <tr>
+              <td>
+                <div className="name-cell">
+                  <span className="name-main faint">Nobody wrote it down</span>
+                  <span className="name-sub">
+                    Money that moved without a name on it. The book says so rather than
+                    quietly balancing itself.
+                  </span>
+                </div>
+              </td>
+              <td className="num mono faint">{money(odd.recent)}</td>
+              <td className="num mono faint">{money(odd.lifetime)}</td>
+            </tr>
+          )}
+        </tbody>
+      </table>
+    </Panel>
   );
 }

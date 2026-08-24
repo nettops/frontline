@@ -141,7 +141,7 @@ function play(seed: number, days: number, policy: Policy): Run {
     // Counted while it is true rather than at the end: rank can arrive later
     // and would then take the credit for a job behaviour had already opened.
     if (state.day % 7 === 0 && rankIndex(state.player.rank) < rankIndex('crew_leader')) {
-      const open = availableOperations(state).filter((o) => o.minRank === 'crew_leader').length;
+      const open = availableOperations(state).filter((o) => o.tier === 2).length;
       openedByBehaviour = Math.max(openedByBehaviour, open);
     }
 
@@ -306,7 +306,7 @@ describe('who you send', () => {
     */
     const byBehaviour = median(best.map((r) => r.openedByBehaviour));
     const kinds = median(best.map((r) => r.kindsRun));
-    const gated = OPERATIONS.filter((o) => o.minRank === 'crew_leader').length;
+    const gated = OPERATIONS.filter((o) => o.tier === 2).length;
 
     // eslint-disable-next-line no-console
     console.log(

@@ -41,8 +41,11 @@ import {
   possessions,
   sellPossession,
   seizeOnePossession,
+  tickPossessions,
 } from '../possessions';
 import { POSSESSION, POSSESSION_BY_ID, POSSESSIONS } from '../../config/possessions';
+import { PAYDAY_INTERVAL } from '../../config/economy';
+import { territoryList } from '../territory';
 import type { GameState } from '../types';
 
 function game(seed = 4, clean = 250_000): GameState {
@@ -101,6 +104,62 @@ describe('owning something', () => {
     const attempt = buyPossession(state, rng, 'roadster');
     expect(attempt.ok).toBe(false);
     expect(state.org.cash).toBe(900);
+  });
+
+  /*
+     Money put away is still your money.
+
+     Measured over 10,569 career-days: on the cash-only rule the dearest thing
+     ever in reach was the $75,000 house and the $160,000 one was reachable on
+     0% of days. Counting holdings it is reachable on 39%. The catalogue's top
+     end was not expensive, it was walled off — and the wall was a side effect
+     of a rule written about *dirty* money, which holdings are not. `putAway`
+     only ever takes from the clean pool.
+
+     Fronts have always drawn on holdings, and so have tribute and settlements.
+     This makes the third system agree with the two that already did.
+  */
+  it('counts money put away, the way buying a front does', () => {
+    const state = game(4, 5_000);
+    state.org.holdings = 250_000;
+    expect(canBuyPossession(state, 'old_place').ok).toBe(true);
+  });
+
+  it('takes it out of holdings first, and charges no hurry price for it', () => {
+    /*
+       No toll, for the reason `acquireBusiness` gives: moving money from a box
+       at a bank into a thing you own is not selling in a hurry. Measured, the
+       15% made a one-point difference to what a career could reach — so this
+       is about the three systems agreeing, not about the money.
+    */
+    const state = game(4, 5_000);
+    state.org.holdings = 250_000;
+    const price = priced(state, POSSESSION_BY_ID.old_place.cost);
+
+    buy(state, 'old_place');
+
+    expect(state.org.holdings).toBe(250_000 - price);
+    expect(state.org.cash).toBe(5_000);
+  });
+
+  it('takes the remainder off the wallet when holdings do not cover it', () => {
+    const state = game(4, 60_000);
+    const price = priced(state, POSSESSION_BY_ID.old_place.cost);
+    state.org.holdings = price - 20_000;
+
+    buy(state, 'old_place');
+
+    expect(state.org.holdings).toBe(0);
+    expect(state.org.cash).toBe(40_000);
+  });
+
+  it('still will not touch dirty money, however it is paid for', () => {
+    // The rule the catalogue actually rests on, and the one this must not
+    // weaken: a suitcase does not become a Lincoln. Holdings are clean.
+    const state = game(4, 0);
+    state.org.dirtyCash = 500_000;
+    state.org.holdings = 0;
+    expect(canBuyPossession(state, 'watch').ok).toBe(false);
   });
 
   it('cannot be bought twice', () => {
@@ -315,5 +374,134 @@ describe('the personal half', () => {
     const state = game();
     buy(state, 'roadster');
     expect(ownsHome(state)).toBe(false);
+  });
+});
+
+/*
+   What a boss keeps, and what keeping it costs.
+
+   The nine original items are bought once and cost nothing to hold, which is
+   why they absorbed a career's surplus for about a month and then stopped. The
+   measurement behind this is in
+   `docs/superpowers/specs/2026-08-24-money-sinks-design.md`: a family earns
+   $1,128,015 of clean money and spends $142,297 of it, and 61% of everything
+   it is worth ends the run sitting in a savings account.
+
+   A one-off price cannot fix a flow. Upkeep can, and it is the only reason the
+   new tier is a decision rather than a purchase — the yacht has to be worth
+   wanting again every quarter.
+
+   Upkeep applies to the new tier only. The nine keep their terms.
+*/
+describe('what it costs to keep', () => {
+  it('charges nothing for the nine that were always free to hold', () => {
+    const state = game(4, 400_000);
+    buy(state, 'old_place');
+    const before = state.org.cash;
+    state.day = PAYDAY_INTERVAL;
+    tickPossessions(state);
+    expect(state.org.cash).toBe(before);
+  });
+
+  it('takes the weekly bill for something on the new tier', () => {
+    const state = game(4, 900_000);
+    buy(state, 'yacht');
+    const before = state.org.cash;
+    state.day = PAYDAY_INTERVAL;
+    tickPossessions(state);
+    const bill = priced(state, POSSESSION_BY_ID.yacht.upkeep!);
+    expect(state.org.cash).toBe(before - bill);
+  });
+
+  it('bills once a week and not every day', () => {
+    const state = game(4, 900_000);
+    buy(state, 'yacht');
+    const before = state.org.cash;
+    state.day = PAYDAY_INTERVAL + 1;
+    tickPossessions(state);
+    expect(state.org.cash).toBe(before);
+  });
+
+  it('adds the bills up when a boss keeps more than one thing', () => {
+    const state = game(4, 1_400_000);
+    buy(state, 'yacht');
+    buy(state, 'country_club');
+    const before = state.org.cash;
+    state.day = PAYDAY_INTERVAL;
+    tickPossessions(state);
+    const bill =
+      priced(state, POSSESSION_BY_ID.yacht.upkeep!) +
+      priced(state, POSSESSION_BY_ID.country_club.upkeep!);
+    expect(state.org.cash).toBe(before - bill);
+  });
+
+  it('does not take the thing away over one week nobody could pay for', () => {
+    /*
+       A yacht is not repossessed for a missed Friday, and a family that cannot
+       make this payment has larger problems than the boat. The bill is skipped
+       and the thing stays — see section 2.4 of the spec. What it does lose is
+       the week's work, which the foundation test below covers.
+    */
+    const state = game(4, 900_000);
+    buy(state, 'yacht');
+    state.org.cash = 0;
+    state.org.dirtyCash = 0;
+    state.org.holdings = 0;
+    state.day = PAYDAY_INTERVAL;
+    tickPossessions(state);
+    expect(heldPossessions(state).some((p) => p.defId === 'yacht')).toBe(true);
+  });
+});
+
+describe('the foundation', () => {
+  it('lifts how a district feels about you, week by week', () => {
+    const state = game(4, 900_000);
+    const t = territoryList(state)[0];
+    t.influence.player = 40;
+    const before = t.sentiment;
+
+    buy(state, 'foundation');
+    state.day = PAYDAY_INTERVAL;
+    tickPossessions(state);
+
+    expect(t.sentiment).toBeGreaterThan(before);
+  });
+
+  it('reaches only the districts the family is actually in', () => {
+    // Charity in a neighbourhood you have never set foot in buys nothing,
+    // because nobody there is watching you to begin with.
+    const state = game(4, 900_000);
+    const near = territoryList(state)[0];
+    const far = territoryList(state)[1];
+    near.influence.player = 40;
+    far.influence.player = 0;
+    const farBefore = far.sentiment;
+
+    buy(state, 'foundation');
+    state.day = PAYDAY_INTERVAL;
+    tickPossessions(state);
+
+    expect(far.sentiment).toBe(farBefore);
+  });
+
+  it('does nothing at all in a week it could not be paid for', () => {
+    /*
+       The whole point of keeping the thing through a missed payment: what you
+       lose is the work, not the asset. A foundation nobody funded is a name on
+       a letterhead.
+    */
+    const state = game(4, 900_000);
+    const t = territoryList(state)[0];
+    t.influence.player = 40;
+
+    buy(state, 'foundation');
+    state.org.cash = 0;
+    state.org.dirtyCash = 0;
+    state.org.holdings = 0;
+    const before = t.sentiment;
+    state.day = PAYDAY_INTERVAL;
+    tickPossessions(state);
+
+    expect(t.sentiment).toBe(before);
   });
 });

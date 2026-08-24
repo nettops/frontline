@@ -12,7 +12,7 @@
 import { describe, expect, it } from 'vitest';
 import { newGame } from '../state';
 import { cleanWorth, putAway, spend, takeBack, totalFunds } from '../economy';
-import { rankRequirements } from '../player';
+import { estate } from '../estate';
 import { HOLDINGS } from '../../config/economy';
 import type { GameState } from '../types';
 
@@ -60,12 +60,20 @@ describe('putting money away', () => {
     expect(state.org.holdings).toBe(45_000);
   });
 
-  it('still counts as standing when the table asks', () => {
+  it('is still part of what the family is worth', () => {
+    /*
+       Money put away is not available to spend and is still yours. This read
+       the rank table's "Clean money" row, which is gone with the table;
+       `estate` is the figure that row reported and is what `legacy.ts` and the
+       front-health floor read now.
+    */
     const state = world();
-    const before = rankRequirements(state).find((r) => r.label === 'Clean money');
+    const before = Math.floor(estate(state).total);
     putAway(state, 45_000);
-    const after = rankRequirements(state).find((r) => r.label === 'Clean money');
-    expect(after?.current).toBe(before?.current);
+    expect(
+      Math.floor(estate(state).total),
+      'putting money somewhere safe made the family poorer',
+    ).toBe(before);
   });
 });
 

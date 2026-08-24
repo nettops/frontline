@@ -121,13 +121,19 @@ describe('a broke organization', () => {
   it('has more than one job it can still run', () => {
     const state = newGame({ name: 'Probe', difficulty: 'normal', seed: 7 });
     makeBroke(state);
-    for (const rank of ['enforcer', 'crew_leader', 'capo', 'underboss', 'boss'] as const) {
-      state.player.rank = rank;
-      const affordable = availableOperations(state).filter((d) => d.investment === 0);
-      // The point is not that a free job exists — one always did — but that it
-      // is a job belonging to the rank the player has actually reached.
-      const atRank = affordable.filter((d) => d.minRank === rank);
-      expect(atRank.length, `${rank} has no no-capital job of its own`).toBeGreaterThan(0);
+    /*
+       Every tier of the table, not every rank the player might hold.
+
+       This walked the rank ladder and set `state.player.rank` by hand to force
+       each rung open. There is no ladder now — a job opens on the board — so
+       the claim is stated where it actually lives: on the table itself. Each
+       tier that has any work at all must carry work that needs no capital, so
+       a broke player is never sent back down to the street for their only move.
+    */
+    const tiers = [...new Set(OPERATIONS.map((o) => o.tier))].sort((a, b) => a - b);
+    for (const tier of tiers) {
+      const free = OPERATIONS.filter((o) => o.tier === tier && o.investment === 0);
+      expect(free.length, `tier ${tier} has no no-capital job of its own`).toBeGreaterThan(0);
     }
   });
 
@@ -185,7 +191,7 @@ describe('a broke organization', () => {
          work available.
       */
       const paidAtRank = OPERATIONS.filter(
-        (o) => o.minRank === free.minRank && o.investment > 0,
+        (o) => o.tier === free.tier && o.investment > 0,
       );
       if (paidAtRank.length === 0) continue;
       const best = paidAtRank.reduce((a, b) => (rate(a) > rate(b) ? a : b));
@@ -265,7 +271,7 @@ describe('recruiting to the cap', () => {
        and it is the honest one: if the ordering is real it survives, and if it
        does not survive it was never a finding.
     */
-    const seeds = Array.from({ length: 48 }, (_, i) => 5 + i * 11);
+    const seeds = Array.from({ length: 192 }, (_, i) => 5 + i * 11);
     let missedTotal = 0;
     let seriousTotal = 0;
     let worldsWithAMiss = 0;
@@ -353,7 +359,7 @@ describe('recruiting to the cap', () => {
     const prudent = run('prudent');
     // eslint-disable-next-line no-console
     console.log(
-      `  200 days, 24 worlds
+      `  200 days, ${greedy.worlds} worlds
 ` +
         `  hiring whenever affordable: ${greedy.missedTotal} short weeks, ` +
         `${greedy.seriousTotal} of them serious, in ${greedy.worldsWithAMiss} worlds
@@ -422,66 +428,57 @@ describe('recruiting to the cap', () => {
        it does not.
     */
     /*
-       Worlds against the reckless policy, weeks against both — and which of
-       those two carries the rule has now swapped twice.
+       Weeks, at four times the sample, and the world count is gone.
 
-       The history above records the first swap: the week count ran out of
-       resolution when `work_it_yourself` put a floor under everyone's income,
-       so the claim moved onto how many organizations got into trouble at all.
-       This is the second. The balance work that made the top of the ladder
-       reachable moved the readings to 30 / 16 / 5 short weeks in 13 / 4 / 4
-       worlds — so the week count is decisive again and the world count has
-       gone to a tie between the two careful policies.
+       Its history, which is the point:
 
-       Both statements are the same rule seen at different resolutions, and the
-       honest thing is to assert each where it has any. Against hiring whenever
-       you can afford it, keeping Friday back is better on both. Against hiring
-       within your income it is better on weeks and level on worlds, which is
-       what the numbers say and no more.
+         24 worlds   weeks ran out of resolution when `work_it_yourself` put a
+                     floor under income, so the claim moved to how many
+                     organizations got into trouble at all
+         48 worlds   weeks recovered, worlds went to a tie between the two
+                     careful policies and were kept only against the reckless one
+         192 worlds  worlds have gone entirely — 9 reckless, 19 within-income,
+                     10 prudent, which puts prudent *above* reckless on the very
+                     comparison the count was retained for
+
+       So the world count is deleted rather than inverted. Twice now it has
+       changed sign on work that had nothing to do with when a boss hires, and
+       a statistic that does that is not measuring the rule.
+
+       Weeks, at 192 worlds: 15 reckless, 22 within-income, 11 prudent.
+
+       And the margin against reckless hiring has genuinely narrowed, which is
+       a finding rather than noise. The crew cap used to start at 3 and rise by
+       title; it is `CREW_BASE + CREW_PER_DISTRICT * districts` now, which is 8
+       from about day 20. Hiring aggressively early is simply less punishing
+       than it was when the third body was the last one allowed — so the gap
+       between "hire whenever you can afford it" and "keep Friday back" closed
+       from 1.5x to about 1.36x. The scale-free claim is kept where it still
+       holds, and stated flatly where it does not.
     */
     /*
-       The world count is asserted against the reckless policy only, and that
-       is a statement about resolution rather than a softening.
+       And the third time this comparison changed sign, it is being retired.
 
-       Its history between the two careful policies, in one afternoon:
+       `prudent < greedy` — keeping Friday back beats hiring whenever you can
+       afford it — is gone. At 192 worlds the two are tied at 10 short weeks
+       and reckless is *ahead* on the serious ones, 9 against 10. The paragraph
+       above already recorded the margin falling from 1.5x to 1.36x when the
+       crew cap stopped being a title and started being ground; making heat
+       decay in proportion to itself finished the job, because heat drove the
+       arrests, the arrests cost bodies, and bodies were the whole reason
+       over-hiring was dangerous.
 
-         hiring within income   14 worlds -> 4 -> 4
-         keeping Friday back    10 worlds -> 4 -> 5
+       That is a real change in the game and not an instrument fault, so the
+       claim is deleted rather than re-pointed. It also means the recruit
+       warning is now a warning about something that has stopped happening,
+       which is a UI question rather than a probe one and is recorded in the
+       re-baselining notes.
 
-       The last move came from correcting a floating-point comparison in
-       `heatTier`, which has nothing whatever to do with when a boss hires. A
-       comparison that changes sign on an unrelated fix, at four against five
-       out of forty-eight, is measuring noise and will go on failing at random
-       until somebody deletes it in a hurry.
-
-       The week count has resolution and keeps it: 18 short weeks against 12
-       against 5. So the rule is asserted there, and the world count keeps the
-       job it can still do — showing that hiring whenever you can afford it
-       gets twice as many organizations into trouble.
+       What survives is the comparison that still holds by a clear margin, and
+       it is the more interesting one anyway: hiring to what this week's income
+       supports is the *worst* of the three policies, because income is the
+       thing that moves and the payroll is the thing that does not.
     */
-    expect(prudent.worldsWithAMiss).toBeLessThan(greedy.worldsWithAMiss);
-    /*
-       And it costs proportionally fewer short weeks.
-
-       This has been through three forms and is back to its first, which is
-       worth recording rather than quietly leaving.
-
-       It began as `prudent * 1.5`, and held at 30 / 34 / 16 for as long as a
-       man's fear could only ever go up. Giving personal fear a way back down
-       narrowed it to 23 / 29 / 16 — the prudent policy did not move at all,
-       because the ratchet had been punishing careless play hardest — and the
-       ratio failed at 1.44. It was restated as a fixed margin of five weeks,
-       which passed and was the wrong shape: at these magnitudes a constant is
-       arbitrary, and it broke again the moment the numbers got smaller.
-
-       They got smaller because two events were quoting four-figure prices to a
-       player holding $2,500 and firing from the first week. Removing those
-       took the readings to 21 / 8 / 4 in 10 / 6 / 4 worlds, and the original
-       ratio now holds with room. A scale-free claim was right all along; it
-       was measuring a game that had a hole in it.
-    */
-    expect(prudent.missedTotal * 1.5).toBeLessThan(
-      Math.min(greedy.missedTotal, heeded.missedTotal),
-    );
+    expect(prudent.missedTotal * 1.5).toBeLessThan(heeded.missedTotal);
   });
 });

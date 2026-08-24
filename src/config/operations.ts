@@ -24,6 +24,27 @@
  * paid jobs are still strictly better whenever you can afford them, which is
  * the point: the no-capital job is the way back to the table, not a way to
  * live at it.
+ *
+ * A second rule was added later, after measurement found the table breaking
+ * it badly: **return on capital rises with the tier**. That is the payout
+ * times the odds divided by the stake, and it used to *fall* — a paid mean of
+ * 4.7x among street work against 1.9x at Boss. The table asked for more money
+ * at every rung and gave back a thinner slice of it, which is backwards for a
+ * ladder whose top rungs are gated on a stock of clean cash: $130,000 for
+ * Underboss, $420,000 for Boss. Twenty-four careers reached Crew Leader or
+ * Capo and none went further, and the five jobs above Capo were shut on 100%
+ * of 3,600 measured days.
+ *
+ * The curve was built by cutting the stakes above the street rather than by
+ * raising the payouts, for two reasons. Payouts are the part of this table a
+ * player reads as fiction, and a Port Operation that suddenly pays double is a
+ * different story rather than a better-priced one. And the stake was itself a
+ * gate — 35% of the days Union Local was open, it was open and unaffordable —
+ * so the same edit that fixes the ratio also puts the job on the board. The
+ * street tier keeps its $150 to $800 stakes untouched: the paragraph above is
+ * why, and a tidier curve is not worth taking that floor away.
+ *
+ * `opReturn.test.ts` guards this; `broke.probe.test.ts` guards the rule above.
  */
 
 import type { OperationDef, OperationRisk } from '../sim/types';
@@ -55,7 +76,7 @@ export const OPERATIONS: OperationDef[] = [
     name: 'Work It Yourself',
     description:
       'Nobody to send, so you go. It is beneath you now and it was all you did once. Small money and nobody else to blame.',
-    minRank: 'street_criminal',
+    tier: 0,
     risk: 'low',
     crewRequired: 0,
     investment: 0,
@@ -72,7 +93,7 @@ export const OPERATIONS: OperationDef[] = [
     name: 'Corner Shakedown',
     description:
       'Lean on a few shopkeepers who have nobody to call. Small money, but it is money tonight.',
-    minRank: 'street_criminal',
+    tier: 0,
     risk: 'low',
     crewRequired: 1,
     investment: 0,
@@ -88,7 +109,7 @@ export const OPERATIONS: OperationDef[] = [
     id: 'boost_cars',
     name: 'Boost Cars',
     description: 'Lift vehicles off the street and move them the same night.',
-    minRank: 'street_criminal',
+    tier: 0,
     risk: 'low',
     crewRequired: 2,
     investment: 200,
@@ -104,7 +125,7 @@ export const OPERATIONS: OperationDef[] = [
     id: 'burglary_run',
     name: 'Burglary Run',
     description: 'A list of empty houses and a short window to work in.',
-    minRank: 'street_criminal',
+    tier: 0,
     risk: 'moderate',
     crewRequired: 2,
     investment: 150,
@@ -134,7 +155,11 @@ export const OPERATIONS: OperationDef[] = [
     name: 'Protection Racket',
     description:
       'A block of businesses paying weekly so nothing happens to them. Steady, visible, hard to walk back.',
-    minRank: 'enforcer',
+    opens: {
+      need: 'a district you can work without asking',
+      met: (b) => b.districtsHeld >= 1,
+    },
+    tier: 1,
     risk: 'moderate',
     crewRequired: 2,
     investment: 500,
@@ -155,10 +180,14 @@ export const OPERATIONS: OperationDef[] = [
     id: 'fence_goods',
     name: 'Fence Stolen Goods',
     description: 'Buy hot merchandise cheap, move it through people who do not ask.',
-    minRank: 'enforcer',
+    opens: {
+      need: 'somewhere of your own to move it through',
+      met: (b) => b.fronts >= 1,
+    },
+    tier: 1,
     risk: 'moderate',
     crewRequired: 2,
-    investment: 2_000,
+    investment: 900,
     payout: [3_500, 7_000],
     durationDays: 3,
     baseSuccess: 0.78,
@@ -171,7 +200,11 @@ export const OPERATIONS: OperationDef[] = [
     id: 'truck_hijack',
     name: 'Truck Hijacking',
     description: 'A loaded trailer, a quiet stretch of road, a fifteen minute window.',
-    minRank: 'enforcer',
+    opens: {
+      need: 'a district you can work without asking',
+      met: (b) => b.districtsHeld >= 1,
+    },
+    tier: 1,
     risk: 'high',
     crewRequired: 3,
     investment: 800,
@@ -189,7 +222,11 @@ export const OPERATIONS: OperationDef[] = [
     name: 'Freelance Muscle',
     description:
       'Somebody else has work that needs doing and nobody to do it. Flat fee, their problem, your hands. No outlay — you are selling the only thing you have.',
-    minRank: 'enforcer',
+    opens: {
+      need: 'three people on the payroll',
+      met: (b) => b.crew >= 3,
+    },
+    tier: 1,
     risk: 'moderate',
     crewRequired: 1,
     investment: 0,
@@ -208,20 +245,20 @@ export const OPERATIONS: OperationDef[] = [
     name: 'Backroom Card Game',
     description:
       'Run the house on a standing game. Reliable earnings and a room full of people who know your face.',
-    minRank: 'crew_leader',
+    opens: {
+      need: 'two districts and a room of your own',
+      met: (b) => b.districtsHeld >= 2 && b.fronts >= 1,
+    },
+    tier: 2,
     /*
        A game needs a room, and it needs people who know to come to it.
 
        Both of those are a district you already stand in and have been leaning
        on. Nobody sets up a table in a neighbourhood where they are a stranger.
     */
-    opens: {
-      need: 'a district of your own and four rackets run in it',
-      met: (b) => b.districtsHeld >= 1 && (b.opsBy.protection_racket ?? 0) >= 4,
-    },
     risk: 'moderate',
     crewRequired: 4,
-    investment: 8_000,
+    investment: 3_400,
     payout: [16_000, 32_000],
     durationDays: 7,
     baseSuccess: 0.74,
@@ -234,19 +271,19 @@ export const OPERATIONS: OperationDef[] = [
     id: 'counterfeit_run',
     name: 'Counterfeit Goods Run',
     description: 'Fake product, real distribution, and a paper trail you have to manage.',
-    minRank: 'crew_leader',
+    opens: {
+      need: 'two fronts and five fencing jobs behind you',
+      met: (b) => b.fronts >= 2 && (b.opsBy.fence_goods ?? 0) >= 5,
+    },
+    tier: 2,
     /*
        Fakes are worth nothing until there is somewhere they can be sold as
        real, and the people who know where that is are the people who have been
        moving goods.
     */
-    opens: {
-      need: 'five fencing jobs and a front to run them through',
-      met: (b) => (b.opsBy.fence_goods ?? 0) >= 5 && b.fronts >= 1,
-    },
     risk: 'high',
     crewRequired: 4,
-    investment: 12_000,
+    investment: 4_900,
     payout: [25_000, 48_000],
     durationDays: 6,
     baseSuccess: 0.7,
@@ -260,18 +297,18 @@ export const OPERATIONS: OperationDef[] = [
     name: 'Warehouse Job',
     description:
       'Everything on the floor, out in one night. Big score, big footprint, no way to do it quietly.',
-    minRank: 'crew_leader',
+    opens: {
+      need: 'somewhere to put it and six to carry it',
+      met: (b) => b.fronts >= 2 && b.crew >= 6,
+    },
+    tier: 2,
     /*
        You learn where the loads go by taking the trucks first, and a load you
        cannot store is a load you have to sell in a hurry.
     */
-    opens: {
-      need: 'three truck jobs and somewhere to put the load',
-      met: (b) => (b.opsBy.truck_hijack ?? 0) >= 3 && b.fronts >= 1,
-    },
     risk: 'high',
     crewRequired: 5,
-    investment: 10_000,
+    investment: 6_000,
     payout: [30_000, 70_000],
     durationDays: 5,
     baseSuccess: 0.62,
@@ -303,18 +340,18 @@ export const OPERATIONS: OperationDef[] = [
     name: 'Debt Collection',
     description:
       'A book of other people’s bad paper, bought at a discount. Collecting it is the job.',
-    minRank: 'crew_leader',
+    opens: {
+      need: 'four to send and six jobs hired out as muscle',
+      met: (b) => b.crew >= 4 && (b.opsBy.freelance_muscle ?? 0) >= 6,
+    },
+    tier: 2,
     /*
        People come to you to collect once enough of them have watched you do it
        for somebody else — and you need the hands to send when they do.
     */
-    opens: {
-      need: 'six jobs hired out as muscle, and four people to send',
-      met: (b) => (b.opsBy.freelance_muscle ?? 0) >= 6 && b.crew >= 4,
-    },
     risk: 'low',
     crewRequired: 2,
-    investment: 2_000,
+    investment: 1_200,
     payout: [5_000, 11_000],
     durationDays: 4,
     baseSuccess: 0.8,
@@ -328,18 +365,18 @@ export const OPERATIONS: OperationDef[] = [
     name: 'Union Local',
     description:
       'Put your man in at the hall. Slow, expensive, and afterwards the trucks move when you say so.',
-    minRank: 'crew_leader',
+    opens: {
+      need: 'two districts and somebody at the hall who owes you',
+      met: (b) => b.districtsHeld >= 2 && b.owedFigures >= 1,
+    },
+    tier: 2,
     /*
        A local is standing in a place rather than a job you can walk into, and
        standing in two places is what makes you worth talking to.
     */
-    opens: {
-      need: 'two districts and three rackets run across them',
-      met: (b) => b.districtsHeld >= 2 && (b.opsBy.protection_racket ?? 0) >= 3,
-    },
     risk: 'moderate',
     crewRequired: 3,
-    investment: 15_000,
+    investment: 6_250,
     payout: [34_000, 62_000],
     durationDays: 14,
     baseSuccess: 0.68,
@@ -354,15 +391,15 @@ export const OPERATIONS: OperationDef[] = [
     name: 'Rent Out the Crew',
     description:
       'Another outfit is short of bodies for a job of their own. They pay for the bodies, they keep the score. Costs nothing but the fortnight you do not have your people.',
-    minRank: 'crew_leader',
+    opens: {
+      need: 'six on the payroll',
+      met: (b) => b.crew >= 6,
+    },
+    tier: 2,
     /*
        Nobody rents men they have not seen work, and nobody rents out men they
        cannot spare.
     */
-    opens: {
-      need: 'six on the payroll and four jobs hired out as muscle',
-      met: (b) => b.crew >= 6 && (b.opsBy.freelance_muscle ?? 0) >= 4,
-    },
     risk: 'moderate',
     crewRequired: 2,
     investment: 0,
@@ -381,10 +418,14 @@ export const OPERATIONS: OperationDef[] = [
     name: 'Underground Club',
     description:
       'An unlicensed room that prints money six nights a week. Profitable, and a fixed address.',
-    minRank: 'capo',
+    opens: {
+      need: 'four fronts and two people in the city who owe you',
+      met: (b) => b.fronts >= 4 && b.owedFigures >= 2,
+    },
+    tier: 3,
     risk: 'moderate',
     crewRequired: 5,
-    investment: 60_000,
+    investment: 20_000,
     payout: [120_000, 195_000],
     durationDays: 12,
     baseSuccess: 0.72,
@@ -398,10 +439,14 @@ export const OPERATIONS: OperationDef[] = [
     name: 'Smuggling Run',
     description:
       'Contraband moved across a long route with too many hands touching it.',
-    minRank: 'capo',
+    opens: {
+      need: 'a district under your control and three fronts',
+      met: (b) => b.districtsControlled >= 1 && b.fronts >= 3,
+    },
+    tier: 3,
     risk: 'high',
     crewRequired: 6,
-    investment: 50_000,
+    investment: 17_500,
     payout: [110_000, 210_000],
     durationDays: 9,
     baseSuccess: 0.62,
@@ -424,10 +469,14 @@ export const OPERATIONS: OperationDef[] = [
     name: 'Protection Route',
     description:
       'Every business on four blocks, on the same schedule, run as one book rather than forty conversations.',
-    minRank: 'capo',
+    opens: {
+      need: 'four districts worked and three fronts',
+      met: (b) => b.districtsHeld >= 4 && b.fronts >= 3,
+    },
+    tier: 3,
     risk: 'low',
     crewRequired: 4,
-    investment: 12_000,
+    investment: 7_250,
     payout: [38_000, 66_000],
     durationDays: 10,
     baseSuccess: 0.78,
@@ -442,7 +491,11 @@ export const OPERATIONS: OperationDef[] = [
     name: 'Sit-Down Fees',
     description:
       'Two smaller outfits cannot settle something and both would rather you ruled on it than fight. You take a cut of whatever you award. Slow, and it costs you nothing but the weeks.',
-    minRank: 'capo',
+    opens: {
+      need: 'people in the city who owe you, and three districts to be seen in',
+      met: (b) => b.owedTotal >= 2 && b.districtsHeld >= 3,
+    },
+    tier: 3,
     risk: 'low',
     crewRequired: 3,
     investment: 0,
@@ -461,10 +514,14 @@ export const OPERATIONS: OperationDef[] = [
     name: 'Financial Scheme',
     description:
       'Money moved through instruments nobody in the crew understands, including you.',
-    minRank: 'underboss',
+    opens: {
+      need: 'two districts under your control and six fronts',
+      met: (b) => b.districtsControlled >= 2 && b.fronts >= 6,
+    },
+    tier: 4,
     risk: 'high',
     crewRequired: 6,
-    investment: 150_000,
+    investment: 50_000,
     payout: [350_000, 800_000],
     durationDays: 18,
     baseSuccess: 0.55,
@@ -478,10 +535,14 @@ export const OPERATIONS: OperationDef[] = [
     name: 'Port Operation',
     description:
       'Control of a dock and everything that crosses it. The kind of score that builds task forces.',
-    minRank: 'underboss',
+    opens: {
+      need: 'control of two districts, six fronts, and two people who owe you',
+      met: (b) => b.districtsControlled >= 2 && b.fronts >= 6 && b.owedFigures >= 2,
+    },
+    tier: 4,
     risk: 'extreme',
     crewRequired: 8,
-    investment: 180_000,
+    investment: 54_000,
     payout: [400_000, 750_000],
     durationDays: 14,
     baseSuccess: 0.58,
@@ -496,7 +557,11 @@ export const OPERATIONS: OperationDef[] = [
     name: 'Call In Tribute',
     description:
       'Go round everyone who owes you and ask for it at once. You are spending standing rather than money, and standing spent this way is noticed.',
-    minRank: 'underboss',
+    opens: {
+      need: 'two districts under your control and eight on the books',
+      met: (b) => b.districtsControlled >= 2 && b.crew >= 8,
+    },
+    tier: 4,
     risk: 'moderate',
     crewRequired: 4,
     investment: 0,
@@ -515,10 +580,14 @@ export const OPERATIONS: OperationDef[] = [
     name: 'Citywide Distribution Network',
     description:
       'Every corner of the map feeding one operation. Nothing this size stays invisible.',
-    minRank: 'boss',
+    opens: {
+      need: 'three districts under your control, eight fronts, and real favours owed',
+      met: (b) => b.districtsControlled >= 3 && b.fronts >= 8 && b.owedTotal >= 4,
+    },
+    tier: 5,
     risk: 'extreme',
     crewRequired: 12,
-    investment: 600_000,
+    investment: 170_000,
     payout: [1_400_000, 2_800_000],
     durationDays: 21,
     baseSuccess: 0.55,
@@ -532,7 +601,11 @@ export const OPERATIONS: OperationDef[] = [
     name: 'Enforce the Peace',
     description:
       'Every operation in the city pays you to make sure nothing happens to any of them. It takes no investment and most of a month, and everybody knows exactly who is keeping order.',
-    minRank: 'boss',
+    opens: {
+      need: 'three districts under your control and a rival who genuinely trusts you',
+      met: (b) => b.districtsControlled >= 3 && b.bestRivalTrust >= 25,
+    },
+    tier: 5,
     risk: 'high',
     crewRequired: 6,
     investment: 0,

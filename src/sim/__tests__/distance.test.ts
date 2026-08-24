@@ -144,68 +144,92 @@ describe('through heatScale, as the game calls it', () => {
  * for their whole length. These conditions are the other way in, and the thing
  * they must not become is the same wall a fortnight later.
  */
-describe('the behavioural routes', () => {
+describe('every route onto the board', () => {
   /*
-     Two kinds of `opens` route now, and they answer different questions.
+     There is one kind of route now, and every job has one.
 
-     The behavioural ones are a way past a **rank** the player cannot afford
-     yet — do the work, skip the promotion. The connected ones are a way past
-     rank entirely: they sit at `crime_lord` and open on who you know, so the
-     board differs between two bosses on the same rung. Splitting them keeps
-     the coverage assertion below meaningful; lumped together it would have
-     been satisfied by any ten jobs with a clause on them.
+     This file used to describe two: **behavioural** routes at Crew Leader,
+     which were a way past a rank the player could not afford, and
+     **connected** ones at Crime Lord, which were a way past rank entirely.
+     Both existed because rank was the real gate and `opens` was the exception
+     — six jobs of twenty-three had a clause and the other seventeen opened on
+     a title.
+
+     Rank is gone. Every gated job names something on the board, so the split
+     has nothing left to separate and the coverage claim below simply covers
+     the table. What has not changed is why the file exists: a condition
+     generic enough to be met by ordinary play is the clean-money wall again a
+     fortnight later, and the last test still says so.
   */
-  const BEHAVIOURAL = OPERATIONS.filter((o) => o.opens && o.minRank === 'crew_leader');
-  const CONNECTED = OPERATIONS.filter((o) => o.opens && o.minRank === 'crime_lord');
+  const ROUTED = OPERATIONS.filter((o) => o.opens);
 
   const ZERO: OpsBoard = {
-    rank: 0,
     districtsHeld: 0,
+    districtsControlled: 0,
     fronts: 0,
     crew: 0,
     opsBy: {},
     favoursOwed: {},
+    owedTotal: 0,
+    owedFigures: 0,
     bestRivalTrust: -100,
   };
-  const MINIMAL: Record<string, OpsBoard> = {
-    backroom_game: { ...ZERO, districtsHeld: 1, opsBy: { protection_racket: 4 } },
-    counterfeit_run: { ...ZERO, fronts: 1, opsBy: { fence_goods: 5 } },
-    warehouse_job: { ...ZERO, fronts: 1, opsBy: { truck_hijack: 3 } },
-    debt_collection: { ...ZERO, crew: 4, opsBy: { freelance_muscle: 6 } },
-    union_local: { ...ZERO, districtsHeld: 2, opsBy: { protection_racket: 3 } },
-    rent_the_crew: { ...ZERO, crew: 6, opsBy: { freelance_muscle: 4 } },
 
-    // The connected four. Each is one relationship and nothing else, which is
-    // the claim `connections.test.ts` makes and this file re-checks from the
-    // config side.
-    fix_a_case: { ...ZERO, favoursOwed: { judge: 1 } },
-    union_walkout: { ...ZERO, favoursOwed: { union: 1 } },
-    police_escort: { ...ZERO, favoursOwed: { captain: 1 } },
+  /** The least board that opens each job, written by hand from its clause. */
+  const MINIMAL: Record<string, OpsBoard> = {
+    freelance_muscle: { ...ZERO, crew: 3 },
+    fence_goods: { ...ZERO, fronts: 1 },
+    truck_hijack: { ...ZERO, districtsHeld: 1 },
+    protection_racket: { ...ZERO, districtsHeld: 1 },
+    rent_the_crew: { ...ZERO, crew: 6 },
+    debt_collection: { ...ZERO, crew: 4, opsBy: { freelance_muscle: 6 } },
+    backroom_game: { ...ZERO, districtsHeld: 2, fronts: 1 },
+    union_local: { ...ZERO, districtsHeld: 2, owedFigures: 1 },
+    counterfeit_run: { ...ZERO, fronts: 2, opsBy: { fence_goods: 5 } },
+    warehouse_job: { ...ZERO, fronts: 2, crew: 6 },
+    sitdown_fees: { ...ZERO, owedTotal: 2, districtsHeld: 3 },
+    underground_club: { ...ZERO, fronts: 4, owedFigures: 2 },
+    smuggling_run: { ...ZERO, districtsControlled: 1, fronts: 3 },
+    protection_route: { ...ZERO, districtsHeld: 4, fronts: 3 },
+    call_in_tribute: { ...ZERO, districtsControlled: 2, crew: 8 },
+    financial_scheme: { ...ZERO, districtsControlled: 2, fronts: 6 },
+    port_operation: { ...ZERO, districtsControlled: 2, fronts: 6, owedFigures: 2 },
+    citywide_network: { ...ZERO, districtsControlled: 5, fronts: 12, owedTotal: 4 },
+    enforce_the_peace: { ...ZERO, districtsControlled: 5, bestRivalTrust: 35 },
+
+    // The connected four, commented out of the table. Kept so that turning
+    // them back on does not silently arrive untested.
+    fix_a_case: { ...ZERO, favoursOwed: { judge: 1 }, owedTotal: 1, owedFigures: 1 },
+    union_walkout: { ...ZERO, favoursOwed: { union: 1 }, owedTotal: 1, owedFigures: 1 },
+    police_escort: { ...ZERO, favoursOwed: { captain: 1 }, owedTotal: 1, owedFigures: 1 },
     joint_venture: { ...ZERO, bestRivalTrust: 60 },
   };
-
-  const ROUTED = [...BEHAVIOURAL, ...CONNECTED];
 
   function boardSatisfying(op: (typeof OPERATIONS)[number]): OpsBoard {
     const board = MINIMAL[op.id];
     // Throws rather than skips: this is what fails loudly when somebody adds a
-    // seventh route and forgets to describe it here, instead of quietly
-    // testing six things and reporting green.
+    // route and forgets to describe it here, instead of quietly testing the
+    // rest and reporting green.
     if (!board) throw new Error(`no minimal board written for ${op.id}`);
     return board;
   }
 
-  it('covers every crew_leader job and nothing else', () => {
-    const gated = OPERATIONS.filter((o) => o.minRank === 'crew_leader');
-    expect(gated.length).toBe(6);
-    expect(BEHAVIOURAL.map((o) => o.id).sort()).toEqual(gated.map((o) => o.id).sort());
-  });
-
-  it('accounts for every routed job, of either kind', () => {
-    // The loud failure this file is built around: a new route with no minimal
-    // board written for it throws rather than being silently untested.
+  it('accounts for every routed job', () => {
     const withClause = OPERATIONS.filter((o) => o.opens).map((o) => o.id).sort();
     expect(ROUTED.map((o) => o.id).sort()).toEqual(withClause);
+  });
+
+  it('leaves the street work open, and only the street work', () => {
+    /*
+       Something has to be doable on the first morning, and it must not be
+       much. Everything ungated is tier 0 — the shakedowns and the burglary a
+       player opens the game with.
+    */
+    const free = OPERATIONS.filter((o) => !o.opens);
+    expect(free.length, 'nothing at all is open on day one').toBeGreaterThan(0);
+    for (const op of free) {
+      expect(op.tier, `${op.name} is open from the first morning and is not street work`).toBe(0);
+    }
   });
 
   it('says what it wants in words as well as in code', () => {
@@ -230,21 +254,26 @@ describe('the behavioural routes', () => {
     }
   });
 
-  it('does not open the whole tier at once', () => {
+  it('does not open a whole tier at once', () => {
     /*
        The failure this exists for: a condition generic enough to be satisfied
-       by ordinary play opens all six in the same week, which is the cash wall
-       replaced by a slightly later cash wall. Each condition has to be
-       specific enough that a board satisfying one leaves most of the others
-       shut.
+       by ordinary play opens its whole tier in the same week, which is the
+       clean-money wall replaced by a slightly later clean-money wall.
+
+       Judged within a tier rather than across the table, because a board that
+       opens a Port Operation *should* also open the smaller work — an outfit
+       holding two districts and six fronts has plainly earned the warehouse
+       job. What would be wrong is one condition unlocking everything at the
+       same level of ambition at once.
     */
     for (const op of ROUTED) {
       const board = boardSatisfying(op);
-      const alsoOpen = BEHAVIOURAL.filter((o) => o.id !== op.id && o.opens!.met(board));
+      const sameTier = ROUTED.filter((o) => o.tier === op.tier && o.id !== op.id);
+      const alsoOpen = sameTier.filter((o) => o.opens!.met(board));
       expect(
         alsoOpen.length,
         `${op.id}'s condition also opens ${alsoOpen.map((o) => o.id).join(', ')}`,
-      ).toBeLessThan(3);
+      ).toBeLessThan(Math.max(2, sameTier.length));
     }
   });
 });

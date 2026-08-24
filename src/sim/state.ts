@@ -103,7 +103,23 @@ function buildTerritories(
   rng: Rng,
   draws: HouseDraw[],
   homeInfluence = STARTING_HOME_INFLUENCE,
+  /*
+     How many districts this start already holds, home first.
+
+     A sandbox start used to say how far along it was by naming a rank. Nothing
+     reads rank now — the job table, the trades and the crew cap all read the
+     board — so the start has to hand over the ground itself, or "At the table"
+     seats a player with twelve people and one district, which is four over the
+     ceiling that same district buys them.
+  */
+  districts = 1,
 ): Record<string, Territory> {
+  const held = new Set(
+    [HOME_TERRITORY, ...TERRITORIES.map((d) => d.id).filter((id) => id !== HOME_TERRITORY)].slice(
+      0,
+      Math.max(1, districts),
+    ),
+  );
   const territories: Record<string, Territory> = {};
 
   for (const def of TERRITORIES) {
@@ -112,7 +128,7 @@ function buildTerritories(
     RIVAL_IDS.forEach((id, i) => {
       influence[id] = draws[i]?.seat.influence[def.id] ?? 0;
     });
-    influence.player = def.id === HOME_TERRITORY ? homeInfluence : 0;
+    influence.player = held.has(def.id) ? homeInfluence : 0;
 
     territories[def.id] = {
       id: def.id,
@@ -123,7 +139,7 @@ function buildTerritories(
       // In Simulation the player has never set foot anywhere, so the map is
       // fogged the same way it would be on day one of a career — you are
       // reading the city from outside it, which is the point.
-      visited: def.id === HOME_TERRITORY && homeInfluence > 0,
+      visited: held.has(def.id) && homeInfluence > 0,
       lastActionDay: 1,
     };
   }
@@ -269,12 +285,11 @@ export function newGame(opts: NewGameOptions): GameState {
     player: {
       name: opts.name.trim() || defaultName,
       nationality,
-      rank: start?.rank ?? 'street_criminal',
+      rank: 'street_criminal',
       attributes,
       attributeProgress: zeroAttributes(),
       opsCompleted: 0,
       opsFailed: 0,
-      pendingRank: null,
     },
 
     org: {
@@ -302,6 +317,7 @@ export function newGame(opts: NewGameOptions): GameState {
       rng,
       draws,
       mode === 'simulation' ? 0 : (start?.homeInfluence ?? undefined),
+      mode === 'simulation' ? 0 : (start?.districts ?? 1),
     ),
     businesses: {},
     factions: {},

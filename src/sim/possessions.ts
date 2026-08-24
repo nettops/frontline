@@ -26,6 +26,9 @@ import { Rng } from './rng';
 import { addLog, formatMoney } from './util';
 import { priced } from './market';
 import { cover } from './perception';
+import { note } from './ledger';
+import { adjustSentiment, hasPresence, territoryList } from './territory';
+import { PAYDAY_INTERVAL } from '../config/economy';
 import { POSSESSION, POSSESSION_BY_ID, type PossessionDef } from '../config/possessions';
 import type { GameState, Possession } from './types';
 
@@ -59,6 +62,28 @@ export function possessionDef(p: Possession): PossessionDef | undefined {
  */
 export function possessionValue(state: GameState, def: PossessionDef): number {
   return priced(state, def.cost);
+}
+
+/**
+ * What a boss can put toward something in his own name.
+ *
+ * The wallet plus what is put away, and no dirty money at any point — money in
+ * a box at a bank got there through `putAway`, which only ever draws on the
+ * clean pool, so none of it can be a suitcase.
+ *
+ * Holdings were left out of this for a long time, and the omission was a side
+ * effect rather than a decision: the rule the catalogue rests on is about
+ * *dirty* money, and the refusal message says so. Measured over 10,569
+ * career-days, the cash-only rule put the dearest thing on the shelf out of
+ * reach on every single one — the $160,000 house was affordable on 0% of days
+ * against 39% once holdings count. It was not priced high, it was walled off.
+ *
+ * `canAcquire` has always counted holdings toward a front, and diplomacy has
+ * always counted them toward what you can put on the table. This is the third
+ * system agreeing with the two that already did.
+ */
+export function cleanPurse(state: GameState): number {
+  return state.org.cash + (state.org.holdings ?? 0);
 }
 
 /** What everything still owned would be counted at. */
@@ -110,12 +135,14 @@ export function canBuyPossession(state: GameState, defId: string): Refusal {
   }
 
   const price = possessionValue(state, def);
-  if (state.org.cash < price) {
+  const purse = cleanPurse(state);
+  if (purse < price) {
     return {
       ok: false,
       reason:
-        `${formatMoney(price)}, and you have ${formatMoney(state.org.cash)} clean. ` +
-        `Dirty money does not buy things in your own name — that is what a front is for.`,
+        `${formatMoney(price)}, and you have ${formatMoney(purse)} clean including what is ` +
+        `put away. Dirty money does not buy things in your own name — that is what a front ` +
+        `is for.`,
     };
   }
   return { ok: true };
@@ -132,8 +159,19 @@ export function buyPossession(state: GameState, rng: Rng, defId: string): Bought
   const def = POSSESSION_BY_ID[defId];
   const price = possessionValue(state, def);
 
-  // By hand rather than through `spend`. See the note at the top of the file.
-  state.org.cash -= price;
+  /*
+     By hand rather than through `spend`. See the note at the top of the file.
+
+     Holdings first, and no hurry price, for the reason `acquireBusiness`
+     gives: moving money out of a box at a bank and into a thing you own is not
+     selling in a hurry. Measured, the 15% `takeBack` toll changed what a
+     career could reach by a single percentage point — so this is about the
+     three systems that spend clean money agreeing with each other, not about
+     the money.
+  */
+  const fromHoldings = Math.min(state.org.holdings ?? 0, price);
+  state.org.holdings = (state.org.holdings ?? 0) - fromHoldings;
+  state.org.cash -= price - fromHoldings;
 
   const possession: Possession = {
     id: `pos_${state.nextId++}`,
@@ -252,4 +290,75 @@ export function possessionRows(state: GameState): PossessionRow[] {
     });
   }
   return rows.sort((a, b) => b.value - a.value);
+}
+
+/**
+ * What a boss keeps, and what keeping it costs.
+ *
+ * Weekly. The nine original items are free to hold; the tier above them is not,
+ * and that is the whole reason it exists. A one-off price absorbs a few months
+ * of a surplus and then the pile resumes — measured, a family earns $1,128,015
+ * of clean money across a career and spends $142,297 of it. A standing bill is
+ * the only thing that makes an ornament a decision you keep making.
+ *
+ * ## Missing a week costs you the work, not the thing
+ *
+ * A yacht is not repossessed over one bad Friday, and a family that cannot find
+ * the mooring fee has larger problems than the boat. So an unpayable bill is
+ * skipped and everything stays owned.
+ *
+ * What it does lose is the week. An unfunded foundation moves no sentiment,
+ * because a foundation nobody paid for is a name on a letterhead. That keeps
+ * "what can I afford to keep running" a live question without building a
+ * repossession system nobody asked for.
+ *
+ * ## Why the money comes out by hand
+ *
+ * Same reason `buyPossession` does it: `spend()` takes dirty first, and a
+ * suitcase does not pay a country club subscription. This draws holdings then
+ * clean, exactly as buying does, so the money that funds the thing is the money
+ * that bought it.
+ */
+export function tickPossessions(state: GameState): void {
+  if (state.day % PAYDAY_INTERVAL !== 0) return;
+
+  const held = heldPossessions(state);
+  if (held.length === 0) return;
+
+  const kept = held
+    .map((p) => possessionDef(p))
+    .filter((d): d is PossessionDef => d !== undefined);
+
+  const bill = kept.reduce((sum, d) => sum + (d.upkeep ? priced(state, d.upkeep) : 0), 0);
+  const rounded = Math.round(bill);
+
+  if (rounded > 0) {
+    if (cleanPurse(state) < rounded) {
+      addLog(
+        state,
+        `Nothing went out on the upkeep this week. ${formatMoney(rounded)} was owed on what you keep.`,
+        'failure',
+      );
+      return;
+    }
+    const fromHoldings = Math.min(state.org.holdings ?? 0, rounded);
+    state.org.holdings = (state.org.holdings ?? 0) - fromHoldings;
+    state.org.cash -= rounded - fromHoldings;
+    note(state, 'premises', -rounded);
+  }
+
+  /*
+     And what the paid-for things do.
+
+     Only where the family is actually standing. Charity in a neighbourhood you
+     have never set foot in buys nothing, because nobody there was watching you
+     to begin with — and `hasPresence` is the same ten-point line every other
+     system uses to mean "they know who you are here".
+  */
+  const lift = kept.reduce((sum, d) => sum + (d.effect?.sentimentPerWeek ?? 0), 0);
+  if (lift > 0) {
+    for (const t of territoryList(state)) {
+      if (hasPresence(t)) adjustSentiment(state, t.id, lift);
+    }
+  }
 }

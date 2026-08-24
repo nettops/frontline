@@ -10,7 +10,13 @@ export interface HeatTier {
   min: number;
   max: number;
   name: string;
-  /** Multiplies the base decay rate. High heat barely bleeds off. */
+  /**
+   * Scales `HEAT_ABSORPTION` — what the organization makes go away by being
+   * large — so an outfit under siege gets less benefit from its own apparatus.
+   *
+   * This used to scale the base decay rate as well, and that is what made the
+   * meter a one-way door. See `HEAT_DECAY_SHARE`.
+   */
   decayMultiplier: number;
   /** Percentage points subtracted from operation success at this tier's peak. */
   description: string;
@@ -135,8 +141,40 @@ export function heatSeverity(heat: number): HeatSeverity {
   return 'hot';
 }
 
-/** Base points bled off per quiet day, before tier and difficulty scaling. */
-export const HEAT_DECAY_PER_DAY = 1.1;
+/**
+ * The share of current heat that comes off on a quiet day.
+ *
+ * This was `HEAT_DECAY_PER_DAY = 1.1`, a flat figure multiplied by
+ * `HeatTier.decayMultiplier` — and that multiplier *falls* as heat rises, from
+ * 1.0 down to 0.22. So the meter cleared slowest exactly where it was most
+ * overloaded, and measured across the whole scale it ran backwards: a family
+ * at 20 shed 1.17 points a day, one at 35 shed 0.96, one at 90 shed 0.44.
+ *
+ * Against that, generation scales with everything the player does — jobs,
+ * districts worked, trade moved, weeks at war — and outflow scaled with
+ * nothing. Measured over 101,664 career-days the meter took in 1.295 a day and
+ * gave back 0.924. A standing 40% surplus walked every career to the ceiling
+ * and held it: median heat 80, a third of all days in the top band of seven,
+ * and 0.469 points a day discarded at the clamp, which is over a quarter of
+ * everything the player did registering nowhere at all.
+ *
+ * A share of the load fixes both properties at once. Removal now rises with
+ * what there is to remove, and it is strongest where the surplus is largest.
+ *
+ * **The rule the old curve was protecting survives.** "You cannot idle your way
+ * down from 80" was written as a rate that collapsed; it is now a matter of
+ * time. Street heat carries a channel multiplier of 1.25, so on normal
+ * difficulty the effective rate is 0.0325 a day — a half-life of about three
+ * weeks of decay, or a month of calendar given the quiet-days gate lets decay
+ * run on 70% of days. Eighty down to forty is a month of doing nothing.
+ *
+ * Chosen by plotting seven values against the resulting distribution rather
+ * than by eye; see section 3.2 of
+ * `docs/superpowers/specs/2026-08-23-heat-ratchet-design.md`. Below about 0.018
+ * the top band still holds a sixth of every career; above about 0.030 the
+ * bottom two bands hold a quarter and the law system goes decorative.
+ */
+export const HEAT_DECAY_SHARE = 0.026;
 
 /** Days of no heat-generating activity before decay starts at all. */
 export const QUIET_DAYS_BEFORE_DECAY = 2;

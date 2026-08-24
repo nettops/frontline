@@ -45,8 +45,6 @@ export interface FactionDef {
   /** Starting influence by territory id. Everything unlisted is zero. */
   influence: Record<string, number>;
   personality: FactionPersonality;
-  startingWealth: number;
-  startingStrength: number;
 }
 
 const FACTIONS: FactionDef[] = [
@@ -59,8 +57,6 @@ const FACTIONS: FactionDef[] = [
     colour: '#c9a227',
     influence: {},
     personality: { aggression: 0, ambition: 0, commerce: 0, caution: 0 },
-    startingWealth: 0,
-    startingStrength: 0,
   },
   {
     id: 'falcone',
@@ -81,8 +77,6 @@ const FACTIONS: FactionDef[] = [
     // Rich, established, and mostly interested in staying that way. They react
     // to encroachment rather than seeking ground.
     personality: { aggression: 0.55, ambition: 0.35, commerce: 0.8, caution: 0.9 },
-    startingWealth: 900_000,
-    startingStrength: 78,
   },
   {
     id: 'vasari',
@@ -102,8 +96,6 @@ const FACTIONS: FactionDef[] = [
     },
     // Traders first. They would rather buy a district than fight for it.
     personality: { aggression: 0.4, ambition: 0.6, commerce: 1.0, caution: 0.6 },
-    startingWealth: 620_000,
-    startingStrength: 62,
   },
   {
     id: 'kestler',
@@ -122,8 +114,6 @@ const FACTIONS: FactionDef[] = [
     },
     // Hungry and reckless. The family most likely to come at the player early.
     personality: { aggression: 1.0, ambition: 0.95, commerce: 0.4, caution: 0.3 },
-    startingWealth: 240_000,
-    startingStrength: 45,
   },
 ];
 
