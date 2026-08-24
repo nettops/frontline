@@ -444,9 +444,11 @@ model cannot be in.
 
 ## pixel-fleet.html — cars that belong and cars that do not
 
-Fourteen vehicles, side-on in a fixed 64 × 24 cell, front left, repainted from
-six hexes. Same method as the armoury: shared anchors, one outline, three
-values of paint, colour separated from shape.
+Nineteen vehicles, side-on in a fixed 64 × 24 cell, front left, in fourteen
+paints — **every colour available to every car on the sheet**. Same method as
+the armoury: shared anchors, one outline, three values of paint, colour
+separated from shape, which is why fourteen paints cost fourteen lines rather
+than fourteen sheets.
 
 ### To look at it
 
@@ -454,11 +456,16 @@ values of paint, colour separated from shape.
 open prototypes/pixel-fleet.html          # or: xdg-open
 ```
 
-`?scale=3&paint=maroon&livery=off` — paints are `black`, `maroon`, `cream`,
-`olive`, `blue`, `primer`. **Livery** decides whether the cruiser, the
-unmarked, the hearse and the burnt shell keep their own colours or take the
-paint control with everything else; a cream police car is a joke rather than a
-mockup, so the default respects them.
+`?scale=3&paint=plum&livery=off` — fourteen paints: `black`, `maroon`,
+`candy`, `copper`, `gold`, `cream`, `white`, `silver`, `primer`, `olive`,
+`jade`, `teal`, `blue`, `plum`. All of them desaturated on purpose; a 1978
+street is not a toy aisle, and paint that shouts louder than the tail lamps
+stops reading as metal.
+
+**Livery** decides whether the cruiser, the unmarked, the hearse and the burnt
+shell keep their own colours or take the paint control with everything else.
+The default respects them — a cream police car is a joke rather than a mockup —
+but `livery=off` will repaint all nineteen.
 
 ### Why this sheet is different from the armoury one
 
@@ -472,9 +479,39 @@ The game is already full of cars and has simply never shown one:
 | `businesses.ts:78` | the freight front — *"Freight, routes and a fleet that explains a lot of movement."* |
 | `operations.ts:89` | an operation called **Boost Cars** |
 | `world.ts:91` | *"There are cars on corners that never had cars."* |
+| `standing.ts` | respect, which is the reason to own a car nobody needs |
 | `events.ts:365` | *"Cars parked where cars are not usually parked."* |
 
 Three of the four groups on the sheet are load-bearing prose in `src/` today.
+
+### Showpieces
+
+A group of five that exist to be seen: the wedge and the berlinetta (1978 has
+the Countach, the Pantera and the 512 BB in it), a personal luxury coupe, a
+limousine and a convertible. They belong on this sheet rather than under
+`Yours` because they are a different decision — `standing.ts` pays for being
+seen and `lawEnforcement.ts` charges for it, and these are the cars where those
+two meet. A man who buys the wedge has bought a witness statement.
+
+Drawing them needed one new primitive. `body()` fills a slab between a flat top
+and a sill, which is right for a sedan and hopeless for a wedge: a supercar is
+*entirely* a profile. `profile()` takes a per-column roofline instead, and
+`glasshouse()` takes a list of points, because a raked screen and a formal
+opera-window roof are different shapes and neither of them is `cabin()`.
+Whitewalls are one pale ring inside the tyre and are the cheapest thing on the
+sheet that says money.
+
+### Two bugs worth recording
+
+**A three-pixel nose is not a nose.** The first wedge sat so low that the wheel
+arch cut its front clean off and it read as a detached sliver floating ahead of
+the car. Fixed by dropping the sill rather than raising the nose — the car sits
+lower *and* keeps some mass at the front, which is what was wanted anyway.
+
+**Whitewalls turned the burnt-out car white.** They were drawn with key `q`,
+which was already the charred shell on `burned`. One shared key across two
+meanings, and a wreck came out cream. Whitewalls have their own key now. This
+is the standing hazard of a palette-key system and it will happen again.
 
 ### The one that already exists
 
