@@ -13,6 +13,7 @@ import { tickOperations } from './operations';
 import { tickBusinesses } from './business';
 import { tickContraband } from './contraband';
 import { tickOrders } from './orders';
+import { tickScores } from './scores';
 import { closeWeek } from './ledger';
 import { tickPossessions } from './possessions';
 import { tickLaunderer } from './launderers';
@@ -70,6 +71,11 @@ export function advanceDay(state: GameState): void {
   //     what that leaves. Daily rather than weekly, because a deadline is a
   //     day.
   tickOrders(state);
+  // 1b2. Windows that have shut. Beside the orders and for the same reason: a
+  //      deadline is a day, not a week. A job that is already out when its
+  //      window shuts still gets to finish — the window is about when you had
+  //      to move, not about how long the night takes.
+  tickScores(state);
   // 1c. Whoever keeps the books takes their fee and forms an opinion. Before
   //     the fronts, because `launderCut` reads the opinion and the fronts
   //     apply it the same morning — a week where somebody walks has to be a

@@ -354,11 +354,17 @@ export const HEAT_CHANNEL_BLURB: Record<HeatChannel, string> = {
 };
 
 /** Which channel an evidence source belongs to. Agencies read their focus. */
-export const CHANNEL_OF_SOURCE: Record<'operation' | 'violence' | 'finance' | 'informant', HeatChannel> = {
+export const CHANNEL_OF_SOURCE: Record<
+  'operation' | 'violence' | 'finance' | 'informant' | 'disposal',
+  HeatChannel
+> = {
   operation: 'street',
   violence: 'street',
   finance: 'money',
   informant: 'inside',
+  // Gear the police came away with is a thing found on a street, which is
+  // exactly what going quiet cannot take back.
+  disposal: 'street',
 };
 
 /**

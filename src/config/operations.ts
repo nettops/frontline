@@ -48,6 +48,7 @@
  */
 
 import type { OperationDef, OperationRisk } from '../sim/types';
+import { SETUPS } from './scores';
 
 export const OPERATIONS: OperationDef[] = [
   // ---------------------------------------------------- street criminal ---
@@ -663,8 +664,19 @@ export const OPERATIONS: OperationDef[] = [
 
 ];
 
+/*
+   Setups are in here and not in `OPERATIONS`, and the split is the whole of
+   how scores were made cheap.
+
+   `launchOperation`, `canLaunch` and `resolveOperation` all look a job up by
+   id, so a setup that lives in this map runs through every one of them
+   unchanged — same crew, same district, same approach, same consequence table
+   when it goes wrong. Keeping them out of `OPERATIONS` is what stops them
+   appearing on the job board, being counted by `standing`, or being read by
+   the return and gate tests, none of which are about them.
+*/
 export const OPERATION_BY_ID: Record<string, OperationDef> = Object.fromEntries(
-  OPERATIONS.map((o) => [o.id, o]),
+  [...OPERATIONS, ...SETUPS].map((o) => [o.id, o]),
 );
 
 /**

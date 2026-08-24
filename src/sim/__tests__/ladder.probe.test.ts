@@ -26,7 +26,17 @@ import { describe, expect, it } from 'vitest';
 import { newGame } from '../state';
 import { Rng } from '../rng';
 import { advanceDay } from '../clock';
-import { availableOperations, launchOperation, operationCost, opsBoard, standing } from '../operations';
+import {
+  availableOperations,
+  crewNeeded,
+  launchOperation,
+  operationCost,
+  opsBoard,
+  standing,
+} from '../operations';
+import { canOpenScore, liveScores, openScore, scoreOn, setupsLeft } from '../scores';
+import { SCORE_TARGETS } from '../../config/scores';
+import { OPERATION_BY_ID } from '../../config/operations';
 import { crewList, isOutOfReach } from '../npc';
 import { eligibleStewards, needsSteward, putInCharge } from '../delegation';
 import {
@@ -578,6 +588,32 @@ interface Climb {
       respectAtLeast: Record<number, number>;
       weeks: number;
     };
+    /** What a bot that builds up to the big jobs did with them. */
+    scores: {
+      opened: number;
+      firstDay: number | null;
+      setupsRun: number;
+      setupsLanded: number;
+      preppedOdds: number[];
+      bareOdds: number[];
+      preppedCrew: number[];
+      bareCrew: number[];
+      setupSpend: number;
+      /** Pieces of gear in hand on each score that reached the night. */
+      prepPerScore: number[];
+      prepped: number;
+      bare: number;
+      expired: number;
+      /** What stood in the way on the last day, for each expired score. */
+      why: string[];
+      /** And over every day each of them stood. */
+      whyDays: Record<string, number>[];
+      recovered: number;
+      weeksNobodyIdle: number;
+      /** Weeks too hot to work or dark, on every arm, for the paired read. */
+      weeksStopped: number;
+      weeks: number;
+    };
     /** What a bot that actually shops did with the catalogue. */
     shopping: {
       /** Ids bought, in order. */
@@ -773,6 +809,21 @@ interface Policy {
    * decision, and no instrument that does not shop can tell the difference.
    */
   shops?: boolean;
+  /**
+   * Builds up to the big jobs instead of walking straight at them.
+   *
+   * F7 in full, and the precedent is direct. The money-sink tier shipped with
+   * a shopping arm in the same pass and the first pricing was wrong in a way
+   * only that arm could show — the yacht was bought zero times in thirty-six
+   * careers. No bot in this project opens a score, so without this every bar
+   * in this file would keep reporting confidently about a game with a feature
+   * in it that nothing ever touches.
+   *
+   * The policy is what a patient player does: put somebody on a target the
+   * moment one is on the board, run every setup it allows, and hold the job
+   * itself back until the kit is together or the window is nearly out.
+   */
+  scores?: boolean;
 }
 
 function climb(seed: number, days: number, policy: Policy = {}): Climb {
@@ -784,6 +835,53 @@ function climb(seed: number, days: number, policy: Policy = {}): Climb {
     firstDay: null as number | null,
     weeksKeeping: 0,
     weeksShort: 0,
+  };
+  /**
+   * The last thing standing between an open score and its night, and a tally
+   * of it over every day the score stood.
+   *
+   * Here because "a third of windows expire" is a number with at least six
+   * different meanings, two of which are defects and four of which are the
+   * feature working. Sampled after the day rather than at expiry, because by
+   * the time a score is expired the state that shut it has moved on.
+   */
+  const blocked = new Map<string, string>();
+  const blockDays = new Map<string, Record<string, number>>();
+  /** Gear that ever reached a kit, and gear the police ever came away with. */
+  const landed = new Set<string>();
+  const recovered = new Set<string>();
+  const scoring = {
+    opened: 0,
+    firstDay: null as number | null,
+    /** Setups launched, and how many of those came off. */
+    setupsRun: 0,
+    setupsLanded: 0,
+    /** Setups run against each score that reached the night, for the spread. */
+    prepPerScore: [] as number[],
+    /** Targets run with a score behind them, and run bare. */
+    prepped: 0,
+    bare: 0,
+    expired: 0,
+    /** Traces the disposal phase wrote. */
+    recovered: 0,
+    /** Weeks the family had nobody spare at all, which is the §4.2 risk. */
+    weeksNobodyIdle: 0,
+    weeksStopped: 0,
+    weeks: 0,
+    /*
+       The direct reading, which the estate gap cannot give.
+
+       A paired estate is a whole career and everything in it; whether a month
+       of planning actually bought anything is a question about one night. Odds
+       and bodies are snapshotted at launch on target jobs only, prepared
+       against bare, so the two columns are the same jobs done two ways.
+    */
+    preppedOdds: [] as number[],
+    bareOdds: [] as number[],
+    preppedCrew: [] as number[],
+    bareCrew: [] as number[],
+    /** What the groundwork cost, in this year's money. */
+    setupSpend: 0,
   };
   let peakClean = 0;
   let peakWorth = 0;
@@ -1044,6 +1142,17 @@ function climb(seed: number, days: number, policy: Policy = {}): Climb {
          `held < room` guard below was false from the first week, and none of
          the hiring diagnostics under it were ever collected.
       */
+      /*
+         §4.2. The bill for a score is a body, and the measured cause of a dead
+         week in this game is a shortage of people. Counted on every arm, so
+         the baseline says what the shortage was before scores existed.
+      */
+      scoring.weeks += 1;
+      if (idle(state).length === 0) scoring.weeksNobodyIdle += 1;
+      // Counted on every arm, so the scores arm can be read against the same
+      // bot that never prepares anything.
+      if (state.org.heat >= 70 || isLayingLow(state)) scoring.weeksStopped += 1;
+
       const room = maxCrew(state);
       const held = crewList(state).filter((n) => n.status !== 'dead').length;
       if (held < room) {
@@ -1389,25 +1498,148 @@ function climb(seed: number, days: number, policy: Policy = {}): Climb {
           Math.max(0, state.org.dirtyCash - reserve) + state.org.cash,
           totalFunds(state) * 0.5,
         );
+        /*
+           Build up to it, when the policy says to.
+
+           Three separate moves, and they are deliberately in this order: put
+           somebody on a target that is on the board, get whatever that target
+           allows, and only then decide whether to move. The third is the one
+           that matters — without it the jobs loop below would open a score and
+           run the job the same afternoon, which is a bot with the feature
+           switched on that never uses any of it.
+        */
+        if (policy.scores) {
+          for (const target of availableOperations(state)) {
+            if (!SCORE_TARGETS[target.id]) continue;
+            /*
+               Only against a job it could actually run.
+
+               The first version put somebody on every target on the board, and
+               39% of scores expired — a man held for a month against a job the
+               family was never going to be able to stake. That is a bot
+               wasting people, not the window being too short, and measuring
+               the feature through it would have priced the window against a
+               policy no player would follow.
+            */
+            if (operationCost(state, target) > spendable) continue;
+            /*
+               And only against a job it could staff.
+
+               A third of the first version's scores expired, and the men held
+               against them were the same men the target itself needed. Holding
+               somebody for a month to prepare a job you cannot put a crew on
+               is the purest form of the §4.2 risk, and no player would do it.
+            */
+            if (idle(state).length <= crewNeeded(state, target)) continue;
+            if (!canOpenScore(state, target.id).ok) continue;
+            const man = idle(state)[0];
+            if (!man) break;
+            if (openScore(state, target.id, where, man.id)) {
+              scoring.opened += 1;
+              if (scoring.firstDay === null) scoring.firstDay = state.day;
+            }
+          }
+          for (const sc of liveScores(state)) {
+            if (sc.status !== 'open') continue;
+            for (const setup of setupsLeft(state, sc)) {
+              const hands = idle(state);
+              if (hands.length < setup.crewRequired) break;
+              if (operationCost(state, setup) > spendable) continue;
+              const out = clean('jobs', () =>
+                launchOperation(
+                  state,
+                  setup.id,
+                  hands.slice(0, setup.crewRequired).map((n) => n.id),
+                  sc.territoryId,
+                  undefined,
+                  sc.id,
+                ),
+              );
+              if (out) {
+                scoring.setupsRun += 1;
+                scoring.setupSpend += out.investment;
+              }
+            }
+          }
+        }
+
         const options = availableOperations(state)
           .filter((o) => operationCost(state, o) <= spendable)
+          /*
+             Hold a target back while its score is still being built.
+
+             `dueDay - 3` rather than the due day itself, because the job takes
+             days of its own and a window that shuts while the crew are out is
+             the same as never having opened it. Three is the shortest setup in
+             the table, so this waits for anything that could still land and
+             for nothing that could not.
+          */
+          .filter((o) => {
+            if (!policy.scores) return true;
+            const sc = scoreOn(state, o.id);
+            if (!sc) return true;
+            if (state.day >= sc.dueDay - 3) return true;
+            /*
+               Nothing left to get *and* nothing still out.
+
+               `setupsLeft` excludes setups that are currently running, so on
+               its own it reads "everything is out" as "everything is done" —
+               and the bot duly ran 143 jobs with an empty kit while the gear
+               for them was three days from arriving. A prepared job that goes
+               in bare is the most expensive way to play this.
+            */
+            const out = Object.values(state.activeOperations).some((op) => op.scoreId === sc.id);
+            return setupsLeft(state, sc).length === 0 && !out;
+          })
           .sort((a, b) => ev(b) - ev(a));
         for (const def of options) {
-          if (idle(state).length < def.crewRequired) break;
+          const bodies = crewNeeded(state, def);
+          /*
+             This is a `break` and it should probably be a `continue`.
+
+             `options` is sorted by expected value, not by how many bodies a
+             job needs, so one body-hungry job at the top stops everything
+             below it from being considered at all. Measured while diagnosing
+             score expiry: on 533 days a ready, fully staffable score target
+             sat further down this list when the loop broke out over a job the
+             family could not crew — 77% of the days a window was open, ready
+             and unused.
+
+             Left alone deliberately. It is a defect in this bot rather than in
+             the game, and every pre-committed bar in this file was set against
+             a bot that does this. Changing it is its own piece of work with
+             its own re-baselining.
+          */
+          if (idle(state).length < bodies) break;
           // The game refuses a second solo job now, so the bot does not have
           // to. Kept as a comment because the line that used to be here was a
           // workaround for a real defect nobody had noticed.
           if (operationCost(state, def) > spendable) continue;
-          clean('jobs', () =>
+          const sc = policy.scores ? scoreOn(state, def.id) : undefined;
+          const out = clean('jobs', () =>
             launchOperation(
               state,
               def.id,
               idle(state)
-                .slice(0, def.crewRequired)
+                .slice(0, bodies)
                 .map((n) => n.id),
-              where,
+              // A prepared job runs where it was prepared. Anywhere else and
+              // the gear was got ready for somewhere the crew never went.
+              sc ? sc.territoryId : where,
             ),
           );
+          if (out && policy.scores && SCORE_TARGETS[def.id]) {
+            if (sc) {
+              scoring.prepped += 1;
+              scoring.prepPerScore.push(sc.kit.length);
+              scoring.preppedOdds.push(out.successChance);
+              scoring.preppedCrew.push(out.crewIds.length);
+            } else {
+              scoring.bare += 1;
+              scoring.bareOdds.push(out.successChance);
+              scoring.bareCrew.push(out.crewIds.length);
+            }
+          }
         }
       }
     }
@@ -2177,6 +2409,48 @@ function climb(seed: number, days: number, policy: Policy = {}): Climb {
     const cleanBefore = state.org.cash;
     const dirtyBefore = state.org.dirtyCash;
     advanceDay(state);
+    /*
+       Sampled after the day rather than at the end of the run, because both
+       readings are destroyed by the thing that produces them: `closeScore`
+       empties the kit, and a disposal trace goes stale and is deleted like any
+       other. Counted into sets so a piece of gear held for a fortnight is one
+       reading rather than fourteen.
+    */
+    if (policy.scores) {
+      for (const sc of state.scores ?? []) {
+        for (const gear of sc.kit) landed.add(`${sc.id}:${gear}`);
+      }
+      for (const sc of state.scores ?? []) {
+        if (sc.status !== 'open') continue;
+        const target = OPERATION_BY_ID[sc.defId];
+        const out = Object.values(state.activeOperations).some((op) => op.scoreId === sc.id);
+        const capacity = launderOutlook(state).capacity;
+        const spendableNow = Math.min(
+          Math.max(0, state.org.dirtyCash - capacity * WASH_RESERVE) + state.org.cash,
+          totalFunds(state) * 0.5,
+        );
+        const why = isLayingLow(state)
+          ? 'laying low'
+          : state.org.heat >= 70
+            ? 'too hot to work'
+            : !availableOperations(state).some((o) => o.id === sc.defId)
+              ? 'came off the board'
+              : out || setupsLeft(state, sc).length > 0
+                ? 'still preparing'
+                : operationCost(state, target) > spendableNow
+                  ? 'could not stake it'
+                  : idle(state).length < crewNeeded(state, target)
+                    ? 'nobody to send'
+                    : 'ready, not picked';
+        blocked.set(sc.id, why);
+        const tally = blockDays.get(sc.id) ?? {};
+        tally[why] = (tally[why] ?? 0) + 1;
+        blockDays.set(sc.id, tally);
+      }
+      for (const trace of Object.values(state.evidence)) {
+        if (trace.source === 'disposal') recovered.add(trace.id);
+      }
+    }
     trade.dirtyPeak = Math.max(trade.dirtyPeak, state.org.dirtyCash);
     if (state.org.dirtyCash > dirtyBefore) wash.dirtyIn += state.org.dirtyCash - dirtyBefore;
     if ((state.succession?.line?.length ?? 0) > lineBefore) {
@@ -2441,6 +2715,18 @@ function climb(seed: number, days: number, policy: Policy = {}): Climb {
         weeks: newSys.weeks,
       },
       shopping,
+      scores: {
+        ...scoring,
+        setupsLanded: landed.size,
+        recovered: recovered.size,
+        expired: (state.scores ?? []).filter((sc) => sc.status === 'expired').length,
+        why: (state.scores ?? [])
+          .filter((sc) => sc.status === 'expired')
+          .map((sc) => blocked.get(sc.id) ?? 'never sampled'),
+        whyDays: (state.scores ?? [])
+          .filter((sc) => sc.status === 'expired')
+          .map((sc) => blockDays.get(sc.id) ?? {}),
+      },
       ownable: {
         weeksAnyAffordable: newSys.ownWeeks,
         weeksHomeAffordable: newSys.ownHomeWeeks,
@@ -3449,6 +3735,20 @@ const RUNS_SHOPS = Array.from({ length: 36 }, (_, i) =>
   climb(700 + i, HUMAN_DAYS, { shops: true }),
 );
 
+/*
+   A bot that builds up to the big jobs, against the same bot that walks
+   straight at them.
+
+   Same seeds, same everything else. F7 §4.3: no instrument in this project has
+   ever opened a score, so without this arm every bar in this file would keep
+   reporting confidently about a game with a month-long feature in it that
+   nothing ever touches. The precedent is the money-sink tier, whose first
+   pricing was wrong in a way only its own arm could show.
+*/
+const RUNS_SCORES = Array.from({ length: 36 }, (_, i) =>
+  climb(700 + i, HUMAN_DAYS, { scores: true }),
+);
+
 describe('somewhere for the money to go', () => {
   it('says whether an ordinary career ever buys any of it', () => {
     const bought = RUNS_SHOPS.filter((r) => r.newSystems.shopping.bought.length > 0);
@@ -3545,6 +3845,296 @@ describe('somewhere for the money to go', () => {
        estate at face, which is what `holdings` already does for free.
     */
     expect(gap, 'buying and keeping all of it costs the family nothing').toBeLessThan(0);
+  });
+});
+
+describe('the month in front of the job', () => {
+  it('says whether an ordinary career ever builds up to one', () => {
+    const opened = RUNS_SCORES.filter((r) => r.newSystems.scores.opened > 0);
+    const days = opened.map((r) => r.newSystems.scores.firstDay!).sort((a, b) => a - b);
+    const prep = RUNS_SCORES.flatMap((r) => r.newSystems.scores.prepPerScore);
+    const spread = Array.from({ length: 6 }, (_, n) => prep.filter((p) => p === n).length);
+
+    // eslint-disable-next-line no-console
+    console.log(
+      `scores: ${opened.length}/${RUNS_SCORES.length} careers opened at least one
+` +
+        (opened.length
+          ? `        first score, 25th / median / 75th day: ` +
+            `${pct(days, 0.25)} / ${median(days)} / ${pct(days, 0.75)}
+`
+          : '') +
+        `        opened ${RUNS_SCORES.reduce((t, r) => t + r.newSystems.scores.opened, 0)}, ` +
+        `${RUNS_SCORES.reduce((t, r) => t + r.newSystems.scores.prepped, 0)} reached the night, ` +
+        `${RUNS_SCORES.reduce((t, r) => t + r.newSystems.scores.expired, 0)} expired, ` +
+        `${RUNS_SCORES.reduce((t, r) => t + r.newSystems.scores.bare, 0)} targets run bare
+` +
+        `        setups: ${RUNS_SCORES.reduce((t, r) => t + r.newSystems.scores.setupsRun, 0)} run, ` +
+        `${RUNS_SCORES.reduce((t, r) => t + r.newSystems.scores.setupsLanded, 0)} landed
+` +
+        `        pieces in hand on the night: ` +
+        spread.map((n, i) => `${i}: ${n}`).join(', ') +
+        `
+        gear the police came away with: ` +
+        `${RUNS_SCORES.reduce((t, r) => t + r.newSystems.scores.recovered, 0)}`,
+    );
+
+    /*
+       Reachable, and reachable in time to be lived with. Both ends, for the
+       same reason the possessions bars assert both: a feature nobody opens is
+       decoration, and a feature only reachable in the last fortnight has taken
+       the days without ever having been a decision.
+    */
+    expect(
+      opened.length,
+      'nobody ever builds up to anything',
+    ).toBeGreaterThanOrEqual(Math.ceil(RUNS_SCORES.length / 2));
+    expect(
+      median(days),
+      'scores are only reachable in the last stretch of a career',
+    ).toBeLessThan(240);
+  });
+
+  it('says whether preparing is a decision or a chore', () => {
+    const prep = RUNS_SCORES.flatMap((r) => r.newSystems.scores.prepPerScore);
+    const most = Math.max(...RUNS_SCORES.flatMap((r) => r.newSystems.scores.prepPerScore), 0);
+    const atNone = prep.filter((p) => p === 0).length;
+    const atAll = prep.filter((p) => p === most).length;
+
+    // eslint-disable-next-line no-console
+    console.log(
+      `scores: ${prep.length} scores reached the night; ` +
+        `${atNone} went in with nothing, ${atAll} with everything (${most})
+` +
+        `        setups landed per score, median ${median(prep)}`,
+    );
+
+    /*
+       The `opGates` rule in a different coat. Prep is meant to be a dial, so a
+       distribution piled at both ends is the feature having become a chore you
+       either do or skip. Only meaningful once something actually happened.
+    */
+    if (prep.length > 0) {
+      expect(
+        atNone + atAll,
+        'preparing is all-or-nothing, which makes it a chore rather than a dial',
+      ).toBeLessThan(prep.length);
+    }
+  });
+
+  it('says whether the bodies it ties up are felt', () => {
+    /*
+       §4.2. A score holds a man for the whole window and its setups tie up
+       more. The measured cause of a dead week is a shortage of people, so this
+       is the risk the feature carries — and it is a paired reading against the
+       same bot without it, because a career with more crew has more idle crew
+       for reasons that have nothing to do with scores.
+    */
+    const share = (r: (typeof RUNS_SCORES)[number]) =>
+      r.newSystems.scores.weeks ? r.newSystems.scores.weeksNobodyIdle / r.newSystems.scores.weeks : 0;
+    const withScores = RUNS_SCORES.map(share).sort((a, b) => a - b);
+    const without = RUNS_300.map(share).sort((a, b) => a - b);
+
+    // eslint-disable-next-line no-console
+    console.log(
+      `scores: weeks with nobody spare, share of weeks — ` +
+        `building up 25th/median/75th ` +
+        `${(pct(withScores, 0.25) * 100).toFixed(0)}% / ${(median(withScores) * 100).toFixed(0)}% / ` +
+        `${(pct(withScores, 0.75) * 100).toFixed(0)}%` +
+        `; walking straight at it ` +
+        `${(pct(without, 0.25) * 100).toFixed(0)}% / ${(median(without) * 100).toFixed(0)}% / ` +
+        `${(pct(without, 0.75) * 100).toFixed(0)}%`,
+    );
+
+    /*
+       The bar goes on the 75th, per §4.2 and DIRECTOR §5 — the quarter of
+       careers that are shortest of people are the ones this can break, and a
+       median would hide them. Three weeks in four with nobody spare is a game
+       that has stopped rather than a game that costs something.
+    */
+    expect(
+      pct(withScores, 0.75),
+      'building up to jobs leaves the family with nobody spare most weeks',
+    ).toBeLessThan(0.75);
+  });
+
+  it('says why a window shuts, and whether the game took it', () => {
+    const last = new Map<string, number>();
+    const days = new Map<string, number>();
+    let dayTotal = 0;
+    for (const r of RUNS_SCORES) {
+      for (const w of r.newSystems.scores.why) last.set(w, (last.get(w) ?? 0) + 1);
+      for (const t of r.newSystems.scores.whyDays) {
+        for (const [w, n] of Object.entries(t)) {
+          days.set(w, (days.get(w) ?? 0) + n);
+          dayTotal += n;
+        }
+      }
+    }
+    const expired = RUNS_SCORES.reduce((t, r) => t + r.newSystems.scores.expired, 0);
+    const opened = RUNS_SCORES.reduce((t, r) => t + r.newSystems.scores.opened, 0);
+    const stopped = (rs: typeof RUNS_SCORES) =>
+      rs
+        .map((r) =>
+          r.newSystems.scores.weeks ? r.newSystems.scores.weeksStopped / r.newSystems.scores.weeks : 0,
+        )
+        .sort((a, b) => a - b);
+    const building = stopped(RUNS_SCORES);
+    const never = stopped(RUNS_300);
+
+    // eslint-disable-next-line no-console
+    console.log(
+      `expiry: ${expired} of ${opened} windows shut. What stood in the way on the last day —
+` +
+        [...last.entries()]
+          .sort((a, b) => b[1] - a[1])
+          .map(([w, n]) => `        ${w}: ${n}`)
+          .join(String.fromCharCode(10)) +
+        `
+        and across every open-score day of an expired one (${dayTotal} days) —
+` +
+        [...days.entries()]
+          .sort((a, b) => b[1] - a[1])
+          .map(([w, n]) => `        ${w}: ${n} (${Math.round((n / dayTotal) * 100)}%)`)
+          .join(String.fromCharCode(10)) +
+        `
+        weeks too hot or dark, share of all weeks — building up ` +
+        `${(pct(building, 0.25) * 100).toFixed(0)}% / ${(median(building) * 100).toFixed(0)}% / ` +
+        `${(pct(building, 0.75) * 100).toFixed(0)}%; never preparing ` +
+        `${(pct(never, 0.25) * 100).toFixed(0)}% / ${(median(never) * 100).toFixed(0)}% / ` +
+        `${(pct(never, 0.75) * 100).toFixed(0)}%`,
+    );
+
+    /*
+       §2.4, as a bar rather than as a sentence: a window expires because the
+       player was slow, never because the game moved the job out from under
+       them. Two of the seven things that can be in the way are the game
+       itself, and both were live before this feature shipped.
+
+       **The gate behind the target shutting.** `opens` reads live state, so a
+       front closing or a favour lapsing could take the job away from a player
+       who had already put a man and most of a month into it. Two expiries in
+       121. `availableOperations` now holds a scored target on the board.
+
+       **Going dark.** `canLaunch` refuses anything but quiet work while laying
+       low, and `LAY_LOW_DURATION_DAYS` is 14 — exactly half a window. 33
+       expiries in 148, and 14% of every day a doomed score ever lived.
+       `tickScores` now stops the clock while the family is dark.
+
+       Everything else in the list is the player: too hot because of what they
+       did, unable to stake it, nobody to send, or still preparing on the last
+       morning. Those are supposed to happen and the bars leave them alone.
+
+       The one figure worth keeping beside this: the family is too hot or dark
+       in 44% of weeks when it builds up to jobs and 40% when it never does.
+       Preparing does not cause the weather it expires in, which is why heat is
+       deliberately not in the pause above — at 85 the odds carry a 25-point
+       penalty and nothing is refused, so working through it is a bad decision
+       rather than a wall, and a clock that paused for that would be pausing
+       for a choice.
+    */
+    expect(
+      last.get('came off the board') ?? 0,
+      'the game took the job away from somebody already building up to it',
+    ).toBe(0);
+    expect(
+      (last.get('laying low') ?? 0) / Math.max(1, expired),
+      'going dark is still killing scores outright',
+    ).toBeLessThan(0.05);
+  });
+
+  it('says whether the night itself goes better', () => {
+    const prepped = RUNS_SCORES.flatMap((r) => r.newSystems.scores.preppedOdds).sort((a, b) => a - b);
+    const bare = RUNS_SCORES.flatMap((r) => r.newSystems.scores.bareOdds).sort((a, b) => a - b);
+    const preppedCrew = RUNS_SCORES.flatMap((r) => r.newSystems.scores.preppedCrew);
+    const bareCrew = RUNS_SCORES.flatMap((r) => r.newSystems.scores.bareCrew);
+
+    // eslint-disable-next-line no-console
+    console.log(
+      `scores: the same targets done two ways —
+` +
+        `        odds at launch, prepared ${(median(prepped) * 100).toFixed(0)}% ` +
+        `(${prepped.length} nights) against bare ${(median(bare) * 100).toFixed(0)}% ` +
+        `(${bare.length} nights)
+` +
+        `        bodies sent, prepared ${median(preppedCrew)} against bare ${median(bareCrew)}
+` +
+        `        the groundwork bill, median career ` +
+        `$${median(RUNS_SCORES.map((r) => r.newSystems.scores.setupSpend)).toLocaleString('en-US')}`,
+    );
+
+    /*
+       The mechanic itself, isolated from the career around it. If a prepared
+       night is not a better night, nothing above this line matters and no
+       amount of policy tuning will make it matter.
+    */
+    if (prepped.length > 0 && bare.length > 0) {
+      expect(
+        median(prepped),
+        'a month of planning does not make the night any better',
+      ).toBeGreaterThan(median(bare));
+    }
+  });
+
+  it('says what it does to the career around it', () => {
+    /*
+       The whole distribution, not the median of it.
+
+       This asserted on `pairedGap` — the median of thirty-five paired career
+       differences — and a sweep of the setup stakes across four scales
+       returned -61,322 / +81,306 / -61,322 / +68,318 for stakes at 100%, 50%,
+       25% and 10% of what they cost. Two different scales returning the *same*
+       figure to the dollar is the tell: the median lands on one career, and
+       which career that is moves for reasons that have nothing to do with the
+       thing being swept.
+
+       So the median of this quantity at n=36 cannot price this feature, and a
+       bar on it would have been a coin flip wearing a threshold. The
+       distribution and the share of careers ahead are what the arm can carry;
+       the median is printed as context and asserted on by nothing.
+    */
+    const rows = RUNS_SCORES.map((r, i) => ({ r, against: RUNS_300[i] })).filter(
+      ({ r }) => r.newSystems.scores.prepped > 0,
+    );
+    const gaps = rows.map(({ r, against }) => r.bestEstate - against.bestEstate).sort((a, b) => a - b);
+    const ahead = gaps.filter((g) => g > 0).length;
+    const heat = pairedGap(
+      RUNS_SCORES,
+      RUNS_300,
+      (r) => r.danger.heat,
+      (r) => (r as (typeof RUNS_SCORES)[number]).newSystems.scores.prepped > 0,
+    );
+
+    // eslint-disable-next-line no-console
+    console.log(
+      `scores: paired against the same seeds, ${rows.length} careers that ran a prepared job —
+` +
+        `        estate difference 25th / median / 75th: ` +
+        `$${Math.round(pct(gaps, 0.25)).toLocaleString('en-US')} / ` +
+        `$${Math.round(median(gaps)).toLocaleString('en-US')} / ` +
+        `$${Math.round(pct(gaps, 0.75)).toLocaleString('en-US')}
+` +
+        `        careers that came out ahead: ${ahead}/${gaps.length}
+` +
+        `        heat-weeks ${Math.round(heat)}`,
+    );
+
+    /*
+       Two bars, and neither of them is "it pays".
+
+       **It must not be a one-way loss.** A month of planning that leaves every
+       career poorer is a trap, and the correct play would be to never touch
+       it. A third of careers ahead is the floor; the measured share sits well
+       above it.
+
+       **It must not be free money either.** If every career comes out ahead,
+       prep has stopped being a decision and become a tax on not reading the
+       manual — the same failure the possessions catalogue is guarded against.
+    */
+    expect(ahead, 'building up to a job makes almost every career poorer').toBeGreaterThan(
+      Math.floor(gaps.length / 3),
+    );
+    expect(ahead, 'building up to a job is free money').toBeLessThan(gaps.length);
   });
 });
 

@@ -174,7 +174,7 @@ export const AGENCIES: AgencyDef[] = [
     shortName: 'City Police',
     blurb:
       'They are close, they are fast, and half of them grew up on the same streets you did. They can ruin a month. They cannot end you.',
-    focus: ['violence', 'operation'],
+    focus: ['violence', 'operation', 'disposal'],
     heatFloor: 15,
     noticesAbove: 0,
     openThreshold: 25,
@@ -191,7 +191,7 @@ export const AGENCIES: AgencyDef[] = [
     shortName: 'Task Force',
     blurb:
       'Assembled specifically for organizations like yours. Patient, and interested in the shape of the thing rather than any single job.',
-    focus: ['operation', 'informant', 'violence'],
+    focus: ['operation', 'informant', 'violence', 'disposal'],
     heatFloor: 35,
     noticesAbove: 22,
     openThreshold: 45,
@@ -225,7 +225,7 @@ export const AGENCIES: AgencyDef[] = [
     shortName: 'Federal Bureau',
     blurb:
       'They will spend four years on you and consider it time well spent. When they move, it is because they have already won.',
-    focus: ['operation', 'informant', 'finance', 'violence'],
+    focus: ['operation', 'informant', 'finance', 'violence', 'disposal'],
     heatFloor: 55,
     noticesAbove: 52,
     openThreshold: 70,
