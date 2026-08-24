@@ -323,15 +323,19 @@ export const TIPS: Tip[] = [
       cards(s).hands === 0 &&
       tableRead(s).some((room) => room.ok && room.seat.kind !== 'nobody'),
   },
-  {
-    id: 'step_up',
-    only: ['career', 'sandbox'],
-    label: 'Yourself',
-    text:
-      'You have been offered a step up. Rank is not experience — it is held money, standing, people and ground, all at once. Yourself shows what the next one is still waiting on.',
-    panel: 'player',
-    when: (s) => s.player.pendingRank !== null,
-  },
+  /*
+     `step_up` was here, and there is no step up any more.
+
+     It fired on `player.pendingRank !== null` and pointed at the Advancement
+     panel: "Rank is not experience — it is held money, standing, people and
+     ground, all at once." Ground and people are still what open the game up;
+     the title in the middle is gone, and with it the offer, so the tip could
+     never fire again. `tips.reach.test.ts` caught it as an unreachable tip.
+
+     What it was really teaching — that the game opens on what you hold rather
+     than on how long you have played — the Needs column on the job table now
+     says on every locked row, at the moment the player is looking at the job.
+  */
 
   // ------------------------------------------------------- the second verb ---
   /*
@@ -477,7 +481,7 @@ export const TIPS: Tip[] = [
     only: ['career', 'sandbox'],
     label: 'The trade',
     text:
-      'People will deal with you now. The Trade runs on a standing arrangement and districts to move through — steady money, and the one thing on your books a warrant can physically take.',
+      'You have premises now, so people will deal with you. The Trade runs on a standing arrangement and districts to move through — steady money, and the one thing on your books a warrant can physically take.',
     panel: 'contraband',
     when: (s) => tradeUnlocked(s, 'product') && !s.contraband.supplierId,
   },

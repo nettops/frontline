@@ -27,6 +27,7 @@ import { activity, priced } from './market';
 import {
   ARMS_SALE,
   CONTROL_THROUGHPUT,
+  PLANT,
   PORT,
   SEIZURE,
   ARMED,
@@ -41,10 +42,14 @@ import {
   WORKSHOP,
   type TradeId,
 } from '../config/contraband';
-import { PAYDAY_INTERVAL, rankIndex } from '../config/economy';
+import { ownedBusinesses } from './business';
+import { PAYDAY_INTERVAL } from '../config/economy';
 import { CONTROL_THRESHOLDS, type ControlLevel } from '../config/territories';
 import { RIVAL_IDS, type FactionId } from '../config/factions';
 import { houseShort } from './houses';
+import { note } from './ledger';
+import type { LedgerKey } from '../config/ledger';
+import { shakeLaundererTrust } from './launderers';
 
 export function newContraband(): Contraband {
   return {
@@ -65,18 +70,27 @@ function funds(state: GameState): number {
   return state.org.cash + state.org.dirtyCash;
 }
 
-/** Local copy of economy.ts:spend. See the import note at the top. */
-function pay(state: GameState, amount: number): boolean {
+/**
+ * Local copy of economy.ts:spend. See the import note at the top.
+ *
+ * `key` is the ledger row it lands on. Defaulted rather than required because
+ * every caller here is spending on the trade one way or another, and a wrong
+ * label is worse than a coarse one.
+ */
+function pay(state: GameState, amount: number, key: LedgerKey = 'stock'): boolean {
   if (amount <= 0) return true;
   if (state.org.cash + state.org.dirtyCash < amount) return false;
   const fromDirty = Math.min(state.org.dirtyCash, amount);
   state.org.dirtyCash -= fromDirty;
   state.org.cash -= amount - fromDirty;
+  note(state, key, -amount);
   return true;
 }
 
 function earn(state: GameState, amount: number): void {
-  if (amount > 0) state.org.dirtyCash += amount;
+  if (amount <= 0) return;
+  state.org.dirtyCash += amount;
+  note(state, 'trade', amount);
 }
 
 /** Local copy of diplomacy.ts:atWar. See the import note at the top. */
@@ -90,10 +104,51 @@ function standingWith(state: GameState, id: FactionId): number {
   return b.trust - b.grudge;
 }
 
+/**
+ * Units already promised to somebody, by trade.
+ *
+ * Lives here rather than in `orders.ts` for the same reason the two money
+ * helpers at the top of this file do: `orders.ts` reads this module and this
+ * module must not read it back. It is one filter over an optional list, and
+ * an absent list — every save written before orders existed — reads as zero,
+ * which leaves the trade behaving exactly as it always did.
+ *
+ * Two places care. Buying adds it to the target, because stock for an order is
+ * stock the streets were never going to absorb. Distribution subtracts it,
+ * because the whole point of a commitment is that it is not for sale to
+ * anybody else.
+ */
+export function reservedUnits(state: GameState, trade: TradeId): number {
+  return (state.orders ?? []).reduce(
+    (sum, o) =>
+      o.status === 'accepted' && o.trade === trade
+        ? sum + Math.max(0, o.units - o.delivered)
+        : sum,
+    0,
+  );
+}
+
 // ------------------------------------------------------------- the trade ---
 
+/**
+ * Why a trade will not open, in words the player can act on.
+ *
+ * Both refusals said `Nobody will deal with a ${rank}` and stopped, naming a
+ * title that no longer appears anywhere in the game and giving no figure, no
+ * bar and no remedy. See `canAcquire` for the same repair on the front gate.
+ */
+function needsFronts(state: GameState, trade: TradeId): string {
+  const have = ownedBusinesses(state).length;
+  const want = TRADES[trade].minFronts;
+  return (
+    `Nobody deals with somebody who has nowhere to put it. You run ` +
+    `${have} ${have === 1 ? 'front' : 'fronts'} and this wants ${want}. ` +
+    `Take a district and buy premises in it.`
+  );
+}
+
 export function tradeUnlocked(state: GameState, trade: TradeId): boolean {
-  return rankIndex(state.player.rank) >= rankIndex(TRADES[trade].minRank);
+  return ownedBusinesses(state).length >= TRADES[trade].minFronts;
 }
 
 function meetsControl(level: ControlLevel, required: ControlLevel): boolean {
@@ -272,19 +327,64 @@ export function unitCost(state: GameState, trade: TradeId): number {
     return Math.round(priced(state, def.unitCost) * (bought ? bought.priceMultiplier : 1));
   }
 
+  /*
+     The cheapest place it can come from, which is what a player is actually
+     paying. `productSources` orders them, so a plant beside an arrangement
+     reads as the plant's price — and `tickContraband` fills from the same list
+     in the same order, so the figure on the panel is the figure being paid.
+  */
+  const sources = productSources(state);
+  return sources[0]?.price ?? priced(state, def.unitCost);
+}
+
+/** What the waterfront arrangement costs, before and after who holds the water. */
+function supplierPrice(state: GameState, supplier: SupplierDef): number {
+  let price = priced(state, TRADES.product.unitCost) * supplier.priceMultiplier;
+  if (supplier.id === PORT.supplierId) price *= portMultiplier(state);
+  return Math.round(price);
+}
+
+/**
+ * Every place product can come from this week, cheapest first.
+ *
+ * Two kinds, and the whole design of the plant is in the fact that they are
+ * both on this list rather than one replacing the other. A plant is cheap and
+ * small; an arrangement is dear and large. A family that has built one and
+ * kept the other fills its base load from the building and its peaks from the
+ * relationship, which is the shape the fork was drawn for.
+ */
+export interface ProductSource {
+  kind: 'plant' | 'supplier';
+  /** What one unit costs from here, right now. */
+  price: number;
+  /** Units a week this source can actually cover. */
+  ceiling: number;
+}
+
+export function productSources(state: GameState): ProductSource[] {
+  const sources: ProductSource[] = [];
+
+  const plants = state.contraband?.plants?.length ?? 0;
+  if (plants > 0) {
+    sources.push({
+      kind: 'plant',
+      price: Math.round(priced(state, TRADES.product.unitCost) * PLANT.unitCostShare),
+      ceiling: plants * PLANT.supplyPerWeek,
+    });
+  }
+
   const supplier = state.contraband?.supplierId
     ? SUPPLIER_BY_ID[state.contraband.supplierId]
     : null;
-  if (!supplier) return priced(state, def.unitCost);
-
-  let price = priced(state, def.unitCost) * supplier.priceMultiplier;
-  if (supplier.id === PORT.supplierId) {
-    const holder = portHolder(state);
-    if (holder === 'player') price *= PORT.ownedMultiplier;
-    else if (holder && atWarWith(state, holder)) price *= PORT.atWarMultiplier;
-    else if (holder && standingWith(state, holder) < -25) price *= PORT.hostileMultiplier;
+  if (supplier) {
+    sources.push({
+      kind: 'supplier',
+      price: supplierPrice(state, supplier),
+      ceiling: supplier.ceiling,
+    });
   }
-  return Math.round(price);
+
+  return sources.sort((a, b) => a.price - b.price);
 }
 
 export interface TradeAction {
@@ -306,7 +406,7 @@ export function canOpenSupply(state: GameState, supplierId: string): TradeAction
   if (!tradeUnlocked(state, 'product')) {
     return {
       ok: false,
-      message: `Nobody will deal with a ${state.player.rank.replace('_', ' ')}.`,
+      message: needsFronts(state, 'product'),
     };
   }
   const retainer = priced(state, supplier.retainer);
@@ -326,7 +426,7 @@ export function openSupply(state: GameState, supplierId: string): TradeAction {
   const check = canOpenSupply(state, supplierId);
   if (!check.ok) return check;
   const supplier = SUPPLIER_BY_ID[supplierId]!;
-  if (!pay(state, priced(state, supplier.retainer))) {
+  if (!pay(state, priced(state, supplier.retainer), 'premises')) {
     return { ok: false, message: 'You cannot cover the retainer.' };
   }
 
@@ -354,7 +454,7 @@ export function canOpenArmsSupply(state: GameState, supplierId: string): TradeAc
   if (!tradeUnlocked(state, 'arms')) {
     return {
       ok: false,
-      message: `Nobody will deal with a ${state.player.rank.replace('_', ' ')}.`,
+      message: needsFronts(state, 'arms'),
     };
   }
   const retainer = priced(state, supplier.retainer);
@@ -371,7 +471,7 @@ export function openArmsSupply(state: GameState, supplierId: string): TradeActio
   const check = canOpenArmsSupply(state, supplierId);
   if (!check.ok) return check;
   const supplier = ARMS_SUPPLIER_BY_ID[supplierId]!;
-  if (!pay(state, priced(state, supplier.retainer))) {
+  if (!pay(state, priced(state, supplier.retainer), 'premises')) {
     return { ok: false, message: 'You cannot cover the retainer.' };
   }
   state.contraband.armsSupplierId = supplierId;
@@ -401,7 +501,7 @@ export function dropSupply(state: GameState): TradeAction {
 
 export function canBuildWorkshop(state: GameState, territoryId: string): TradeAction {
   if (!tradeUnlocked(state, 'arms')) {
-    return { ok: false, message: `A ${TRADES.arms.minRank.replace('_', ' ')} could run one.` };
+    return { ok: false, message: needsFronts(state, 'arms') };
   }
   const t = state.territories[territoryId];
   if (!t) return { ok: false, message: 'No such district.' };
@@ -428,12 +528,69 @@ export function canBuildWorkshop(state: GameState, territoryId: string): TradeAc
 export function buildWorkshop(state: GameState, territoryId: string): TradeAction {
   const check = canBuildWorkshop(state, territoryId);
   if (!check.ok) return check;
-  if (!pay(state, priced(state, WORKSHOP.cost))) return { ok: false, message: 'You cannot cover it.' };
+  if (!pay(state, priced(state, WORKSHOP.cost), 'premises')) return { ok: false, message: 'You cannot cover it.' };
 
   state.contraband.workshops.push({ territoryId, since: state.day });
   addLog(
     state,
     `There is a machine shop in ${territoryDef(territoryId).name} now, and it has a lease and a sign.`,
+    'money',
+  );
+  return { ok: true, message: 'Open.' };
+}
+
+// ------------------------------------------------------------- the plants --
+
+/**
+ * Your own supply, lazily.
+ *
+ * Optional state with a lazy initialiser, the same idiom `promises` and
+ * `civic` use — so `SAVE_VERSION` does not move and a save written before this
+ * existed loads with an empty list, which for those saves is exactly true.
+ */
+export function plantList(state: GameState): { territoryId: string; since: number }[] {
+  const c = state.contraband;
+  if (!c.plants) c.plants = [];
+  return c.plants;
+}
+
+export function canBuildPlant(state: GameState, territoryId: string): TradeAction {
+  if (!tradeUnlocked(state, 'product')) {
+    return { ok: false, message: needsFronts(state, 'product') };
+  }
+  const t = state.territories[territoryId];
+  if (!t) return { ok: false, message: 'No such district.' };
+  if (!meetsControl(controlLevel(t), PLANT.minControl)) {
+    return {
+      ok: false,
+      message: `You would need control of ${territoryDef(territoryId).name}. A foothold is not somewhere to put this.`,
+    };
+  }
+  if (plantList(state).length >= PLANT.max) {
+    return {
+      ok: false,
+      message: `You already run ${plantList(state).length}. ${PLANT.max} is the most anybody can keep quiet.`,
+    };
+  }
+  const cost = priced(state, PLANT.cost);
+  if (funds(state) < cost) {
+    return {
+      ok: false,
+      message: `That costs ${formatMoney(cost)} and you hold ${formatMoney(funds(state))}.`,
+    };
+  }
+  return { ok: true, message: `Open one in ${territoryDef(territoryId).name}` };
+}
+
+export function buildPlant(state: GameState, territoryId: string): TradeAction {
+  const check = canBuildPlant(state, territoryId);
+  if (!check.ok) return check;
+  if (!pay(state, priced(state, PLANT.cost), 'premises')) return { ok: false, message: 'You cannot cover it.' };
+
+  plantList(state).push({ territoryId, since: state.day });
+  addLog(
+    state,
+    `You do not have to ask anybody for it any more, at least not in ${territoryDef(territoryId).name}.`,
     'money',
   );
   return { ok: true, message: 'Open.' };
@@ -504,22 +661,42 @@ export function tickContraband(state: GameState, rng: Rng): void {
     }
   }
 
-  if (c.supplierId && tradeUnlocked(state, 'product')) {
-    const supplier = SUPPLIER_BY_ID[c.supplierId];
-    const price = unitCost(state, 'product');
-    // Buy what the streets can shift, not what the supplier can deliver. A
-    // warehouse of stock is a warehouse of evidence.
-    const want = Math.min(
-      supplier.ceiling,
-      Math.max(0, Math.ceil(throughput(state, 'product').total) - c.stock.product),
+  /*
+     Filled cheapest first, across however many sources there are.
+
+     This used to be one arrangement and one price. A plant is a second source
+     rather than a replacement for the first, so the buy has to walk a list —
+     the building covers its ceiling at its price and the arrangement covers
+     whatever is left at its own. A family with both fills its base load from
+     the plant and its peaks from the relationship, which is the whole reason
+     the fork is worth having.
+  */
+  if (tradeUnlocked(state, 'product')) {
+    // Buy what the streets can shift, not what the sources can deliver. A
+    // warehouse of stock is a warehouse of evidence — plus anything already
+    // promised to somebody, which is stock that is not for the street at all.
+    let want = Math.min(
+      Math.max(
+        0,
+        Math.ceil(throughput(state, 'product').total + reservedUnits(state, 'product')) -
+          c.stock.product,
+      ),
       TRADES.product.stockCap - c.stock.product,
     );
-    const affordable = Math.floor((state.org.cash + state.org.dirtyCash) / price);
-    const bought = Math.max(0, Math.min(want, affordable));
-    if (bought > 0 && pay(state, bought * price)) {
-      c.stock.product += bought;
-      report.product.bought = bought;
+    for (const source of productSources(state)) {
+      if (want <= 0) break;
+      const affordable = Math.floor((state.org.cash + state.org.dirtyCash) / source.price);
+      const bought = Math.max(0, Math.min(want, source.ceiling, affordable));
+      if (bought > 0 && pay(state, bought * source.price)) {
+        c.stock.product += bought;
+        report.product.bought += bought;
+        want -= bought;
+      }
     }
+  }
+
+  if (c.supplierId && tradeUnlocked(state, 'product')) {
+    const supplier = SUPPLIER_BY_ID[c.supplierId];
     if (supplier.exposure > 0) {
       addEvidence(state, {
         day: state.day,
@@ -528,6 +705,31 @@ export function tickContraband(state: GameState, rng: Rng): void {
         npcIds: [],
         detail: 'Regular deliveries arriving on a schedule somebody has noticed.',
       });
+    }
+  }
+
+  // --- the plants ---------------------------------------------------------
+  /*
+     A plant costs the same money whether or not a single unit moved, and it is
+     the loudest thing in the trade. That is the price of an arrangement nobody
+     can walk out of: the exposure above stops when the deliveries stop, and a
+     building's does not.
+
+     Nothing is produced here. The plant's only effect on the shelf is the
+     price it put on the units bought above.
+  */
+  const plants = c.plants ?? [];
+  if (plants.length > 0) {
+    if (pay(state, plants.length * priced(state, PLANT.upkeep), 'premises')) {
+      addEvidence(state, {
+        day: state.day,
+        source: 'operation',
+        strength: plants.length * PLANT.exposure,
+        npcIds: [],
+        detail: 'Premises with a lease, a meter reading and no customers anybody can name.',
+      });
+    } else {
+      addLog(state, 'You could not pay for your own premises this week.', 'failure');
     }
   }
 
@@ -547,7 +749,10 @@ export function tickContraband(state: GameState, rng: Rng): void {
     const price = unitCost(state, 'arms');
     const want = Math.min(
       armsSource.ceiling,
-      Math.max(0, Math.ceil(throughput(state, 'arms').total) - c.stock.arms),
+      Math.max(
+        0,
+        Math.ceil(throughput(state, 'arms').total + reservedUnits(state, 'arms')) - c.stock.arms,
+      ),
       TRADES.arms.stockCap - c.stock.arms,
     );
     const affordable = Math.floor((state.org.cash + state.org.dirtyCash) / price);
@@ -577,7 +782,7 @@ export function tickContraband(state: GameState, rng: Rng): void {
   // --- the workshops ------------------------------------------------------
   if (c.workshops.length > 0) {
     const upkeep = c.workshops.length * priced(state, WORKSHOP.upkeep);
-    if (pay(state, upkeep)) {
+    if (pay(state, upkeep, 'premises')) {
       const materials = WORKSHOP.outputPerWeek * unitCost(state, 'arms');
       for (const shop of c.workshops) {
         if (c.stock.arms >= TRADES.arms.stockCap) break;
@@ -611,7 +816,11 @@ export function tickContraband(state: GameState, rng: Rng): void {
     if (routes.length === 0) continue;
 
     const capacity = throughput(state, trade);
-    let remaining = Math.min(c.stock[trade], capacity.total);
+    // Stock somebody is already owed is not on the street this week, however
+    // much room the street has. A commitment that the distribution loop can
+    // quietly sell out from under it is not a commitment.
+    const sellable = Math.max(0, c.stock[trade] - reservedUnits(state, trade));
+    let remaining = Math.min(sellable, capacity.total);
     if (remaining <= 0) continue;
 
     let earned = 0;
@@ -784,6 +993,10 @@ export function seizeStock(state: GameState, rng: Rng, agency: string): void {
        back what a quiet year earned.
     */
     shakeSupplierTrust(state);
+    // And whoever signs the accounts reads the same newspaper. See
+    // `shakeLaundererTrust` — the discount is bought with quiet, and this is
+    // where a quiet year is taken back.
+    shakeLaundererTrust(state);
   }
 
   if (c.workshops.length > 0 && rng.chance(SEIZURE.workshopChance)) {
@@ -792,6 +1005,24 @@ export function seizeStock(state: GameState, rng: Rng, agency: string): void {
     addLog(
       state,
       `The shop in ${territoryDef(shop.territoryId).name} is gone. They took the machines and the paperwork.`,
+      'failure',
+    );
+  }
+
+  /*
+     And the other kind of building.
+
+     A plant buys its way out of ever being walked out on by a supplier, and
+     this is what it pays for that: an address, on a list, that a warrant can
+     be written against. An arrangement cannot be raided because there is
+     nothing of yours at the end of it.
+  */
+  if ((c.plants?.length ?? 0) > 0 && rng.chance(SEIZURE.plantChance)) {
+    const gone = c.plants!.pop()!;
+    state.org.cash += Math.round(priced(state, PLANT.cost) * PLANT.raidRefundShare);
+    addLog(
+      state,
+      `The premises in ${territoryDef(gone.territoryId).name} are sealed. You are buying from somebody again.`,
       'failure',
     );
   }
@@ -849,11 +1080,17 @@ export function readSuppliers(state: GameState) {
     current: state.contraband?.supplierId === supplier.id,
     // The waterfront price moves with who holds the water, and that is
     // something the player can see on the Territory panel already.
-    price: Math.round(
-      unitCost(state, 'product') *
-        supplier.priceMultiplier *
-        (supplier.id === PORT.supplierId ? portMultiplier(state) : 1),
-    ),
+    /*
+       The arrangement's own price, not the one you are paying.
+
+       This read `unitCost(state, 'product') * supplier.priceMultiplier`, and
+       `unitCost` already had the *current* supplier's multiplier baked into
+       it — so every row in this table was wrong the moment any arrangement was
+       open, by whatever the open one's multiplier happened to be. A plant
+       would have made it wronger still, because `unitCost` now reads the
+       cheapest source rather than the arrangement.
+    */
+    price: supplierPrice(state, supplier),
   }));
 }
 

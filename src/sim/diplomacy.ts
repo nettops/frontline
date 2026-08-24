@@ -647,7 +647,7 @@ export function tickWars(state: GameState, rng: Rng): void {
   if (playerAtWar.length > 0) {
     const crew = crewList(state).filter((n) => n.status !== 'dead').length;
     const cost = crew * WAR.playerWarCostPerCrew * playerAtWar.length;
-    if (!spend(state, cost) && crew > 0) {
+    if (!spend(state, cost, 'world') && crew > 0) {
       addLog(state, 'You cannot afford to keep fighting. People notice.', 'failure');
       for (const npc of crewList(state)) {
         npc.stats.loyalty = clamp(npc.stats.loyalty - 4, 0, 100);
@@ -952,7 +952,7 @@ export function doDiplomacy(
     */
     const liquid = state.org.cash + state.org.dirtyCash;
     if (liquid < cost) takeBack(state, cost - liquid);
-    if (!spend(state, cost)) {
+    if (!spend(state, cost, 'world')) {
       return { ok: false, message: `${formatMoney(cost)} could not be raised.` };
     }
   }

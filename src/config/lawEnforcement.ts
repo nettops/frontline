@@ -249,6 +249,25 @@ export const EVIDENCE_ABSORPTION = 0.55;
 
 /** Old crimes go cold. Traces lose this much strength per week once stale. */
 export const EVIDENCE_DECAY_PER_WEEK = 0.55;
+/**
+ * How much slower a trace fades while a case is actually holding it.
+ *
+ * `decayEvidence` used to skip any trace with `attachedTo.length > 0`
+ * outright, so a trace a case had picked up was immortal — released only by
+ * `closeCase`, which fired once in 795 cases. Measured, **98 of 98 surviving
+ * traces were held by a case**: the pile was a permanent archive, and an agency
+ * opening a file in year four absorbed year-one evidence at full strength.
+ *
+ * The intent was sound and is stated in `closeCase` — the trail dies with the
+ * case — but it only works in a game where cases end. Here it was a circle:
+ * traces did not decay because cases held them, and cases did not close
+ * because evidence kept arriving.
+ *
+ * So held evidence fades too, just slower, because somebody is keeping it
+ * warm. It does not reduce any case's current strength — that was banked when
+ * the trace was absorbed — it stops the archive being permanent.
+ */
+export const EVIDENCE_HELD_DECAY_SCALE = 0.4;
 export const EVIDENCE_STALE_AFTER_DAYS = 45;
 /** Below this a trace is worthless and is dropped entirely. */
 export const EVIDENCE_WORTHLESS_BELOW = 1.5;
@@ -268,7 +287,25 @@ export const HEAT_EVIDENCE_CONTRIBUTION = 0.035;
 export const MOMENTUM_HEAT_FLOOR = 20;
 
 export const COLD_CASE_AFTER_DAYS = 35;
-export const COLD_CASE_DECAY_PER_WEEK = 1.8;
+/**
+ * What a cold case sheds each week, as a share of what it holds.
+ *
+ * This was a flat 1.8, so a file at 100 shed exactly what a file at 10 shed —
+ * and the cases a player most needs to be able to starve were proportionally
+ * the hardest to kill. From 100 down to `CASE_CLOSED_BELOW` was 52 weeks of
+ * perfect silence with nothing at all pushing back.
+ *
+ * Measured over 17,051 case-weeks before this changed: mean open case strength
+ * 94.6, every career peaking at 100, and **one case closed by decay against
+ * 795 opened**. The starvation mechanic fired on 13% of case-weeks and the
+ * case got stronger in 90.4% of them.
+ *
+ * A share of the load instead, which is the same repair the heat meter needed
+ * and for the same reason: the thing that clears the meter has to scale with
+ * how much there is to clear. A file at 90 now sheds five points a week and one
+ * at 20 sheds one, so going quiet bites hardest exactly where it should.
+ */
+export const COLD_CASE_DECAY_SHARE = 0.055;
 /** Below this strength, a stalled case is closed for good. */
 export const CASE_CLOSED_BELOW = 6;
 

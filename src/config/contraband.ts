@@ -19,6 +19,14 @@
  * That makes the first a relationship you have to maintain and the second a
  * capital asset somebody can raid.
  *
+ * Both rows have since grown a second door, and neither door collapses that
+ * distinction. Arms can be *bought* in finished crates at a worse unit price
+ * (ARMS_SUPPLIERS), and product can be *made* in a plant that produces no
+ * units at all — it only changes what a unit costs and takes away the
+ * arrangement's ability to walk out (PLANT). A workshop makes things. A plant
+ * changes terms. That is deliberate: the day both trades are "spend capital,
+ * receive units" is the day there is only one trade here.
+ *
  * ---------------------------------------------------------------------------
  * As with laundering, this is deliberately an abstract economy and nothing
  * else. Units, routes, capacity, spoilage, exposure. Nothing here describes how
@@ -29,7 +37,6 @@
 
 import type { EvidenceSource } from './lawEnforcement';
 import type { ControlLevel } from './territories';
-import type { RankId } from '../sim/types';
 
 export type TradeId = 'product' | 'arms';
 
@@ -40,7 +47,8 @@ export interface TradeDef {
   unit: [one: string, many: string];
   blurb: string;
   /** Lowest rank that can run it at all. */
-  minRank: RankId;
+  /** Fronts you must be running before anyone will sell into this trade. */
+  minFronts: number;
   /** Control needed in a district before it will carry anything. */
   minControl: ControlLevel;
 
@@ -78,7 +86,17 @@ export const TRADES: Record<TradeId, TradeDef> = {
     unit: ['load', 'loads'],
     blurb:
       'Bought outside the city, carried in through the port, and moved on the same streets your people already stand on. It earns more than anything else you can do and the neighbourhood knows exactly what it is.',
-    minRank: 'crew_leader',
+    /*
+       Two fronts to move it through, rather than a rank.
+
+       This read `minRank: 'crew_leader'`, which was a clean-money threshold
+       wearing a title — and the title came off the screen the day the player
+       became the boss from the first morning. Fronts are the honest
+       requirement anyway: the product moves through premises, and a career
+       reaches two of them around day 90, which is where Crew Leader used to
+       land.
+    */
+    minFronts: 2,
     minControl: 'foothold',
 
     /*
@@ -115,7 +133,10 @@ export const TRADES: Record<TradeId, TradeDef> = {
     unit: ['crate', 'crates'],
     blurb:
       'A machine shop that makes parts nobody asks about, or a freight agent who will sell you crates already full. Lower volume, far higher value, and the only trade whose customers can point it back at you.',
-    minRank: 'capo',
+    // A district actually under your control, plus somewhere to keep it. The
+    // old `minRank: 'capo'` is gone with the rest of the ladder; `minControl`
+    // below was always doing most of this gate's work.
+    minFronts: 3,
     minControl: 'control',
 
     // Manufacture rather than purchase — see WORKSHOP. The cost here is
@@ -377,6 +398,96 @@ export const WORKSHOP = {
   raidRefundShare: 0.1,
 };
 
+// ----------------------------------------------------------- own supply ---
+
+/**
+ * Making it yourself, instead of buying it from somebody.
+ *
+ * The obvious version of this is a second WORKSHOP — spend capital, receive
+ * units — and it is the wrong build. The header above states the asymmetry
+ * between the two trades as a design position: product is a *relationship* you
+ * have to maintain and arms are a *capital asset* somebody can raid. Give
+ * product a unit-producing facility and both rows collapse into the same
+ * thing, `supplierTrust` becomes flavour a player can buy their way out of,
+ * and the one structural difference between the trades is gone.
+ *
+ * So a plant does not produce units. It **changes the terms**:
+ *
+ *     keep buying   the supplier's price, moving with whoever holds the water,
+ *                   and a weekly chance they simply stop
+ *     build one     materially lower and fixed, nobody to walk out on you, and
+ *                   an address a warrant can point at
+ *
+ * Neither dominates, and the ceiling is what keeps that true. One plant covers
+ * `supplyPerWeek` and no more, which is well under what any of the three
+ * arrangements can deliver — so a plant is the cheap base load and a supplier
+ * is still how a large operation is fed. The arrangement survives the
+ * facility, which is the constraint this was designed against.
+ *
+ * ## Every number here off a plotted distribution
+ *
+ * Measured on `ladder.probe`'s bot — the project's standard career — over 144
+ * careers. Peak funds inside the first year *after* the trade opened, which is
+ * the state a player is actually in when this becomes a question:
+ *
+ *     reached the trade   131/144
+ *     peak funds          p10 $38,690   median $236,014   p75 $766,036
+ *
+ * `cost` sits just above the median, per DIRECTOR §5, which puts a plant
+ * inside reach of about half the careers that get as far as running the trade
+ * — measured directly, 84 of 131 ever hold $185,000 and 64 of 131 ever hold
+ * $260,000.
+ *
+ * The first pass priced this at $185,000 off a bot written for the feature,
+ * which reported a median peak of $176,843. That bot opened a supply in 14
+ * careers of 36 where the standard one reaches two fronts in 132 of 144: F7,
+ * and the third time in this cycle an instrument written alongside a feature
+ * has flattered it. The figure above is the standard bot's.
+ *
+ * Dearer than the arms workshop on purpose. The workshop was the PATRON shape
+ * at $120,000 against a p90 of $94,345; this is priced against the careers
+ * that can actually ask the question.
+ */
+export const PLANT = {
+  cost: 250_000,
+  /**
+   * What a unit costs here, as a share of the trade's own base figure.
+   *
+   * Against the three arrangements — 0.85, 1.15 and 1.40 — this is roughly
+   * half the cheapest of them and a third of the dearest. Large enough to be
+   * worth $185,000 and a weekly bill; small enough that it does not make the
+   * margin so fat that the district capacity stops being the thing that
+   * matters.
+   */
+  unitCostShare: 0.45,
+  /**
+   * Units a week one plant will cover, at the cheap price.
+   *
+   * The whole reason the supplier survives. Measured weekly throughput while a
+   * supply is open runs a median of 9 and a p90 of 27.8, so one plant carries
+   * a median operation and three of them still fall short of what the
+   * waterfront alone can deliver.
+   */
+  supplyPerWeek: 10,
+  /** Weekly running cost, whether or not a single unit moves. */
+  upkeep: 2_600,
+  /** Control needed in the district. A foothold is not somewhere to put this. */
+  minControl: 'control' as ControlLevel,
+  /** Most you can run, total. */
+  max: 3,
+  /**
+   * Evidence per week, each.
+   *
+   * Higher than any of the three arrangements — the dearest of those is the
+   * waterfront at 1.4 — because this is the one that cannot be walked away
+   * from. A delivery pattern stops when the deliveries stop. A building does
+   * not.
+   */
+  exposure: 1.6,
+  /** What survives a warrant. Same share a workshop gets. */
+  raidRefundShare: 0.1,
+};
+
 // -------------------------------------------------------- selling to them --
 
 /**
@@ -452,6 +563,8 @@ export const SEIZURE = {
   evidence: 22,
   /** Chance a raid also takes a workshop. */
   workshopChance: 0.35,
+  /** ...and the same again for a plant, which is equally an address. */
+  plantChance: 0.35,
 };
 
 /** How much a district's control level lets through. */

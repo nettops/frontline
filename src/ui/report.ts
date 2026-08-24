@@ -14,7 +14,7 @@
  * adding a line here can never change the outcome of a game.
  */
 
-import type { GameState, Id, NpcStatus, RankId } from '../sim/types';
+import type { GameState, Id, NpcStatus } from '../sim/types';
 import type { PanelId } from './Rail';
 import type { Cue } from './audio';
 import type { StageId } from '../config/lawEnforcement';
@@ -37,8 +37,6 @@ export interface Snapshot {
   heat: number;
   respect: number;
   crew: Record<Id, NpcStatus>;
-  rank: RankId;
-  pendingRank: RankId | null;
   cases: Record<Id, { stage: StageId; strength: number; agencyId: string }>;
   controlled: string[];
   wars: FactionId[];
@@ -66,8 +64,6 @@ export function snapshot(state: GameState): Snapshot {
     namedStories: state.city.stories.filter((story) => story.named).length,
     respect: state.org.respect,
     crew,
-    rank: state.player.rank,
-    pendingRank: state.player.pendingRank,
     cases,
     controlled: controlledTerritories(state).map((t) => t.id),
     wars: playerWars(state).map((f) => f.id),
@@ -312,10 +308,15 @@ export function buildReport(before: Snapshot, state: GameState): DayReport | nul
     }
   }
 
-  // --- yourself ---------------------------------------------------------
-  if (now.pendingRank && now.pendingRank !== before.pendingRank) {
-    push('You have been offered a step up.', 'good', 'player');
-  }
+  /*
+     "You have been offered a step up" was reported here.
+
+     Nothing offers one. `tickPlayer` stopped making the offer when the ladder
+     came out and `pendingRank` is never written, so the line could not fire —
+     and a playtest report that carries a field nothing writes is a field the
+     next reader will assume means something. Both it and `rank`, which was
+     recorded and never compared, are off the snapshot.
+  */
 
   // --- money and attention ----------------------------------------------
   const money = now.clean + now.dirty - (before.clean + before.dirty);

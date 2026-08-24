@@ -26,7 +26,13 @@ import { clamp } from './rng';
 import { priced } from './market';
 import { earnDirty } from './economy';
 import { crewList } from './npc';
-import { territoryList, territoryDef, adjustSentiment, playerInfluence } from './territory';
+import {
+  adjustSentiment,
+  controlledTerritories,
+  playerInfluence,
+  territoryDef,
+  territoryList,
+} from './territory';
 import {
   CIVIC,
   CIVIC_ATTRIBUTE,
@@ -58,6 +64,31 @@ export function civicRoster(state: GameState): CivicStanding[] {
   return roster(state);
 }
 
+/**
+ * Do somebody outside the family a favour, and have it count.
+ *
+ * Returns whether the standing actually moved. The caller has already spent
+ * the money by the time this is asked — that is deliberate, and it is the rule
+ * `INFLUENCE_FROM.approachCooldownDays` set: the credit is rate-limited, the
+ * action is not. A boss may keep writing cheques to the same councilman every
+ * week and the councilman will keep taking them; what he will not do is think
+ * twice as well of you for the second one.
+ *
+ * It grants no influence. Helping a man makes *him* think better of you, which
+ * is the fiction and the whole shape of this file: standing is a consequence of
+ * how the family is run, never a thing bought. An earlier version paid +1 to
+ * the player's influence as well, which made nine memos and $81,000 into the
+ * patron's Influence 9 — a `contactCost` shop reintroduced by the back door.
+ */
+export function helpFigure(state: GameState, id: string, standing: number): boolean {
+  const held = figure(state, id);
+  const since = state.day - (held.lastHelpedDay ?? -Infinity);
+  if (since < CIVIC.helpCooldownDays) return false;
+  held.lastHelpedDay = state.day;
+  held.standing = clamp(held.standing + standing, 0, 100);
+  return true;
+}
+
 export function figure(state: GameState, id: string): CivicStanding {
   const found = roster(state).find((f) => f.id === id);
   if (found) return found;
@@ -84,7 +115,16 @@ function scoreFor(state: GameState, def: CivicFigureDef): number {
     case 'quiet':
       return clamp(100 - state.org.heat, 0, 100);
     case 'ground': {
-      const held = territoryList(state).filter((t) => playerInfluence(t) >= 25).length;
+      /*
+         Ground you hold, not ground you have a foot in.
+
+         This counted influence at 25 — a foothold — and a family with three
+         districts under control has a toe in six or seven besides, so the
+         union boss was reading a number nearly every career maxed out. He was
+         owed by 35 of 36. `controlledTerritories` is the same line every other
+         system means when it says a district is yours.
+      */
+      const held = controlledTerritories(state).length;
       // Four districts is a family with real ground; more does not impress
       // them further, it just means somebody else has less.
       return clamp((held / 4) * 100, 0, 100);

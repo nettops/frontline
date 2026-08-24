@@ -41,12 +41,14 @@ import {
   addInfluence,
   adjustSentiment,
   canOperateIn,
+  controlLevel,
   controlledTerritories,
   hasPresence,
   heatMultiplier,
   payoutMultiplier,
   successModifier,
   territoryDef,
+  territoryList,
 } from './territory';
 import {
   INFLUENCE_ON_FAILURE_SHARE,
@@ -84,7 +86,7 @@ import {
 } from '../config/operations';
 import { LAWYER_BY_LEVEL } from '../config/lawEnforcement';
 import { CANCEL_OPERATION_HEAT } from '../config/heat';
-import { ATTRIBUTE_MAX, FEAR, ROLE_ORDER, rankIndex } from '../config/economy';
+import { ATTRIBUTE_MAX, FEAR, ROLE_ORDER } from '../config/economy';
 import { civicRoster } from './civic';
 import { bond } from './diplomacy';
 import { rivals } from './faction';
@@ -98,7 +100,7 @@ import { DIFFICULTY_BY_ID } from '../config/difficulty';
  * operation history, and doing that twenty-three times to draw one table was
  * the obvious way to make a menu expensive.
  */
-function opsBoard(state: GameState): OpsBoard {
+export function opsBoard(state: GameState): OpsBoard {
   const opsBy: Record<string, number> = {};
   for (const r of state.operationHistory) {
     opsBy[r.defId] = (opsBy[r.defId] ?? 0) + 1;
@@ -115,25 +117,67 @@ function opsBoard(state: GameState): OpsBoard {
      `CIVIC.maxOwed`, so this cannot become free.
   */
   const favoursOwed: Record<string, number> = {};
-  for (const f of civicRoster(state)) favoursOwed[f.id] = f.owed;
+  let owedTotal = 0;
+  let owedFigures = 0;
+  for (const f of civicRoster(state)) {
+    favoursOwed[f.id] = f.owed;
+    owedTotal += f.owed;
+    if (f.owed > 0) owedFigures += 1;
+  }
 
   const bestRivalTrust = rivals(state)
     .filter((f) => f.strength > 0)
     .reduce((best, f) => Math.max(best, bond(state, 'player', f.id).trust), -100);
 
   return {
-    rank: rankIndex(state.player.rank),
     districtsHeld: controlledTerritories(state).length,
+    districtsControlled: territoryList(state).filter((t) => {
+      const level = controlLevel(t);
+      return level === 'control' || level === 'dominance';
+    }).length,
     fronts: ownedBusinesses(state).length,
     crew: crewList(state).filter((n) => n.status !== 'dead').length,
     opsBy,
     favoursOwed,
+    owedTotal,
+    owedFigures,
     bestRivalTrust,
   };
 }
 
+/*
+   No rank in it any more.
+
+   This read `rankIndex(def.minRank) <= board.rank`, with `opens` as a second
+   way in for six of twenty-three jobs. That stopped making sense the day the
+   player became the boss from the first morning: the screen said so, the table
+   still asked them to climb from Street Criminal, and the label that would
+   have explained the refusal had been taken off the screen. Measured, the five
+   jobs above Capo were shut on 100% of 3,600 days.
+
+   An absent `opens` now means always open, which is the street work, and
+   everything else names something the player can go and get.
+*/
 function isOpen(def: OperationDef, board: OpsBoard): boolean {
-  return rankIndex(def.minRank) <= board.rank || (def.opens?.met(board) ?? false);
+  return def.opens?.met(board) ?? true;
+}
+
+/**
+ * How big an outfit this is, on the same 0..5 scale the jobs are priced on.
+ *
+ * The heat model needs to know how far beneath the player a job sits — a
+ * corner shakedown draws nothing when a task force is already reading your
+ * mail. That used to be `rankIndex(player.rank)`, and there is no rank now.
+ *
+ * Rather than invent a second scale to sit beside the gates, this reads the
+ * gates: your standing is the top of the table you can actually reach. It
+ * needs no tuning of its own, it moves the moment the board moves, and it
+ * cannot drift away from what the player sees, because it is the same
+ * calculation the job list is drawn from.
+ */
+export function standing(state: GameState): number {
+  const board = opsBoard(state);
+  return OPERATIONS.reduce((top, op) => (isOpen(op, board) ? Math.max(top, op.tier) : top), 0);
 }
 
 /** Jobs the player's standing — or their record — allows them to take on. */
@@ -179,7 +223,7 @@ export function heatScale(
   const territory = territoryId ? state.territories[territoryId] : undefined;
   return heatScaleForDistance(
     heatDistance({
-      rankGap: rankIndex(state.player.rank) - rankIndex(def.minRank),
+      rankGap: standing(state) - def.tier,
       sentSeniority,
       stewarded: !!territory?.stewardId,
       crew: crewList(state).filter((n) => n.status !== 'dead').length,
@@ -469,7 +513,7 @@ export function launchOperation(
   if (!check.ok) return null;
 
   const cost = operationCost(state, def);
-  if (!spend(state, cost)) return null;
+  if (!spend(state, cost, 'stakes')) return null;
 
   const crew = crewIds.map((id) => state.npcs[id]);
   const chance = successBreakdown(state, def, crew, territoryId, approach).total;
@@ -585,7 +629,7 @@ function resolveOperation(state: GameState, rng: Rng, op: ActiveOperation): void
   // Whether they knew you here is decided at launch, not after the fact.
   const unfamiliar = !hasPresence(territory);
   const influenceStep =
-    INFLUENCE_PER_OPERATION + rankIndex(def.minRank) * INFLUENCE_PER_OPERATION_TIER;
+    INFLUENCE_PER_OPERATION + def.tier * INFLUENCE_PER_OPERATION_TIER;
 
   const result: OperationResult = {
     id: op.id,
@@ -647,7 +691,7 @@ function resolveOperation(state: GameState, rng: Rng, op: ActiveOperation): void
       crewTraitEffect(crew, 'heat');
     result.payout = payout;
     result.heat = heat;
-    earnDirty(state, payout);
+    earnDirty(state, payout, 'jobs');
     addHeat(state, heat, 'street', def.name);
     gainRespect(state, def.respect * approach.respect);
     /*

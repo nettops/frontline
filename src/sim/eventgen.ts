@@ -33,9 +33,11 @@ import { spend, totalFunds } from './economy';
 import { addHeat } from './heat';
 import { gainFear, gainRespect, trainAttribute } from './player';
 import { ownedBusinesses, weeklyRevenue } from './business';
-import { adjustSentiment, playerInfluence, territoryDef, territoryList } from './territory';
+import { addInfluence, adjustSentiment, playerInfluence, territoryDef, territoryList } from './territory';
 import { activeCases, agencyOf, legalCostAt, retainLawyer } from './investigation';
-import { figure } from './civic';
+import { figure, helpFigure } from './civic';
+import { stewardOf } from './delegation';
+import { priced } from './market';
 import { readWhispers } from './whispers';
 import { goHome, home } from './personal';
 import { RELATIONS } from '../config/personal';
@@ -635,6 +637,69 @@ const nameCameUp: EventDef = {
   },
 };
 
+
+/**
+ * The man running a district for you, asking for something.
+ *
+ * Delegation is the largest system in the late game with no memo surface: a
+ * player hands somebody a street and then never hears from him except through
+ * a weekly ledger line. Every other shape in this file fires on something an
+ * early family already has, so the generated supply thinned exactly where the
+ * authored pool had also been round twice.
+ *
+ * Gated on a season in the job, so this is a man reporting in rather than an
+ * introduction — and on the district being worth something, so the ask has a
+ * reason behind it.
+ */
+const stewardAsks: EventDef = {
+  id: 'gen_steward_asks',
+  ...shape('gen_steward_asks'),
+  applies(state, rng) {
+    const held = territoryList(state).filter((t) => {
+      const man = stewardOf(state, t);
+      if (!man || man.status !== 'active') return false;
+      return state.day - (t.stewardSince ?? state.day) >= GEN_WHEN.stewardSeasonDays;
+    });
+    if (held.length === 0) return null;
+    const t = rng.pick(held);
+    const man = stewardOf(state, t)!;
+    return { territory: t, npc: man };
+  },
+  build(state, rng, ctx) {
+    const t = ctx.territory!;
+    const man = ctx.npc!;
+    const where = territoryDef(t.id).name;
+    const months = Math.round((state.day - (t.stewardSince ?? state.day)) / 30);
+    return {
+      defId: 'gen_steward_asks',
+      title: `${man.name} wants a free hand in ${where}`,
+      body: oneOf(rng, [
+        `${man.name} has had ${where} for ${months} months and stopped asking permission ` +
+          `for the small things a while ago. Now the big one: money to do it properly, and ` +
+          `nobody standing over the work while it is done.`,
+        `A message from ${where}, ${months} months into ${man.name} running it. The street ` +
+          `could do more than it is doing, and what is stopping it is you. Respectfully put, ` +
+          `and clearly rehearsed.`,
+      ]),
+      severity: 'opportunity',
+      npcId: man.id,
+      data: { territoryId: t.id },
+      choices: [
+        {
+          id: 'back',
+          label: 'Give them the free hand',
+          ...payable(state, priced(state, GEN_EFFECT.stewardBackingCost), 'and the run of the place'),
+        },
+        {
+          id: 'refuse',
+          label: 'Your way, or not at all',
+          hint: 'That answer will be heard, and not only by the one who asked.',
+        },
+      ],
+    };
+  },
+};
+
 export const GEN_DEFS: EventDef[] = [
   wantsAWord,
   badBlood,
@@ -646,6 +711,7 @@ export const GEN_DEFS: EventDef[] = [
   takeIsShort,
   nameCameUp,
   askedForYou,
+  stewardAsks,
 ];
 
 // ------------------------------------------------------------- resolution ---
@@ -678,7 +744,7 @@ export function resolveGenerated(
       state.flags[`asked_${npc.id}`] = state.day;
       if (choiceId === 'pay') {
         const ask = Math.max(500, Math.round(npc.wage * GEN_EFFECT.payWages));
-        if (!spend(state, ask)) {
+        if (!spend(state, ask, 'world')) {
           addLog(state, `You had nothing to give ${npc.name}. They noticed that too.`, 'failure');
           return;
         }
@@ -736,7 +802,7 @@ export function resolveGenerated(
       if (!b) return;
       if (choiceId === 'spend') {
         const cost = Math.max(2_000, Math.round(weeklyRevenue(state, b) * GEN_EFFECT.frontRepairWeeks));
-        if (!spend(state, cost)) {
+        if (!spend(state, cost, 'world')) {
           addLog(state, 'There was nothing to put into it.', 'failure');
           return;
         }
@@ -773,7 +839,7 @@ export function resolveGenerated(
       const t = state.territories[id];
       if (!t) return;
       if (choiceId === 'spend') {
-        if (!spend(state, GEN_EFFECT.streetSpend)) {
+        if (!spend(state, GEN_EFFECT.streetSpend, 'world')) {
           addLog(state, 'You could not put anything into the street this week.', 'failure');
           return;
         }
@@ -797,13 +863,31 @@ export function resolveGenerated(
       const def = CIVIC_FIGURES.find((f) => f.id === id);
       if (!def) return;
       if (choiceId === 'help') {
-        if (!spend(state, GEN_EFFECT.outsideSpend)) {
+        if (!spend(state, GEN_EFFECT.outsideSpend, 'world')) {
           addLog(state, `You could not cover it, so nothing was done for ${def.title.toLowerCase()}.`, 'failure');
           return;
         }
-        held.standing = clamp(held.standing + GEN_EFFECT.outsideStanding, 0, 100);
-        addLog(state, `${def.title} has one less problem. Standing is ${Math.round(held.standing)}.`, 'crew');
-        trainAttribute(state, 'influence', 1);
+        /*
+           Through `helpFigure`, which caps the credit at a fortnight.
+
+           This wrote the standing directly and paid +1 influence on top, every
+           time, with nothing stopping a boss answering the same memo as often
+           as it regenerated: nine of them and $81,000 bought the patron's
+           Influence 9. The influence is gone entirely — helping a man makes
+           *him* think better of you, and general political pull is what
+           `INFLUENCE_FROM` is for.
+
+           The money goes either way. That is the same rule the diplomatic
+           approach follows: what is limited is the credit, not the act.
+        */
+        const counted = helpFigure(state, id, GEN_EFFECT.outsideStanding);
+        addLog(
+          state,
+          counted
+            ? `${def.title} has one less problem. Standing is ${Math.round(held.standing)}.`
+            : `${def.title} took the money. You have done this lately and it did not land twice.`,
+          'crew',
+        );
         return;
       }
       held.standing = clamp(held.standing + GEN_EFFECT.outsideDeclineStanding, 0, 100);
@@ -814,7 +898,7 @@ export function resolveGenerated(
       if (!npc) return;
       if (choiceId === 'bail') {
         const bail = Math.max(1_500, Math.round(npc.wage * GEN_EFFECT.insideBailWeeks));
-        if (!spend(state, bail)) {
+        if (!spend(state, bail, 'law')) {
           addLog(state, `Nobody went down for ${npc.name}. There was nothing to send.`, 'failure');
           return;
         }
@@ -860,6 +944,27 @@ export function resolveGenerated(
 
     case 'gen_asked_for_you': {
       if (choiceId === 'go') goHome(state);
+      return;
+    }
+
+    case 'gen_steward_asks': {
+      const t = state.territories[String(event.data.territoryId ?? '')];
+      if (!t || !npc) return;
+      if (choiceId === 'back') {
+        if (!spend(state, priced(state, GEN_EFFECT.stewardBackingCost), 'world')) {
+          addLog(state, `The money was not there, so ${npc.name} was refused by default.`, 'failure');
+          npc.stats.loyalty = clamp(npc.stats.loyalty - GEN_EFFECT.stewardRefusedLoyalty, 0, 100);
+          return;
+        }
+        npc.stats.loyalty = clamp(npc.stats.loyalty + GEN_EFFECT.stewardBackedLoyalty, 0, 100);
+        addInfluence(state, t.id, GEN_EFFECT.stewardBackedInfluence);
+        addNote(npc, state.day, `Given the run of ${territoryDef(t.id).name}.`, 'good');
+        addLog(state, `${territoryDef(t.id).name} is run the way ${npc.name} asked for now.`, 'crew');
+        return;
+      }
+      npc.stats.loyalty = clamp(npc.stats.loyalty - GEN_EFFECT.stewardRefusedLoyalty, 0, 100);
+      addNote(npc, state.day, `Asked for the run of a district and was refused.`, 'bad');
+      addLog(state, `${npc.name} took it well enough, in front of you.`, 'crew');
       return;
     }
 

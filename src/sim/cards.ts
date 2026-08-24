@@ -422,7 +422,7 @@ export function sitDown(
      the thing and you are paid as though the money had been on the table,
      which is what putting it up meant.
   */
-  if (!staked && !spend(state, stake)) {
+  if (!staked && !spend(state, stake, 'world')) {
     return { ok: false, reason: 'The money was not there when it came to it.' };
   }
   const pot = Math.round(stake * (sharp ? CARDS.hard.payout : CARDS.payout));
@@ -454,7 +454,7 @@ function takeStake(state: GameState, staked: Possession | null, stake: number): 
     staked.goneDay = state.day;
     return staked;
   }
-  spend(state, stake);
+  spend(state, stake, 'world');
   return null;
 }
 

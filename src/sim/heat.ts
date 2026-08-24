@@ -21,7 +21,7 @@ import { worldMod } from './world';
 import {
   DECAY_BY_CHANNEL,
   HEAT_CHANNELS,
-  HEAT_DECAY_PER_DAY,
+  HEAT_DECAY_SHARE,
   HEAT_SUCCESS_PENALTY_AT_MAX,
   LAY_LOW_BY_CHANNEL,
   LAY_LOW_DURATION_DAYS,
@@ -161,18 +161,24 @@ export function tickHeat(state: GameState): void {
 
   if (org.quietDays < QUIET_DAYS_BEFORE_DECAY) return;
 
-  // Read from the total, so a player at 80 bleeds off slowly whichever three
-  // ways they got there.
-  const tier = heatTier(org.heat);
-  const tierBefore = tier.name;
+  // Read from the total, so what comes off is decided by how much trouble the
+  // family is in altogether rather than by any one channel's share of it.
+  const tierBefore = heatTier(org.heat).name;
   const laying = isLayingLow(state);
 
   const by = channels(state);
   for (const channel of HEAT_CHANNELS) {
     if ((by[channel] ?? 0) <= 0) continue;
+    /*
+       A share of the load, not a flat figure. See `HEAT_DECAY_SHARE`.
+
+       The channel multipliers still do the work they always did: the street
+       forgets fastest, paper does not go away because you stopped, and a man
+       already sitting with a federal agent is not affected by any of this.
+    */
     const decay =
-      HEAT_DECAY_PER_DAY *
-      tier.decayMultiplier *
+      org.heat *
+      HEAT_DECAY_SHARE *
       diff.heatDecay *
       DECAY_BY_CHANNEL[channel] *
       (laying ? LAY_LOW_BY_CHANNEL[channel] : 1);

@@ -12,6 +12,10 @@ import { addEvidence, addLog } from './util';
 import { tickOperations } from './operations';
 import { tickBusinesses } from './business';
 import { tickContraband } from './contraband';
+import { tickOrders } from './orders';
+import { closeWeek } from './ledger';
+import { tickPossessions } from './possessions';
+import { tickLaunderer } from './launderers';
 import { tickTerritory } from './territory';
 import { tickDelegation } from './delegation';
 import { tickPromises } from './promises';
@@ -34,7 +38,7 @@ import { tickCards } from './cards';
 import { tickWhispers } from './whispers';
 import { tickEvents } from './events';
 import { tickWorld } from './world';
-import { tickFear, tickPlayer, tickRecord, tickStanding } from './player';
+import { tickFear, tickRecord, tickStanding } from './player';
 import { refreshRecruits } from './crew';
 import { addInfluence, territoryDef } from './territory';
 import { bond } from './diplomacy';
@@ -60,16 +64,37 @@ export function advanceDay(state: GameState): void {
   //     which is the join between the two halves of the economy, and the
   //     first thing that has ever strained the laundering system.
   tickContraband(state, rng);
+  // 1b. And whatever is left on the shelf goes to whoever was promised it.
+  //     After the trade, always: the buy aims at the street plus the orders,
+  //     the street takes everything that is not reserved, and this hands over
+  //     what that leaves. Daily rather than weekly, because a deadline is a
+  //     day.
+  tickOrders(state);
+  // 1c. Whoever keeps the books takes their fee and forms an opinion. Before
+  //     the fronts, because `launderCut` reads the opinion and the fronts
+  //     apply it the same morning — a week where somebody walks has to be a
+  //     week the family pays the stranger's rate, not one where the panel and
+  //     the payday disagree.
+  tickLaunderer(state, rng);
   // 2. Fronts earn and launder, before wages — a business should be able to
   //    fund the crew that holds the district it sits in.
   tickBusinesses(state, rng);
   // 3. Everybody you owe collects, before the crew get paid — they are the
   //    only creditors in the game who do something about it.
   if (state.day % PAYDAY_INTERVAL === 0) {
-    tickLoans(state, rng, (amount) => spend(state, amount), loanHooks(state, rng));
+    tickLoans(state, rng, (amount) => spend(state, amount, 'debt'), loanHooks(state, rng));
   }
   // 3a. Wages out.
   tickEconomy(state);
+  // 3b. What the boss keeps, and what keeping it does for him.
+  //
+  //     After wages, because the upkeep on a yacht is a standing bill and
+  //     belongs beside the other standing bills. Before the book is ruled off
+  //     at 5d, or the charge lands in `unaccounted`. And before influence and
+  //     feeling drift at 7, for the reason 6a runs where it does — a district
+  //     the foundation worked this morning should read as worked when the
+  //     drift asks about it this afternoon.
+  tickPossessions(state);
   // 4. Heat decays only if nothing above generated any.
   tickHeat(state);
   // 4a. Being feared fades, and charges rent while it lasts.
@@ -92,6 +117,13 @@ export function advanceDay(state: GameState): void {
   //     marked this morning should be aggrieved when the drift asks him this
   //     afternoon how he feels about you.
   if (state.day % DRIFT_INTERVAL_DAYS === 0) markStanding(state);
+  // 5d. Rule off the week's book.
+  //
+  //     After every phase that moves money and before anything that only
+  //     reads it. The close differences the wallet against what was written
+  //     down and books the gap as `unaccounted`, so a category nobody has
+  //     labelled yet shows up on the panel rather than disappearing.
+  if (state.day % PAYDAY_INTERVAL === 0) closeWeek(state);
   // 6. The weekly re-evaluation of everybody's position.
   if (state.day % DRIFT_INTERVAL_DAYS === 0) driftNpcs(state, rng);
   // 6a. Anybody holding a district of yours decides what to do with it this
@@ -178,7 +210,6 @@ export function advanceDay(state: GameState): void {
     */
     tickRecord(state);
     // 15. Has the organization earned the next rank?
-    tickPlayer(state);
   }
 
 }

@@ -43,14 +43,23 @@ import {
   unitCost,
 } from '../contraband';
 import { totalFunds } from '../economy';
+import { withFronts } from './helpers';
 import { controlledTerritories } from '../territory';
 import { advanceDay } from '../clock';
 import type { GameState } from '../types';
 
+/**
+ * An outfit the arms trade will actually deal with.
+ *
+ * Was `state.player.rank = 'capo'`. The trade reads fronts now — three of
+ * them — because there is no rank left to read and "nowhere to put it" is the
+ * honest reason a dealer says no.
+ */
 function capo(funds = 60_000, seed = 14): GameState {
   const state = newGame({ name: 'Nobody', difficulty: 'normal', seed });
-  state.player.rank = 'capo';
+  withFronts(state, TRADES.arms.minFronts);
   state.org.cash = funds;
+  state.org.dirtyCash = 0;
   return state;
 }
 
@@ -97,10 +106,15 @@ describe('there is a way in that is not a factory', () => {
     expect(check.message, 'a refusal that does not name the price is F10 again').toMatch(/\d/);
   });
 
-  it('refuses below the rank the trade itself asks for', () => {
-    const state = capo();
-    state.player.rank = 'street_criminal';
-    expect(canOpenArmsSupply(state, ARMS_SUPPLIERS[0].id).ok).toBe(false);
+  it('refuses an outfit with nowhere to put it, and says so', () => {
+    const state = newGame({ name: 'Nobody', difficulty: 'normal', seed: 14 });
+    state.org.cash = 60_000;
+    const check = canOpenArmsSupply(state, ARMS_SUPPLIERS[0].id);
+    expect(check.ok).toBe(false);
+    // Names the figure, the bar and the way back — see `needsFronts`.
+    expect(check.message).toMatch(/0 fronts/);
+    expect(check.message).toMatch(new RegExp(`wants ${TRADES.arms.minFronts}`));
+    expect(check.message).toMatch(/Take a district/);
   });
 });
 
@@ -126,6 +140,9 @@ describe('the wiring, not the function', () => {
       seed: 31,
     });
     state.org.cash = 400_000;
+    // The seated start holds ground but owns nothing on it, and the trade now
+    // asks for premises rather than a rank.
+    withFronts(state, TRADES.arms.minFronts);
     const where = controlledTerritories(state)[0];
     expect(where, 'the seated start holds nothing, so nothing can carry crates').toBeDefined();
     openRoute(state, 'arms', where.id);

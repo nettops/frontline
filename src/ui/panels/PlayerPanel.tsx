@@ -1,8 +1,8 @@
 import { useGame, mutate } from '../../store';
 import { Panel, Bar, KeyValue } from '../components';
-import { nextRank, rankRequirements } from '../../sim/player';
 import { estate } from '../../sim/estate';
 import { careerShape, legitimacy } from '../../sim/legacy';
+import { maxCrew } from '../../sim/player';
 import { authorityRead } from '../../sim/authority';
 import { canGoHome, goHome, homeRead } from '../../sim/personal';
 import {
@@ -20,8 +20,6 @@ import {
   ATTRIBUTE_IDS,
   ATTRIBUTE_LABEL,
   ATTRIBUTE_MAX,
-  RANK_BY_ID,
-  ROLE_LABEL,
   attributeProgressNeeded,
 } from '../../config/economy';
 import { DIFFICULTY_BY_ID } from '../../config/difficulty';
@@ -241,9 +239,6 @@ function Possessions() {
 export default function PlayerPanel() {
   const state = useGame();
   const { player, org } = state;
-  const rank = RANK_BY_ID[player.rank];
-  const next = nextRank(state);
-  const reqs = rankRequirements(state);
   const difficulty = DIFFICULTY_BY_ID[state.difficulty];
   const authorityNow = authorityRead(state);
   const houseNow = homeRead(state);
@@ -253,68 +248,10 @@ export default function PlayerPanel() {
     <>
       <div className="page-head">
         <h1 className="page-title">{player.name}</h1>
-        <span className="tiny">
-          {rank.name} · {difficulty.name}
-        </span>
+        <span className="tiny">{difficulty.name}</span>
       </div>
-      <p className="page-sub">{rank.blurb}</p>
 
       <div className="grid-2">
-        <Panel title="Advancement">
-          {next ? (
-            <>
-              <p className="dim" style={{ marginTop: 0 }}>
-                Rank is not earned by time served. It is recognition of what you
-                already control — meet every line and it will be offered to you.
-                What you have ever managed counts, not only what you hold today.
-              </p>
-              <div className="tiny" style={{ margin: '4px 0 10px' }}>
-                Toward {RANK_BY_ID[next].name}
-              </div>
-              {reqs.map((req) => (
-                <div className="kv" key={req.label}>
-                  <span className="kv-key">
-                    {req.met ? <span className="good">✓</span> : <span className="faint">·</span>}{' '}
-                    {req.label}
-                  </span>
-                  {/*
-                    Both figures when they differ, because they are different
-                    things and the table used to name only one.
-
-                    This column measures the best the family has ever managed —
-                    a rung once earned stays earned. The Overview shows what you
-                    hold today. Round 11 read "Crew 13 / 16" here beside "Crew 8
-                    of 22" there, and "$92,017" beside "In all $80,917", and
-                    twice misjudged the distance to a promotion. The rule was
-                    stated once in small text and never at the point of use.
-                  */}
-                  <span className={req.met ? 'kv-val good' : 'kv-val'}>
-                    {req.money
-                      ? `${formatMoney(req.current)} / ${formatMoney(req.needed)}`
-                      : `${req.current} / ${req.needed}`}
-                    {req.now < req.current && (
-                      <span className="faint">
-                        {' '}
-                        (now {req.money ? formatMoney(req.now) : req.now})
-                      </span>
-                    )}
-                  </span>
-                </div>
-              ))}
-              {player.pendingRank && (
-                <p className="brass" style={{ marginBottom: 0 }}>
-                  You have been offered {RANK_BY_ID[player.pendingRank].name}. Answer it
-                  on the overview.
-                </p>
-              )}
-            </>
-          ) : (
-            <p className="brass" style={{ margin: 0 }}>
-              There is nothing above this.
-            </p>
-          )}
-        </Panel>
-
         <Worth />
 
         <Panel title="Standing">
@@ -407,8 +344,17 @@ export default function PlayerPanel() {
           <KeyValue label="Shaping into" value={careerShape(state).name} tone="brass" />
           <KeyValue label="Operations completed" value={player.opsCompleted} tone="good" />
           <KeyValue label="Operations failed" value={player.opsFailed} tone="hot" />
-          <KeyValue label="People you can command" value={rank.maxCrew} />
-          <KeyValue label="Highest rank you can appoint" value={ROLE_LABEL[rank.maxRole]} />
+          {/*
+             The cap the outfit actually has, and no ceiling on appointments.
+
+             Both rows read the rank table. `maxCrew` there is 3 for every
+             career now that `player.rank` never moves, and `maxRole` was the
+             ceiling `canPromote` used to enforce before it stopped: you are the
+             boss from the first morning, so there is nobody above you to
+             withhold permission to name a capo. One row is corrected and the
+             other is gone.
+          */}
+          <KeyValue label="People you can command" value={maxCrew(state)} />
         </Panel>
       </div>
 

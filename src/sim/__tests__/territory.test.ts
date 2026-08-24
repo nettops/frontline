@@ -382,17 +382,43 @@ describe('businesses and laundering', () => {
     expect(state.org.dirtyCash).toBe(payroll);
   });
 
-  it('cannot launder more than its capacity in a week', () => {
+  it('launders past its capacity, and ages the front for it', () => {
+    /*
+       This asserted the opposite — `laundered <= capacity` — and the rule it
+       guarded is gone rather than broken.
+
+       Capacity was a wall, and measured over 36 careers of 300 days the wall
+       turned out to be what stood between the contraband trade and the rest of
+       the game: once a trade is running the fronts were saturated on 74% of
+       paydays, and `estate` counts clean money and never counts dirty. So it
+       is a risk dial now. Everything goes through, and `exposure` climbs at
+       the rate you are pushing — which runs to heat, to `finance` evidence, to
+       the pressure that kills a front, and to whose books get subpoenaed
+       first.
+
+       Rewritten to the new rule rather than deleted, because "what happens to
+       a family that washes ten times its capacity" is still exactly the
+       question worth asking here. See `overload.test.ts` for the rest of it.
+    */
     const state = funded();
     acquireBusiness(state, 'laundromat', HOME_TERRITORY);
+    const front = ownedBusinesses(state)[0];
+    // Told to lean on it. The ceiling only lifts where the dial says so — a
+    // front nobody has touched still stops at capacity, which is the case
+    // `overload.test.ts` guards.
+    front.pressure = 'hard';
     const capacity = totalLaunderCapacity(state);
+    const exposureBefore = front.exposure;
 
     state.org.dirtyCash = capacity * 10;
     state.day = 7;
     const report = tickBusinesses(state, new Rng(state.rng));
 
-    expect(report.laundered).toBeLessThanOrEqual(capacity);
-    expect(state.org.dirtyCash).toBeGreaterThan(0);
+    expect(report.laundered, 'the ceiling is still there').toBeGreaterThan(capacity);
+    expect(
+      front.exposure - exposureBefore,
+      'ten times capacity went through and the place looks no more interesting',
+    ).toBeGreaterThan(0);
   });
 
   it('never launders more dirty cash than exists', () => {

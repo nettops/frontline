@@ -50,6 +50,8 @@
 import { describe, expect, it } from 'vitest';
 
 import { newGame } from '../state';
+import { withFronts } from './helpers';
+import { TRADES } from '../../config/contraband';
 import {
   openRoute,
   openSupply,
@@ -72,6 +74,9 @@ function trading(seed = 5): GameState {
     seed,
   });
   state.org.cash = 2_000_000;
+  // The product trade opens on premises now rather than on a rank, and the
+  // seated start holds ground without owning anything standing on it.
+  withFronts(state, TRADES.product.minFronts);
   const where = controlledTerritories(state)[0];
   expect(where, 'the seated start holds nothing to run a route through').toBeDefined();
   openRoute(state, 'product', where.id);

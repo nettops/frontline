@@ -26,7 +26,7 @@ import { describe, expect, it } from 'vitest';
 import { newGame } from '../state';
 import { Rng } from '../rng';
 import { advanceDay } from '../clock';
-import { availableOperations, launchOperation, operationCost } from '../operations';
+import { availableOperations, launchOperation, operationCost, opsBoard, standing } from '../operations';
 import { crewList, isOutOfReach } from '../npc';
 import { eligibleStewards, needsSteward, putInCharge } from '../delegation';
 import {
@@ -39,20 +39,21 @@ import { canPromote, canRecruit, promote, recruit, recruitCost } from '../crew';
 import { cleanWorth, putAway, takeBack, totalFunds, weeklyWageBill } from '../economy';
 import { HOLDINGS } from '../../config/economy';
 import { isLayingLow } from '../heat';
-import { fearLevel } from '../player';
-import { acquireBusiness, canAcquire, healthPressure, launderOutlook } from '../business';
+import { fearLevel, maxCrew } from '../player';
+import { acquireBusiness, canAcquire, healthPressure, launderCut, launderOutlook } from '../business';
 import { BUSINESSES, HEALTH } from '../../config/businesses';
 import {
   FEAR,
   PAYDAY_INTERVAL,
   RANKS,
-  RANK_BY_ID,
   ROLE_ORDER,
   rankIndex,
 } from '../../config/economy';
 import { claimStrength, eligibleHeirs, heirOf, nameHeir } from '../succession';
 import { CLAIM } from '../../config/succession';
 import { estate } from '../estate';
+import { TERRITORIES } from '../../config/territories';
+import { OPERATIONS } from '../../config/operations';
 import {
   atWar,
   bond,
@@ -103,15 +104,21 @@ const WASH_RESERVE = 1;
 import { DRIFT, DRIFT_INTERVAL_DAYS } from '../../config/npcs';
 import { wageExpectation } from '../npc';
 import type { RankId } from '../types';
-import { answerCheaply, ev, idle, median } from './helpers';
-import { borrow, canBorrow } from '../market';
+import { answerCheaply, ev, idle, mean as meanOf, median, pairedGap } from './helpers';
+import { borrow, canBorrow, priced } from '../market';
 import { readWhispers } from '../whispers';
 import { isGenerated } from '../eventgen';
 import { civicRead, spendFavour } from '../civic';
 import { careerShape, legitimacy } from '../legacy';
 import { CIVIC, CIVIC_FIGURES } from '../../config/civic';
-import { POSSESSIONS } from '../../config/possessions';
-import { possessionValue } from '../possessions';
+import { POSSESSIONS, POSSESSION_BY_ID } from '../../config/possessions';
+import {
+  buyPossession,
+  canBuyPossession,
+  cleanPurse,
+  heldPossessions,
+  possessionValue,
+} from '../possessions';
 import { TABLES, TABLE_BY_ID } from '../../config/cards';
 
 /**
@@ -125,6 +132,33 @@ import { TABLES, TABLE_BY_ID } from '../../config/cards';
  */
 const RESPECT_BARS = [25, 55, 85, 120, 150, 180, 220, 260];
 import { canSit, seatedAt } from '../cards';
+import { ledger, ledgerWeeks } from '../ledger';
+import { LEDGER_KEYS } from '../../config/ledger';
+import { canRetainLauderer, launderer, laundererTrust, retainLaunderer } from '../launderers';
+import { LAUNDERERS } from '../../config/launderers';
+import {
+  armsSupplier,
+  buildPlant,
+  canBuildPlant,
+  canOpenArmsSupply,
+  canOpenSupply,
+  openArmsSupply,
+  openRoute,
+  openSupply,
+  plantList,
+  readTrade,
+  throughput,
+  tradeUnlocked,
+  unitCost,
+} from '../contraband';
+import {
+  ARMS_SUPPLIERS,
+  PLANT,
+  SUPPLIERS,
+  TRADE_IDS,
+} from '../../config/contraband';
+import { acceptOrder, liveOrders, orderList, refuseOrder } from '../orders';
+import { GANGS } from '../../config/orders';
 import { SENTIMENT_HOSTILE_BELOW } from '../../config/territories';
 import { activeCases, worstStage } from '../investigation';
 import { stageIndex } from '../../config/lawEnforcement';
@@ -146,6 +180,16 @@ interface Climb {
    */
   weeksSinceHandover: number | null;
   /** Day each rank was first held. Missing means never reached. */
+  /**
+   * The day each rung of the table first opened, keyed by the old rank ids.
+   *
+   * Keyed by rank name because every assertion, every printed table and every
+   * recorded reading in this file is written in those words, and renaming them
+   * would make three years of comments describe a different thing. What is
+   * measured is `standing` — the top tier of the job table the board actually
+   * opens — which is the same 0..5 scale the ranks sat on and is what those
+   * ranks were standing in for all along. Rank itself no longer moves.
+   */
   reachedOn: Map<string, number>;
   /**
    * Pull, at the end. Named `pull` because `influence` on this record is
@@ -225,13 +269,21 @@ interface Climb {
   legalQuoted: number;
   legalQuotes: number;
   wageAtQuote: number;
+  /**
+   * Where the career finished, as the top tier of the job table it could open.
+   *
+   * Was `state.player.rank`, which no longer moves — so this read
+   * `street_criminal` for all thirty-six and the assertion below became "0 of
+   * 36 left the bottom", a true statement about a dead field. Same 0..5 scale,
+   * still keyed by the old rank ids so the printed tables read as they always
+   * have.
+   */
   finalRank: RankId;
   finalCrew: number;
   peakClean: number;
   districtsHeld: number;
   fronts: number;
   /** Which requirement was furthest from being met at the end. */
-  blockedBy: string | null;
   hires: number;
   /** Sit-downs actually held. Guards against measuring the remedy switched off. */
   sitdowns: number;
@@ -383,6 +435,64 @@ interface Climb {
    * it safe to add to the existing population instead of standing up a second
    * one, and it is asserted below rather than assumed.
    */
+  /**
+   * The two trades, and the two things built on top of them.
+   *
+   * Zero on every arm but `trades`. The baseline bot has never opened a supply
+   * or a route in its life — F7's oldest and largest blind spot, and one this
+   * project did not know the size of until the plant went in: `ladder.probe`
+   * reported that 102 careers of 144 are *offered* an order while none of them
+   * had a single unit of stock to fill one with.
+   */
+  trade: {
+    /** The day somebody was first put on the books, and the best they thought of you. */
+    bookkeeperDay: number | null;
+    bestTrust: number;
+    /** The rate the wash actually charged, averaged over the weeks of the career. */
+    meanCut: number;
+    meanHeat: number;
+    heats: number[];
+    quietShare: number;
+    /** Units carried out of the building by somebody with a warrant. */
+    seizedUnits: number;
+    raids: number;
+    /** The ledger's own account of the career, by category. */
+    book: Record<string, number>;
+    unaccounted: number;
+    /** What the stock cost over the career, and what the payroll took. */
+    cogs: number;
+    wages: number;
+    unitsBought: number;
+    /** What the estate is actually made of, at the end. */
+    estateParts: { cash: number; holdings: number; fronts: number; total: number };
+    /** The four payday states, counted only on weeks a source was open. */
+    running: { noFronts: number; nothingToWash: number; dirtyBound: number; capacityBound: number };
+    /** Dirty money on hand at the end, and the most ever held at once. */
+    dirtyEnd: number;
+    dirtyPeak: number;
+    productOpenedOn: number | null;
+    armsOpenedOn: number | null;
+    /** Everything the two trades earned, lifetime. */
+    income: number;
+    /** Plants standing at the end, and the day the first one opened. */
+    plants: number;
+    plantOn: number | null;
+    /** The game said yes at least once, whether or not the bot took it. */
+    couldBuild: boolean;
+    /** What the outfit paid for a unit of product, averaged over the weeks it bought. */
+    unitCostSum: number;
+    unitCostWeeks: number;
+    offers: number;
+    accepted: number;
+    refused: number;
+    filled: number;
+    failed: number;
+    /** Paid for units actually handed over, across every order. */
+    orderIncome: number;
+    unitsToGangs: number;
+    /** The lowest public feeling ever seen in a district a gang was supplied in. */
+    worstGangSentiment: number;
+  };
   newSystems: {
     whispers: {
       /** Distinct claims that ever appeared in the feed. */
@@ -467,6 +577,17 @@ interface Climb {
        */
       respectAtLeast: Record<number, number>;
       weeks: number;
+    };
+    /** What a bot that actually shops did with the catalogue. */
+    shopping: {
+      /** Ids bought, in order. */
+      bought: string[];
+      /** Day of the first purchase on the upkeep tier. Null means never. */
+      firstDay: number | null;
+      /** Weeks anything on the upkeep tier was owned. */
+      weeksKeeping: number;
+      /** Weeks the upkeep could not be met. */
+      weeksShort: number;
     };
     ownable: {
       /** Weeks with the cheapest item's price in clean cash. */
@@ -599,12 +720,71 @@ interface Policy {
    * and nobody walks it. This arm walks it.
    */
   financeFronts?: boolean;
+  /**
+   * Runs the two trades: an arrangement when one is affordable, and a route in
+   * every district that will carry one.
+   *
+   * The baseline bot does neither, which makes every reading this file has
+   * ever taken a reading of a career with no contraband income at all. That is
+   * the control, and it stays the control — this is the other arm.
+   */
+  trades?: boolean;
+  /**
+   * ...and the two things that sit on top of a running trade: a plant of your
+   * own, and orders from other people.
+   *
+   * Separate from `trades` on purpose. Measuring "plant and orders" against a
+   * bot that does not trade at all would report the whole contraband economy
+   * as the effect of two features added this week.
+   */
+  ownSupply?: boolean;
+  /**
+   * Works the pressure dial for one purpose only: clearing a laundering
+   * backlog.
+   *
+   * Isolated from `active`, which also spends favours and reacts to cases —
+   * measuring the ceiling coming off against a bot that does four other new
+   * things as well would report all four as this. Every front goes to `hard`
+   * on a week where there is more dirty money than the premises will take, and
+   * back to `normal` when there is not.
+   */
+  lean?: boolean;
+  /**
+   * Puts somebody on the books, and keeps them.
+   *
+   * `LAUNDER_CUT_BASE` was 24% of every dollar any family ever washed, and the
+   * ledger said it took $156,255 out of a trading career and bought nothing.
+   * It is what a stranger charges now. This arm measures whether the
+   * alternative is worth having — the best rate the family can afford, taken
+   * as soon as it can afford it, and never dropped.
+   */
+  books?: boolean;
+  /**
+   * Buys the things a boss buys, and keeps paying for them.
+   *
+   * No bot in this project has ever bought a possession. It banks its clean
+   * money and it buys fronts, which is a perfectly sensible way to play and is
+   * the only way anything here has ever been measured — so the whole luxury
+   * tier is invisible to every bar in this file.
+   *
+   * That matters more than usual for this feature, because the surplus it
+   * exists to absorb peaks on **day 294 of 300**. A catalogue only bought in
+   * the last fortnight has taken the money without ever having been a
+   * decision, and no instrument that does not shop can tell the difference.
+   */
+  shops?: boolean;
 }
 
 function climb(seed: number, days: number, policy: Policy = {}): Climb {
   const state = newGame({ name: 'Ladder', difficulty: 'normal', seed });
   const rng = new Rng(state.rng);
   const reachedOn = new Map<string, number>();
+  const shopping = {
+    bought: [] as string[],
+    firstDay: null as number | null,
+    weeksKeeping: 0,
+    weeksShort: 0,
+  };
   let peakClean = 0;
   let peakWorth = 0;
   let peakEstate = 0;
@@ -748,6 +928,43 @@ function climb(seed: number, days: number, policy: Policy = {}): Climb {
     dialTurns: 0,
     dialWeeks: { clean: 0, normal: 0, hard: 0 } as Record<PressureId, number>,
   };
+  const trade = {
+    dirtyEnd: 0,
+    dirtyPeak: 0,
+    /* What the stock cost, and what the payroll took, over the career. */
+    cogs: 0,
+    seizedUnits: 0,
+    raids: 0,
+    wages: 0,
+    /* Who kept the books, how long, and what they came to think of you. */
+    bookkeeperDay: null as number | null,
+    bestTrust: 0,
+    cutSum: 0,
+    cutWeeks: 0,
+    heatSum: 0,
+    heatUnder60: 0,
+    heats: [] as number[],
+    unitsBought: 0,
+    /*
+       The same four payday states, counted only while a source was open.
+
+       Necessary because the whole-career figures cannot separate "the machine
+       was idle" from "the trade had not started yet": the median arrangement
+       opens on day 91 of 300, so roughly a third of every trading career is a
+       career with nothing to wash for reasons that have nothing to do with
+       capacity.
+    */
+    running: { noFronts: 0, nothingToWash: 0, dirtyBound: 0, capacityBound: 0 },
+    productOpenedOn: null as number | null,
+    armsOpenedOn: null as number | null,
+    plantOn: null as number | null,
+    couldBuild: false,
+    unitCostSum: 0,
+    unitCostWeeks: 0,
+    refused: 0,
+    unitsToGangs: 0,
+    worstGangSentiment: 100,
+  };
   const firstFront = {
     day: null as number | null,
     control: 0,
@@ -780,7 +997,7 @@ function climb(seed: number, days: number, policy: Policy = {}): Climb {
     couldAndDid: 0,
   };
 
-  reachedOn.set(state.player.rank, 0);
+  reachedOn.set(RANKS[standing(state)].id, 0);
 
   for (let d = 0; d < days; d++) {
     /*
@@ -819,7 +1036,15 @@ function climb(seed: number, days: number, policy: Policy = {}): Climb {
     */
     const bill = weeklyWageBill(state);
     if (state.day % 7 === 0) {
-      const room = RANKS[rankIndex(state.player.rank)].maxCrew;
+      /*
+         How many people the outfit can actually hold.
+
+         This read `RANKS[rankIndex(player.rank)].maxCrew`, and `player.rank`
+         is pinned at the first rung — so `room` was 3 for every career, the
+         `held < room` guard below was false from the first week, and none of
+         the hiring diagnostics under it were ever collected.
+      */
+      const room = maxCrew(state);
       const held = crewList(state).filter((n) => n.status !== 'dead').length;
       if (held < room) {
         const anyOffered = Object.keys(state.recruits).length > 0;
@@ -1072,7 +1297,39 @@ function climb(seed: number, days: number, policy: Policy = {}): Climb {
          counts, rather than a bare influence figure that ignores whether a
          rival is standing in the same district with more.
       */
-      const wanted = RANKS[rankIndex(state.player.rank) + 1]?.requires.territories ?? 0;
+      /*
+         What the next rung of the *table* asks for, now that no rank asks for
+         anything.
+
+         This read `RANKS[rankIndex(player.rank) + 1].requires.territories`, and
+         the note above records how much damage that constant did while it was
+         a bare 2. It is the same failure in a slower form: the bot expands to
+         whatever the progression demands, so the moment the progression stopped
+         being the rank table it stopped expanding at all — one district and two
+         fronts at day 300, against 25 crew and a $483,000 estate before. A bot
+         playing to a rule the game no longer has is not a careful player, it is
+         a broken instrument, and every pacing reading taken through it would
+         have been a reading of the deleted ladder.
+
+         So it reads the gates. `districtsControlled` on the lowest job the
+         board has not opened yet is exactly "how much ground does the next
+         thing I want need", which is what the number always meant and is now
+         on the locked row for a player to read too.
+      */
+      const board = opsBoard(state);
+      const wanted = OPERATIONS.filter((o) => o.opens && !o.opens.met(board))
+        .sort((a, b) => a.tier - b.tier)
+        .reduce<number>((need, op) => {
+          if (need > 0) return need;
+          // How much ground would open it, found by asking rather than by
+          // parsing the clause: raise the count until the gate gives way.
+          for (let n = board.districtsControlled + 1; n <= TERRITORIES.length; n++) {
+            if (op.opens!.met({ ...board, districtsControlled: n, districtsHeld: Math.max(board.districtsHeld, n) })) {
+              return n;
+            }
+          }
+          return 0;
+        }, 0);
       /*
          And how hard you push depends on how far short you are.
 
@@ -1323,6 +1580,53 @@ function climb(seed: number, days: number, policy: Policy = {}): Climb {
       */
       const cheapestFront = Math.min(...BUSINESSES.map((b) => b.cost));
       const liquid = (weeklyWageBill(state) + weeklyLegalCost(state)) * 12 + cheapestFront;
+
+      /*
+         And what a boss spends it on, if he spends it on anything.
+
+         Two rules, and both were wrong in the first draft.
+
+         **He keeps a quarter of the new bill back, not half a year.** The same
+         twelve weeks the liquidity buffer above already uses, because a boss
+         reasoning about whether he can run a boat is reasoning on the horizon
+         he already reasons on. Half a year put the yacht's bar at $817,000,
+         which the measured purse curve says six careers in thirty-six reach by
+         day 200.
+
+         **And he works up the catalogue rather than splurging.** This took the
+         dearest affordable row, which meant the cheap things were never bought
+         at all and the one row that *does* something lost to an ornament on a
+         technicality — the foundation's heavier upkeep made it qualify later
+         than a country club costing more. Cheapest first buys in price order,
+         so the entry-level thing is owned longest, which is what "lived with"
+         means.
+
+         One purchase a week either way. Nobody buys a boat and a country club
+         on the same Friday.
+      */
+      if (policy.shops) {
+        const keeping = heldPossessions(state);
+        const owned = new Set(keeping.map((h) => h.defId));
+        if (keeping.some((h) => POSSESSION_BY_ID[h.defId]?.upkeep)) shopping.weeksKeeping += 1;
+
+        const affordable = POSSESSIONS.filter((d) => d.upkeep && !owned.has(d.id))
+          .map((d) => ({ def: d, price: possessionValue(state, d) }))
+          .filter(
+            (o) =>
+              cleanPurse(state) - o.price >= liquid + priced(state, o.def.upkeep!) * 12 &&
+              canBuyPossession(state, o.def.id).ok,
+          )
+          .sort((a, b) => a.price - b.price);
+
+        if (affordable.length > 0) {
+          const pick = affordable[0].def;
+          if (buyPossession(state, rng, pick.id).ok) {
+            shopping.bought.push(pick.id);
+            if (shopping.firstDay === null) shopping.firstDay = state.day;
+          }
+        }
+      }
+
       const spare = state.org.cash - liquid;
       if (spare >= HOLDINGS.minimum) {
         if (putAway(state, spare).ok) banked += spare;
@@ -1554,6 +1858,62 @@ function climb(seed: number, days: number, policy: Policy = {}): Climb {
     if (state.day % 7 === 0) {
       newSys.weeks += 1;
 
+      /*
+         The cost of goods, which no instrument in this project had ever added
+         up.
+
+         `lifetime` is gross sales revenue. The trade buys before it sells, out
+         of the same pocket, so "the trade earned $1.6M" and "the family is
+         $1.6M better off" are not the same sentence and nothing had ever
+         measured the gap.
+      */
+      trade.wages += weeklyWageBill(state);
+      trade.cutSum += launderCut(state);
+      trade.cutWeeks += 1;
+      trade.heatSum += state.org.heat;
+      trade.heats.push(state.org.heat);
+      if (state.org.heat < 60) trade.heatUnder60 += 1;
+      const books = launderer(state);
+      if (books) {
+        if (trade.bookkeeperDay === null) trade.bookkeeperDay = state.day;
+        trade.bestTrust = Math.max(trade.bestTrust, laundererTrust(state, books.id));
+      }
+      for (const id of TRADE_IDS) {
+        const bought = state.contraband.lastRun?.[id].bought ?? 0;
+        const seized = state.contraband.lastRun?.[id].seized ?? 0;
+        if (seized > 0) {
+          trade.seizedUnits += seized;
+          trade.raids += 1;
+        }
+        if (bought <= 0) continue;
+        trade.unitsBought += bought;
+        trade.cogs += bought * unitCost(state, id);
+      }
+
+      /*
+         What a unit actually cost, and what the neighbourhood made of it.
+
+         Sampled weekly and only while something was being bought, because
+         `unitCost` returns the trade's own base figure when there is no source
+         at all — averaging that in would report a career with no arrangement
+         as paying the cheapest price in the game.
+      */
+      if (policy.trades && state.contraband.routes.product.length > 0) {
+        const sources = state.contraband.supplierId || plantList(state).length > 0;
+        if (sources) {
+          trade.unitCostSum += unitCost(state, 'product');
+          trade.unitCostWeeks += 1;
+        }
+      }
+      for (const gang of GANGS) {
+        const supplied = (state.orders ?? []).some(
+          (o) => o.buyerId === gang.id && o.delivered > 0,
+        );
+        if (!supplied) continue;
+        const where = state.territories[gang.territoryId];
+        if (where) trade.worstGangSentiment = Math.min(trade.worstGangSentiment, where.sentiment);
+      }
+
       const feed = readWhispers(state);
       if (feed.length) newSys.weeksWithAny += 1;
       for (const w of feed) {
@@ -1635,6 +1995,126 @@ function climb(seed: number, days: number, policy: Policy = {}): Climb {
          favour thrown away. It does not hoard for a rainy day and it does not
          plan; it answers the week in front of it.
       */
+      /*
+         The trades, which the baseline bot has never touched.
+
+         Competent, not optimal, the same standard as everything else here: it
+         opens the cheapest arrangement it can pay for, runs a route wherever
+         one will run, and does not agonise. It does not time the market, hold
+         stock back, or pick a supplier on exposure.
+      */
+      if (policy.trades) {
+        for (const id of TRADE_IDS) {
+          if (!tradeUnlocked(state, id)) continue;
+          for (const t of readTrade(state, id).eligible) {
+            if (!state.contraband.routes[id].includes(t.id)) openRoute(state, id, t.id);
+          }
+        }
+        if (tradeUnlocked(state, 'product') && !state.contraband.supplierId) {
+          for (const def of [...SUPPLIERS].sort((a, b) => a.retainer - b.retainer)) {
+            if (!canOpenSupply(state, def.id).ok) continue;
+            openSupply(state, def.id);
+            if (trade.productOpenedOn === null) trade.productOpenedOn = state.day;
+            break;
+          }
+        }
+        if (tradeUnlocked(state, 'arms') && !armsSupplier(state)) {
+          for (const def of [...ARMS_SUPPLIERS].sort((a, b) => a.retainer - b.retainer)) {
+            if (!canOpenArmsSupply(state, def.id).ok) continue;
+            openArmsSupply(state, def.id);
+            if (trade.armsOpenedOn === null) trade.armsOpenedOn = state.day;
+            break;
+          }
+        }
+      }
+
+      /*
+         A plant, and orders.
+
+         The plant is bought with a reserve rather than with the last dollar —
+         $250,000 spent down to nothing is not a decision a competent player
+         makes, and a bot that does it would report the plant as a bankruptcy
+         engine. Half as much again is the same margin the front-buying policy
+         above keeps.
+
+         Orders are accepted when the trade can plausibly cover them and
+         refused when it cannot, because the decision this feature exists to
+         put in front of a player *is* which ones to take. A bot that accepts
+         everything measures nothing except how often an indiscriminate player
+         fails, which is a question with a known answer.
+      */
+      if (policy.ownSupply) {
+        if (plantList(state).length === 0) {
+          for (const t of controlledTerritories(state)) {
+            if (!canBuildPlant(state, t.id).ok) continue;
+            trade.couldBuild = true;
+            if (totalFunds(state) < priced(state, PLANT.cost) * 1.5) break;
+            if (buildPlant(state, t.id).ok && trade.plantOn === null) trade.plantOn = state.day;
+            break;
+          }
+        }
+        for (const order of liveOrders(state)) {
+          if (order.status !== 'offered') continue;
+          const weeks = Math.max(1, (order.dueDay - state.day) / 7);
+          const couldMove = throughput(state, order.trade).total * weeks;
+          // Half the projected flow, because the street wants the other half
+          // and an order that starves it is not a good trade.
+          if (couldMove * 0.5 >= order.units) acceptOrder(state, order.id);
+          else {
+            refuseOrder(state, order.id);
+            trade.refused += 1;
+          }
+        }
+      }
+
+      /*
+         The dial, on the one question the wall used to answer for you.
+
+         `hard` is the only setting where laundering has no ceiling, so this is
+         a player looking at a backlog and deciding to push it through rather
+         than watch it sit. Reverting to `normal` the moment the backlog clears
+         matters: leaving everything on `hard` for a whole career would measure
+         the dial's exposure and wear terms rather than the ceiling coming off.
+      */
+      /*
+         The best terms the family can pay for, taken the day it can pay for
+         them and kept from then on.
+
+         Best first rather than cheapest first, because the whole design is
+         that the dear one pays for itself over time — a bot that grabbed the
+         $45,000 bookkeeper on day 30 and never revisited it would measure the
+         cheapest tier and report it as the feature. Switching costs the new
+         retainer and resets the relationship to nothing, which is exactly the
+         trade a player weighs, so it only moves when it can afford to.
+      */
+      if (policy.books) {
+        const held = launderer(state);
+        for (const def of [...LAUNDERERS].sort((a, b) => a.bestCut - b.bestCut)) {
+          if (held && held.bestCut <= def.bestCut) break;
+          if (!canRetainLauderer(state, def.id).ok) continue;
+          /*
+             Not with the last dollar. A retainer is priced off *peak* funds,
+             and a peak is a moment — the first version of this arm let the bot
+             spend its high-water mark on a firm downtown and then had nothing
+             left to buy stock with, which read as the feature costing the
+             family $850,000 of trade income. Same reserve the front-buying and
+             plant-building policies keep.
+          */
+          if (totalFunds(state) < priced(state, def.retainer) * 1.5) continue;
+          retainLaunderer(state, def.id);
+          break;
+        }
+      }
+
+      if (policy.lean) {
+        const outlook = launderOutlook(state);
+        const backedUp = outlook.heldBack + outlook.capacity < state.org.dirtyCash;
+        const want: PressureId = backedUp ? 'hard' : 'normal';
+        for (const b of ownedBusinesses(state)) {
+          if ((b.pressure ?? 'normal') !== want) b.pressure = want;
+        }
+      }
+
       if (policy.active) {
         const cases = activeCases(state);
         const inside = crewList(state).filter((n) => n.status === 'arrested').length > 0;
@@ -1697,6 +2177,7 @@ function climb(seed: number, days: number, policy: Policy = {}): Climb {
     const cleanBefore = state.org.cash;
     const dirtyBefore = state.org.dirtyCash;
     advanceDay(state);
+    trade.dirtyPeak = Math.max(trade.dirtyPeak, state.org.dirtyCash);
     if (state.org.dirtyCash > dirtyBefore) wash.dirtyIn += state.org.dirtyCash - dirtyBefore;
     if ((state.succession?.line?.length ?? 0) > lineBefore) {
       if (state.player.rank === rankBefore) rankKept++;
@@ -1783,16 +2264,23 @@ function climb(seed: number, days: number, policy: Policy = {}): Climb {
         frontLife.kill.weeks += 1;
       }
       const r = state.lastLaunderReport;
+      const sourced =
+        state.contraband.supplierId !== null ||
+        state.contraband.armsSupplierId != null ||
+        plantList(state).length > 0 ||
+        state.contraband.workshops.length > 0;
       if (!r || r.capacity === undefined || r.washable === undefined) {
         wash.noFronts++;
+        if (sourced) trade.running.noFronts++;
       } else {
         wash.laundered += r.laundered;
         wash.cut += r.cut;
         wash.revenue += r.revenue;
         wash.capacity += r.capacity;
-        if (r.washable <= 0) wash.nothingToWash++;
-        else if (r.laundered >= r.capacity) wash.capacityBound++;
-        else wash.dirtyBound++;
+        const state_ =
+          r.washable <= 0 ? 'nothingToWash' : r.laundered >= r.capacity ? 'capacityBound' : 'dirtyBound';
+        wash[state_]++;
+        if (sourced) trade.running[state_]++;
       }
     }
     // Gross clean income against the peak balance, to separate "never earned
@@ -1801,44 +2289,35 @@ function climb(seed: number, days: number, policy: Policy = {}): Climb {
     // gone, loan payments, tribute, and whatever the city does to you.
     if (state.org.cash > cleanBefore) wash.cleanIn += state.org.cash - cleanBefore;
     else wash.cleanOut.upkeep += cleanBefore - state.org.cash;
-    if (!reachedOn.has(state.player.rank)) reachedOn.set(state.player.rank, state.day);
+    /*
+       Every rung the board opened today, not only the top one — `standing` can
+       jump two tiers in a week when a district falls, and a rung skipped over
+       is still a rung reached.
+    */
+    for (let t = 0; t <= standing(state); t++) {
+      if (!reachedOn.has(RANKS[t].id)) reachedOn.set(RANKS[t].id, state.day);
+    }
     if (state.gameOver) break;
   }
 
   /*
-     Which requirement was furthest away when the music stopped.
+     `blockedBy` was computed here and it is gone.
 
-     Stated as a share of what was needed rather than as a raw gap, so that a
-     respect shortfall and a two-and-a-half-million-dollar shortfall can be
-     compared at all. The answer to "why does nobody get past here" is a
-     requirement name, and this is how the probe produces one instead of
-     leaving it to be guessed.
+     It scored the career against `RANKS[next].requires` — respect, crew, clean
+     money, operations, districts — and reported whichever share was smallest
+     as "the furthest requirement at the end". That table gated promotion,
+     promotion has not existed since the ladder came out, and `player.rank` is
+     pinned, so `next` was always Enforcer and the answer was always a distance
+     to a gate that opens nothing.
+
+     The line it printed was quoted twice in the conversation that removed it,
+     both times as evidence for a design decision. Neither claim survived.
+
+     What a career is actually short of is already printed: `standing()` says
+     which job tiers the board opens, and the `opens` clauses say what each
+     locked one wants. If a single label is wanted again it has to be built
+     from those.
   */
-  const next = RANKS[rankIndex(state.player.rank) + 1];
-  let blockedBy: string | null = null;
-  if (next) {
-    const held = crewList(state).filter((n) => n.status !== 'dead').length;
-    const districts = territoryList(state).filter((t) => playerInfluence(t) >= 25).length;
-    const gaps: [string, number][] = [
-      ['respect', state.org.respect / Math.max(1, next.requires.respect)],
-      ['crew', held / Math.max(1, next.requires.crew)],
-      ['clean money', state.org.cash / Math.max(1, next.requires.cleanCash)],
-      ['operations', state.player.opsCompleted / Math.max(1, next.requires.opsCompleted)],
-      ['districts', districts / Math.max(1, next.requires.territories)],
-    ];
-    /*
-       A NaN here once sorted to the front and was reported as a finding.
-
-       `state.player.respect` does not exist — respect lives on `state.org` —
-       so the share was `undefined / 140`, and every career duly reported
-       respect as its furthest requirement. The typechecker caught it; the
-       probe had been perfectly happy. Filtering non-finite shares means a
-       future mistake of the same kind produces no answer instead of a
-       confident wrong one.
-    */
-    const usable = gaps.filter(([, share]) => Number.isFinite(share));
-    blockedBy = usable.length ? usable.sort((a, b) => a[1] - b[1])[0][0] : null;
-  }
 
   const everybody = Object.values(state.npcs);
   const lost = {
@@ -1884,6 +2363,53 @@ function climb(seed: number, days: number, policy: Policy = {}): Climb {
       ...frontLife,
       shuttered: Object.values(state.businesses).filter((b) => b.status === 'shuttered').length,
     },
+    trade: {
+      estateParts: (() => {
+        const e = estate(state);
+        return {
+          cash: Math.round(e.cash),
+          holdings: Math.round(e.holdings),
+          fronts: Math.round(e.fronts),
+          total: Math.round(e.total),
+        };
+      })(),
+      bookkeeperDay: trade.bookkeeperDay,
+      bestTrust: Math.round(trade.bestTrust),
+      meanCut: trade.cutWeeks > 0 ? trade.cutSum / trade.cutWeeks : 0,
+      meanHeat: trade.cutWeeks > 0 ? trade.heatSum / trade.cutWeeks : 0,
+      heats: trade.heats.slice(),
+      quietShare: trade.cutWeeks > 0 ? trade.heatUnder60 / trade.cutWeeks : 0,
+      seizedUnits: Math.round(trade.seizedUnits),
+      raids: trade.raids,
+      book: Object.fromEntries(
+        LEDGER_KEYS.map((k) => [k, Math.round(ledger(state).lifetime[k])]),
+      ) as Record<string, number>,
+      unaccounted: Math.round(ledgerWeeks(state).reduce((n, w) => n + w.unaccounted, 0)),
+      cogs: Math.round(trade.cogs),
+      wages: Math.round(trade.wages),
+      unitsBought: Math.round(trade.unitsBought),
+      running: { ...trade.running },
+      dirtyEnd: Math.max(0, Math.floor(state.org.dirtyCash)),
+      dirtyPeak: Math.max(0, Math.floor(trade.dirtyPeak)),
+      productOpenedOn: trade.productOpenedOn,
+      armsOpenedOn: trade.armsOpenedOn,
+      income: state.contraband.lifetime.product + state.contraband.lifetime.arms,
+      plants: plantList(state).length,
+      plantOn: trade.plantOn,
+      couldBuild: trade.couldBuild,
+      unitCostSum: trade.unitCostSum,
+      unitCostWeeks: trade.unitCostWeeks,
+      offers: orderList(state).length,
+      accepted: orderList(state).filter((o) => o.acceptedDay != null).length,
+      refused: trade.refused,
+      filled: orderList(state).filter((o) => o.status === 'filled').length,
+      failed: orderList(state).filter((o) => o.status === 'failed').length,
+      orderIncome: orderList(state).reduce((sum, o) => sum + o.delivered * o.unitPrice, 0),
+      unitsToGangs: orderList(state)
+        .filter((o) => o.buyerKind === 'gang')
+        .reduce((sum, o) => sum + o.delivered, 0),
+      worstGangSentiment: trade.worstGangSentiment,
+    },
     newSystems: {
       whispers: {
         received: heard.size,
@@ -1914,6 +2440,7 @@ function climb(seed: number, days: number, policy: Policy = {}): Climb {
         respectAtLeast: newSys.respectAtLeast,
         weeks: newSys.weeks,
       },
+      shopping,
       ownable: {
         weeksAnyAffordable: newSys.ownWeeks,
         weeksHomeAffordable: newSys.ownHomeWeeks,
@@ -1978,12 +2505,11 @@ function climb(seed: number, days: number, policy: Policy = {}): Climb {
     legalQuotes,
     wageAtQuote,
     pull: state.player.attributes.influence,
-    finalRank: state.player.rank,
+    finalRank: RANKS[standing(state)].id,
     finalCrew: crewList(state).filter((n) => n.status !== 'dead').length,
     peakClean,
     districtsHeld: territoryList(state).filter((t) => playerInfluence(t) >= 25).length,
     fronts: Object.keys(state.businesses).length,
-    blockedBy,
   };
 }
 
@@ -2020,11 +2546,6 @@ describe('the ladder', () => {
       day: RUNS.filter((run) => run.reachedOn.has(r.id)).map((run) => run.reachedOn.get(r.id)!),
     }));
 
-    const blockers = new Map<string, number>();
-    for (const run of RUNS) {
-      if (run.blockedBy) blockers.set(run.blockedBy, (blockers.get(run.blockedBy) ?? 0) + 1);
-    }
-
     // eslint-disable-next-line no-console
     console.log(
       `ladder: over ${DAYS} days (${Math.round(DAYS / 365)} years), ${RUNS.length} careers\n` +
@@ -2035,11 +2556,6 @@ describe('the ladder', () => {
               (c.reached ? ` (median day ${median(c.day)})` : ''),
           )
           .join('\n') +
-        `\n         furthest requirement at the end: ` +
-        [...blockers.entries()]
-          .sort((a, b) => b[1] - a[1])
-          .map(([k, n]) => `${k} ${n}`)
-          .join(', ') +
         `\n         hires ${median(RUNS.map((r) => r.hires))} per career, ` +
         `${median(RUNS.map((r) => r.sitdowns))} sit-downs held; lost ` +
         `${median(RUNS.map((r) => r.lost.dead))} dead, ` +
@@ -2129,41 +2645,30 @@ describe('the ladder', () => {
             `${Math.round((t.laundered / Math.max(1, t.capacity)) * 100)}% used), ` +
             `${money(t.cut)} lost in the wash, fronts earned ${money(t.revenue)} clean` +
             `\n         clean money in over the career ${money(t.cleanIn)} against a peak ` +
-            `balance of $${median(RUNS.map((r) => r.peakClean)).toLocaleString('en-US')} ` +
-            `and a Capo requirement of $${RANK_BY_ID.capo.requires.cleanCash.toLocaleString('en-US')}` +
-            (() => {
-              /*
-                 Which of Capo's five requirements a family ever actually met.
-
-                 Rank reads the high-water record, so a requirement is met
-                 the moment it is *ever* satisfied. Counting how many careers
-                 cleared each line separately says which one is the wall,
-                 rather than leaving it to be inferred from a single
-                 furthest-requirement label that only names the worst.
-              */
-              const need = RANK_BY_ID.capo.requires;
-              const met = (f: (r: Climb) => number, want: number) =>
-                `${RUNS.filter((r) => f(r) >= want).length}/${RUNS.length}`;
-              return (
-                `\n         careers that ever met each Capo line: ` +
-                `crew ${met((r) => r.bestCrew, need.crew)}, ` +
-                `worth ${met((r) => r.bestEstate, need.cleanCash)}, ` +
-                `respect ${met((r) => r.bestRespect, need.respect)}, ` +
-                `operations ${met((r) => r.bestOps, need.opsCompleted)}, ` +
-                `districts ${met((r) => r.bestDistricts, need.territories)}` +
-                `\n         influence, which Control needs 50 of: highest any district ` +
-                `reached ${Math.round(median(RUNS.map((r) => r.influence.peak)))} (median career), ` +
-                `best of all ${Math.round(Math.max(...RUNS.map((r) => r.influence.peak)))}` +
-                `\n         districts a career ever got to each band: presence ` +
-                `${median(RUNS.map((r) => r.influence.everPresence))}, foothold ` +
-                `${median(RUNS.map((r) => r.influence.everFoothold))}, control ` +
-                `${median(RUNS.map((r) => r.influence.everControl))} (of 12)` +
-                `\n         mean influence where the family was working at all: ` +
-                `${(RUNS.reduce((n, r) => n + r.influence.meanWhereWorking, 0) / RUNS.length).toFixed(1)}` +
-                `\n         best crew ever held: median ${median(RUNS.map((r) => r.bestCrew))}, ` +
-                `highest ${Math.max(...RUNS.map((r) => r.bestCrew))} (Capo wants ${need.crew})`
-              );
-            })() +
+            `balance of $${median(RUNS.map((r) => r.peakClean)).toLocaleString('en-US')}` +
+            /*
+               A block reporting 'careers that ever met each Capo line' stood
+               here, scoring the population against `RANK_BY_ID.capo.requires`.
+               Those five numbers gated a promotion that has not existed since
+               the ladder came out, so it counted careers past a post nothing
+               stands behind. The influence and crew figures below were the
+               part worth keeping and are unchanged.
+            */
+            `
+         influence, which Control needs 50 of: highest any district ` +
+            `reached ${Math.round(median(RUNS.map((r) => r.influence.peak)))} (median career), ` +
+            `best of all ${Math.round(Math.max(...RUNS.map((r) => r.influence.peak)))}` +
+            `
+         districts a career ever got to each band: presence ` +
+            `${median(RUNS.map((r) => r.influence.everPresence))}, foothold ` +
+            `${median(RUNS.map((r) => r.influence.everFoothold))}, control ` +
+            `${median(RUNS.map((r) => r.influence.everControl))} (of 12)` +
+            `
+         mean influence where the family was working at all: ` +
+            `${(RUNS.reduce((n, r) => n + r.influence.meanWhereWorking, 0) / RUNS.length).toFixed(1)}` +
+            `
+         best crew ever held: median ${median(RUNS.map((r) => r.bestCrew))}, ` +
+            `highest ${Math.max(...RUNS.map((r) => r.bestCrew))}` +
             `\n         the estate: $${median(RUNS.map((r) => r.finalEstate)).toLocaleString('en-US')} median at the end, best ever $${Math.max(...RUNS.map((r) => r.peakEstate)).toLocaleString('en-US')}` +
             `\n         put away ${money(RUNS.reduce((n, r) => n + r.banked, 0))} a career, ` +
             `sold back ${money(RUNS.reduce((n, r) => n + r.soldBack, 0))}; peak clean worth ` +
@@ -2491,17 +2996,6 @@ describe('the ladder, over the 300 days a person plays', () => {
            estate      ${col((r) => r.bestEstate)}` +
         `\n           operations  ${col((r) => r.bestOps)}` +
         `\n           districts   ${col((r) => r.bestDistricts)}` +
-        `
-         furthest requirement at the end: ` +
-        [
-          ...RUNS_300.reduce((m, r) => {
-            if (r.blockedBy) m.set(r.blockedBy, (m.get(r.blockedBy) ?? 0) + 1);
-            return m;
-          }, new Map<string, number>()),
-        ]
-          .sort((a, b) => b[1] - a[1])
-          .map(([k, n]) => `${k} ${n}`)
-          .join(', ') +
         `
          influence at day ${HUMAN_DAYS}, 40th / median / 75th: ` +
         `${col((r) => r.pull)} (the patron wants 9, a task-force contact 5)` +
@@ -2895,6 +3389,751 @@ const RUNS_ACTIVE = Array.from({ length: 36 }, (_, i) => climb(700 + i, HUMAN_DA
 const RUNS_FINANCED = Array.from({ length: 36 }, (_, i) =>
   climb(700 + i, HUMAN_DAYS, { financeFronts: true }),
 );
+
+/*
+   The contraband arm, in two halves, and why there are two.
+
+   The baseline bot has never opened an arrangement or a route. Every reading
+   this file has ever taken is therefore a reading of a career with no
+   contraband income at all — the largest F7 blind spot in the project, and one
+   nobody had put a number on until the plant went in and `ladder.probe`
+   reported that 102 careers of 144 are *offered* an order while not one of them
+   held a single unit of stock.
+
+   RUNS_TRADING runs the two trades as they have always existed. RUNS_OWNED runs
+   the same bot plus the two things built on top of them. Splitting it is the
+   whole point: measured against a bot that does not trade, "plant and orders"
+   would report the entire contraband economy as the effect of two features
+   added in one afternoon.
+*/
+const RUNS_TRADING = Array.from({ length: 36 }, (_, i) =>
+  climb(700 + i, HUMAN_DAYS, { trades: true }),
+);
+const RUNS_OWNED = Array.from({ length: 36 }, (_, i) =>
+  climb(700 + i, HUMAN_DAYS, { trades: true, ownSupply: true }),
+);
+
+/*
+   The third arm: the same trading bot, willing to lean on its premises.
+
+   F22 said the wall between dirty money and standing was shut on 74% of
+   trading paydays. The repair took the wall off `hard` and left it everywhere
+   else, so the question this arm answers is whether the door the player was
+   given is worth walking through — and what it costs them when they do.
+*/
+const RUNS_LEANING = Array.from({ length: 36 }, (_, i) =>
+  climb(700 + i, HUMAN_DAYS, { trades: true, lean: true }),
+);
+
+/*
+   The fourth arm: the same trading bot, with somebody keeping its books.
+
+   The ledger said a trading career sells $1,632,268, pays $694,777 for stock
+   and $105,821 in wages, and hands **$156,255 to nobody at all** — the wash
+   cut, the only charge in this game that buys nothing. 24% is what a stranger
+   charges now, and this measures what the alternative is worth.
+*/
+const RUNS_BOOKS = Array.from({ length: 36 }, (_, i) =>
+  climb(700 + i, HUMAN_DAYS, { trades: true, books: true }),
+);
+
+/*
+   A bot that buys things, against the same bot that does not.
+
+   Everything measured in this file until now was measured on a family that
+   banks its clean money and buys fronts with it, which is why the possessions
+   catalogue has never appeared in a single reading. F7: an instrument blind to
+   a system reports confidently about everything around it.
+*/
+const RUNS_SHOPS = Array.from({ length: 36 }, (_, i) =>
+  climb(700 + i, HUMAN_DAYS, { shops: true }),
+);
+
+describe('somewhere for the money to go', () => {
+  it('says whether an ordinary career ever buys any of it', () => {
+    const bought = RUNS_SHOPS.filter((r) => r.newSystems.shopping.bought.length > 0);
+    const days = bought
+      .map((r) => r.newSystems.shopping.firstDay!)
+      .sort((a, b) => a - b);
+    // Distinct rows, not purchases: a warrant takes things, and the bot buys
+    // another one, so `bought` runs past the size of the catalogue.
+    const counts = RUNS_SHOPS.map((r) => new Set(r.newSystems.shopping.bought).size);
+    const tier = POSSESSIONS.filter((d) => d.upkeep).length;
+    const tally = new Map<string, number>();
+    for (const r of RUNS_SHOPS) {
+      for (const id of r.newSystems.shopping.bought) tally.set(id, (tally.get(id) ?? 0) + 1);
+    }
+
+    // eslint-disable-next-line no-console
+    console.log(
+      `sinks: ${bought.length}/${RUNS_SHOPS.length} careers bought something on the ` +
+        `upkeep tier
+` +
+        (bought.length
+          ? `       first purchase, 25th / median / 75th day: ` +
+            `${pct(days, 0.25)} / ${median(days)} / ${pct(days, 0.75)}
+`
+          : '') +
+        `       how many things a career ended up with: ` +
+        Array.from({ length: tier + 1 }, (_, n) => n)
+          .map((n) => `${n}: ${counts.filter((c) => c === n).length}`)
+          .join(', ') +
+        `  (of ${tier} rows; ` +
+        `${RUNS_SHOPS.reduce((t, r) => t + r.newSystems.shopping.bought.length, 0)} purchases ` +
+        `in all, the extras being things a warrant took)` +
+        `
+       purchases by row (a seized thing gets replaced): ` +
+        POSSESSIONS.filter((d) => d.upkeep)
+          .map((d) => `${d.id} ${tally.get(d.id) ?? 0}/${RUNS_SHOPS.length}`)
+          .join(', ') +
+        `
+       weeks keeping something, median ` +
+        `${median(RUNS_SHOPS.map((r) => r.newSystems.shopping.weeksKeeping))}` +
+        `; estate median $${median(RUNS_SHOPS.map((r) => r.bestEstate)).toLocaleString('en-US')}` +
+        ` against $${median(RUNS_300.map((r) => r.bestEstate)).toLocaleString('en-US')} not shopping`,
+    );
+
+    /*
+       Reachable, and reachable in time to be lived with.
+
+       The surplus peaks on day 294 of 300. A catalogue only bought in the last
+       fortnight has absorbed the money without ever having been a decision,
+       which is the specific way this feature fails while looking like it
+       worked. Both ends are asserted for the same reason the patron test
+       asserts both: a price low enough that everybody buys everything has not
+       fixed the sink, it has deleted the choice.
+    */
+    expect(
+      bought.length,
+      'nobody ever buys anything on the upkeep tier',
+    ).toBeGreaterThanOrEqual(Math.ceil(RUNS_SHOPS.length / 2));
+    expect(
+      median(days),
+      'the catalogue is only reachable in the last fortnight of a career',
+    ).toBeLessThan(240);
+    expect(
+      counts.filter((c) => c === tier).length,
+      'every career buys the entire catalogue, so none of it is a choice',
+    ).toBeLessThan(RUNS_SHOPS.length);
+  });
+
+  it('says whether keeping it costs anything worth noticing', () => {
+    /*
+       Paired against the same seeds, participants only, per HANDOFF section 3.
+       A family that never bought anything cannot be told apart from one that
+       did, and averaging the two hides the whole effect.
+    */
+    const gap = pairedGap(
+      RUNS_SHOPS,
+      RUNS_300,
+      (r) => r.bestEstate,
+      (r) => (r as (typeof RUNS_SHOPS)[number]).newSystems.shopping.bought.length > 0,
+    );
+
+    // eslint-disable-next-line no-console
+    console.log(
+      `sinks: paired estate gap for careers that shopped: ` +
+        `$${Math.round(gap).toLocaleString('en-US')}
+` +
+        `       weeks the upkeep could not be met, median ` +
+        `${median(RUNS_SHOPS.map((r) => r.newSystems.shopping.weeksShort))}`,
+    );
+
+    /*
+       It has to cost something. A sink that leaves the family exactly as rich
+       is not absorbing anything — it is a purchase that happens to sit in the
+       estate at face, which is what `holdings` already does for free.
+    */
+    expect(gap, 'buying and keeping all of it costs the family nothing').toBeLessThan(0);
+  });
+});
+
+describe('the trades, and the two things built on top of them', () => {
+  it('says whether running them is worth doing at all', () => {
+    const base = RUNS_300.map((r) => r.bestEstate);
+    const trading = RUNS_TRADING.map((r) => r.bestEstate);
+    const income = RUNS_TRADING.map((r) => r.trade.income);
+    const opened = RUNS_TRADING.filter((r) => r.trade.productOpenedOn !== null);
+    const armed = RUNS_TRADING.filter((r) => r.trade.armsOpenedOn !== null);
+
+    // eslint-disable-next-line no-console
+    console.log(
+      `trades: ${RUNS_TRADING.length} careers, ${HUMAN_DAYS} days each\n` +
+        `        opened a product arrangement: ${opened.length}/${RUNS_TRADING.length}` +
+        (opened.length
+          ? `, median day ${Math.round(median(opened.map((r) => r.trade.productOpenedOn!)))}`
+          : '') +
+        `\n` +
+        `        opened an arms source:        ${armed.length}/${RUNS_TRADING.length}` +
+        (armed.length
+          ? `, median day ${Math.round(median(armed.map((r) => r.trade.armsOpenedOn!)))}`
+          : '') +
+        `\n` +
+        `        trade income over the career: p10 ${Math.round(pct(income, 0.1))} ` +
+        `median ${Math.round(median(income))} p75 ${Math.round(pct(income, 0.75))}\n` +
+        `        best estate, not trading vs trading: ` +
+        `${Math.round(median(base))} vs ${Math.round(median(trading))}`,
+    );
+
+    /*
+       Two conditions, and they are about whether the trade is a real option
+       rather than about how much it pays.
+
+       A trade most careers cannot get into is content nobody sees. A trade
+       that leaves a family no better off is a button that costs a retainer.
+    */
+    expect(
+      opened.length,
+      'most careers can never get into the trade at all',
+    ).toBeGreaterThanOrEqual(Math.ceil(RUNS_TRADING.length / 2));
+    expect(
+      median(trading),
+      'running both trades for 300 days leaves a family no better off',
+    ).toBeGreaterThan(median(base));
+  });
+
+  it('says what a plant does for the careers that build one', () => {
+    const built = RUNS_OWNED.filter((r) => r.trade.plants > 0);
+    const unit = (rs: typeof RUNS_OWNED) =>
+      rs
+        .filter((r) => r.trade.unitCostWeeks > 0)
+        .map((r) => r.trade.unitCostSum / r.trade.unitCostWeeks);
+
+    /*
+       Paired by seed, and only the careers that actually built one.
+
+       The first version of both assertions below compared the median of the
+       whole owning population against the median of the whole buying one, and
+       a mutation check found what that is worth: **making a plant add 40 units
+       a week of throughput left the volume assertion green.** Seven careers in
+       thirty-six build a plant, so the median career in the owning arm does
+       not have one and a minority effect cannot move the statistic. That is
+       instance thirty-six of an instrument reporting confidently about
+       something it is not measuring.
+
+       The two arms share seeds, so a plant-holder can be compared against the
+       same career that did not buy one. The arms do diverge — a quarter of a
+       million dollars leaving the account changes what the bot can afford next
+       week and therefore what it rolls — so this is a paired comparison of
+       two related careers rather than a controlled experiment. That is enough
+       to catch a sign error and enough to catch a volume upgrade smuggled in
+       as a price cut, which is what it is for.
+    */
+    const pairs = RUNS_OWNED.map((owned, i) => ({ owned, bought: RUNS_TRADING[i] })).filter(
+      (x) =>
+        x.owned.trade.plants > 0 &&
+        x.owned.trade.unitCostWeeks > 0 &&
+        x.bought.trade.unitCostWeeks > 0,
+    );
+    const mean = (r: (typeof RUNS_OWNED)[number]) => r.trade.unitCostSum / r.trade.unitCostWeeks;
+
+    // eslint-disable-next-line no-console
+    console.log(
+      `plant: the game offered one to ${RUNS_OWNED.filter((r) => r.trade.couldBuild).length}/${RUNS_OWNED.length}, built in ${built.length}` +
+        (built.length
+          ? `, median day ${Math.round(median(built.map((r) => r.trade.plantOn!)))}`
+          : '') +
+        `\n       whole populations, mean paid per load: ` +
+        `${Math.round(median(unit(RUNS_TRADING)))} buying vs ${Math.round(median(unit(RUNS_OWNED)))} owning\n` +
+        `       the ${pairs.length} careers that built one, against themselves without it:\n` +
+        `         paid per load  ` +
+        `${Math.round(median(pairs.map((x) => mean(x.bought))))} -> ` +
+        `${Math.round(median(pairs.map((x) => mean(x.owned))))}\n` +
+        `         trade income   ` +
+        `${Math.round(median(pairs.map((x) => x.bought.trade.income)))} -> ` +
+        `${Math.round(median(pairs.map((x) => x.owned.trade.income)))}`,
+    );
+
+    /*
+       The reachability condition, and the one that killed the mirror design.
+
+       `WORKSHOP` was the PATRON shape at fewer than one career in ten. A
+       quarter is the bar because a plant is a late capital purchase rather
+       than something every career does — but a quarter reaching it is the
+       difference between an ambition and a museum piece.
+
+       ## What this watches, and what it deliberately does not
+
+       It reads `couldBuild` — the game said yes — and not `plants`, the number
+       the bot actually bought. That distinction was not obvious and cost a red
+       test to find. The bar went in at a quarter before anything was plotted,
+       which is the right order; the plot then read **7 of 36 built** and it
+       failed. The diagnostic is the line above it: the game offered a plant to
+       **16 of 36**. The gap is entirely the bot's own reserve rule, which
+       refuses to spend below one and a half times the price, because a boss
+       who empties the account on a building is not the competent-but-not-
+       optimal player the rest of this file models.
+
+       So the bar was pointed at reachability rather than at appetite. Note
+       what did *not* happen: the number did not move. A bar reading a quantity
+       that answers a different question is the alderman's fault in a different
+       costume, and the repair for that is the same — change what it watches,
+       not where it sits.
+
+       Take-up stays in the log, unasserted, because it is a fact about this
+       bot's caution and not about the game.
+    */
+    expect(
+      RUNS_OWNED.filter((r) => r.trade.couldBuild).length,
+      'a plant is priced for a run that has already succeeded — PATRON again',
+    ).toBeGreaterThanOrEqual(Math.ceil(RUNS_OWNED.length / 4));
+
+    /*
+       And that it does the one thing it exists to do. A plant produces
+       nothing; the whole feature is the price of a unit.
+    */
+    if (pairs.length > 0) {
+      expect(
+        median(pairs.map((x) => mean(x.owned) - mean(x.bought))),
+        'the same career pays no less for a load after building premises of its own',
+      ).toBeLessThan(0);
+    }
+
+    /*
+       "Cheaper units must not become more units" is checked, and not here.
+
+       It was here, as a bound on trade income, and the bound was wrong twice
+       over. Income is revenue rather than volume, and a plant-holder who also
+       fills orders books revenue a street-only career never sees — the paired
+       figures above read $1.8M against $2.3M for exactly that reason, which is
+       orders working rather than throughput leaking. Bounding it would have
+       been a bar against the wrong quantity, placed to make a true claim look
+       tested.
+
+       The claim is a claim about one function, so it is tested on that
+       function: `plant.test.ts` asserts `throughput` is byte-identical either
+       side of `buildPlant`, and reinstating a plant that adds capacity turns
+       it red. A population statistic could not have caught it anyway — seven
+       careers in thirty-six hold a plant, and the median of the other
+       twenty-nine does not move when they gain forty units a week.
+    */
+  });
+
+  /*
+     Where trade income goes, and why almost none of it reaches the estate.
+
+     Two findings were open and looked like one. The trade earns a median
+     $1.6M over 300 days and moves what the family is *worth* by 6.5%; and the
+     estate accumulates at 0.18x annual income against a real-world 1-2x. The
+     obvious shared cause is the washing machine, because `estate` counts clean
+     cash, holdings and fronts and **never counts dirty money** — so every
+     dollar the trade earns has to pass through a front to become standing.
+
+     Two populations, same seeds, one difference: whether the bot trades. If
+     capacity is the constraint, the trading arm should be pinned against it.
+  */
+  it('says where trade income goes, and whether laundering is what stops it', () => {
+    const roll = (rs: typeof RUNS_300) => {
+      const t = rs.reduce(
+        (a, r) => ({
+          capacityBound: a.capacityBound + r.wash.capacityBound,
+          dirtyBound: a.dirtyBound + r.wash.dirtyBound,
+          nothingToWash: a.nothingToWash + r.wash.nothingToWash,
+          noFronts: a.noFronts + r.wash.noFronts,
+          laundered: a.laundered + r.wash.laundered,
+          capacity: a.capacity + r.wash.capacity,
+          dirtyIn: a.dirtyIn + r.wash.dirtyIn,
+          cleanIn: a.cleanIn + r.wash.cleanIn,
+          cut: a.cut + r.wash.cut,
+          outHires: a.outHires + r.wash.cleanOut.hires,
+          outJobs: a.outJobs + r.wash.cleanOut.jobs,
+          outFronts: a.outFronts + r.wash.cleanOut.fronts,
+          outEvents: a.outEvents + r.wash.cleanOut.events,
+          outUpkeep: a.outUpkeep + r.wash.cleanOut.upkeep,
+        }),
+        {
+          capacityBound: 0,
+          dirtyBound: 0,
+          nothingToWash: 0,
+          noFronts: 0,
+          laundered: 0,
+          capacity: 0,
+          dirtyIn: 0,
+          cleanIn: 0,
+          cut: 0,
+          outHires: 0,
+          outJobs: 0,
+          outFronts: 0,
+          outEvents: 0,
+          outUpkeep: 0,
+        },
+      );
+      const paydays = t.capacityBound + t.dirtyBound + t.nothingToWash + t.noFronts;
+      return {
+        ...t,
+        paydays,
+        used: t.laundered / Math.max(1, t.capacity),
+        washedShare: t.laundered / Math.max(1, t.dirtyIn),
+        estate: median(rs.map((r) => r.bestEstate)),
+        dirtyHeld: median(rs.map((r) => r.trade.dirtyEnd)),
+        dirtyPeak: median(rs.map((r) => r.trade.dirtyPeak)),
+        /*
+           Every money figure on the ledger line is a **median career**, and
+           saying so matters: the aggregate sums above are divided by 36, which
+           is a mean, and this population has a long right tail (F15 — a
+           quarter of careers run away with it). An earlier version of this
+           readout put a mean and a median inside the same subtraction.
+        */
+        tradeIncome: median(rs.map((r) => r.trade.income)),
+        /** What the legitimate side took in over the career. */
+        frontRevenue: median(rs.map((r) => r.wash.revenue)),
+        cutPaid: median(rs.map((r) => r.wash.cut)),
+        washed: median(rs.map((r) => r.wash.laundered)),
+        cogs: median(rs.map((r) => r.trade.cogs)),
+        book: Object.fromEntries(
+          LEDGER_KEYS.map((k) => [k, median(rs.map((r) => r.trade.book[k] ?? 0))]),
+        ) as Record<string, number>,
+        unexplained: median(rs.map((r) => r.trade.unaccounted)),
+        seized: median(rs.map((r) => r.trade.seizedUnits)),
+        raids: median(rs.map((r) => r.trade.raids)),
+        meanCut: median(rs.map((r) => r.trade.meanCut)),
+        meanHeat: median(rs.map((r) => r.trade.meanHeat)),
+        heatQ: (() => { const all = rs.flatMap((r) => r.trade.heats); return [10,25,50,75,90].map((q) => Math.round(pct(all, q/100))).join('/'); })(),
+        quietShare: median(rs.map((r) => r.trade.quietShare)),
+        wages: median(rs.map((r) => r.trade.wages)),
+        units: median(rs.map((r) => r.trade.unitsBought)),
+        fronts: median(rs.map((r) => r.fronts)),
+        eCash: median(rs.map((r) => r.trade.estateParts.cash)),
+        eHold: median(rs.map((r) => r.trade.estateParts.holdings)),
+        eFronts: median(rs.map((r) => r.trade.estateParts.fronts)),
+        eTotal: median(rs.map((r) => r.trade.estateParts.total)),
+        days: median(rs.map((r) => r.days)),
+        died: rs.filter((r) => r.gameOver).length,
+        cases: median(rs.map((r) => r.casesOpened)),
+        handovers: median(rs.map((r) => r.handovers)),
+        shuttered: median(rs.map((r) => r.frontLife.shuttered)),
+        runNoFronts: rs.reduce((n, r) => n + r.trade.running.noFronts, 0),
+        runNothing: rs.reduce((n, r) => n + r.trade.running.nothingToWash, 0),
+        runDirty: rs.reduce((n, r) => n + r.trade.running.dirtyBound, 0),
+        runCapacity: rs.reduce((n, r) => n + r.trade.running.capacityBound, 0),
+        runWeeks: rs.reduce(
+          (n, r) =>
+            n +
+            r.trade.running.noFronts +
+            r.trade.running.nothingToWash +
+            r.trade.running.dirtyBound +
+            r.trade.running.capacityBound,
+          0,
+        ),
+      };
+    };
+    const base = roll(RUNS_300);
+    const trading = roll(RUNS_TRADING);
+    const leaning = roll(RUNS_LEANING);
+    const books = roll(RUNS_BOOKS);
+    const hired = RUNS_BOOKS.filter((r) => r.trade.bookkeeperDay !== null);
+    const hiredCut = median(hired.map((r) => r.trade.meanCut));
+    /*
+       Paired against the same seed, because the arms are not the same world.
+
+       `trading`, `leaning` and `books` are separate simulations that diverge at
+       the first decision a policy changes, so a median-to-median revenue
+       comparison across them is two different populations quoted side by side
+       rather than a controlled measurement. Sales read $359,270 lower in
+       `books` than in `trading` on the medians while stock spend was flat,
+       which is not a difference either arm's policy can produce. The paired
+       figures below are the only ones entitled to attribute anything.
+    */
+    /*
+       Paired, and restricted to the careers that actually used the thing —
+       both halves of the rule on `helpers.pairedGap`. Without the second half
+       the median gap for `books` reads exactly zero, because nine careers in
+       thirty-six never hire anybody and their pairs are identical.
+    */
+    const gap = (
+      arm: typeof RUNS_BOOKS,
+      pick: (r: (typeof RUNS_BOOKS)[number]) => number,
+      took: (r: (typeof RUNS_BOOKS)[number]) => boolean,
+    ) => Math.round(pairedGap(arm, RUNS_TRADING, pick, took));
+    const traded = (r: (typeof RUNS_BOOKS)[number]) => r.trade.income > 0;
+    const onBooks = (r: (typeof RUNS_BOOKS)[number]) => r.trade.bookkeeperDay !== null;
+    const neverCut = median(
+      RUNS_BOOKS.filter((r) => r.trade.bookkeeperDay === null).map((r) => r.trade.meanCut),
+    );
+    const pc = (n: number, of: number) => `${Math.round((100 * n) / Math.max(1, of))}%`;
+    /**
+     * A per-career **mean**, formatted, and named for what it is.
+     *
+     * Kept apart from `median` on purpose — see the rule on `helpers.mean`.
+     * This population has a long right tail, so a mean and a median describe
+     * different families, and an earlier version of this readout quoted one
+     * against the other inside a single subtraction. Every figure on the
+     * ledger line below is a median; every figure on a line marked `— means`
+     * is not.
+     */
+    const mean = (n: number, over = 36) => `$${Math.round(n / over).toLocaleString('en-US')}`;
+    void meanOf;
+    const dollars = (n: number) => `$${Math.round(n).toLocaleString('en-US')}`;
+    const line = (name: string, t: typeof base) =>
+      `        ${name.padEnd(9)} laundered ${mean(t.laundered)} of ${mean(t.capacity)} offered ` +
+      `(${Math.round(100 * t.used)}% used), ${mean(t.cut)} lost in the wash — means\n` +
+      `                  paydays: no fronts ${pc(t.noFronts, t.paydays)}, ` +
+      `nothing to wash ${pc(t.nothingToWash, t.paydays)}, ` +
+      `dirty ran out ${pc(t.dirtyBound, t.paydays)}, ` +
+      `capacity ran out ${pc(t.capacityBound, t.paydays)}\n` +
+      `                  weekly heat p10/25/50/75/90 ${t.heatQ}, mean ` +
+      `${Math.round(t.meanHeat)}, weeks under 60 ${Math.round(100 * t.quietShare)}%\n` +
+      `                  revenue, median career: trade ${dollars(t.tradeIncome)} + fronts ` +
+      `${dollars(t.frontRevenue)} = ${dollars(t.tradeIncome + t.frontRevenue)}\n` +
+      `                  the ledger, all medians: sold ${dollars(t.tradeIncome)} ` +
+      `- stock ${dollars(t.cogs)} - payroll ${dollars(t.wages)} ` +
+      `- the cut ${dollars(t.cutPaid)} (${(100 * t.meanCut).toFixed(1)}% of ` +
+      `${dollars(t.washed)} washed) = ` +
+      `${dollars(t.tradeIncome - t.cogs - t.wages - t.cutPaid)}\n` +
+      `                  units bought ${t.units} · seized ${t.seized} in ${t.raids} raids
+` +
+      `                  the book, median career: ` +
+      LEDGER_KEYS.filter((k) => Math.round(t.book[k]) !== 0)
+        .map((k) => `${k} ${dollars(t.book[k])}`)
+        .join(', ') +
+      ` · unexplained ${dollars(t.unexplained)}
+` +
+      `                  clean in ${mean(t.cleanIn)}, out on ` +
+      `hires ${mean(t.outHires)} · jobs ${mean(t.outJobs)} · fronts ${mean(t.outFronts)} · ` +
+      `events ${mean(t.outEvents)} · upkeep ${mean(t.outUpkeep)} — means\n` +
+      `                  fronts at the end ${t.fronts} · gone under ${t.shuttered} · ` +
+      `lived ${t.days}d · ended ${t.died}/36 · cases ${t.cases} · handovers ${t.handovers}\n` +
+      `                  estate at the end ${t.eTotal.toLocaleString('en-US')} = ` +
+      `cash ${t.eCash.toLocaleString('en-US')} + put away ${t.eHold.toLocaleString('en-US')} + ` +
+      `fronts ${t.eFronts.toLocaleString('en-US')} · peak ${dollars(t.estate)}` +
+      (t.runWeeks > 0
+        ? `\n                  and only on weeks a source was open (${t.runWeeks} paydays): ` +
+          `no fronts ${pc(t.runNoFronts, t.runWeeks)}, ` +
+          `nothing to wash ${pc(t.runNothing, t.runWeeks)}, ` +
+          `dirty ran out ${pc(t.runDirty, t.runWeeks)}, ` +
+          `capacity ran out ${pc(t.runCapacity, t.runWeeks)}`
+        : '');
+
+    // eslint-disable-next-line no-console
+    console.log(
+      `washing: two populations, same seeds, one difference\n` +
+        line('no trade', base) +
+        `\n` +
+        line('trading', trading) +
+        `\n` +
+        line('leaning', leaning) +
+        `\n` +
+        line('books', books) +
+        `\n        paired against the same seeds, against trading:` +
+        `\n          leaning  sold ${gap(RUNS_LEANING, (r) => r.trade.income, traded).toLocaleString('en-US')}` +
+        `, units ${gap(RUNS_LEANING, (r) => r.trade.unitsBought, traded)}` +
+        `, stock ${gap(RUNS_LEANING, (r) => r.trade.cogs, traded).toLocaleString('en-US')}` +
+        `, estate ${gap(RUNS_LEANING, (r) => r.bestEstate, traded).toLocaleString('en-US')}` +
+        `\n          books    sold ${gap(RUNS_BOOKS, (r) => r.trade.income, onBooks).toLocaleString('en-US')}` +
+        `, units ${gap(RUNS_BOOKS, (r) => r.trade.unitsBought, onBooks)}` +
+        `, stock ${gap(RUNS_BOOKS, (r) => r.trade.cogs, onBooks).toLocaleString('en-US')}` +
+        `, estate ${gap(RUNS_BOOKS, (r) => r.bestEstate, onBooks).toLocaleString('en-US')}` +
+        `\n        somebody on the books: ` +
+        `${RUNS_BOOKS.filter((r) => r.trade.bookkeeperDay !== null).length}/36` +
+        (RUNS_BOOKS.some((r) => r.trade.bookkeeperDay !== null)
+          ? `, median day ${Math.round(
+              median(
+                RUNS_BOOKS.filter((r) => r.trade.bookkeeperDay !== null).map(
+                  (r) => r.trade.bookkeeperDay!,
+                ),
+              ),
+            )}` +
+            `, best standing among those who hired: median ${Math.round(
+              median(
+                RUNS_BOOKS.filter((r) => r.trade.bookkeeperDay !== null).map(
+                  (r) => r.trade.bestTrust,
+                ),
+              ),
+            )}, p75 ${Math.round(
+              pct(
+                RUNS_BOOKS.filter((r) => r.trade.bookkeeperDay !== null).map(
+                  (r) => r.trade.bestTrust,
+                ),
+                0.75,
+              ),
+            )}, max ${Math.max(...RUNS_BOOKS.map((r) => r.trade.bestTrust))}/100` +
+            `
+        the cut those careers paid: ${(100 * hiredCut).toFixed(1)}% ` +
+            `against ${(100 * trading.meanCut).toFixed(1)}% for the same bot with nobody` +
+            (Number.isFinite(neverCut) ? ` (${(100 * neverCut).toFixed(1)}% for the 9 who never hired)` : '')
+          : ''),
+    );
+
+    /*
+       `wash.dirtyIn` is not usable here, and finding that out is half the
+       result.
+
+       It is the sum of the *daily net rise* in dirty cash, and the trade earns
+       and spends dirty on the same tick — `tickContraband` buys next week's
+       stock out of the same pocket the sale just filled. So the trading arm
+       reports **less** dirty in ($750k against $866k) while laundering more
+       than twice as much, and "laundered 100% of dirty income" is the
+       arithmetic of a denominator that cancelled itself out rather than a fact
+       about the game. Left in the accumulator because the rest of this file
+       reads it for a bot that does not trade, where it is fine; not read here.
+
+       So the guard is on the quantity the comparison is actually about. If
+       running two trades does not put materially more through the fronts, the
+       two arms are the same experiment and nothing below means anything.
+
+       ## Why it is not a ratio of any kind
+
+       It read `trading.laundered > base.laundered * 1.5` and failed at 1.39x —
+       not because the trade stopped working, but because the **base arm got
+       richer**. Heat decaying as a share of the load took the median estate
+       from $541,253 to about $1.48M, so a family that never touches contraband
+       now earns enough dirty money from jobs alone to fill most of the same
+       eight fronts.
+
+       Repointing it at a *ratio* of capacity-bound weeks failed the same way
+       for the same reason, one change later: any ratio of two quantities that
+       are both pressed against the same ceiling converges on 1, and it says
+       nothing about what is behind them.
+
+       So it is a line rather than a ratio, drawn between the two arms and
+       stating what the section is named for. Measured:
+
+           no trade   laundered $1,175,109 of $1,583,488 offered — 74% used
+           trading    laundered $1,606,761 of $1,771,352 offered — 91% used
+                      and 89% of the weeks a source was open, capacity-bound
+
+       The trading arm runs its fronts flat out. The arm with no trade has a
+       quarter of its capacity spare. If the second one ever saturates too, the
+       experiment has stopped being an experiment and this fires and says so —
+       which a ratio quietly would not.
+    */
+    const used = (a: ReturnType<typeof roll>) => a.laundered / Math.max(1, a.capacity);
+    expect(
+      used(trading),
+      'the trading arm is not running its fronts flat out, so the wash is not what stops it',
+    ).toBeGreaterThan(0.85);
+    expect(
+      used(base),
+      'a career with no trade fills its fronts too, so the two arms compare nothing',
+    ).toBeLessThan(0.85);
+
+    /*
+       And the repair, which is the reason `lean` exists as its own arm.
+
+       F22: the wall between dirty money and standing was shut on 74% of
+       trading paydays, `estate` counts clean money and never counts dirty, so
+       a trade earning $1.6M moved what the family is worth by 6.5%. Taking the
+       ceiling off `hard` has to actually open that door — a dial that does not
+       move the money is a dial with a warning label and nothing behind it —
+       and it has to cost something, or it is not a decision.
+
+       ## What is asserted, and what is only printed
+
+       Both halves below are large, directional and robust: leaning puts 56%
+       more through the fronts, and it takes 11% off what those fronts are
+       worth, because exposure feeds health and health feeds value. Either one
+       reversing would mean the feature is not doing what it says.
+
+       What is **not** asserted is the estate total. Measured, leaning ends
+       $586,738 against $576,661 — 1.7% on a median of 36 careers, which is
+       inside the noise this file has been burned by before (a Capo shift of
+       16 to 10 that turned out to be 34 to 29 at 96 seeds). The honest reading
+       is that the extra clean money and the lost front value roughly cancel,
+       and whether that is the right price is a tuning question with a
+       plotted answer rather than a bar.
+    */
+    expect(
+      leaning.laundered,
+      'leaning on the premises put no more through them than not leaning',
+    ).toBeGreaterThan(trading.laundered * 1.2);
+    /*
+       Paired and restricted, like everything else that compares two arms. This
+       read `leaning.eFronts < trading.eFronts` — two medians over two
+       populations that are not the same worlds — until the rule on
+       `helpers.pairedGap` was written down.
+    */
+    expect(
+      gap(RUNS_LEANING, (r) => r.trade.estateParts.fronts, traded),
+      'leaning on the premises for a whole career cost nothing at all',
+    ).toBeLessThan(0);
+
+    /*
+       And the cut, which is the charge the ledger said buys nothing.
+
+       Two conditions. Somebody has to actually be reachable — a roster priced
+       out of the game is the PATRON shape again — and keeping them has to move
+       the rate materially, or the retainer, the weekly fee and the name on the
+       paperwork are being charged for a rounding error. A fifth of the charge
+       is the bar, pre-committed before anything was plotted.
+
+       ## What it reads, and the mistake that took three goes to stop making
+
+       It reads the careers that **actually hired somebody**, not the whole
+       population. Pointed at the population it failed at 18.4% against 17.4%
+       needed — and the reason was the nine careers in thirty-six that never
+       retained anybody at all, sitting in the average at 22.8% and dragging it
+       up. Mixing adoption into an effect size measures neither.
+
+       That is the third bar in this file to be pointed at a population
+       containing people who never touched the thing being measured: the
+       plant's take-up, the plant's volume, and this. The number did not move
+       in any of the three. HANDOFF §3.
+    */
+    expect(
+      hired.length,
+      'nobody in the game can afford to have their books kept',
+    ).toBeGreaterThanOrEqual(Math.ceil(RUNS_BOOKS.length / 2));
+    expect(
+      hiredCut,
+      'keeping somebody on the books barely changes what the wash takes',
+    ).toBeLessThan(trading.meanCut * 0.8);
+  });
+
+  it('says whether an order is a decision rather than a payout', () => {
+    const offered = RUNS_OWNED.filter((r) => r.trade.offers > 0);
+    const took = RUNS_OWNED.filter((r) => r.trade.accepted > 0);
+    const accepted = RUNS_OWNED.reduce((n, r) => n + r.trade.accepted, 0);
+    const filled = RUNS_OWNED.reduce((n, r) => n + r.trade.filled, 0);
+    const failed = RUNS_OWNED.reduce((n, r) => n + r.trade.failed, 0);
+    const refused = RUNS_OWNED.reduce((n, r) => n + r.trade.refused, 0);
+    const supplied = RUNS_OWNED.filter((r) => r.trade.unitsToGangs > 0);
+
+    // eslint-disable-next-line no-console
+    console.log(
+      `orders: offered to ${offered.length}/${RUNS_OWNED.length} careers, ` +
+        `taken by ${took.length}\n` +
+        `        accepted ${accepted}, refused ${refused}, filled ${filled}, failed ${failed}\n` +
+        `        order income: median ${Math.round(
+          median(RUNS_OWNED.map((r) => r.trade.orderIncome)),
+        )} p75 ${Math.round(pct(RUNS_OWNED.map((r) => r.trade.orderIncome), 0.75))}\n` +
+        `        careers that ever supplied a gang: ${supplied.length}` +
+        (supplied.length
+          ? `, worst feeling seen in their neighbourhood: median ${Math.round(
+              median(supplied.map((r) => r.trade.worstGangSentiment)),
+            )}`
+          : ''),
+    );
+
+    /*
+       Reach first. An order book nobody is ever handed is the PATRON shape a
+       third time, and this is the condition the whole feature was gated on.
+    */
+    expect(
+      offered.length,
+      'most careers are never asked for anything',
+    ).toBeGreaterThanOrEqual(Math.ceil(RUNS_OWNED.length / 2));
+
+    /*
+       And then the two ways it could be hollow.
+
+       A player who takes only what they can carry should mostly deliver — if
+       they cannot, the sizing is wrong and the feature is a tax. But if
+       *nothing* ever fails, the deadline is decoration and `ORDER_FAILURE` is
+       dead config. The bot here refuses what it cannot cover, which is what
+       makes both halves of that a fair question to ask.
+    */
+    if (accepted > 0) {
+      expect(
+        filled,
+        'a bot that only accepts what it can carry still fills nothing',
+      ).toBeGreaterThan(0);
+      expect(
+        refused,
+        'every order offered was coverable, so accepting is not a decision',
+      ).toBeGreaterThan(0);
+    }
+  });
+});
 
 describe('the other families', () => {
   it('says whether they ever move, and whether anything is ever open', () => {

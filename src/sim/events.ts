@@ -27,7 +27,7 @@ import { informFromMemory, remember } from './memory';
 import { recordTie } from './ties';
 import { earnDirty, refund, spend, spendSplit, totalFunds } from './economy';
 import { addHeat, reduceHeat, startLayLow } from './heat';
-import { acceptPromotion, declinePromotion, gainFear, gainRespect, trainAttribute } from './player';
+import { gainFear, gainRespect, trainAttribute } from './player';
 import { dismiss, promote } from './crew';
 import {
   addInfluence,
@@ -1709,13 +1709,6 @@ export function resolveEvent(
   }
 
   switch (event.defId) {
-    // ---------------------------------------------------- rank promotion --
-    case 'rank_offer': {
-      if (choiceId === 'accept') acceptPromotion(state, event.data.rank as never);
-      else declinePromotion(state);
-      return;
-    }
-
     // ----------------------------------------------------- crew pressure --
     case 'promotion_demand': {
       if (!npc) return;
@@ -1754,7 +1747,7 @@ export function resolveEvent(
         remember(npc, state.day, 'was_believed');
         addNote(npc, state.day, 'Was listened to.', 'good');
       } else if (choiceId === 'pay') {
-        if (spend(state, 3_000)) {
+        if (spend(state, 3_000, 'world')) {
           npc.stats.grievance = clamp(npc.stats.grievance - 25, 0, 100);
           npc.stats.greed = clamp(npc.stats.greed + 3, 0, 100);
           addNote(npc, state.day, 'Was paid to let something go.', 'neutral');
@@ -1823,7 +1816,7 @@ export function resolveEvent(
         }
         trainAttribute(state, 'leadership', 1);
       } else if (choiceId === 'pay') {
-        if (spend(state, 8_000)) {
+        if (spend(state, 8_000, 'world')) {
           npc.stats.fear = clamp(npc.stats.fear - 12, 0, 100);
           npc.stats.loyalty = clamp(npc.stats.loyalty + 6, 0, 100);
           npc.stats.greed = clamp(npc.stats.greed + 6, 0, 100);
@@ -1884,7 +1877,7 @@ export function resolveEvent(
       if (choiceId === 'lay_low') {
         startLayLow(state);
       } else if (choiceId === 'lawyer') {
-        if (spend(state, 25_000)) {
+        if (spend(state, 25_000, 'world')) {
           reduceHeat(state, 14, 'street');
           trainAttribute(state, 'influence', 1.5);
           addLog(state, 'The lawyer earned it. Attention moved elsewhere.', 'heat');
@@ -1914,7 +1907,7 @@ export function resolveEvent(
       const times = state.flags[pressed] ?? 0;
 
       if (choiceId === 'lawyer') {
-        if (spend(state, 20_000)) {
+        if (spend(state, 20_000, 'world')) {
           npc.stats.loyalty = clamp(npc.stats.loyalty + 14, 0, 100);
           npc.stats.fear = clamp(npc.stats.fear - 15, 0, 100);
           addNote(npc, state.day, 'You put a real lawyer on their case.', 'good');
@@ -1927,7 +1920,7 @@ export function resolveEvent(
           addLog(state, 'You could not cover it.', 'failure');
         }
       } else if (choiceId === 'family') {
-        if (spend(state, 6_000)) {
+        if (spend(state, 6_000, 'world')) {
           npc.stats.loyalty = clamp(npc.stats.loyalty + 8, 0, 100);
           addNote(npc, state.day, 'Their family was looked after while they were inside.', 'good');
           state.flags[pressed] = Math.max(0, times - 1);
@@ -2037,7 +2030,7 @@ export function resolveEvent(
       }
 
       if (choiceId !== 'take') return;
-      if (!spend(state, cost)) {
+      if (!spend(state, cost, 'world')) {
         addLog(state, 'The money was not there when it came to it.', 'failure');
         return;
       }
@@ -2066,7 +2059,7 @@ export function resolveEvent(
     case 'recruit_offer': {
       if (choiceId !== 'take') return;
       const fee = event.data.fee as number;
-      if (!spend(state, fee)) {
+      if (!spend(state, fee, 'world')) {
         addLog(state, 'You could not cover the fee.', 'failure');
         return;
       }
@@ -2278,7 +2271,7 @@ export function resolveEvent(
       if (choiceId !== 'accept') return;
       const agencyId = event.data.agencyId as string;
       const price = event.data.price as number;
-      if (!spend(state, price)) {
+      if (!spend(state, price, 'world')) {
         addLog(state, 'You could not cover it.', 'failure');
         return;
       }
@@ -2331,7 +2324,7 @@ export function resolveEvent(
           'crew',
         );
       } else if (choiceId === 'money') {
-        if (!spend(state, 40_000)) {
+        if (!spend(state, 40_000, 'world')) {
           addLog(state, 'You could not put anything behind it.', 'failure');
           return;
         }
@@ -2431,7 +2424,7 @@ export function resolveEvent(
       const where = territoryDef(territoryId).name;
 
       if (choiceId === 'pay') {
-        if (spend(state, demand)) {
+        if (spend(state, demand, 'world')) {
           // Paying is quiet, and quietly costs you the district's respect.
           addInfluence(state, territoryId, -2);
           addLog(state, `You paid to keep working ${where}. People heard that too.`, 'money');
@@ -2464,7 +2457,7 @@ export function resolveEvent(
       if (choiceId !== 'take') return;
       const territoryId = event.data.territoryId as string;
       const cost = event.data.cost as number;
-      if (!spend(state, cost)) {
+      if (!spend(state, cost, 'world')) {
         addLog(state, 'You could not cover it.', 'failure');
         return;
       }
@@ -2482,7 +2475,7 @@ export function resolveEvent(
     case 'community_friction': {
       const territoryId = event.data.territoryId as string;
       if (choiceId === 'money') {
-        if (spend(state, 12_000)) {
+        if (spend(state, 12_000, 'world')) {
           adjustSentiment(state, territoryId, 30);
           addInfluence(state, territoryId, 2);
           addLog(state, `${territoryDef(territoryId).name} has warmed to you again.`, 'money');
@@ -2522,7 +2515,7 @@ export function resolveEvent(
       if (!business) return;
 
       if (choiceId === 'accountant') {
-        if (spend(state, 15_000)) {
+        if (spend(state, 15_000, 'world')) {
           business.exposure = clamp(business.exposure - 45, 0, 100);
           trainAttribute(state, 'business', 2);
           addLog(state, 'The books are somebody else’s problem now, and they are clean.', 'money');
@@ -2548,7 +2541,7 @@ export function resolveEvent(
       if (choiceId !== 'buy') return;
       const territoryId = event.data.territoryId as string;
       const price = event.data.price as number;
-      const paid = spendSplit(state, price);
+      const paid = spendSplit(state, price, 'world');
       if (!paid) {
         addLog(state, 'You could not cover it.', 'failure');
         return;
@@ -2586,7 +2579,7 @@ export function resolveEvent(
         // Choosing to pay and not being able to used to fall silently through
         // to the free outcome, so the player was told nothing and got the
         // lesser thing while believing they had bought the greater one.
-        if (spend(state, 5_000)) {
+        if (spend(state, 5_000, 'world')) {
           npc.stats.loyalty = clamp(npc.stats.loyalty + 6, 0, 100);
           npc.stats.greed = clamp(npc.stats.greed + 2, 0, 100);
           addLog(state, `${money(5_000)} to ${npc.name} for what they did. It was noticed.`, 'money');
