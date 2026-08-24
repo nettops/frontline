@@ -4,6 +4,82 @@ Not shipped. Nothing in `src/` imports anything here, and nothing here is in the
 build output — that is the point of the folder. These are things that were built
 to be looked at and then argued with.
 
+## pixel-arms.html — sixteen pieces, and a warning about where they go
+
+Sixteen pieces of 1978 hardware, side-on in a fixed 48 × 16 cell, muzzle left,
+in three finishes. Drafted off a modern shooter's weapon sheet, of which almost
+nothing survived contact with this game and two things did.
+
+### To look at it
+
+```bash
+open prototypes/pixel-arms.html          # or: xdg-open
+```
+
+`?scale=4&finish=nickel&bg=paper` — finishes are `blued`, `blacked`, `nickel`;
+grounds are `panel`, `paper`, `alpha`.
+
+### What translated, and what did not
+
+The reference sorts sixty guns by damage and hangs an ammo column and a
+crosshair column off the sides. None of that is this game: it is 1978, nobody
+aims anything, and there is no damage number anywhere in `src/`. What is worth
+stealing is the craft — side-on silhouette, one hard outline, three values, a
+fixed cell so a list of them lines up — and the trick that makes such a sheet
+affordable, which is that black, silver and gold are one shape and three
+palettes rather than three drawings.
+
+So the sheet keeps the technique and re-points both of its axes at things this
+game already has an opinion about.
+
+**Down the sheet: what it costs to carry.** `contraband.ts` prices heat per
+unit, and a razor in a coat pocket and a shotgun carried down a street are not
+the same risk. The classes are `pocket`, `coat`, `long`, and the cell says
+which by how much of it the thing fills — the sprite is the stat.
+
+**Across the sheet: where it came from.** Not rarity, which this game has no
+concept of. Provenance. *Blued* is what you buy, with a serial on it and a
+paper trail somebody else started. *Blacked* is what you use, and no loss when
+it goes in a river. *Nickel* is what you were given, worth more than the job
+and impossible to sell without saying who by.
+
+### Palette
+
+The metal ramp is the game's own `--carbon` and `--carbon-dim` — the cold
+institutional blue reserved for law enforcement. That started as an accident of
+what was already in `theme.css` and then it stopped being one: it is the right
+colour for steel and the right joke about it. Walnut reuses the brown skin ramp
+from `pixel-cast.html` unchanged. Two new darks for the deepest metal, and
+nothing else.
+
+### The warning
+
+**Fifteen of these sixteen sprites have nowhere to go.** The simulation does
+not model weapons. Crew do not carry anything, operations roll a consequence
+rather than a firefight, and violence is a number in `evidence: 'violence'`.
+The one sprite the game can ask for today is the crate, because
+`TRADE_IDS = ['product', 'arms']` counts crates and nothing finer.
+
+That is not an argument against drawing them, but it is an argument against
+pretending this is an art task. Shipping the other fifteen means deciding
+first that hardware is a thing the player owns, loses, is traced through and
+gives away — and that is a systems decision with a real cost, most of it in
+`heat.ts` and `investigation.ts` rather than in pixels.
+
+The cheapest version, if one is wanted: the class is already a heat modifier
+and nothing else. A piece carried on an operation shifts the heat it generates
+and what a failure leaves behind, and provenance decides whether a recovered
+one points at you. That is three numbers and one field on a person, and it
+would use nine of the sixteen. The rest are set dressing until something wants
+them.
+
+### One deliberate limit
+
+Following the note at the top of `contraband.ts` — that the contraband economy
+is abstract on purpose and nothing should be added that describes how anything
+is made, moved or concealed — these are objects, drawn as objects, and the file
+says so where somebody adding to it will see it.
+
 ## pixel-cast.html — the cast, from parts
 
 `pixel-boss.html` settled what one character is. This is the question that
