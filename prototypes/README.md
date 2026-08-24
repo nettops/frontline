@@ -4,6 +4,54 @@ Not shipped. Nothing in `src/` imports anything here, and nothing here is in the
 build output — that is the point of the folder. These are things that were built
 to be looked at and then argued with.
 
+**`ART-DIRECTION.md`** is the standing note on what has to match between these
+pieces and what is deliberately allowed to differ. Short version: palette
+family, light logic and craft floor are fixed; pixel scale, fidelity, framing
+and mood are not, and should not be.
+
+## pixel-portrait.html — the same man at two fidelities
+
+The demonstration for `ART-DIRECTION.md`, and the reason that note exists.
+
+Left: the cast sprite from `pixel-cast.html`, 32 × 40, parts-composed, flat
+colour, shown at 4×. Right: the same character at 64 × 80, shown at 2× — the
+**same display size** and four times the information. Sphere-shaded face, a
+hard brim shadow cutting across the eyes, cool sky fill on the shadow side, and
+the cigar working as a genuine third light source under the jaw.
+
+```bash
+open prototypes/pixel-portrait.html          # ?z=3 to inspect
+```
+
+Same man, same palette family, same period. Different jobs, so different
+grids, and neither is the other done badly. The left one has to survive being
+16px tall in a list; the right one gets looked at.
+
+### What the extra pixels actually buy
+
+Not detail for its own sake — one specific thing that 32 × 40 cannot do. At
+panel scale the brim shadow is a single dark row and it either covers the eyes
+or it does not exist. At 64 × 80 it is an eight-row band with a hard edge that
+falls across the sockets and leaves the catchlights in, which is the entire
+noir read of the character. Everything else the bigger grid buys — the nose
+plane, the trimmed moustache, the lit crown, the ember bounce — is secondary
+to that.
+
+### Two rebuilds worth recording
+
+**The first face was mush.** Four overlapping ellipses each with their own
+shading function, fighting each other. A portrait wants *one* form solved
+properly and then a small number of deliberate marks; the rebuild draws one
+shaded solid, squares the jaw off it, and then spends about thirty pixels on
+features.
+
+**The hat vanished.** Near-black felt on a near-black backdrop is nothing, and
+the rim pass — testing brightness rather than the silhouette — put three
+bright spikes on the crown where it clipped interior edges. Both fixed by the
+same move: lift the backdrop behind the head so the hat has something to
+silhouette against, and take the rim from an exact subject mask (a copy of the
+buffer kept from before the figure was drawn, same trick as `pixel-alley.html`).
+
 ## pixel-alley.html — the arms deal, as a scene
 
 One cinematic frame: two men from behind at the open boot of an old maroon
@@ -31,14 +79,14 @@ the ground without one.
 
 The drawing code is the source. There is no image file.
 
-### Pixel scale, stated plainly
+### Pixel scale
 
 The cast sheet is 32 x 40 because it was drawn for a panel. The figures here
-are ~140px tall because this is a close third-person camera. **Those two scales
-cannot both be right in one image**, and the file does not pretend otherwise —
-these are drawn at scene scale in the same palette family, not cast sprites
-enlarged. If the game ever wants both, that is a decision about how many pixel
-scales the project is willing to own, and it should be made deliberately.
+are ~140px tall because this is a close third-person camera. Both are correct:
+they are different shots, and a project that forces one grid on every piece
+ends up with icons full of wasted pixels and scenes with none to spare. See
+`ART-DIRECTION.md` — palette, light logic and craft are what hold this together,
+not resolution.
 
 ### The light
 
@@ -76,13 +124,11 @@ shadow under it; that one band is most of what makes the silhouette a person.
 
 ### What it is and is not
 
-It is concept art for a beat the simulation does not have, same as
-`pixel-scene.html` and stated for the same reason: nothing in `src/` puts the
-player at a car boot, and `contraband.ts` is deliberately abstract about how
-anything moves. Nothing in `src/` is touched, and this does not belong in the
-shipping UI — that interface is typed data on tobacco-dark surfaces, and
-dropping a cinematic frame into it would break the visual argument the whole
-game is built on.
+Nothing in `src/` is touched, and there is no screen for a frame like this
+yet — the arms trade is abstract about how anything moves, and no state in the
+simulation puts the player at a car boot. That is a reason to build the screen
+if the beat is wanted, not a reason to hold the picture to the interface's
+current fidelity.
 
 ## pixel-scene.html — the buyer
 
@@ -152,14 +198,12 @@ to fake in a scene file.
 
 ### The open question
 
-Whether scenes are a thing this game has at all. A sit-down backdrop
-(`pixel-rooms.html`) decorates a screen that exists. This does not: there is no
-moment in the simulation where the player stands at a boot, and the arms trade
-is deliberately abstract about how anything moves. So this is either concept
-art for a beat the game does not have, or an argument for adding one — and the
-`lid=shut` toggle is there because that is the version of the argument worth
-having. The car and the two men are a scene. What is in the boot is a claim
-about what the game is willing to show.
+Not whether scenes are allowed — they are, see `ART-DIRECTION.md` — but which
+beat this one is for. There is no moment in the simulation where the player
+stands at a boot, so this is an argument for adding one. The `lid=shut` toggle
+is there because that is the version of the argument worth having: with the
+boot down it is a car in an alley, and the difference between the two is the
+whole scene.
 
 ## pixel-rooms.html — the other side of the ten fronts
 
@@ -222,11 +266,12 @@ fronts sheet and the finishes on the armoury.
 one, and a header image for a business panel. Both use `trading` state and
 existing data.
 
-**Not for:** walking around. There is no perspective here, no depth, no
-occlusion beyond one re-stamp, and nothing in the simulation moves a person
-through a place. These are stage flats. If the game ever wants a room the
-player is *in* rather than looking at, this is the wrong drawing and the
-sensible thing is to say so now rather than after twenty more of them.
+**Not for:** walking around. There is no perspective here and nothing in the
+simulation moves a person through a place — these are stage flats, drawn flat
+on purpose because a backdrop behind a conversation does not need depth it
+will never be looked into. A room the player is *in* is a different piece at a
+different fidelity, and `pixel-alley.html` is roughly what that would look
+like.
 
 ## pixel-fronts.html — the ten in businesses.ts
 
