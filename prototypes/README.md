@@ -4,6 +4,83 @@ Not shipped. Nothing in `src/` imports anything here, and nothing here is in the
 build output — that is the point of the folder. These are things that were built
 to be looked at and then argued with.
 
+## pixel-fleet.html — cars that belong and cars that do not
+
+Fourteen vehicles, side-on in a fixed 64 × 24 cell, front left, repainted from
+six hexes. Same method as the armoury: shared anchors, one outline, three
+values of paint, colour separated from shape.
+
+### To look at it
+
+```bash
+open prototypes/pixel-fleet.html          # or: xdg-open
+```
+
+`?scale=3&paint=maroon&livery=off` — paints are `black`, `maroon`, `cream`,
+`olive`, `blue`, `primer`. **Livery** decides whether the cruiser, the
+unmarked, the hearse and the burnt shell keep their own colours or take the
+paint control with everything else; a cream police car is a joke rather than a
+mockup, so the default respects them.
+
+### Why this sheet is different from the armoury one
+
+The armoury came with a warning: thirty of thirty-one sprites had nowhere to
+go, because the simulation does not model weapons. This sheet is the opposite.
+The game is already full of cars and has simply never shown one:
+
+| | |
+| --- | --- |
+| `lawEnforcement.ts:61` | the surveillance stage, in full — *"Cars that do not belong. Your people are being followed and photographed."* |
+| `businesses.ts:78` | the freight front — *"Freight, routes and a fleet that explains a lot of movement."* |
+| `operations.ts:89` | an operation called **Boost Cars** |
+| `world.ts:91` | *"There are cars on corners that never had cars."* |
+| `events.ts:365` | *"Cars parked where cars are not usually parked."* |
+
+Three of the four groups on the sheet are load-bearing prose in `src/` today.
+
+### The one that already exists
+
+**The unmarked is not a proposal.** It is the surveillance stage, which the
+game describes as a car, tells the player about as a car, and has no way to
+show. One sprite and one row in the district panel when an investigation
+reaches that stage, and a mechanic that currently exists only as a sentence
+becomes a thing parked on a street.
+
+That is the cheapest real win on any of the three art sheets, and it is worth
+saying plainly: it needs no new state, no new field and no balance pass. The
+investigation stage is already computed. Everything else here is optional and
+this is not.
+
+### Deliberate omissions
+
+**No number plates.** A legible plate is a detail the simulation would then
+have to keep consistent — across a save, across a district, across the same
+car seen twice — and it tracks nothing of the kind. Drawing one would promise
+a system that does not exist.
+
+**No driver.** The cast sheet is 32 × 40 and these cells are 24 tall; a person
+at this scale is four pixels and a rumour. If a car ever needs somebody in it,
+that is a different sprite rather than a smaller one.
+
+### The open question
+
+Whether a vehicle is an entity or an illustration, and the honest answer is
+that only one of them needs deciding now.
+
+**As illustration** — the unmarked on a surveilled district, the box truck on
+the freight front, a stripped shell after a Boost Cars job — every sprite here
+is nearly free, because it decorates state the simulation already has.
+
+**As an entity** — a car that is owned, seen, remembered, described by a
+witness, traced to a name, burnt to destroy what is in it — is a system, and a
+bigger one than the hardware system the armoury asked for. It touches
+`heat.ts`, `investigation.ts` and `estate.ts`, and the first question it raises
+is not artistic: if a car can be traced to you, then the beater bought under a
+name nobody checked is a mechanic, and mechanics need numbers.
+
+Start with illustration. It costs a `<canvas>` and it makes five existing
+sentences visible.
+
 ## pixel-arms.html — thirty-one pieces, and a warning about where they go
 
 Thirty-one pieces of 1978 hardware, side-on in a fixed 48 × 16 cell, business
