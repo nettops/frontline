@@ -8,10 +8,11 @@
 /* =========================================================================
    PIXEL FLEET — disposable. Nothing in src/ is touched.
 
-   Fourteen vehicles, side-on, in a fixed 64 x 24 cell, front left. Same
+   Nineteen vehicles, side-on, in a fixed 64 x 24 cell, front left. Same
    method as pixel-arms.html: shared anchors, one outline, three values of
-   paint, and colour separated from shape so the whole sheet re-paints from
-   six hexes.
+   paint, and colour separated from shape — which is why fourteen paints cost
+   fourteen lines rather than fourteen sheets, and why every one of them is
+   available to every car here.
 
    The reason this file exists at all is that the game is already full of
    cars and none of them have ever been drawn:
@@ -84,8 +85,8 @@ canvas { image-rendering:pixelated; display:block; }
 
 <h1>Pixel fleet — cars that belong and cars that do not</h1>
 <p class="sub">
-  Fourteen vehicles, side-on in a fixed 64 × 24 cell, front left, repainted
-  from six hexes. Unlike the armoury, most of this sheet is not art waiting for
+  Nineteen vehicles, side-on in a fixed 64 × 24 cell, front left, in fourteen
+  paints — every colour available to every car on the sheet. Unlike the armoury, most of this sheet is not art waiting for
   a system — the simulation is already full of cars and has simply never shown
   one. Three of the four groups below are load-bearing prose in
   <code>src/</code> today.
@@ -101,10 +102,18 @@ canvas { image-rendering:pixelated; display:block; }
   <span class="seg" id="paint">
     <button data-v="black" aria-pressed="true">black</button>
     <button data-v="maroon">maroon</button>
+    <button data-v="candy">candy</button>
+    <button data-v="copper">copper</button>
+    <button data-v="gold">gold</button>
     <button data-v="cream">cream</button>
-    <button data-v="olive">olive</button>
-    <button data-v="blue">blue</button>
+    <button data-v="white">white</button>
+    <button data-v="silver">silver</button>
     <button data-v="primer">primer</button>
+    <button data-v="olive">olive</button>
+    <button data-v="jade">jade</button>
+    <button data-v="teal">teal</button>
+    <button data-v="blue">blue</button>
+    <button data-v="plum">plum</button>
   </span>
   <label for="livery">Livery</label>
   <span class="seg" id="livery">
@@ -150,13 +159,24 @@ canvas { image-rendering:pixelated; display:block; }
    't''T' rubber and rim · 'r' lamps · 'i' light bar · 'w''W' white panel
    'p' primer · 'q' burnt · 'k' shadow
    ====================================================================== */
+/* Fourteen, and every one of them available to every car on the sheet.
+   Kept desaturated on purpose: a 1978 street is not a toy aisle, and paint
+   that shouts louder than the tail lamps stops reading as metal. */
 const PAINT = {
   black:  ['#0f0f11', '#1c1c20', '#2e2e34'],
   maroon: ['#2a0f0e', '#4a1a17', '#6d2622'],
+  candy:  ['#3d0b09', '#6b1310', '#a5251b'],
+  copper: ['#2c1608', '#4d2a10', '#7a441c'],
+  gold:   ['#2e2109', '#544012', '#8a6a22'],
   cream:  ['#5c5443', '#8a7f66', '#b3a68a'],
-  olive:  ['#1e2417', '#333d24', '#4f6337'],
-  blue:   ['#131b26', '#22303f', '#37485c'],
+  white:  ['#4a4741', '#7a766d', '#b3ada0'],
+  silver: ['#2b2e31', '#4a4f54', '#787f86'],
   primer: ['#2a2724', '#3d3934', '#524d46'],
+  olive:  ['#1e2417', '#333d24', '#4f6337'],
+  jade:   ['#0d2019', '#173a2c', '#255a44'],
+  teal:   ['#0c2027', '#143741', '#1f5561'],
+  blue:   ['#131b26', '#22303f', '#37485c'],
+  plum:   ['#22101f', '#3b1a34', '#5a2a4e'],
 };
 const FIXED = {
   '0': '#0c0a09',
@@ -166,6 +186,7 @@ const FIXED = {
   'r': '#c2352b', 'i': '#332a22',
   'w': '#ded3bc', 'W': '#9c9083',
   'p': '#524d46', 'q': '#1c1713', 'k': '#0c0a09',
+  'W': '#8a8578',   // whitewall — its own key; 'q' is the charred shell
   'n': '#3b2519', 'm': '#5f3d27', 'M': '#855838',
 };
 function palette(name) {
@@ -306,6 +327,136 @@ const FLEET = {
     '...........00ttttttt00...................00ttttttt00............',
     '........000000ttttt0000000000000000000000000ttttt000000.........',
     '.......0kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk0........',
+  ] },
+  wedge: { name: 'The wedge', role: 'showpiece', note: "Doors that open the wrong way. Nobody who sees it forgets where.", rows: [
+    '................................................................',
+    '................................................................',
+    '................................................................',
+    '................................................................',
+    '................................................................',
+    '................................................................',
+    '...............................00000000000......................',
+    '.............................00ccccccccccc000...................',
+    '...........................00ccdddddddddddccc0..................',
+    '.........................00ccddddddddddddddddc000...............',
+    '.......................00ccdddddddddddddddddddccc0000000000.....',
+    '...000..........0000000ccddddddddddddddddddddddddcccccccccc0....',
+    '..0aaa0..000...0cccccccbbbbbbbbbbbbbbbbbbbb000000000acacarr0....',
+    '..0aaa000ccc0000000bbbbbbbbbbbbbbbbbaaaaaa00ttttttt00babarr0....',
+    '..0acccccbb00ttttt00bbbbbbbbbbbbbbbbajjjj00ttttttttt00ababb0....',
+    '..0bbbbbbb00ttttttt00bbbbbbbbbbbbbbbaaaaa0ttttttttttt0bbbbb0....',
+    '..0bbbbbbb0ttttftttt0bbbbbbbbbbbbbbbaaaaa0tttttfttttt0bbbbb0....',
+    '..0aaaaaaa0tttfffttt0aaaaaaaaaaaaaaaaaaaa0ttttffftttt0aaaaa0....',
+    '..0aaaaaaa0ttffFfftt0aaaaaaaaaaaaaaaaaaaa0tttffFffttt0aaaaa0....',
+    '...00000000tttfffttt0000000000000000000000ttttffftttt000000.....',
+    '..........0ttttftttt0....................0tttttfttttt0..........',
+    '..........00ttttttt00....................0ttttttttttt0..........',
+    '.....00000000ttttt0000000000000000000000000ttttttttt00000.......',
+    '....0kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk0......',
+  ] },
+  berlinetta: { name: 'The berlinetta', role: 'showpiece', note: "Two seats, twelve cylinders and nowhere to put anything.", rows: [
+    '................................................................',
+    '................................................................',
+    '................................................................',
+    '................................................................',
+    '................................................................',
+    '................................................................',
+    '................................................................',
+    '...........................000000000000000......................',
+    '..........................0ccccccccccccccc000...................',
+    '.......................000cdddddddddddddddccc000................',
+    '......................0cccdddddddddddddddddddccc000.............',
+    '..000.............0000cdddddddddddddddddddddddddccc0..0000000...',
+    '.0aaa000000......0ccccbbbbbbbbbbbbbbbbbbbbbbb000000000cccccrr0..',
+    '.0aaacccccc0000000bbbbbbbbbbbbbbbbaaaaaaaaaa00ttttttt00ccccrr0..',
+    '.0acbbbbbb00ttttt00bbbbbbbbbbbbbbbajjjjjjjj00ttttttttt00bbbbb0..',
+    '.0bbbbbbb00ttttttt00bbbbbbbbbbbbbbaaaaaaaaa0ttttttttttt0bbbbb0..',
+    '.0bbbbbbb0ttttftttt0bbbbbbbbbbbbbbbbbbbbbbb0tttttfttttt0bbbbb0..',
+    '.0aaaaaaa0tttfffttt0aaaaaaaaaaaaaaaaaaaaaaa0ttttffftttt0aaaaa0..',
+    '.0aaaaaaa0ttffFfftt0aaaaaaaaaaaaaaaaaaaaaaa0tttffFffttt0aaaaa0..',
+    '..00000000tttfffttt0000000000000000000000000ttttffftttt000000...',
+    '.........0ttttftttt0.......................0tttttfttttt0........',
+    '.........00ttttttt00.......................0ttttttttttt0........',
+    '....00000000ttttt0000000000000000000000000000ttttttttt00000.....',
+    '...0kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk0....',
+  ] },
+  luxcoupe: { name: 'Personal luxury', role: 'showpiece', note: "A two-door the length of a hallway. This is what respect looked like in 1978.", rows: [
+    '................................................................',
+    '................................................................',
+    '................................................................',
+    '................................000000000000000000..............',
+    '..............................00caaaaaaaaaaaaaaaaa0.............',
+    '.............................0ccda222222222222222ac00...........',
+    '.............................0dddaaaaaaaaaaaaaaaaadcc0..........',
+    '.............................0dddddddddddddadddaddddd0..........',
+    '.............................0dddddddddddddadddaddddd0..........',
+    '.00000000000000000000000000000dddddddddddddadddaddddd0000000000.',
+    '0cccccccccccccccccccccccccccccdddddddddddddaaaaadddddcccccccccc0',
+    'ffbcccccccccccccccccccccccccccdddddddddddddddddddddddbbbbbbbbbff',
+    'ffFffbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbffrff',
+    'ffFffbbbbbb0000000bbbbbbbbbbbbbbbbbbbbbbbbbbbbb0000000bbbbbffrff',
+    'ffffffffff00ttttt00fffffffffffffffffffffffffff00ttttt00fffffffff',
+    '0ffffbbbb00tWtttWt00bbbbbbbbbbbbbbbbbbbbbbbbb00tWtttWt00bbbffff0',
+    '0aaaaaaaa0ttWtftWtt0aaaaaaaaaaaaaaaaaaaaaaaaa0ttWtftWtt0aaaaaaa0',
+    '0aaaaaaaa0tWtffftWt0aaaaaaaaaaaaaaaaaaaaaaaaa0tWtffftWt0aaaaaaa0',
+    '.000000000tWffFffWt000000000000000000000000000tWffFffWt00000000.',
+    '.........0tWtffftWt0.........................0tWtffftWt0........',
+    '.........0ttWtftWtt0.........................0ttWtftWtt0........',
+    '.........00tWtttWt00.........................00tWtttWt00........',
+    '...000000000ttttt0000000000000000000000000000000ttttt00000000...',
+    '..0kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk0..',
+  ] },
+  limo: { name: 'Limousine', role: 'showpiece', note: "Somebody else drives. The back window is blind on purpose.", rows: [
+    '................................................................',
+    '................................................................',
+    '................................................................',
+    '................00000000000000000000000000000000000000..........',
+    '..............00ccccccccccccccaaacccccccccccaaaccccccc0.........',
+    '.............0ccddddddddddddddaaadddddddddddaaaaaaaaadc00.......',
+    '.............0ddddddddddddddddaaadddddddddddaaaa2222addcc0......',
+    '.............0ddddddddddddddddaaadddddddddddaaaa2222adddd0......',
+    '.............0ddddddddddddddddaaadddddddddddaaaa2222adddd0......',
+    '00000000000000ddddddddddddddddaaadddddddddddaaaa2222adddd0000000',
+    'ccccccccccccccddddddddddddddddaaadddddddddddaaaaaaaaaddddccccccc',
+    'fbbbbbbbbbbbbbddddddddddddddddaaadddddddddddaaaddddddddddbbbbbbf',
+    'fFffbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbffrf',
+    'fFffbbbbb0000000bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb0000000bbbbffrf',
+    'ffffffff00ttttt00fffffffffffffffffffffffffffffff00ttttt00fffffff',
+    'ffffbbb00tWtttWt00bbbbbbbbbbbbbbbbbbbbbbbbbbbbb00tWtttWt00bbffff',
+    'aaaaaaa0ttWtftWtt0aaaaaaaaaaaaaaaaaaaaaaaaaaaaa0ttWtftWtt0aaaaaa',
+    'aaaaaaa0tWtffftWt0aaaaaaaaaaaaaaaaaaaaaaaaaaaaa0tWtffftWt0aaaaaa',
+    '00000000tWffFffWt0000000000000000000000000000000tWffFffWt0000000',
+    '.......0tWtffftWt0.............................0tWtffftWt0......',
+    '.......0ttWtftWtt0.............................0ttWtftWtt0......',
+    '.......00tWtttWt00.............................00tWtttWt00......',
+    '..00000000ttttt00000000000000000000000000000000000ttttt0000000..',
+    '.0kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk0.',
+  ] },
+  convertible: { name: 'Convertible', role: 'showpiece', note: "Seen from three streets away, which is either the point or the problem.", rows: [
+    '................................................................',
+    '................................................................',
+    '................................................................',
+    '................................................................',
+    '................................................................',
+    '..........................00....................................',
+    '.........................0ff00..................................',
+    '.........................0ddff00.000000..0000000..0000000.......',
+    '.........................0ddddff022222200222222200bcccccb0......',
+    '..000000000000000000000000dddddda222222aa2222222aabbbbbbb0000...',
+    '.0ccccccccccccccccccccccccccccccaaaaaaaaaaaaaaaaaabbbbbbbcccc0..',
+    '0ffbcccccccccccccccccccccccbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbff0.',
+    '0ffFbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbrff0.',
+    '0ffFbbbbbbb0000000bbbbbbbbbbbbbbbbbbbbbbbbbbb0000000bbbbbbbrff0.',
+    '0ffbffffff00ttttt00fffffffffffffffffffffffff00ttttt00ffffffbff0.',
+    '.0bbbbbbb00tWtttWt00bbbbbbbbbbbbbbbbbbbbbbb00tWtttWt00bbbbbbb0..',
+    '.0aaaaaaa0ttWtftWtt0aaaaaaaaaaaaaaaaaaaaaaa0ttWtftWtt0aaaaaaa0..',
+    '.0aaaaaaa0tWtffftWt0aaaaaaaaaaaaaaaaaaaaaaa0tWtffftWt0aaaaaaa0..',
+    '..00000000tWffFffWt0000000000000000000000000tWffFffWt00000000...',
+    '.........0tWtffftWt0.......................0tWtffftWt0..........',
+    '.........0ttWtftWtt0.......................0ttWtftWtt0..........',
+    '.........00tWtttWt00.......................00tWtttWt00..........',
+    '....00000000ttttt00000000000000000000000000000ttttt00000000.....',
+    '...0kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk0....',
   ] },
   van: { name: 'Panel van', role: 'business', note: "No windows worth the name, which is either useful or the first thing noticed.", rows: [
     '................................................................',
@@ -545,6 +696,7 @@ const FLEET = {
 
 const ROLES = [
   ['yours',    'Yours',          'What the organization is seen in. Standing on one side, heat on the other.'],
+  ['showpiece','Showpieces',     'Bought because somebody will see it. standing.ts pays for that and lawEnforcement.ts charges for it.'],
   ['business', 'The business',   'Fronts and freight. businesses.ts already sells "a fleet that explains a lot of movement".'],
   ['taken',    'Taken',          'operations.ts has an operation called Boost Cars. This is both ends of it.'],
   ['theirs',   'Not yours',      'The two that arrive whatever you do, and the one that arrives once.'],
@@ -613,7 +765,7 @@ function buildPaints() {
     const box = document.createElement('div');
     box.className = 'opt';
     const c = document.createElement('canvas');
-    draw(c, FLEET.towncar.rows, Math.max(2, scale), palette(p));
+    draw(c, FLEET.luxcoupe.rows, Math.max(2, scale), palette(p));
     box.appendChild(c);
     const s = document.createElement('span'); s.textContent = p; box.appendChild(s);
     wrap.appendChild(box);
@@ -657,6 +809,8 @@ function syncControls() {
 function everything() { buildRacks(); buildPaints(); buildRamp(); }
 syncControls();
 everything();
+const _scroll = params.get('y');   // for capturing a still of a lower rack
+if (_scroll) requestAnimationFrame(() => requestAnimationFrame(() => window.scrollTo(0, Number(_scroll))));
 </script>
 </body>
 </html>
