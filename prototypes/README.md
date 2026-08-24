@@ -4,6 +4,81 @@ Not shipped. Nothing in `src/` imports anything here, and nothing here is in the
 build output — that is the point of the folder. These are things that were built
 to be looked at and then argued with.
 
+## pixel-fronts.html — the ten in businesses.ts
+
+Not buildings somebody thought would look nice. These are the ten entries in
+`config/businesses.ts`, drawn, in the order that file already sorts them by —
+and the sort is the whole point.
+
+### To look at it
+
+```bash
+open prototypes/pixel-fronts.html          # or: xdg-open
+```
+
+`?scale=4&state=seized&hour=night` — states are `trading`, `shut`, `seized`;
+hours are `day` and `night`.
+
+### The brief was already in the config
+
+Every `BusinessDef` carries a field called `legitimacy`, commented in the
+source as *“How unremarkable it looks. High legitimacy decays exposure
+faster.”* That is a visual property with a number already attached to it,
+which is a rare thing to find waiting for an artist. It runs 80 to 25:
+
+| | | |
+| --- | --- | --- |
+| 80 | Real Estate Office | should be impossible to describe afterwards |
+| 75 | Restaurant | real customers, so it has to look like it wants them |
+| 70 | Hotel | two rows of windows is the only way to get height into 40 rows |
+| 65 | Auto Shop | a bay and an office window |
+| 60 | Laundromat | machines through the glass and nothing else to look at |
+| 60 | Trucking Company | two bays; the fleet from `pixel-fleet.html` lives behind them |
+| 55 | Construction Firm | half the frontage is hoarding, which is its own cover |
+| 45 | Social Club | a curtain, a light and a door |
+| 40 | Nightclub | blank wall above, all the money spent at eye level |
+| 25 | Casino | the only one advertising, and it pays for it |
+
+So the sheet is sorted by legitimacy descending and each sprite answers one
+question: does it look as unremarkable as its number says. The **street**
+section at the bottom is the test — scan the terrace and the two you notice
+first should be the two at the bottom of the table. They are.
+
+The thing that made that work was not drawing: it was giving each front its
+own sign. A first pass put the same red band on all ten and the sort
+disappeared, because a sign is the loudest decision a frontage makes. They now
+run from a painted grey board through olive, blue and brass to two that are
+lit, and the ordering survives being looked at quickly.
+
+### Parts, again
+
+Shell, cornice, windows, shutters, sign band, shopfront, awning, canopy, neon,
+hanging sign, lamp, hoarding. Same argument as the cast and the same payoff:
+ten buildings drawn whole is ten buildings, ten drawn from parts is however
+many the game later wants.
+
+They tile. The shell runs to the party wall on both sides, so a district's
+holdings can be drawn as one terrace rather than a row of dolls' houses.
+
+### States are palette work
+
+`trading`, `shut` and `seized` are one sprite each. Shut is the same facade
+with the lights out — glass, letters, neon and lamps all remapped. Seized is
+that plus timber across the shopfront and a notice on the door. `night`
+darkens the shell and the pavement and turns the glass warm. None of it is a
+second drawing, which is the only reason a state per front is affordable.
+
+### What is actually hooked up
+
+More than the armoury, less than the fleet. Every sprite here is a
+`BusinessDef` that already exists, has a cost, a revenue, a launder capacity
+and a district — so `trading` needs nothing new at all. The other two states
+are the open question: the simulation has failing fronts and it has
+investigations, but whether a business is ever *seized* as a distinct state,
+rather than simply stopping earning, is a `sim/business.ts` question and not
+an art one. The sprite is drawn either way; it should not ship a state the
+model cannot be in.
+
 ## pixel-fleet.html — cars that belong and cars that do not
 
 Fourteen vehicles, side-on in a fixed 64 × 24 cell, front left, repainted from
