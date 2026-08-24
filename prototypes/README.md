@@ -4,11 +4,182 @@ Not shipped. Nothing in `src/` imports anything here, and nothing here is in the
 build output — that is the point of the folder. These are things that were built
 to be looked at and then argued with.
 
-## pixel-boss.html — three mockups, awaiting a pick
+## pixel-cast.html — the cast, from parts
+
+`pixel-boss.html` settled what one character is. This is the question that
+decides whether the game can have twenty of them: how to draw a cast without
+drawing a cast.
+
+Nobody in it is drawn whole. A character is a spec —
+
+```js
+{ build:'heavy', hat:'fedora', facial:'tache', garment:'tie', prop:'cigar',
+  skin:'olive', suit:'charcoal', hair:'pepper', tie:'blood' }
+```
+
+— and `compose()` stamps the parts onto one 32 × 40 grid in order: torso,
+garment, neck, face, jaw, facial hair, hair, hat, prop. Later parts win, which
+is how a brim shadows a forehead and a beard buries a mouth.
+
+### To look at it
+
+```bash
+open prototypes/pixel-cast.html          # or: xdg-open
+```
+
+`?scale=6` sets the zoom, `?only=cast|strangers|library|swaps|context` renders
+one section alone for capturing a still. **Reroll the strangers** is the button
+that matters — see below.
+
+### The one rule that makes it work
+
+Every part shares an anchor. Every face is the same ten columns wide (x11–x20),
+every torso opens on the same six (x13–x18), every jaw starts on the same row.
+That is why any moustache fits any head and any collar fits any build, and it
+is the entire reason the library multiplies instead of accumulating. Break the
+anchor for one part and that part needs a variant per head, and the whole thing
+degenerates back into a pile of sprites.
+
+Current library: 3 builds × 4 hats (or 5 hairstyles) × 7 kinds of facial hair ×
+5 garments × 5 props, over 5 skin tones, 5 cloth colours, 5 hair colours, 3
+shirts and 6 ties. Thirty-odd hand-drawn parts; the combinations run to six
+figures. Nobody needs six figures of bosses, but the game needs never to draw
+the twenty-first one.
+
+### Colour is not shape
+
+The grid holds palette *keys*, not colours; a character supplies the hexes. So
+skin, cloth, hair, shirt and tie are free — the **Colour is not shape** section
+is one spec rendered five ways twice, and it costs zero pixels. The skin ramp
+is five tones from deep to fair, all pulled warm so a face reads as belonging
+to this game's palette rather than borrowed from another one.
+
+### Strangers
+
+The **Strangers** row rolls the library at random and is the only honest test
+of a parts system: combinations nobody chose, nobody checked, and nobody drew.
+If those still read as people, the anchors hold. Anything ugly in that row is a
+part that needs fixing, not a bad roll — that is the standard the library is
+held to, and it is why the button is there.
+
+### Notes on what is in the cast
+
+The names are the game's own, out of `LEADER_FIRST_NAMES` in
+`config/factionLeaders.ts`. That list already generates women as bosses —
+Ottavia, Rosalia, Concetta, Serafina — so the cast has them, which is why the
+library carries `bun` and `bob` and why nothing about the torso assumes a man.
+
+### The open questions
+
+**Ageing.** The simulation ages people for decades and re-rolls a family's boss
+when he dies. A character's portrait should age with him, and the parts system
+makes that nearly free — `hair: 'black' → 'pepper' → 'white'`, `hair_style:
+'slick' → 'balding'`, and a `build` that widens. Nothing here does it yet, and
+the spec is stored as flat strings rather than as anything the simulation could
+drive.
+
+**Where the spec lives.** Right now a character is hand-written JSON in the
+prototype. In the game it would have to be derived from the person — seeded off
+the same RNG that makes them, so the same capo looks the same across a save and
+across a reload. That is a small function and it does not exist.
+
+**How much a face should say.** Every one of these has the same eyes. The game's
+argument is that you cannot read people, so a portrait that telegraphs mood
+would undercut `perceive()` — but a portrait that never changes at all wastes
+the one screen where the game stops and looks at somebody. Untouched here.
+
+## pixel-boss.html — three specs, and the direction that won
 
 The game has no character art. Three drafts of the same man — the boss of a
-rival family — because the thing actually being decided is not what he looks
-like but what every character drawn after him is committed to.
+rival family — drawn to three different specs, because the thing actually being
+decided is not what he looks like but what every character drawn after him is
+committed to. This is the direction that was picked; `pixel-cast.html` is what
+was built on top of it.
+
+### To look at it
+
+Open the file. No dev server, no build, no assets — it is one self-contained
+page.
+
+```bash
+open prototypes/pixel-boss.html          # or: xdg-open
+```
+
+Query string sets the controls, for capturing a still at an exact setting:
+`?scale=8&bg=ledger&grid=on`. Backgrounds are `alpha`, `ledger`, `paper`, `crt`.
+
+### The three
+
+| | Grid | Colours | Framing | Where it would live |
+| --- | --- | --- | --- | --- |
+| **A** The stamp | 24 × 24 | 6 | bust | beside a name, in a row |
+| **B** The sitting | 32 × 40 | 12 | half-figure, holds a cigar | a panel header, the sit-down |
+| **C** The standing | 32 × 48 | 9 | full figure | a district, a board |
+
+They are the same man on purpose. What varies between them is only the spec, so
+the comparison is about cost and reach rather than about taste.
+
+Each is authored in the page as rows of palette keys, one character per pixel:
+
+```js
+'........cdeddedc........',
+'........cdd00ddc........',
+```
+
+That is the whole asset pipeline, and it is deliberate — the art is source, so a
+change to a face shows up in a diff as a changed face, and nobody has to open a
+binary to review it.
+
+### What it costs, in the only two places it costs anything
+
+**Four new palette entries.** `theme.css` defines ten colours and not one of
+them is skin, because until now nothing in this interface has been a person.
+Characters need a warm three-step skin ramp and one lift above `--line` to keep
+a lapel off a shoulder. They are pulled toward the tobacco end so a face does
+not read as an asset from a different game — but they are still four tokens the
+visual system did not have, and they are marked NEW in the palette strip at the
+bottom of the page.
+
+**The CRT skin cannot have them for free.** The shipped `crt` skin is not
+monochrome, it is the sixteen CGA colours, which is worse: no brown, nothing
+near skin. Snapping each colour to its nearest CGA entry — the obvious
+automatic answer — turns every lit cheekbone bright red, because `#b3835a` is
+genuinely closer to `#ff5555` than to anything else in the set. The metric is
+not wrong; it just does not know a face is a face. The page ships a hand-picked
+CGA colour per palette key instead, and the `crt mono` background renders
+through it. So: every sprite the game gains needs that table written by hand,
+and no conversion will produce it.
+
+### The open question
+
+Which spec, and it is not a tie.
+
+**A** is the only one whose cast is affordable — twenty of these is a weekend,
+twenty of B is an art budget — and the only one that fits where character art
+would help most, which is a row of names the player cannot currently tell apart.
+It also cannot ever show state: this man has no room on him to look worried when
+his family is losing, and the game's whole subject is people whose feelings
+about you change.
+
+**B** is the one that can. It is also the only one that can hold a prop, which
+matters more than it sounds — the sit-down is the one screen where the game
+stops and looks at a person.
+
+**C** is the only one that answers a question the game is actually asking,
+because territory is about someone standing on ground. It is also the one whose
+face will never be the character.
+
+The likely real answer is A now and B later for the four or five people the game
+names repeatedly, with C parked until the territory view is something you look
+at rather than read. That is a recommendation, not a decision.
+
+## pixel-boss-silhouette.html — parked, not chosen
+
+The same three specs drawn the opposite way, off an anime reference: the man
+as a hole in the light rather than a lit portrait. It was not picked — the
+portraits were — and it is kept because two of the things it establishes
+survive the decision: character art costs nothing in palette if it has no
+skin in it, and a figure needs light behind it before it needs detail on it.
 
 ### The direction
 
@@ -28,7 +199,7 @@ argument about people, drawn.
 Open the file. No dev server, no build, no assets — one self-contained page.
 
 ```bash
-open prototypes/pixel-boss.html          # or: xdg-open
+open prototypes/pixel-boss-silhouette.html          # or: xdg-open
 ```
 
 Query string sets the controls, for capturing a still at an exact setting:
