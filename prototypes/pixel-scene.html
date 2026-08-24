@@ -1,0 +1,686 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Pixel scene — the buyer</title>
+<style>
+/* =========================================================================
+   PIXEL SCENE — the buyer. Disposable. Nothing in src/ is touched.
+
+   One composed scene rather than a sheet, and the point of it is that almost
+   nothing in it is new. The car is drawn here; everything standing in it came
+   off the sheets already on this branch:
+
+     pixel-arms.html    the long gun, the machine pistol, the .45, the snub,
+                        the sawn-off and the bundle, cropped to their bounding
+                        boxes and laid in the boot
+     pixel-cast.html    both people, straight out of compose()
+     pixel-fleet.html   the paint keys, so the car takes the same six colours
+
+   WHAT THE SCENE IS
+
+   contraband.ts, on the arms trade: "the only trade whose customers can point
+   it back at you." That line is the entire reference image. This is not a
+   shop — it is a sale, in an alley, to somebody from outside the city who now
+   knows a thing about you. The boot is open for about ninety seconds.
+
+   THE ONE THING THE LIBRARY DID NOT HAVE
+
+   Both figures are seen from behind, which the cast library cannot do: it has
+   faces and no backs of heads. `backOf()` below is a stopgap that fills the
+   face box with hair and leaves the neck — good enough for a mockup at this
+   size, and not good enough to ship. If scenes are wanted, the cast needs a
+   real `facing` axis, and that is a change to pixel-cast.html rather than
+   something to keep patching here.
+
+   Composition follows the reference: the two of them at the edges, cut by the
+   frame, the boot between them and lit by nothing in particular.
+   ========================================================================= */
+
+:root {
+  --ink-900:#0c0a09; --ink-800:#15110e; --ink-700:#1c1713; --line:#332a22;
+  --text:#e6ddcd; --text-dim:#9c9083; --text-faint:#6b6157; --brass:#c9a227;
+  --brass-dim:#7d6720; --stamp:#c2352b; --carbon:#7593a8;
+  --font-display: Bahnschrift,'Avenir Next Condensed','Arial Narrow','Segoe UI',system-ui,sans-serif;
+  --font-mono: ui-monospace,'Cascadia Mono',Consolas,'SF Mono',Menlo,monospace;
+}
+* { box-sizing:border-box; }
+body { margin:0; padding:28px 32px 64px; background:var(--ink-900); color:var(--text);
+       font-family:var(--font-mono); font-size:12px; line-height:1.55; }
+h1 { font-family:var(--font-display); font-size:22px; letter-spacing:.14em; text-transform:uppercase; margin:0 0 4px; }
+.sub { color:var(--text-dim); max-width:84ch; margin:0 0 20px; }
+h3 { font-family:var(--font-display); font-size:13px; letter-spacing:.14em; text-transform:uppercase;
+     color:var(--text-dim); margin:30px 0 4px; }
+.lede { color:var(--text-faint); margin:0 0 14px; max-width:84ch; }
+.controls { display:flex; flex-wrap:wrap; gap:18px; align-items:center; padding:10px 14px;
+            margin-bottom:20px; background:var(--ink-800); border:1px solid var(--line); }
+.controls label { color:var(--text-dim); text-transform:uppercase; letter-spacing:.1em; font-size:10px; }
+.seg { display:inline-flex; border:1px solid var(--line); }
+.seg button { background:var(--ink-700); color:var(--text-dim); border:0; border-right:1px solid var(--line);
+              padding:4px 10px; font:inherit; font-size:11px; cursor:pointer; }
+.seg button:last-child { border-right:0; }
+.seg button[aria-pressed="true"] { background:var(--brass-dim); color:var(--ink-900); }
+.frame { border:1px solid var(--line); display:inline-block; background:#000; }
+canvas { image-rendering:pixelated; display:block; }
+.from { display:flex; flex-wrap:wrap; gap:10px; margin-top:12px; }
+.from div { background:var(--ink-800); border:1px solid var(--line); padding:6px 8px; text-align:center; }
+.from span { display:block; color:var(--text-faint); font-size:10px; margin-top:3px; }
+.modal { background:var(--ink-800); border:1px solid var(--line); width:322px; }
+.modal .body { padding:12px 14px; }
+.modal .who { font-family:var(--font-display); letter-spacing:.1em; text-transform:uppercase; }
+.modal .said { color:var(--text-dim); margin:8px 0 12px; }
+.modal .reg { display:flex; gap:6px; flex-wrap:wrap; }
+.modal .reg span { border:1px solid var(--line); padding:3px 9px; color:var(--text-dim); font-size:11px; }
+.two { display:flex; gap:20px; flex-wrap:wrap; align-items:flex-start; }
+</style>
+</head>
+<body>
+
+<h1>Pixel scene — the buyer</h1>
+<p class="sub">
+  <code>contraband.ts</code> on the arms trade: <i>“the only trade whose
+  customers can point it back at you.”</i> That is the reference image. Not a
+  shop — a sale, in an alley, to somebody from outside the city who now knows
+  something about you. Almost nothing here is new: the car is drawn for this
+  scene and everything standing in it came off the sheets already on this
+  branch.
+</p>
+
+<div class="controls">
+  <label for="scale">Scale</label>
+  <span class="seg" id="scale">
+    <button data-v="2">2x</button><button data-v="3" aria-pressed="true">3x</button>
+    <button data-v="4">4x</button><button data-v="5">5x</button>
+  </span>
+  <label for="hour">Hour</label>
+  <span class="seg" id="hour">
+    <button data-v="dusk" aria-pressed="true">dusk</button>
+    <button data-v="night">night</button>
+  </span>
+  <label for="lid">Boot</label>
+  <span class="seg" id="lid">
+    <button data-v="open" aria-pressed="true">open</button>
+    <button data-v="shut">shut</button>
+  </span>
+</div>
+
+<div class="two">
+  <div class="frame"><canvas id="scene"></canvas></div>
+  <div class="modal">
+    <div class="frame" style="border:0;border-bottom:1px solid var(--line);display:block">
+      <canvas id="scene2"></canvas>
+    </div>
+    <div class="body">
+      <div class="who">The buyer &middot; not from here</div>
+      <div class="said">“Twelve crates. And after tonight you know my face and
+        I know your street, so we are both being careful now.”</div>
+      <div class="reg"><span>Press</span><span>Offer</span><span>Listen</span><span>Walk</span></div>
+    </div>
+  </div>
+</div>
+
+<h3>What is in the boot, and where it came from</h3>
+<p class="lede">Every item below is a sprite from another file on this branch, cropped to its bounding box and laid down. None of them was drawn twice.</p>
+<div class="from" id="from"></div>
+
+<script>
+/* ======================================================================
+   1. PALETTES — one per source sheet, because each sheet owns its own
+   ====================================================================== */
+const CAR = {          /* keys match pixel-fleet.html; this is `maroon` */
+  '0': '#0c0a09', 'a': '#2a0f0e', 'b': '#4a1a17', 'c': '#6d2622',
+  'f': '#9c9083', 'F': '#ded3bc', 'r': '#6d1b16', 'R': '#c2352b',
+  'j': '#15110e', 'J': '#241d18', 'k': '#2a2d31', 'K': '#3d4148',
+  'n': '#3b2519', 'N': '#5f3d27', 'M': '#855838', 'o': '#7d6720',
+  'v': '#1c2229', 'V': '#2b3540',
+};
+const ARMS = {         /* pixel-arms.html, blued */
+  '0': '#0c0a09', '1': '#171a1e', '2': '#2b333a', '3': '#3d5464', '4': '#6b7f8c',
+  '5': '#3b2519', '6': '#5f3d27', '7': '#855838', '8': '#7d6720', '9': '#c9a227',
+  'q': '#6d1b16', 'r': '#c2352b', 'R': '#dd5347', 'o': '#4f6337', 'p': '#85a45c',
+  'g': '#15110e', 'w': '#ded3bc',
+};
+const SKINS = { deep:['#2e1c14','#4a2f21','#6b452f'], brown:['#3b2519','#5f3d27','#855838'],
+                olive:['#5c3a26','#8a5c3c','#b3835a'], tan:['#6b4a33','#9c6f4c','#c2926a'],
+                fair:['#7a5744','#b08462','#d6ae8a'] };
+const SUITS = { charcoal:['#14120f','#2b2723','#443e38'], brown:['#1a130d','#332a22','#4a3d31'],
+                navy:['#10141a','#232c38','#3a4756'], olive:['#14170f','#2b3122','#434a33'],
+                bone:['#2a2620','#4a443a','#6b6355'] };
+const HAIRS = { black:['#17130f','#2a231c'], brown:['#2e2118','#4a382a'], pepper:['#3b352e','#7a7168'],
+                grey:['#6b6157','#9c9083'], white:['#9c9083','#ded3bc'] };
+const SHIRTS = { white:'#e6ddcd', cream:'#ded3bc', grey:'#b0a89c' };
+const TIES = { blood:'#c2352b', brass:'#c9a227', carbon:'#4a6f7a', olive:'#6b7f4a',
+               deep:'#6d1b16', bone:'#ded3bc' };
+const HATFELT = { black:'#15110e', brown:'#241d18', ash:'#332a22', bone:'#6b6157' };
+function figPalette(p) {
+  const sk = SKINS[p.skin], su = SUITS[p.suit], ha = HAIRS[p.hair];
+  return { '0':'#0c0a09', '1':HATFELT[p.felt||'black'], 'h':su[0],
+           '2':su[0], '3':su[1], '4':su[2], '7':SHIRTS[p.shirt||'white'],
+           'b':TIES[p.tie||'blood'], '9':'#c9a227', '5':ha[0], '6':ha[1],
+           'c':sk[0], 'd':sk[1], 'e':sk[2], '8':'#7d6720', 'a':'#9c9083' };
+}
+/* Night is a straight multiply over the finished frame. Everything on this
+   branch has treated light as palette work; here it is one pass instead,
+   because the scene is a composite of five palettes and remapping all of
+   them would be five times the work for the same result. */
+function dim(ctx, w, h, amount) {
+  ctx.globalCompositeOperation = 'source-atop';
+  ctx.fillStyle = 'rgba(10,14,26,' + amount + ')';
+  ctx.fillRect(0, 0, w, h);
+  ctx.globalCompositeOperation = 'source-over';
+}
+
+/* ======================================================================
+   2. THE PIECES
+   ====================================================================== */
+const PARTS = {
+  car: [
+    '.....aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.....',
+    '.....aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.....',
+    '...cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc...',
+    '...cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc...',
+    '...bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb...',
+    '...bbbbaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaabbbb...',
+    '...bbbbaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaabbbb...',
+    '...bbbbaabbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbaabbbb...',
+    '...bbbbaabbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbaabbbb...',
+    '...bbbbaabbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbaabbbb...',
+    '...bbbbaabbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbaabbbb...',
+    '...bbbbaabbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbaabbbb...',
+    '...bbbbaabbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbaabbbb...',
+    '...bbbbaabbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbaabbbb...',
+    '...bbbbaabbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbaabbbb...',
+    '...bbbbaabbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbaabbbb...',
+    '...bbbbaabbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbaabbbb...',
+    '...bbbbaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaabbbb...',
+    '...bbbbaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaabbbb...',
+    '...bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbffffffffbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb...',
+    '...bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbffffffffbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb...',
+    '.cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc.',
+    '.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.',
+    '.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.',
+    '.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.',
+    '...aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa...',
+    '...jjJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJjj...',
+    '...jjJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJjj...',
+    '...jjJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJjj...',
+    '...jjJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJjj...',
+    '...jjJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJjj...',
+    '...jjJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJjj...',
+    '...jjJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJjj...',
+    '...jjJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJjj...',
+    '...jjJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJjj...',
+    '...jjJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJjj...',
+    '...jjJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJjj...',
+    '...jjJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJjj...',
+    '...jjJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJjj...',
+    '...jjJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJjj...',
+    '...jjJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJjj...',
+    '...jjJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJjj...',
+    '...jjJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJjj...',
+    '...jjJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJjj...',
+    '...jjJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJjj...',
+    '...jjJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJjj...',
+    '...jjJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJjj...',
+    '...jjJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJjj...',
+    '...jjJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJjj...',
+    '...jjJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJjj...',
+    '...aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa...',
+    '...aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa...',
+    '.cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc.',
+    '.cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc.',
+    '.bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.',
+    '.bbbrrrrrrrrrrrrrrrbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbrrrrrrrrrrrrrrrbbb.',
+    '.bbbrRRRRRRRRRRRRRrbbbbbbbbbbbfffffffffffffffffbbbbbbbbbbrRRRRRRRRRRRRRrbbb.',
+    '.bbbrRRRRRRRRRRRRRrbbbbbbbbbbbfFFFFFFFFFFFFFFFfbbbbbbbbbbrRRRRRRRRRRRRRrbbb.',
+    '.bbbrRRRRRRRRRRRRRrbbbbbbbbbbbfFFFFFFFFFFFFFFFfbbbbbbbbbbrRRRRRRRRRRRRRrbbb.',
+    '.bbbrRRRRRRRRRRRRRrbbbbbbbbbbbfFFfffffffffffFFfbbbbbbbbbbrRRRRRRRRRRRRRrbbb.',
+    '.bbbrRRRRRRRRRRRRRrbbbbbbbbbbbfFFfffffffffffFFfbbbbbbbbbbrRRRRRRRRRRRRRrbbb.',
+    '.bbbrrrrrrrrrrrrrrrbbbbbbbbbbbfFFFFFFFFFFFFFFFfbbbbbbbbbbrrrrrrrrrrrrrrrbbb.',
+    '.bbbbbbbbbbbbbbbbbbbbbbbbbbbbbfffffffffffffffffbbbbbbbbbbbbbbbbbbbbbbbbbbbb.',
+    '.bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.',
+    'ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff',
+    'FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF',
+    'FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF',
+    'ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff',
+    'kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk',
+    'kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk',
+    '............................................................................',
+    '............................................................................'
+  ],
+  vest: [
+    '.vvvvvvv........vvvvvvv.',
+    '.vVVVVVv........vVVVVVv.',
+    '.vVVVVVv........vVVVVVv.',
+    '.vVVVVVvvvvvvvvvvVVVVVv.',
+    '.vVVVVVvVVVVVVVVvVVVVVv.',
+    '.vvvvvvvVVvvvvVVvvvvvvv.',
+    '...vVVVVVVvVVvVVVVVVv...',
+    '...vvvvvvvvVVvvvvvvvv...',
+    '...vvvvvvvvVVvvvvvvvv...',
+    '...vVVVVVVvFVvVVVVVVv...',
+    '...vVVVVVVvVVvVVVVVVv...',
+    '...vvvvvvvvVVvvvvvvvv...',
+    '...vvvvvvvvVVvvvvvvvv...',
+    '...vVVVVVVvVVvVVVVVVv...',
+    '...vVVVVVVvvvvVVVVVVv...',
+    '...vvvvvvvvvvvvvvvvvv...'
+  ],
+  bin: [
+    'kkkkkkkkkkkkkkkkkkkkkk',
+    'kKKKKKKKkkkkkkKKKKKKKk',
+    'kKKKKKKKKKKKKKKKKKKKKk',
+    'kKKKKKKKKKKKKKKKKKKKKk',
+    'kkkkkkkkkkkkkkkkkkkkkk',
+    'kKKKKKKKKKKKKKKKKKKKKk',
+    'kKKKKKKKKKKKKKKKKKKKKk',
+    'kKKkKKKKkKKKKkKKKKkKKk',
+    'kKKkKKKKkKKKKkKKKKkKKk',
+    'kKKkKKKKkKKKKkKKKKkKKk',
+    'kKKkKKKKkKKKKkKKKKkKKk',
+    'kKKkKKKKkKKKKkKKKKkKKk',
+    'kKKkKKKKkKKKKkKKKKkKKk',
+    'kKKkKKKKkKKKKkKKKKkKKk',
+    'kKKkKKKKkKKKKkKKKKkKKk',
+    'kKKkKKKKkKKKKkKKKKkKKk',
+    'kKKkKKKKkKKKKkKKKKkKKk',
+    'kKKkKKKKkKKKKkKKKKkKKk',
+    'kKKkKKKKkKKKKkKKKKkKKk',
+    'kKKkKKKKkKKKKkKKKKkKKk',
+    'kKKkKKKKkKKKKkKKKKkKKk',
+    'kKKkKKKKkKKKKkKKKKkKKk',
+    'kKKkKKKKkKKKKkKKKKkKKk',
+    'kKKkKKKKkKKKKkKKKKkKKk',
+    'kKKkKKKKkKKKKkKKKKkKKk',
+    'kkkkkkkkkkkkkkkkkkkkkk'
+  ],
+  crate: [
+    'nnnnnnnnnnnnnnnnnnnnnnnnnn',
+    'nnnMMMMMMMMMMMMMMMMMMMMnnn',
+    'nnnMMMMMMMMMMMMMMMMMMMMnnn',
+    'nnnNNNNNNNNNNNNNNNNNNNNnnn',
+    'nnnNNNNNNNNNNNNNNNNNNNNnnn',
+    'nnnNNNNNNNNNNNNNNNNNNNNnnn',
+    'nnnnnnnnnnnnnnnnnnnnnnnnnn',
+    'nnnnnnnnnnnnnnnnnnnnnnnnnn',
+    'nnnNNNNNNNNNNNNNNNNNNNNnnn',
+    'nnnNNoNoNoNoNoNoNoNNNNNnnn',
+    'nnnNNNNNNNNNNNNNNNNNNNNnnn',
+    'nnnNNNNNNNNNNNNNNNNNNNNnnn',
+    'nnnnnnnnnnnnnnnnnnnnnnnnnn',
+    'nnnnnnnnnnnnnnnnnnnnnnnnnn',
+    'nnnNNNNNNNNNNNNNNNNNNNNnnn',
+    'nnnNNNNNNNNNNNNNNNNNNNNnnn',
+    'nnnNNNNNNNNNNNNNNNNNNNNnnn',
+    'nnnNNNNNNNNNNNNNNNNNNNNnnn',
+    'nnnNNNNNNNNNNNNNNNNNNNNnnn',
+    'nnnnnnnnnnnnnnnnnnnnnnnnnn'
+  ],
+};
+const KIT = {
+  heirloom: [
+    '...................0..........................',
+    '..................0100000000000000............',
+    '.0000000000000000012222222222222220...........',
+    '023232323232323232321111111111111200..........',
+    '022222222222222222221111111111177777000.......',
+    '022222222222222222221111111111176666665000....',
+    '.0000555555000000002111111111111766666666500..',
+    '....05666650......022222222222222766666666650.',
+    '....05666650.......001111110200200766666666650',
+    '....05666650........0122221022220.076666666650',
+    '....05666650........012222100000...07666666650',
+    '....05555550........01222210........0055555550',
+    '.....000000.........01222210..........0000000.',
+    '....................01111110..................'
+  ],
+  mac: [
+    '........00000000000000000.........',
+    '.......03333333333333333300000000.',
+    '.000000022222222222222222111111110',
+    '0121212122111111111111122111111110',
+    '0121212122111111111111122000000110',
+    '0121212122222222222222222111111110',
+    '.000000022222222222222222111111110',
+    '.......02222222222222222200000000.',
+    '........000011110020ggggg0........',
+    '...........012210022ggggg0........',
+    '...........012210.00ggggg0........',
+    '...........012210...0ggggg0.......',
+    '...........012210...0ggggg0.......',
+    '...........011110....00000........'
+  ],
+  auto45: [
+    '.00000000000000000000...',
+    '0333333333333333333330..',
+    '0222222222222222111120..',
+    '0111111222222222222220..',
+    '0222222222222222222220..',
+    '.0000000002222222222220.',
+    '........02222gggggggg20.',
+    '........02020g555555g0..',
+    '........02020g566665g0..',
+    '........022200569665gg0.',
+    '.........000.0566665gg0.',
+    '.............0555555gg0.',
+    '..............0gggggggg0'
+  ],
+  snub: [
+    '................00....',
+    '........00000000110...',
+    '.00000002222222220....',
+    '033333333233322220....',
+    '022222222234322220....',
+    '.00000000233322220....',
+    '........02222222200...',
+    '.........000200gggg0..',
+    '...........0222gggg0..',
+    '............0000gggg0.',
+    '...............0gggg0.',
+    '................0gggg0',
+    '.................0000.'
+  ],
+  lupara: [
+    '..................000000...........',
+    '.00000000000000000222222000000.....',
+    '0333333333333333332111155555550....',
+    '02222222222222222221111556666660...',
+    '03333333333333333321111256777760...',
+    '02222222222222222221111256777760...',
+    '.00000000000000000222222067777650..',
+    '..................000200266666650..',
+    '....................02222666666550.',
+    '.....................0000055555550.',
+    '..........................055555550',
+    '...........................0000000.'
+  ],
+  bundle: [
+    '.0000000000000000000000000....0.',
+    '0qqqRRR111RRRRRRRRR111RRRR0.0080',
+    '0qqqrrr111rrrrrrrrr111rrrr00880.',
+    '0qqqrrr111rrrrrrrrr111rrrr0800..',
+    '0qqqqqq111qqqqqqqqq111qqqq80....',
+    '.0qqqRR111RRRRRRRRR111RRRRR0....',
+    '.0qqqrr111rrrrrrrrr111rrrrr0....',
+    '.0qqqrr111rrrrrrrrr111rrrrr0....',
+    '.0qqqqq111qqqqqqqqq111qqqqq0....',
+    '..0qqqR111RRRRRRRRR111RRRRRR0...',
+    '..0qqqr111rrrrrrrrr111rrrrrr0...',
+    '..0qqqr111rrrrrrrrr111rrrrrr0...',
+    '..0qqqq111qqqqqqqqq111qqqqqq0...',
+    '...0000000000000000000000000....'
+  ],
+  tin: [
+    '.0000000000000000.',
+    '033333333333333330',
+    '033333333333333330',
+    '022222222222222220',
+    '011111111111111110',
+    '022222222222222220',
+    '022888888888888220',
+    '022222222222222220',
+    '011111111111111110',
+    '.0000000000000000.'
+  ],
+  charge: [
+    '...............................0.',
+    '.............................0080',
+    '.00000..................00000880.',
+    '0111110000000000000000001111800..',
+    '012221333333333333333333122210...',
+    '012221222222222222222222122210...',
+    '012221222222222222222222122210...',
+    '012221222222222222222222122210...',
+    '012221222222222222222222122210...',
+    '012221222222222222222222122210...',
+    '012221111111111111111111122210...',
+    '011111000000000000000000111110...',
+    '.00000..................00000....'
+  ],
+};
+const FIGURES = {
+  boss: { name: 'Salvatore Falcone', pal: {"name": "Salvatore Falcone", "build": "heavy", "hat": "fedora", "hair_style": "none", "facial": "tache", "garment": "tie", "prop": "cigar", "skin": "olive", "suit": "charcoal", "hair": "pepper", "tie": "blood", "felt": "black"}, rows: [
+    '................................',
+    '................................',
+    '............00000000............',
+    '...........0111111110...........',
+    '..........012112211210..........',
+    '..........012112211210..........',
+    '..........011111111110..........',
+    '.........0hhhhhhhhhhhh0.........',
+    '......0111111111111111110.......',
+    '.......000000000000000000.......',
+    '...........cccccccccc...........',
+    '...........cc0dccd0cc...........',
+    '...........cdddccdddc...........',
+    '...........cdeddcdedc...........',
+    '...........cded00dedc...........',
+    '..........ccd555555dcc..........',
+    '..........ccddd00dddcc..........',
+    '..........ccddeeeeddcc..........',
+    '...........cddddddddc...........',
+    '............cddddddc............',
+    '.............cccccc.............',
+    '.............cccccc.............',
+    '.........3333cccccc3333.........',
+    '.......3333337cccc7333333.......',
+    '.....333333347bbbb74333333......',
+    '...03333333347bbbb743333333330..',
+    '..022333333347bbbb743333333220..',
+    '..a22333333347bbbb743333333220..',
+    '..022333333347bbbb743333333220..',
+    '.a022333333347bbbb743333333220..',
+    '..022333333347b99b743333333220..',
+    '.a022333333347bbbb743333333220..',
+    '..0223dd333347bbbb743333333220..',
+    'b888ded9333347bbbb743333333220..',
+    '..02cccc333347bbbb743333333220..',
+    '..0223333333433333343333333220..',
+    '..0223333333433333343333333220..',
+    '..0223333333433333343333333220..',
+    '..0223333333433333343333333220..',
+    '..0000000000000000000000000000..'
+  ] },
+  buyer: { name: 'The buyer', pal: {"build": "regular", "hat": "none", "hair_style": "slick", "facial": "none", "garment": "roll", "prop": "none", "skin": "tan", "suit": "charcoal", "hair": "black", "shirt": "grey"}, rows: [
+    '................................',
+    '................................',
+    '................................',
+    '................................',
+    '................................',
+    '..............0000..............',
+    '.............555555.............',
+    '............55555555............',
+    '...........5555555555...........',
+    '..........555555555555..........',
+    '...........cddddddddc...........',
+    '...........cc0dccd0cc...........',
+    '...........cdddccdddc...........',
+    '...........cdeddcdedc...........',
+    '...........cded00dedc...........',
+    '...........cddddddddc...........',
+    '...........cddd00dddc...........',
+    '...........cddeeeeddc...........',
+    '............cddddddc............',
+    '.............cddddc.............',
+    '..............cccc..............',
+    '..............cccc..............',
+    '..........3334cccc4333..........',
+    '........3333344cc4433333........',
+    '......33333344444444333333......',
+    '.....0333333444444443333330.....',
+    '....033333334444444433333330....',
+    '....022333334444444433333220....',
+    '....022333334444444433333220....',
+    '....022333334444444433333220....',
+    '....022333334444444433333220....',
+    '....022333334444444433333220....',
+    '....022333334444444433333220....',
+    '....022333334444444433333220....',
+    '....022333334333333433333220....',
+    '....022333334333333433333220....',
+    '....022333334333333433333220....',
+    '....022333334333333433333220....',
+    '....022333334333333433333220....',
+    '....000000000000000000000000....',
+  ] },
+};
+
+/* ======================================================================
+   3. backOf() — the stopgap
+
+   The cast library has faces and no backs of heads. This fills the face box
+   with hair and leaves the neck, which is enough at 32 x 40 and is not a
+   substitute for a real `facing` axis in pixel-cast.html.
+   ====================================================================== */
+/* The cast stops at the waist because it was drawn for a panel. A scene needs
+   the rest of him, and repeating the coat's last row down to the frame is the
+   same class of stopgap as backOf(): fine at this size, and a sign that the
+   cast wants a full-figure variant rather than more patching here. */
+function extendTo(rows, h) {
+  const outRows = rows.slice(0, rows.length - 1);
+  const hem = outRows[outRows.length - 1];
+  /* One dark column down the middle so a full-length coat is a coat rather
+     than a slab. */
+  const fold = hem.split('');
+  const mid = Math.floor(fold.length / 2);
+  if (fold[mid] !== '.') { fold[mid] = '2'; fold[mid - 1] = '2'; }
+  while (outRows.length < h - 1) outRows.push(fold.join(''));
+  outRows.push(rows[rows.length - 1]);
+  return outRows;
+}
+
+function backOf(rows) {
+  const g = rows.map((r) => r.split(''));
+  for (let y = 10; y < 20; y++)                    // the face box becomes hair
+    for (let x = 10; x < 22; x++)
+      if (g[y][x] !== '.') g[y][x] = '5';
+  for (let x = 13; x < 19; x++) if (g[11][x] !== '.') g[11][x] = '6';
+  for (let y = 20; y < 23; y++)                    // neck stays skin
+    for (let x = 14; x < 18; x++)
+      if (g[y][x] !== '.') g[y][x] = 'c';
+  for (let y = 22; y < g.length; y++)              // a man's back has no tie on it
+    for (let x = 0; x < g[y].length; x++)
+      if ('7b9'.includes(g[y][x])) g[y][x] = '3';
+  return g.map((r) => r.join(''));
+}
+
+/* ======================================================================
+   4. RENDER
+   ====================================================================== */
+const W = 160, H = 96;
+const params = new URLSearchParams(location.search);
+let scale = Number(params.get('scale')) || 3;
+let hour = params.get('hour') || 'dusk';
+let lid = params.get('lid') || 'open';
+
+function paint(ctx, rows, s, pal, ox, oy, y0, y1) {
+  for (let y = (y0 || 0); y < (y1 === undefined ? rows.length : y1); y++) {
+    for (let x = 0; x < rows[y].length; x++) {
+      const k = rows[y][x];
+      if (k === '.') continue;
+      const hex = pal[k];
+      if (!hex) { console.warn('no colour for', k); continue; }
+      ctx.fillStyle = hex;
+      ctx.fillRect((x + ox) * s, (y + oy) * s, s, s);
+    }
+  }
+}
+
+/* Where everything goes. Item positions are scene coordinates, not car ones,
+   because the boot is a place in a picture rather than a slot in a widget. */
+const LOADOUT = [
+  ['heirloom', 37, 36],
+  ['vest',     78, 39],
+  ['lupara',   37, 50],
+  ['mac',      64, 50],
+  ['bundle',   72, 36],
+  ['snub',     40, 44],
+];
+
+function drawScene(canvas, s) {
+  canvas.width = W * s; canvas.height = H * s;
+  const ctx = canvas.getContext('2d');
+  ctx.imageSmoothingEnabled = false;
+
+  const F = (x, y, w, h, hex) => { ctx.fillStyle = hex; ctx.fillRect(x * s, y * s, w * s, h * s); };
+
+  F(0, 0, W, 14, '#1c1713');                       // the wall, far off
+  for (let y = 2; y < 14; y += 3) F(0, y, W, 1, '#15110e');
+  F(0, 13, W, 3, '#0f0d0b');                       // where it meets the ground
+  F(0, 17, W, H - 17, '#241d18');                  // the alley
+  for (let x = 0; x < W; x += 29) F(x, 17, 1, H - 17, '#1c1713');
+  F(0, 30, W, 1, '#2b241d');
+
+  paint(ctx, PARTS.bin, s, CAR, 116, 0);
+  paint(ctx, PARTS.crate, s, CAR, 132, 42);
+
+  const carX = 32, carY = 12;
+  if (lid === 'open') {
+    paint(ctx, PARTS.car, s, CAR, carX, carY);
+    LOADOUT.forEach(([k, x, y]) => paint(ctx, k === 'vest' ? PARTS.vest : KIT[k], s,
+                                         k === 'vest' ? CAR : ARMS, x, y));
+  } else {
+    /* Shut, it is a car. That is the whole argument for the scene existing. */
+    paint(ctx, PARTS.car, s, CAR, carX, carY, 52, 72);
+    F(carX + 1, carY + 24, 74, 28, '#4a1a17');
+    F(carX + 1, carY + 24, 74, 1, '#6d2622');
+    F(carX + 30, carY + 38, 16, 3, '#9c9083');
+  }
+
+  const boss = FIGURES.boss, buyer = FIGURES.buyer;
+  paint(ctx, extendTo(backOf(buyer.rows), 70), s, figPalette(buyer.pal), 8, 26);
+  paint(ctx, extendTo(backOf(boss.rows), 70), s, figPalette(boss.pal), 104, 26);
+
+  F(0, H - 2, W, 2, '#15110e');
+  if (hour === 'night') dim(ctx, canvas.width, canvas.height, 0.5);
+}
+
+function buildFrom() {
+  const wrap = document.getElementById('from');
+  wrap.innerHTML = '';
+  const src = { vest: 'drawn here', heirloom: 'pixel-arms', mac: 'pixel-arms', lupara: 'pixel-arms',
+                auto45: 'pixel-arms', snub: 'pixel-arms', bundle: 'pixel-arms', tin: 'pixel-arms' };
+  LOADOUT.forEach(([k]) => {
+    const rows = k === 'vest' ? PARTS.vest : KIT[k];
+    const box = document.createElement('div');
+    const c = document.createElement('canvas');
+    c.width = rows[0].length * 2; c.height = rows.length * 2;
+    const ctx = c.getContext('2d'); ctx.imageSmoothingEnabled = false;
+    paint(ctx, rows, 2, k === 'vest' ? CAR : ARMS, 0, 0);
+    box.appendChild(c);
+    const sp = document.createElement('span'); sp.textContent = src[k];
+    box.appendChild(sp);
+    wrap.appendChild(box);
+  });
+}
+
+function wire(id, apply) {
+  const box = document.getElementById(id);
+  box.addEventListener('click', (e) => {
+    const btn = e.target.closest('button');
+    if (!btn) return;
+    [...box.querySelectorAll('button')].forEach((b) => b.setAttribute('aria-pressed', String(b === btn)));
+    apply(btn.dataset.v);
+  });
+}
+wire('scale', (v) => { scale = Number(v); everything(); });
+wire('hour', (v) => { hour = v; everything(); });
+wire('lid', (v) => { lid = v; everything(); });
+
+function syncControls() {
+  [['scale', String(scale)], ['hour', hour], ['lid', lid]].forEach(([id, v]) => {
+    [...document.getElementById(id).querySelectorAll('button')].forEach((b) =>
+      b.setAttribute('aria-pressed', String(b.dataset.v === v)));
+  });
+}
+function everything() {
+  drawScene(document.getElementById('scene'), scale);
+  drawScene(document.getElementById('scene2'), 2);
+  buildFrom();
+}
+syncControls();
+everything();
+</script>
+</body>
+</html>
