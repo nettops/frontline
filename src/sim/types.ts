@@ -499,6 +499,48 @@ export interface ActiveOperation {
    * existed do not have one; read it through `approachOf`, never directly.
    */
   approach?: ApproachId;
+  /**
+   * The score this belongs to, if any.
+   *
+   * On a setup it says which score the gear goes into. On the job at the end
+   * of it, it says which score to spend the kit and settle. Optional because
+   * saves written before scores existed do not have one, and because most jobs
+   * are still just jobs.
+   */
+  scoreId?: Id;
+}
+
+/**
+ * A job you are building up to.
+ *
+ * One live score per target, held for a window rather than a stage count: the
+ * thing that makes this a caper instead of a permanent unlock is that it
+ * expires. See `scores.ts` for the machine and `config/scores.ts` for the
+ * table.
+ */
+export interface Score {
+  id: Id;
+  /** The job at the end of it. An existing `OperationDef.id`. */
+  defId: string;
+  territoryId: string;
+  openedDay: number;
+  /** The day the window shuts. Prep is wasted if the job has not run. */
+  dueDay: number;
+  /** Gear in hand for this score, by `GearId`. Spent when it fires. */
+  kit: string[];
+  /** Setups attempted and blown. Each one raised alertness. */
+  botched: string[];
+  /** 0..100, subtracted from the main job's odds. */
+  alertness: number;
+  /** The man watching the place, unavailable until it fires or expires. */
+  manId: Id;
+  /**
+   * `open` while setups can run, `running` once the job itself is out, and
+   * then settled one way or the other. Not in the design note, which described
+   * the lifecycle without naming the field that carries it.
+   */
+  status: 'open' | 'running' | 'done' | 'expired';
+  settledDay?: number;
 }
 
 export interface OperationResult {
@@ -674,7 +716,7 @@ export interface Promised {
 export interface EvidenceTrace {
   id: Id;
   day: number;
-  source: 'operation' | 'violence' | 'finance' | 'informant';
+  source: 'operation' | 'violence' | 'finance' | 'informant' | 'disposal';
   /** 0..100 contribution to a future case. Decays once the trail goes cold. */
   strength: number;
   npcIds: Id[];
@@ -1569,6 +1611,17 @@ export interface GameState {
    * missing data.
    */
   leaks?: Leak[];
+
+  /**
+   * Jobs you are building up to, and how far along each one is.
+   *
+   * Optional with a lazy initialiser in `scores.ts`, the same idiom as
+   * `promises`, `civic`, `orders` and `possessions` — so `SAVE_VERSION` does
+   * not move and a save written before scores existed loads with nobody
+   * planning anything, which for those saves is exactly true. Not in
+   * `validate()`, for the same reason none of the others are.
+   */
+  scores?: Score[];
 
   /** Counters and one-off markers. Cheaper than adding a field per flag. */
   flags: Record<string, number>;

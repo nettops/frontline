@@ -1,8 +1,11 @@
 # Scores: jobs you have to build before you can do them
 
-**Status: proposal. Nothing here is built.** Revised 24 Aug 2026 after the heat
-and evidence work, which changed both the numbers this rests on and whether the
-central mechanic has anywhere to land.
+**Status: phase one built, 24 Aug 2026.** Revised earlier the same day after the
+heat and evidence work, which changed both the numbers this rests on and whether
+the central mechanic had anywhere to land. What shipped is in
+`config/scores.ts`, `sim/scores.ts`, the setup branch of `sim/operations.ts`,
+the Operations panel, `scores.test.ts` and the `RUNS_SCORES` arm of
+`ladder.probe.test.ts`. §8 records what the arm measured and what it changed.
 
 | | proposal |
 |---|---|
@@ -338,3 +341,168 @@ It does not touch the resolution roll, the consequence table, approaches, heat,
 or any existing job's numbers. A player who never opens a score plays exactly
 the game that exists today, which is also what makes the paired measurement mean
 anything.
+
+---
+
+## 8. What the arm measured, and what it moved
+
+Thirty-six careers, 300 days, the same seeds as every other bar in
+`ladder.probe.test.ts`, against the same bot with the feature switched off.
+
+### 8.1 Take-up
+
+    careers opening at least one score   35/36
+    first score, 25th / median / 75th    day 70 / 89 / 141
+    opened 437 · 245 reached the night · 148 expired · 421 targets run bare
+    setups 2,080 run, 1,319 landed
+    pieces in hand on the night   0:3  1:2  2:2  3:202  4:2  5:34
+
+Day 89 is the day the tier-4 board opens, which is what §0.2 asked for.
+
+### 8.2 The mechanic itself
+
+    odds at launch, prepared   61%   (245 nights)
+                        bare   43%   (421 nights)
+    bodies sent, prepared 3 against bare 4
+    the groundwork bill, median career $62,933
+
+**This is the row that matters.** The same targets done two ways, and a
+prepared night is eighteen points better with one fewer man in it.
+
+### 8.3 What it costs the career, and why no bar sits on it
+
+    estate difference, 25th / median / 75th
+      -$592,941 / -$61,322 / +$330,715
+    careers that came out ahead   17/35
+    heat-weeks                    -34
+
+The first version of the fourth test asserted `pairedGap > 0` on the estate. A
+sweep of the setup stakes at 100%, 50%, 25% and 10% returned **-61,322 /
++81,306 / -61,322 / +68,318** — two different stake scales giving the same
+figure to the dollar, and no trend at all.
+
+That is the median of thirty-five paired career differences landing on one
+career, and which career that is moves for reasons unrelated to what is being
+swept. **The median of this quantity at n=36 cannot price this feature**, and a
+bar on it would have been a coin flip wearing a threshold — instance 40 of the
+project's standing failure mode, caught by sweeping rather than by reasoning.
+
+So the stakes stayed where the fiction put them, and the bars moved to
+quantities the arm can carry: the night goes better, at least a third of
+careers come out ahead, and not all of them do.
+
+### 8.4 What the measurement changed
+
+Two defects and two mispricings, all found by the arm and none visible without
+it.
+
+**A second job could spend the same kit.** `scoreOn` returned running scores as
+well as open ones, so a second launch against the same target picked up the same
+gear, took the same crew discount, and whichever job resolved first closed the
+score out from under the other. The probe reported 632 prepared jobs against 479
+scores, which is how it was found.
+
+**The bot ran 143 jobs bare with the gear three days away.** `setupsLeft`
+excludes setups that are currently out, so on its own it reads "everything is
+running" as "everything is done".
+
+**Setups were priced as jobs rather than as groundwork.** They failed 47% of the
+time at moderate and high risk, paid nothing, and cost days and bodies. Now all
+five are `risk: 'low'`, cheaper, shorter, and land 63% of the time. The paired
+estate gap moved from -$396,479 to roughly zero on that change alone.
+
+**The gear was too weak for what it cost.** Odds contributions and crew relief
+both went up; a full kit is now +43 points and four fewer bodies.
+
+## 9. Why windows shut
+
+"A third of scores expire" is a number with at least six meanings, two of which
+are defects and four of which are the feature working. So the expiry reason was
+sampled on every day of every open score and tallied at the moment it shut.
+
+    148 of 437 windows shut. On the last day —
+      too hot to work    53
+      ready, not picked  42
+      laying low         33
+      still preparing    11
+      could not stake it  5
+      nobody to send      4
+
+    across every day a doomed score ever stood (3,996 days) —
+      too hot to work    39%
+      still preparing    21%
+      ready, not picked  18%
+      laying low         14%
+      nobody to send      6%
+      could not stake it  2%
+      came off the board  1%
+
+### 9.1 Two of them were the game taking the window away
+
+§2.4 says a window expires because the player was slow, **never because the
+game moved the job out from under them**. Two entries in that list are exactly
+that, and both were live before this feature shipped.
+
+**Going dark.** `canLaunch` refuses anything but quiet work while laying low,
+and `LAY_LOW_DURATION_DAYS` is 14 — precisely half a window. A player who takes
+the correct cure for heat lost the month of planning for it, which is round
+13's complaint with a deadline bolted on: *the punishment for heat is not
+danger, it is 14 days of pressing +1 week.* `tickScores` now stops the clock
+while the family is dark, and moves the held man's timer with it.
+
+**The gate behind the target shutting.** `opens` reads live state — fronts
+running, ground held, who owes you — so a front closing or a favour lapsing
+could take the job away from somebody who had already put a man and most of a
+month into it. `canLaunch` never checked `opens`, so the simulation always
+allowed it; the board was the only thing saying no.
+`availableOperations` now holds a scored target on the board.
+
+Both are guarded by bars in the probe rather than by prose.
+
+### 9.2 One of them was the instrument
+
+**"Ready, not picked" is the probe, not the game.** 533 of those 693 days —
+77% — were the bot breaking out of its own job loop over a job it could not
+crew, while a ready, fully staffable score target sat further down a list
+sorted by expected value rather than by bodies. That `break` should be a
+`continue`. It is left alone: it is a defect in the bot, every pre-committed
+bar in that file was set against a bot that does it, and changing it is its own
+piece of work with its own re-baselining.
+
+### 9.3 Heat is deliberately not paused
+
+Two days in five is the largest single entry, and it is not caused by this
+feature. Paired against the same bot with scores switched off:
+
+    weeks too hot or dark, share of all weeks
+      building up to jobs   31% / 44% / 52%
+      never preparing       29% / 40% / 52%
+
+The family lives in that weather either way. And heat is not a wall: at 85 the
+odds carry a 25-point penalty and nothing is refused, so working through it is
+a bad decision rather than a refusal — a clock that paused for that would be
+pausing for a choice the player is free to make.
+
+A score expiring because you spent its month getting too hot to move is the
+feature working. It says you built up to a big job and then made yourself
+unable to run it.
+
+### 9.4 Where it landed
+
+    windows shut     148/437 (34%)  →  116/414 (28%)
+    came off the board       1%     →  0
+    laying low, last day     33     →  1
+    estate difference, median  -$61,322 → -$61,485
+
+Of the 116 that remain, 34 are the probe's `break` and the other 82 — 20% of
+all scores opened — are the player: too hot because of what they did, unable to
+stake it, nobody to send, or still preparing on the last morning.
+
+---
+
+## 10. Still open
+
+**The probe's `break`.** §9.2. Its own piece of work.
+
+**Phase two stays deferred.** The take-up bar is met, so named targets are no
+longer blocked by §6's condition; they are simply not built.
