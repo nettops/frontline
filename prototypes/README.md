@@ -4,6 +4,83 @@ Not shipped. Nothing in `src/` imports anything here, and nothing here is in the
 build output — that is the point of the folder. These are things that were built
 to be looked at and then argued with.
 
+## pixel-scene.html — the buyer
+
+One composed scene rather than a sheet, drafted off a reference of two men at
+an open car boot. The point of it is that almost nothing in it is new.
+
+### To look at it
+
+```bash
+open prototypes/pixel-scene.html          # or: xdg-open
+```
+
+`?scale=5&hour=night&lid=shut` — the **shut** boot is worth a click: with the
+lid down it is a red car in an alley and two men standing near it, which is
+the whole reason the scene exists.
+
+### What the scene is
+
+`contraband.ts` on the arms trade: *“the only trade whose customers can point
+it back at you.”* That line is the reference image. This is not a shop, it is a
+sale — in an alley, to somebody from outside the city, who after tonight knows
+a thing about you that nobody outside your family knew this morning. The boot
+is open for about ninety seconds.
+
+### What it is made of
+
+| | |
+| --- | --- |
+| `pixel-arms.html` | the long gun, the machine pistol, the sawn-off, the snub and the bundle — cropped to their bounding boxes and laid in the boot |
+| `pixel-cast.html` | both people, straight out of `compose()` |
+| `pixel-fleet.html` | the paint keys, so the car takes the same six colours as the fleet |
+| drawn here | the car's rear and open boot, a plate carrier, a bin, a crate |
+
+Five palettes in one frame, each sheet keeping its own. The section at the
+bottom of the page lists every item in the boot and where it came from,
+because that claim is the deliverable and it should be checkable.
+
+### Two stopgaps, both of which are really requests
+
+**`backOf()`.** Both figures are seen from behind and the cast library has
+faces and no backs of heads. The function fills the face box with hair, leaves
+the neck, and — the part that actually mattered — strips the shirt, tie and pin
+below the collar, because a man's back does not have a tie on it. Fine at
+32 × 40. Not shippable. The cast needs a real `facing` axis.
+
+**`extendTo()`.** The cast stops at the waist because it was drawn for a panel,
+and a scene needs the rest of him. This repeats the coat's hem down to the
+frame with one dark fold down the middle so it reads as a coat rather than a
+slab. Also fine, also not shippable: the cast wants a full-figure variant.
+
+Both are marked as such in the file. Neither should be patched further here —
+they are a list of two things `pixel-cast.html` is missing, discovered by
+trying to use it for something it was not drawn for, which is the useful thing
+a scene does to a library.
+
+### On the buyer
+
+The brief asked for a specific ethnicity for the left figure. What the cast
+library actually encodes is a skin ramp and a hair style, and at ten columns
+of face it could not carry much more than that even head-on — so the honest
+statement is that this figure is coded as *from outside the city*, seen from
+behind, with slick black hair and a roll-neck under a dark coat, and that
+nothing about the drawing asserts more than that. If a character has to read
+as specifically anything from the front, that is a parts problem in
+`pixel-cast.html` — brow, hair, and what they are wearing — and not something
+to fake in a scene file.
+
+### The open question
+
+Whether scenes are a thing this game has at all. A sit-down backdrop
+(`pixel-rooms.html`) decorates a screen that exists. This does not: there is no
+moment in the simulation where the player stands at a boot, and the arms trade
+is deliberately abstract about how anything moves. So this is either concept
+art for a beat the game does not have, or an argument for adding one — and the
+`lid=shut` toggle is there because that is the version of the argument worth
+having. The car and the two men are a scene. What is in the boot is a claim
+about what the game is willing to show.
+
 ## pixel-rooms.html — the other side of the ten fronts
 
 The inside of every facade in `pixel-fronts.html`, which is the inside of every
