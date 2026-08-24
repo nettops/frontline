@@ -1,0 +1,668 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Pixel cast — variants on the boss</title>
+<style>
+/* =========================================================================
+   PIXEL CAST — disposable. Nothing in src/ is touched.
+
+   pixel-boss.html settled what a character is: 32x40, half-figure, warm
+   tobacco palette, a face with enough rows to change. This is the next
+   question, which is the one that decides whether the game can have a cast
+   at all: twenty of them, all different, without drawing twenty of them.
+
+   So nobody here is drawn whole. A character is a spec —
+
+     { build, head, hat, facial, garment, prop, skin, suit, hair, shirt, tie }
+
+   — and compose() stamps the parts in order onto one 32x40 grid. Parts share
+   anchors on purpose: every face is the same ten columns wide, so every
+   moustache fits every head, and every torso opens on the same six columns,
+   so every collar fits every build. That constraint is the whole trick. Break
+   it and the library stops multiplying and becomes a pile of sprites again.
+
+   Colour is separate from shape. The grid holds palette KEYS, and a character
+   supplies the hexes for them, so skin, suit, hair, shirt and tie are swaps
+   that cost nothing per character. Five skin tones times three builds times
+   six hats times seven beards is not thirty-two pixels of work, it is one.
+   ========================================================================= */
+
+:root {
+  --ink-900:#0c0a09; --ink-800:#15110e; --ink-700:#1c1713; --ink-600:#241d18;
+  --line:#332a22; --text:#e6ddcd; --text-dim:#9c9083; --text-faint:#6b6157;
+  --brass:#c9a227; --brass-dim:#7d6720; --stamp:#c2352b; --paper:#ded3bc;
+  --carbon:#7593a8; --carbon-dim:#3d5464;
+  --font-display: Bahnschrift,'Avenir Next Condensed','Arial Narrow','Segoe UI',system-ui,sans-serif;
+  --font-mono: ui-monospace,'Cascadia Mono',Consolas,'SF Mono',Menlo,monospace;
+}
+* { box-sizing: border-box; }
+body {
+  margin:0; padding:28px 32px 64px; background:var(--ink-900); color:var(--text);
+  font-family:var(--font-mono); font-size:12px; line-height:1.55;
+}
+h1 { font-family:var(--font-display); font-size:22px; letter-spacing:.14em; text-transform:uppercase; margin:0 0 4px; }
+.sub { color:var(--text-dim); max-width:80ch; margin:0 0 22px; }
+h3 {
+  font-family:var(--font-display); font-size:13px; letter-spacing:.14em; text-transform:uppercase;
+  color:var(--text-dim); margin:34px 0 4px;
+}
+.lede { color:var(--text-faint); margin:0 0 14px; max-width:80ch; }
+
+.controls {
+  display:flex; flex-wrap:wrap; gap:18px; align-items:center;
+  padding:10px 14px; margin-bottom:22px; background:var(--ink-800); border:1px solid var(--line);
+}
+.controls label { color:var(--text-dim); text-transform:uppercase; letter-spacing:.1em; font-size:10px; }
+.seg { display:inline-flex; border:1px solid var(--line); }
+.seg button {
+  background:var(--ink-700); color:var(--text-dim); border:0; border-right:1px solid var(--line);
+  padding:4px 10px; font:inherit; font-size:11px; cursor:pointer;
+}
+.seg button:last-child { border-right:0; }
+.seg button[aria-pressed="true"] { background:var(--brass-dim); color:var(--ink-900); }
+
+.cast { display:flex; flex-wrap:wrap; gap:14px; }
+.who {
+  background:var(--ink-800); border:1px solid var(--line); padding:10px 12px 12px;
+  width:200px; display:flex; flex-direction:column; gap:8px;
+}
+.who .art { display:flex; justify-content:center; background:var(--ink-700); padding:8px 0; }
+.who .name {
+  font-family:var(--font-display); letter-spacing:.09em; text-transform:uppercase; font-size:12px;
+}
+.who .role { color:var(--text-faint); font-size:11px; margin-top:-6px; }
+.who .made { color:var(--brass-dim); font-size:10px; line-height:1.4; }
+
+.strip { display:flex; flex-wrap:wrap; gap:10px; }
+.opt {
+  background:var(--ink-800); border:1px solid var(--line); padding:6px;
+  display:flex; flex-direction:column; align-items:center; gap:4px;
+}
+.opt span { color:var(--text-faint); font-size:10px; letter-spacing:.06em; }
+canvas { image-rendering:pixelated; display:block; }
+
+.ramps { display:flex; flex-wrap:wrap; gap:22px; }
+.ramp b { display:block; color:var(--text-dim); font-weight:400; margin-bottom:5px; font-size:11px; }
+.ramp .row { display:flex; align-items:center; gap:8px; margin-bottom:3px; }
+.ramp .sw { display:flex; }
+.ramp .sw i { width:20px; height:16px; display:block; }
+.ramp .nm { color:var(--text-faint); font-size:10px; }
+
+.fake-panel { background:var(--ink-800); border:1px solid var(--line); padding:12px 14px; min-width:300px; }
+.fake-panel .title {
+  font-family:var(--font-display); letter-spacing:.12em; text-transform:uppercase;
+  color:var(--text-dim); font-size:11px; margin-bottom:8px;
+}
+.fake-line { display:flex; align-items:center; gap:10px; padding:4px 0; border-bottom:1px solid #241e18; }
+.fake-line:last-child { border-bottom:0; }
+.fake-line .n { flex:1; }
+.fake-line .d { color:var(--text-faint); }
+.row-wrap { display:flex; gap:22px; flex-wrap:wrap; align-items:flex-start; }
+</style>
+</head>
+<body>
+
+<h1>Pixel cast — variants on the boss</h1>
+<p class="sub">
+  Nobody here is drawn whole. A character is a spec — build, head, hat, facial
+  hair, clothes, prop, and five colour choices — and the parts are stamped onto
+  one 32×40 grid in order. Every face is the same ten columns wide and every
+  torso opens on the same six, so any moustache fits any head and any collar
+  fits any build. That shared anchor is the only reason a cast of twenty costs
+  less than twenty sprites.
+</p>
+
+<div class="controls">
+  <label for="scale">Scale</label>
+  <span class="seg" id="scale">
+    <button data-v="2">2x</button><button data-v="3">3x</button>
+    <button data-v="4" aria-pressed="true">4x</button><button data-v="6">6x</button>
+  </span>
+  <label for="reroll">Mixer</label>
+  <span class="seg" id="reroll"><button data-v="go">Reroll the strangers</button></span>
+</div>
+
+<h3>The cast</h3>
+<p class="lede">
+  Twelve, hand-specced. Names are the game's own — <code>LEADER_FIRST_NAMES</code>
+  in <code>config/factionLeaders.ts</code>, which already generates women as
+  bosses, so the cast does too.
+</p>
+<div class="cast" id="cast"></div>
+
+<h3>Strangers</h3>
+<p class="lede">
+  The same library rolled at random. This is the honest test of a parts system:
+  if the combinations it has never been shown still read as people, the library
+  works. Anything ugly here is a part that needs fixing, not a bad roll.
+</p>
+<div class="cast" id="strangers"></div>
+
+<h3>The library</h3>
+<p class="lede">Every part, on the same neutral man, so the difference is the only thing visible.</p>
+<div id="library"></div>
+
+<h3>Colour is not shape</h3>
+<p class="lede">
+  One spec, five skins and five suits. None of this costs a pixel — the grid
+  holds keys, the character holds hexes.
+</p>
+<div class="row-wrap" id="swaps"></div>
+<div class="ramps" id="ramps" style="margin-top:18px"></div>
+
+<h3>At 1x and 2x, where they would live</h3>
+<div class="row-wrap" id="context"></div>
+
+<script>
+/* ======================================================================
+   1. KEYS
+
+   '0' outline · '1' hat felt · 'h' hat band · '2''3''4' cloth dark/mid/lift
+   '7' shirt · 'b' tie or scarf · '9' brass · '5''6' hair dark/light
+   'c''d''e' skin shadow/mid/light · '8' tobacco · 'a' smoke
+   '_' erase — used by builds that need to cut the face narrower.
+   ====================================================================== */
+const OUTLINE = '#0c0a09';
+
+const SKINS = {
+  deep:  ['#2e1c14', '#4a2f21', '#6b452f'],
+  brown: ['#3b2519', '#5f3d27', '#855838'],
+  olive: ['#5c3a26', '#8a5c3c', '#b3835a'],
+  tan:   ['#6b4a33', '#9c6f4c', '#c2926a'],
+  fair:  ['#7a5744', '#b08462', '#d6ae8a'],
+};
+const SUITS = {
+  charcoal: ['#14120f', '#2b2723', '#443e38'],
+  brown:    ['#1a130d', '#332a22', '#4a3d31'],
+  navy:     ['#10141a', '#232c38', '#3a4756'],
+  olive:    ['#14170f', '#2b3122', '#434a33'],
+  bone:     ['#2a2620', '#4a443a', '#6b6355'],
+};
+const HAIRS = {
+  black:  ['#17130f', '#2a231c'],
+  brown:  ['#2e2118', '#4a382a'],
+  pepper: ['#3b352e', '#7a7168'],
+  grey:   ['#6b6157', '#9c9083'],
+  white:  ['#9c9083', '#ded3bc'],
+};
+const SHIRTS = { white:'#e6ddcd', cream:'#ded3bc', grey:'#b0a89c' };
+const TIES = {
+  blood:'#c2352b', brass:'#c9a227', carbon:'#4a6f7a',
+  olive:'#6b7f4a', deep:'#6d1b16', bone:'#ded3bc',
+};
+const HATFELT = { black:'#15110e', brown:'#241d18', ash:'#332a22', bone:'#6b6157' };
+
+function paletteFor(ch) {
+  const sk = SKINS[ch.skin], su = SUITS[ch.suit], ha = HAIRS[ch.hair];
+  const felt = HATFELT[ch.felt || 'black'];
+  return {
+    '0': OUTLINE,
+    '1': felt, 'h': su[0],
+    '2': su[0], '3': su[1], '4': su[2],
+    '7': SHIRTS[ch.shirt || 'white'],
+    'b': TIES[ch.tie || 'blood'],
+    '9': '#c9a227',
+    '5': ha[0], '6': ha[1],
+    'c': sk[0], 'd': sk[1], 'e': sk[2],
+    '8': '#7d6720', 'a': '#9c9083',
+  };
+}
+
+/* ======================================================================
+   2. PARTS
+
+   { x, y, rows } — stamped top-left at (x, y). '.' leaves what is under it,
+   '_' erases it. Order matters: torso, garment, neck, face, jaw, brows,
+   facial hair, hair, hat, prop. Later parts win, which is why a hat brim
+   can shadow a forehead and a beard can bury a mouth.
+   ====================================================================== */
+const P = (x, y, ...rows) => ({ x, y, rows });
+
+/* --- torsos. Three widths, one opening: columns 13..18, always. --------- */
+const TORSO = {
+  slim: P(7, 22,
+    '....33......33....',
+    '..3333......3333..',
+    '.33334......43333.',
+    '033334......433330',
+    '023334......433320','023334......433320','023334......433320',
+    '023334......433320','023334......433320','023334......433320',
+    '023334......433320','023334......433320','023334......433320',
+    '023334......433320','023334......433320','023334......433320',
+    '023334......433320',
+    '000000000000000000'),
+  regular: P(4, 22,
+    '......333......333......',
+    '....33333......33333....',
+    '..3333334......4333333..',
+    '.03333334......43333330.',
+    '033333334......433333330',
+    '022333334......433333220','022333334......433333220',
+    '022333334......433333220','022333334......433333220',
+    '022333334......433333220','022333334......433333220',
+    '022333334......433333220','022333334......433333220',
+    '022333334......433333220','022333334......433333220',
+    '022333334......433333220','022333334......433333220',
+    '000000000000000000000000'),
+  heavy: P(2, 22,
+    '.......3333......3333.......',
+    '.....333333......333333.....',
+    '...33333334......4333333....',
+    '.0333333334......43333333330'.slice(0, 28),
+    '02233333334......4333333' + '3220',
+    '02233333334......43333333220','02233333334......43333333220',
+    '02233333334......43333333220','02233333334......43333333220',
+    '02233333334......43333333220','02233333334......43333333220',
+    '02233333334......43333333220','02233333334......43333333220',
+    '02233333334......43333333220','02233333334......43333333220',
+    '02233333334......43333333220','02233333334......43333333220',
+    '0000000000000000000000000000'),
+};
+
+/* --- garments. All six columns wide, all anchored at x=13. -------------- */
+const GARMENT = {
+  tie: P(13, 22,
+    '7....7','77..77',
+    '7bbbb7','7bbbb7','7bbbb7','7bbbb7','7bbbb7','7bbbb7',
+    '7b99b7','7bbbb7','7bbbb7','7bbbb7','7bbbb7',
+    '333333','333333','333333','333333'),
+  open: P(13, 22,
+    '7....7','77..77','777777','777777','.7777.','..77..',
+    '333333','333333','333333','333333','333333','333333',
+    '333333','333333','333333','333333','333333'),
+  vest: P(13, 22,
+    '7....7','77..77',
+    '722227','722227','729227','722227','722227','722227',
+    '729227','722227','722227','722227','722227',
+    '333333','333333','333333','333333'),
+  roll: P(13, 21,
+    '.4444.','444444','444444',
+    '444444','444444','444444','444444','444444','444444',
+    '444444','444444','444444','444444',
+    '333333','333333','333333','333333','333333'),
+  scarf: P(13, 21,
+    '.bbbb.','bbbbbb','bbbbbb',
+    '7bb..7','7bb..7','3bb..3','3bb..3','3bb..3',
+    '333333','333333','333333','333333','333333','333333',
+    '333333','333333','333333','333333'),
+};
+
+/* --- the face. One box, ten columns, x=11..20. Never changes width. ----- */
+const FACE = P(11, 10,
+  'cddddddddc',
+  'cc0dccd0cc',
+  'cdddccdddc',
+  'cdeddcdedc',
+  'cded00dedc',
+  'cddddddddc',
+  'cddd00dddc');
+
+const JAW = {
+  slim:    P(11, 17, '.cdeeeedc.', '..cddddc..', '...cddc...'),
+  regular: P(11, 17, 'cddeeeeddc', '.cddddddc.', '..cddddc..'),
+  heavy:   P(10, 17, 'ccddeeeeddcc', '.cddddddddc.', '..cddddddc..'),
+};
+/* slim takes two columns off the cheeks; heavy adds jowls outside the box. */
+const BUILD_MOD = {
+  slim: P(11, 12, '_c......c_', '_c......c_', '_c......c_', '_c......c_', '_c......c_'),
+  regular: null,
+  heavy: P(10, 15, 'c..........c', 'c..........c'),
+};
+const NECK = {
+  slim:    [P(15, 20, 'cc', 'cc', 'cc'), P(15, 23, 'cc')],
+  regular: [P(14, 20, 'cccc', 'cccc', 'cccc'), P(15, 23, 'cc')],
+  heavy:   [P(13, 20, 'cccccc', 'cccccc', 'cccccc'), P(14, 23, 'cccc')],
+};
+
+/* --- hats and hair ----------------------------------------------------- */
+const HAT = {
+  fedora: P(6, 2,
+    '......00000000......',
+    '.....0111111110.....',
+    '....01211221121 0....'.replace(' ', ''),
+    '....012112211210....',
+    '....011111111110....',
+    '...0hhhhhhhhhhhh0...',
+    '011111111111111111 0'.replace(' ', ''),
+    '.000000000000000000.'),
+  homburg: P(7, 3,
+    '.....00000000.....',
+    '....01111111 10....'.replace(' ', ''),
+    '...0111111111 10...'.replace(' ', ''),
+    '...011111111110...',
+    '..0hhhhhhhhhhhh0..',
+    '.011111111111110.',
+    '..00000000000000..'),
+  flatcap: [P(8, 5,
+    '...00000000.....',
+    '..0111111111 0...'.replace(' ', ''),
+    '.01111111111110.',
+    '.01111111111110.',
+    '.00000000000000.'),
+    P(18, 9, '011110', '.0000.')],
+  none: null,
+};
+const BRIM_SHADOW = P(11, 10, 'cccccccccc');
+
+const HAIR = {
+  slick: P(10, 5, '....0000....', '...555555...', '..55555555..', '.5555555555.', '555555555555'),
+  bald:  P(10, 6, '.....00.....', '...0dddd0...', '..0dddddd0..', '.0dddddddd0.'),
+  balding: [P(10, 6, '.....00.....', '...0dddd0...', '..0dddddd0..', '.0555555550.'),
+            P(10, 10, '5..........5', '5..........5')],
+  bun:   [P(10, 5, '....0000....', '...555555...', '..55555555..', '.5555555555.', '555555555555'),
+          P(8, 7, '.00.', '0556', '0556', '.00.'),
+          P(10, 10, '5..........5', '5..........5', '5..........5')],
+  bob:   [P(10, 5, '....0000....', '...555555...', '..55555555..', '.5555555555.', '555555555555'),
+          P(10, 10, '5..........5', '5..........5', '5..........5', '5..........5', '5..........5',
+                    '5..........5', '55........55', '55........55', '55........55')],
+  none: null,
+};
+
+/* --- facial hair. All inside the face box, so it fits every head. ------- */
+const FACIAL = {
+  none: null,
+  tache: P(13, 15, '555555'),
+  walrus: [P(12, 15, '55555555'), P(13, 16, '555555')],
+  goatee: [P(13, 15, '555555'), P(14, 17, '5555'), P(14, 18, '5555'), P(15, 19, '55')],
+  beard: [P(11, 14, '5........5'), P(11, 15, '5555555555'), P(11, 16, '5555555555'),
+          P(11, 17, '5555555555'), P(12, 18, '55555555'), P(13, 19, '555555'), P(14, 20, '5555')],
+  stubble: [P(11, 16, '5.5.5.5.5.'), P(11, 17, '.5.5.5.5.5'), P(12, 18, '5.5.5.5.'), P(13, 19, '.5.5.5')],
+  chops: P(11, 11, '5........5', '5........5', '5........5', '5........5', '5........5'),
+};
+
+/* --- props ------------------------------------------------------------- */
+const PROP = {
+  none: null,
+  cigar: [P(8, 32, 'dd'), P(1, 33, '6b888ded9'), P(6, 34, 'cccc'),
+          P(3, 31, 'a'), P(3, 29, 'a'), P(4, 27, 'a')],
+  glasses: [P(12, 10, '000..000'), P(12, 11, '0..00..0'), P(12, 12, '000..000')],
+  scar: P(19, 12, '0', '0', '0'),
+  pick: P(18, 16, '66'),
+};
+/* The cigar hand hangs off the coat's left edge, which moves with the build. */
+const PROP_DX = { slim: 3, regular: 0, heavy: -2 };
+
+/* ======================================================================
+   3. COMPOSE
+   ====================================================================== */
+function blank() { return Array.from({ length: 40 }, () => Array(32).fill('.')); }
+
+function stamp(g, part, dx) {
+  if (!part) return;
+  if (Array.isArray(part)) { part.forEach((p) => stamp(g, p, dx)); return; }
+  part.rows.forEach((row, ry) => {
+    for (let rx = 0; rx < row.length; rx++) {
+      const k = row[rx];
+      if (k === '.') continue;
+      const x = part.x + rx + (dx || 0), y = part.y + ry;
+      if (x < 0 || x > 31 || y < 0 || y > 39) continue;
+      g[y][x] = k === '_' ? '.' : k;
+    }
+  });
+}
+
+function compose(ch) {
+  const g = blank();
+  stamp(g, TORSO[ch.build]);
+  stamp(g, GARMENT[ch.garment]);
+  NECK[ch.build].forEach((p) => stamp(g, p));
+  stamp(g, FACE);
+  stamp(g, BUILD_MOD[ch.build]);
+  stamp(g, JAW[ch.build]);
+  stamp(g, FACIAL[ch.facial]);
+  stamp(g, HAIR[ch.hair_style]);
+  stamp(g, HAT[ch.hat]);
+  if (ch.hat !== 'none') stamp(g, BRIM_SHADOW);   // a brim is why a forehead is dark
+  stamp(g, PROP[ch.prop], PROP_DX[ch.build]);
+  return g.map((r) => r.join(''));
+}
+
+/* ======================================================================
+   4. THE CAST
+   ====================================================================== */
+const CAST = [
+  { name:'Salvatore Falcone', role:'Boss, Falcone · 61',
+    build:'heavy', hat:'fedora', hair_style:'none', facial:'tache', garment:'tie', prop:'cigar',
+    skin:'olive', suit:'charcoal', hair:'pepper', tie:'blood', felt:'black' },
+  { name:'Ottavia Vasari', role:'Boss, Vasari · 54',
+    build:'regular', hat:'none', hair_style:'bun', facial:'none', garment:'roll', prop:'none',
+    skin:'tan', suit:'navy', hair:'black', tie:'carbon', shirt:'cream' },
+  { name:'Guido Kestler', role:'Boss, Kestler · 47',
+    build:'slim', hat:'flatcap', hair_style:'none', facial:'stubble', garment:'open', prop:'pick',
+    skin:'fair', suit:'olive', hair:'brown', shirt:'grey' },
+  { name:'Rosalia Marchetti', role:'Underboss · 43',
+    build:'slim', hat:'none', hair_style:'bob', facial:'none', garment:'tie', prop:'none',
+    skin:'deep', suit:'bone', hair:'black', tie:'deep', shirt:'white' },
+  { name:'Augusto Renna', role:'Capo · 58',
+    build:'heavy', hat:'homburg', hair_style:'none', facial:'beard', garment:'vest', prop:'cigar',
+    skin:'brown', suit:'brown', hair:'grey', tie:'brass' },
+  { name:'Cesare Duval', role:'Capo · 39',
+    build:'regular', hat:'none', hair_style:'slick', facial:'none', garment:'tie', prop:'glasses',
+    skin:'olive', suit:'navy', hair:'black', tie:'olive' },
+  { name:'Ignazio Bru', role:'Enforcer · 35',
+    build:'heavy', hat:'none', hair_style:'balding', facial:'walrus', garment:'open', prop:'scar',
+    skin:'tan', suit:'charcoal', hair:'brown', shirt:'grey' },
+  { name:'Concetta Ruiz', role:'Bookkeeper · 62',
+    build:'slim', hat:'none', hair_style:'bun', facial:'none', garment:'scarf', prop:'glasses',
+    skin:'brown', suit:'bone', hair:'white', tie:'bone' },
+  { name:'Bartolo Nkemi', role:'Capo · 51',
+    build:'regular', hat:'fedora', hair_style:'none', facial:'goatee', garment:'tie', prop:'none',
+    skin:'deep', suit:'brown', hair:'black', tie:'brass', felt:'brown' },
+  { name:'Serafina Kowal', role:'Fixer · 46',
+    build:'regular', hat:'flatcap', hair_style:'none', facial:'none', garment:'open', prop:'none',
+    skin:'fair', suit:'olive', hair:'brown', shirt:'cream', felt:'ash' },
+  { name:'Ferdinando Aloe', role:'Consigliere · 68',
+    build:'slim', hat:'homburg', hair_style:'none', facial:'chops', garment:'tie', prop:'none',
+    skin:'olive', suit:'charcoal', hair:'white', tie:'carbon', felt:'ash' },
+  { name:'Massimo Idris', role:'Soldier · 29',
+    build:'regular', hat:'none', hair_style:'slick', facial:'stubble', garment:'roll', prop:'none',
+    skin:'brown', suit:'navy', hair:'black' },
+];
+
+/* ======================================================================
+   5. RENDER
+   ====================================================================== */
+const params = new URLSearchParams(location.search);
+let scale = Number(params.get('scale')) || 4;
+
+function draw(canvas, rows, s, pal) {
+  canvas.width = 32 * s; canvas.height = 40 * s;
+  const ctx = canvas.getContext('2d');
+  ctx.imageSmoothingEnabled = false;
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  for (let y = 0; y < rows.length; y++) {
+    for (let x = 0; x < rows[y].length; x++) {
+      const k = rows[y][x];
+      if (k === '.') continue;
+      const hex = pal[k];
+      if (!hex) { console.warn('no colour for key', k, x, y); continue; }
+      ctx.fillStyle = hex;
+      ctx.fillRect(x * s, y * s, s, s);
+    }
+  }
+}
+
+function card(ch, s) {
+  const el = document.createElement('div');
+  el.className = 'who';
+  const art = document.createElement('div');
+  art.className = 'art';
+  const c = document.createElement('canvas');
+  draw(c, compose(ch), s, paletteFor(ch));
+  art.appendChild(c);
+  el.appendChild(art);
+  const n = document.createElement('div'); n.className = 'name'; n.textContent = ch.name; el.appendChild(n);
+  const r = document.createElement('div'); r.className = 'role'; r.textContent = ch.role || ''; el.appendChild(r);
+  const m = document.createElement('div'); m.className = 'made';
+  m.textContent = [ch.build, ch.hat !== 'none' ? ch.hat : ch.hair_style, ch.facial, ch.garment, ch.skin, ch.suit]
+    .filter((v) => v && v !== 'none').join(' · ');
+  el.appendChild(m);
+  return el;
+}
+
+function buildCast() {
+  const wrap = document.getElementById('cast');
+  wrap.innerHTML = '';
+  CAST.forEach((ch) => wrap.appendChild(card(ch, scale)));
+}
+
+const pick = (o) => { const k = Object.keys(o); return k[Math.floor(Math.random() * k.length)]; };
+const FIRST = ['Emilio','Vittoria','Rafaele','Ludovico','Ilaria','Marcello','Assunta','Ubaldo','Guido','Serafina'];
+const LAST = ['Falcone','Vasari','Kestler','Marchetti','Renna','Duval','Nkemi','Kowal','Idris','Aloe'];
+
+function stranger() {
+  const hatted = Math.random() < 0.45;
+  return {
+    name: FIRST[Math.floor(Math.random() * FIRST.length)] + ' ' + LAST[Math.floor(Math.random() * LAST.length)],
+    role: '',
+    build: pick({ slim:0, regular:0, heavy:0 }),
+    hat: hatted ? pick({ fedora:0, homburg:0, flatcap:0 }) : 'none',
+    hair_style: hatted ? 'none' : pick({ slick:0, bald:0, balding:0, bun:0, bob:0 }),
+    facial: pick(FACIAL),
+    garment: pick(GARMENT),
+    prop: pick(PROP),
+    skin: pick(SKINS), suit: pick(SUITS), hair: pick(HAIRS),
+    shirt: pick(SHIRTS), tie: pick(TIES), felt: pick(HATFELT),
+  };
+}
+
+function buildStrangers() {
+  const wrap = document.getElementById('strangers');
+  wrap.innerHTML = '';
+  for (let i = 0; i < 8; i++) wrap.appendChild(card(stranger(), scale));
+}
+
+/* The library, each option on the same neutral man. */
+const NEUTRAL = { build:'regular', hat:'none', hair_style:'slick', facial:'none', garment:'tie',
+                  prop:'none', skin:'olive', suit:'charcoal', hair:'black', tie:'blood' };
+
+function buildLibrary() {
+  const wrap = document.getElementById('library');
+  wrap.innerHTML = '';
+  const groups = [
+    ['Build', 'build', ['slim', 'regular', 'heavy']],
+    ['Hat', 'hat', ['fedora', 'homburg', 'flatcap', 'none']],
+    ['Hair', 'hair_style', ['slick', 'bald', 'balding', 'bun', 'bob'], { hat: 'none' }],
+    ['Facial hair', 'facial', ['none', 'tache', 'walrus', 'goatee', 'beard', 'stubble', 'chops']],
+    ['Clothes', 'garment', ['tie', 'open', 'vest', 'roll', 'scarf']],
+    ['Props', 'prop', ['none', 'cigar', 'glasses', 'scar', 'pick']],
+  ];
+  groups.forEach(([label, key, opts, extra]) => {
+    const h = document.createElement('div');
+    h.style.cssText = 'color:var(--text-dim);margin:14px 0 6px;letter-spacing:.08em;text-transform:uppercase;font-size:10px';
+    h.textContent = label;
+    wrap.appendChild(h);
+    const strip = document.createElement('div');
+    strip.className = 'strip';
+    opts.forEach((v) => {
+      const ch = Object.assign({}, NEUTRAL, extra || {}, { [key]: v });
+      const box = document.createElement('div');
+      box.className = 'opt';
+      const c = document.createElement('canvas');
+      draw(c, compose(ch), Math.max(2, scale - 1), paletteFor(ch));
+      box.appendChild(c);
+      const s = document.createElement('span'); s.textContent = v; box.appendChild(s);
+      wrap.appendChild(box);
+      strip.appendChild(box);
+    });
+    wrap.appendChild(strip);
+  });
+}
+
+function buildSwaps() {
+  const wrap = document.getElementById('swaps');
+  wrap.innerHTML = '';
+  const base = { build:'regular', hat:'fedora', hair_style:'none', facial:'tache', garment:'tie',
+                 prop:'none', suit:'charcoal', hair:'pepper', tie:'blood', felt:'black', skin:'olive' };
+  [['Skin', 'skin', Object.keys(SKINS)], ['Suit', 'suit', Object.keys(SUITS)]].forEach(([label, key, opts]) => {
+    const panel = document.createElement('div');
+    panel.className = 'fake-panel';
+    panel.innerHTML = '<div class="title">' + label + '</div>';
+    const strip = document.createElement('div');
+    strip.className = 'strip';
+    opts.forEach((v) => {
+      const ch = Object.assign({}, base, { [key]: v });
+      const box = document.createElement('div'); box.className = 'opt';
+      const c = document.createElement('canvas');
+      draw(c, compose(ch), Math.max(2, scale - 1), paletteFor(ch));
+      box.appendChild(c);
+      const s = document.createElement('span'); s.textContent = v; box.appendChild(s);
+      strip.appendChild(box);
+    });
+    panel.appendChild(strip);
+    wrap.appendChild(panel);
+  });
+}
+
+function buildRamps() {
+  const wrap = document.getElementById('ramps');
+  wrap.innerHTML = '';
+  [['Skin', SKINS], ['Cloth', SUITS], ['Hair', HAIRS]].forEach(([label, set]) => {
+    const d = document.createElement('div');
+    d.className = 'ramp';
+    d.innerHTML = '<b>' + label + '</b>';
+    Object.entries(set).forEach(([name, hexes]) => {
+      const row = document.createElement('div'); row.className = 'row';
+      const sw = document.createElement('div'); sw.className = 'sw';
+      hexes.forEach((h) => { const i = document.createElement('i'); i.style.background = h; sw.appendChild(i); });
+      row.appendChild(sw);
+      const nm = document.createElement('span'); nm.className = 'nm'; nm.textContent = name; row.appendChild(nm);
+      d.appendChild(row);
+    });
+    wrap.appendChild(d);
+  });
+}
+
+function buildContext() {
+  const wrap = document.getElementById('context');
+  wrap.innerHTML = '';
+  [1, 2].forEach((s) => {
+    const panel = document.createElement('div');
+    panel.className = 'fake-panel';
+    panel.innerHTML = '<div class="title">Rival families &mdash; ' + s + 'x</div>';
+    CAST.slice(0, 5).forEach((ch) => {
+      const line = document.createElement('div'); line.className = 'fake-line';
+      const c = document.createElement('canvas');
+      draw(c, compose(ch), s, paletteFor(ch));
+      line.appendChild(c);
+      const n = document.createElement('span'); n.className = 'n'; n.textContent = ch.name; line.appendChild(n);
+      const d = document.createElement('span'); d.className = 'd'; d.textContent = ch.role.split('·')[0]; line.appendChild(d);
+      panel.appendChild(line);
+    });
+    wrap.appendChild(panel);
+  });
+}
+
+function wire(id, apply) {
+  const box = document.getElementById(id);
+  box.addEventListener('click', (e) => {
+    const btn = e.target.closest('button');
+    if (!btn) return;
+    if (id === 'scale') [...box.querySelectorAll('button')].forEach((b) => b.setAttribute('aria-pressed', String(b === btn)));
+    apply(btn.dataset.v);
+  });
+}
+wire('scale', (v) => { scale = Number(v); everything(); });
+wire('reroll', () => buildStrangers());
+
+function everything() { buildCast(); buildStrangers(); buildLibrary(); buildSwaps(); buildRamps(); buildContext(); }
+everything();
+/* ?only=<section> renders one section alone, for capturing a still of it. */
+const _only = params.get('only');
+if (_only) {
+  const keep = { cast:['cast'], strangers:['strangers'], library:['library'],
+                 swaps:['swaps','ramps'], context:['context'] }[_only] || [];
+  document.querySelectorAll('h3').forEach((h) => {
+    let n = h.nextElementSibling, ids = [];
+    while (n && n.tagName !== 'H3') { if (n.id) ids.push(n.id); n = n.nextElementSibling; }
+    if (!ids.some((i) => keep.includes(i))) {
+      let m = h.nextElementSibling; h.remove();
+      while (m && m.tagName !== 'H3') { const nx = m.nextElementSibling; m.remove(); m = nx; }
+    }
+  });
+}
+</script>
+</body>
+</html>

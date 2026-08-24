@@ -8,34 +8,31 @@
 /* =========================================================================
    PIXEL BOSS — three mockups. Disposable. Nothing in src/ is touched.
 
-   THE DIRECTION
+   The game has no character art. Before it gets any, one decision has to be
+   made and then never revisited, because it binds every character drawn
+   afterwards: the grid, the palette depth, and the framing.
 
-   The man is not drawn. He is the shape the light does not reach: a flat
-   near-black mass against a lit wall, no face, no shading, no rim. The only
-   warm thing anywhere in the frame is the coal of a cigarette, and the only
-   thing that moves is its smoke.
+   These are three answers to that, all of the same man — the boss of a rival
+   family — so the only thing varying between them is the spec.
 
-   This is a much better fit for the game than a lit portrait was, and not
-   only because it looks like the reference. `perceive()` exists because the
-   player is never told what a person actually is — a face with an expression
-   contradicts that on sight. A silhouette does not: it is a man you can see
-   and still cannot read, which is the game's entire argument about people.
+     A  24x24   bust      6 colours   sits in a table row
+     B  32x40   half      12 colours  sits in a panel, has a prop
+     C  32x48   standing  9 colours   sits on a board, reads by silhouette
 
-   THE THREE
-
-   Same man, three specs, because the decision being made is not what a boss
-   looks like but what every character drawn after him is committed to.
-
-     A  24x24   bust       sits in a table row
-     B  32x40   half       sits in a panel
-     C  32x48   standing   sits on ground
-
-   Every sprite is authored below as rows of palette keys, one character per
+   Every sprite is authored here as rows of palette keys, one character per
    pixel, and drawn with imageSmoothingEnabled = false at integer scale. There
    is no image file anywhere in this prototype: the art IS the source, which is
    the only reason a change to it is reviewable in a diff.
    ========================================================================= */
 
+/* ------------------------------------------------------------ PALETTE ---
+   The game's tokens, plus the three it does not have.
+
+   theme.css defines ten colours and none of them is skin, because until now
+   nothing in this interface has been a person. Characters need a warm ramp,
+   and it is pulled toward the tobacco end so a face does not read as a
+   different game's asset dropped into this one. Those three are marked NEW
+   below and are the actual cost of shipping any of these. */
 :root {
   --ink-900: #0c0a09;
   --ink-800: #15110e;
@@ -48,10 +45,8 @@
   --brass: #c9a227;
   --brass-dim: #7d6720;
   --stamp: #c2352b;
-  --stamp-bright: #dd5347;
   --stamp-deep: #6d1b16;
   --carbon: #7593a8;
-  --carbon-dim: #3d5464;
   --paper: #ded3bc;
   --font-display: Bahnschrift, 'Avenir Next Condensed', 'Arial Narrow', 'Segoe UI', system-ui, sans-serif;
   --font-mono: ui-monospace, 'Cascadia Mono', Consolas, 'SF Mono', Menlo, monospace;
@@ -60,18 +55,26 @@
 * { box-sizing: border-box; }
 
 body {
-  margin: 0; padding: 28px 32px 64px;
-  background: var(--ink-900); color: var(--text);
-  font-family: var(--font-mono); font-size: 12px; line-height: 1.55;
+  margin: 0;
+  padding: 28px 32px 64px;
+  background: var(--ink-900);
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.55;
 }
 
 h1 {
-  font-family: var(--font-display); font-size: 22px; letter-spacing: 0.14em;
-  text-transform: uppercase; margin: 0 0 4px;
+  font-family: var(--font-display);
+  font-size: 22px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  margin: 0 0 4px;
 }
-.sub { color: var(--text-dim); max-width: 78ch; margin: 0 0 22px; }
-.sub em { color: var(--stamp-bright); font-style: normal; }
 
+.sub { color: var(--text-dim); max-width: 76ch; margin: 0 0 22px; }
+
+/* ---------------------------------------------------------- CONTROLS --- */
 .controls {
   display: flex; flex-wrap: wrap; gap: 18px; align-items: center;
   padding: 10px 14px; margin-bottom: 26px;
@@ -87,23 +90,41 @@ h1 {
 .seg button:last-child { border-right: 0; }
 .seg button[aria-pressed="true"] { background: var(--brass-dim); color: var(--ink-900); }
 
+/* ------------------------------------------------------------- SHEET --- */
 .sheet { display: flex; flex-wrap: wrap; gap: 22px; align-items: flex-start; }
-.card { flex: 1 1 340px; min-width: 320px; background: var(--ink-800); border: 1px solid var(--line); }
+
+.card {
+  flex: 1 1 340px; min-width: 320px;
+  background: var(--ink-800); border: 1px solid var(--line);
+}
 .card header {
   padding: 9px 14px; border-bottom: 1px solid var(--line);
   display: flex; justify-content: space-between; align-items: baseline; gap: 10px;
 }
-.card h2 { font-family: var(--font-display); font-size: 15px; letter-spacing: 0.12em; text-transform: uppercase; margin: 0; }
+.card h2 {
+  font-family: var(--font-display); font-size: 15px; letter-spacing: 0.12em;
+  text-transform: uppercase; margin: 0;
+}
 .spec { color: var(--brass); font-size: 11px; white-space: nowrap; }
 
+/* The stage. Checkerboard so transparency is visible, unless a background
+   is chosen — a sprite that only works on one background is not finished. */
 .stage {
   display: flex; align-items: flex-end; justify-content: center;
-  min-height: 280px; padding: 22px 14px; border-bottom: 1px solid var(--line);
+  min-height: 260px; padding: 22px 14px;
+  border-bottom: 1px solid var(--line);
+}
+.stage[data-bg="alpha"] {
+  background-color: #191512;
+  background-image:
+    linear-gradient(45deg, #221c17 25%, transparent 25%, transparent 75%, #221c17 75%),
+    linear-gradient(45deg, #221c17 25%, transparent 25%, transparent 75%, #221c17 75%);
+  background-size: 16px 16px;
+  background-position: 0 0, 8px 8px;
 }
 .stage[data-bg="ledger"] { background: var(--ink-700); }
 .stage[data-bg="paper"]  { background: var(--paper); }
-.stage[data-bg="crt"]    { background: #000; padding: 0; }
-.stage[data-bg="lot"], .stage[data-bg="well"] { background: var(--ink-900); padding: 0; }
+.stage[data-bg="crt"]    { background: #0a0a0a; }
 
 canvas { image-rendering: pixelated; display: block; }
 
@@ -112,62 +133,76 @@ canvas { image-rendering: pixelated; display: block; }
 .notes b { color: var(--text); font-weight: 400; }
 .notes .cost { color: var(--stamp); }
 
+/* ------------------------------------------------------- IN CONTEXT ---
+   The whole point. A sprite judged at 8x is a sprite judged wrong: these have
+   to survive at 1x, in the interface they are actually for. */
 .context { margin-top: 34px; }
 .context h3 {
   font-family: var(--font-display); font-size: 13px; letter-spacing: 0.14em;
-  text-transform: uppercase; color: var(--text-dim); margin: 0 0 4px;
+  text-transform: uppercase; color: var(--text-dim); margin: 0 0 12px;
 }
-.context .lede { color: var(--text-faint); margin: 0 0 12px; max-width: 78ch; }
 .ctx-row { display: flex; gap: 26px; flex-wrap: wrap; align-items: flex-start; }
 
-.fake-panel { background: var(--ink-800); border: 1px solid var(--line); padding: 12px 14px; min-width: 290px; }
+.fake-panel {
+  background: var(--ink-800); border: 1px solid var(--line);
+  padding: 12px 14px; min-width: 300px;
+}
 .fake-panel .title {
   font-family: var(--font-display); letter-spacing: 0.12em; text-transform: uppercase;
   color: var(--text-dim); font-size: 11px; margin-bottom: 8px;
 }
-.fake-panel .title.bad { color: var(--stamp); }
-.fake-line { display: flex; align-items: center; gap: 10px; padding: 5px 0; border-bottom: 1px solid #241e18; }
+.fake-line {
+  display: flex; align-items: center; gap: 10px;
+  padding: 5px 0; border-bottom: 1px solid #241e18;
+}
 .fake-line:last-child { border-bottom: 0; }
 .fake-line .name { flex: 1; }
+.fake-line .val { color: var(--brass); }
 .fake-line .dim { color: var(--text-faint); }
-.well { background: var(--carbon-dim); padding: 1px; display: inline-flex; }
 
-.ramp { display: flex; gap: 0; margin-top: 8px; }
+.ramp { display: flex; gap: 0; margin-top: 26px; }
 .ramp div { width: 46px; height: 34px; position: relative; }
-.ramp span { position: absolute; bottom: -17px; left: 0; font-size: 9px; color: var(--text-faint); }
+.ramp span {
+  position: absolute; bottom: -17px; left: 0; font-size: 9px; color: var(--text-faint);
+}
+.ramp div[data-new="1"]::after {
+  content: 'NEW'; position: absolute; top: 3px; left: 4px;
+  font-size: 8px; letter-spacing: 0.08em; color: var(--stamp-bright, #dd5347);
+}
 </style>
 </head>
 <body>
 
 <h1>Pixel character mockups — the boss</h1>
 <p class="sub">
-  He is not drawn, he is subtracted: a flat near-black mass against a lit wall,
-  no face, no shading, one coal and its smoke. Three specs of the same man,
-  because what is being decided is not what a boss looks like but what every
-  character drawn after him is committed to. <em>Nothing here needs a colour the
-  game does not already have.</em>
+  Three answers to the same question, drawn as the same man: what grid, how many
+  colours, and how much of him. Whichever is picked becomes the spec every other
+  character in the game is drawn to, so the choice is the deliverable — the boss
+  is just the subject that makes it legible.
 </p>
 
 <div class="controls">
   <label for="scale">Scale</label>
   <span class="seg" id="scale">
-    <button data-v="1">1x</button><button data-v="2">2x</button>
-    <button data-v="4">4x</button><button data-v="6" aria-pressed="true">6x</button>
+    <button data-v="1">1x</button>
+    <button data-v="2">2x</button>
+    <button data-v="4" aria-pressed="true">4x</button>
+    <button data-v="6">6x</button>
     <button data-v="8">8x</button>
   </span>
 
-  <label for="bg">Behind him</label>
+  <label for="bg">Background</label>
   <span class="seg" id="bg">
-    <button data-v="lot" aria-pressed="true">the lot</button>
-    <button data-v="well">flat well</button>
-    <button data-v="ledger">panel (dark)</button>
+    <button data-v="alpha" aria-pressed="true">alpha</button>
+    <button data-v="ledger">ledger</button>
     <button data-v="paper">paper</button>
-    <button data-v="crt">crt</button>
+    <button data-v="crt">crt mono</button>
   </span>
 
   <label for="grid">Pixel grid</label>
   <span class="seg" id="grid">
-    <button data-v="off" aria-pressed="true">off</button><button data-v="on">on</button>
+    <button data-v="off" aria-pressed="true">off</button>
+    <button data-v="on">on</button>
   </span>
 </div>
 
@@ -175,318 +210,306 @@ canvas { image-rendering: pixelated; display: block; }
 
 <div class="context">
   <h3>At 1x, where they would actually live</h3>
-  <p class="lede">
-    The first panel is the game as it stands, and it is the whole problem: a man
-    made of shadow, on a surface made of shadow, is nothing. The second is the
-    same sprite over one flat cold rectangle. That rectangle is the real ask.
-  </p>
   <div class="ctx-row" id="context"></div>
 </div>
 
 <div class="context">
   <h3>Palette</h3>
-  <p class="lede">Every key is an existing token in <code>theme.css</code>. Hover for the mapping.</p>
   <div class="ramp" id="ramp"></div>
 </div>
 
 <script>
 /* ======================================================================
-   1. PALETTE — all of it already in theme.css
+   1. PALETTE
 
-   The lit-portrait draft needed four new tokens, three of them skin, because
-   theme.css defines ten colours and none of them is a person. A silhouette
-   needs none of that: a man who is a hole in the light has no skin in him.
-   What is left is the mass, the coal, the smoke, and the cold room.
+   One key per character in the sprite rows. Everything except the three
+   marked `isNew` is already a token in theme.css, which is the constraint
+   that keeps a drawn character inside the same world as the typed UI.
    ====================================================================== */
 const PALETTE = {
-  '0': { hex: '#0c0a09', name: 'ink-900',      note: 'the mass — deepest' },
-  '1': { hex: '#15110e', name: 'ink-800',      note: 'the mass — everything else' },
-  '2': { hex: '#1c1713', name: 'ink-700',      note: 'the mass — where it breaks' },
-  '5': { hex: '#6d1b16', name: 'stamp-deep',   note: 'what the coal throws on the brim' },
-  '6': { hex: '#c2352b', name: 'stamp',        note: 'the coal, off the boil' },
-  '7': { hex: '#dd5347', name: 'stamp-bright', note: 'the coal, being drawn on' },
-  '9': { hex: '#6b6157', name: 'text-faint',   note: 'smoke, going' },
-  'a': { hex: '#9c9083', name: 'text-dim',     note: 'smoke, new' },
-  'c': { hex: '#3d5464', name: 'carbon-dim',   note: 'the room, in shadow' },
-  'd': { hex: '#7593a8', name: 'carbon',       note: 'the room, lit' },
-  'e': { hex: '#ded3bc', name: 'paper',        note: 'the tube, the painted line' },
+  '0': { hex: '#0c0a09', name: 'ink-900',    note: 'outline, deepest shadow' },
+  '1': { hex: '#15110e', name: 'ink-800',    note: 'hat felt' },
+  '2': { hex: '#241d18', name: 'ink-600',    note: 'suit shadow, sleeve' },
+  '3': { hex: '#332a22', name: 'line',       note: 'suit mid' },
+  '4': { hex: '#4a3d31', name: 'line-lift',  note: 'lapel edge', isNew: true },
+  '5': { hex: '#6b6157', name: 'text-faint', note: 'grey, leather, smoke' },
+  '6': { hex: '#9c9083', name: 'text-dim',   note: 'ash, smoke, highlight' },
+  '7': { hex: '#e6ddcd', name: 'text',       note: 'shirt' },
+  '8': { hex: '#7d6720', name: 'brass-dim',  note: 'tobacco' },
+  '9': { hex: '#c9a227', name: 'brass',      note: 'ring, pin, button' },
+  'a': { hex: '#6d1b16', name: 'stamp-deep', note: 'tie shadow' },
+  'b': { hex: '#c2352b', name: 'stamp',      note: 'tie, ember' },
+  'c': { hex: '#5c3a26', name: 'skin-dark',  note: 'face shadow', isNew: true },
+  'd': { hex: '#8a5c3c', name: 'skin-mid',   note: 'face', isNew: true },
+  'e': { hex: '#b3835a', name: 'skin-lit',   note: 'face highlight', isNew: true },
+  'f': { hex: '#7593a8', name: 'carbon',     note: 'cold accent — unused by these three' },
 };
 
 /* ======================================================================
    2. THE SPRITES
+
+   Rows of palette keys. '.' is transparent. Read them as pictures — that is
+   the format's whole argument for existing.
    ====================================================================== */
 
-/* --- A · the ember · 24x24 -------------------------------------------
-   At icon size the man is four shapes — brim, head, shoulders, coat — and
-   the coal is what makes it a person rather than a smudge. */
+/* --- A. 24x24 bust ---------------------------------------------------
+   Icon scale. Hat brim shadow does the work the eyes cannot do at this
+   size: six colours, no gradients, one silhouette. */
 const BOSS_A = [
   '........................',
-  '........................',
-  '........................',
-  '........................',
-  '..................9.....',
-  '........................',
-  '..................9.....',
-  '.................9......',
-  '........111111..........',
-  '........111111...9......',
-  '........111111...a......',
-  '....111111111111a.......',
-  '.....00000000050a.......',
-  '.........00000067.......',
-  '.........000000.........',
-  '.........000000.........',
-  '.......1111111111.......',
-  '.......1111111111.......',
-  '......111111111111......',
-  '.....11111000011111.....',
-  '.....11111000011111.....',
-  '.....11111000011111.....',
-  '.....11111000011111.....',
-  '.....11111000011111.....',
+  '........00000000........',
+  '.......0111111110.......',
+  '.......0111111110.......',
+  '.......0222222220.......',
+  '......011111111110......',
+  '...011111111111111110...',
+  '.....00000000000000.....',
+  '........cccccccc........',
+  '.......ccd0dd0dcc.......',
+  '.......ccddccddcc.......',
+  '........cdeddedc........',
+  '........cdd00ddc........',
+  '.........cddddc.........',
+  '..........cccc..........',
+  '......333377773333......',
+  '....3333347bb7433333....',
+  '...33333347bb74333333...',
+  '..033333347bb743333330..',
+  '..033333347bb743333330..',
+  '..03333334799743333330..',
+  '..03333333bbbb33333330..',
+  '..03333333bbbb33333330..',
+  '..00000000000000000000..',
 ];
 
-/* --- B · the doorway · 32x40 -----------------------------------------
-   Enough height for the smoke to become a line rather than a dot, which is
-   the only motion this art direction has. */
+/* --- B. 32x40 half-figure --------------------------------------------
+   Panel scale. Enough rows for a face that is actually shaded, and enough
+   width for a prop — the cigar is the point: a character with a hand can
+   hold the thing the scene is about. Twelve colours. */
 const BOSS_B = [
   '................................',
   '................................',
-  '................................',
-  '......................9.........',
-  '................................',
-  '......................9.........',
-  '.......................9........',
-  '................................',
-  '.......................9........',
-  '......................9.........',
-  '................................',
-  '......................9.........',
-  '...........11111111....9........',
-  '...........11111111....9........',
-  '...........11111111...a.........',
-  '...........11111111...9.........',
-  '........1111111111111.a.........',
-  '.........00000000000.a..........',
-  '............0000000..a..........',
-  '............000000055a..........',
-  '............0000000167..........',
-  '............0000000.............',
-  '..........11111111111...........',
-  '..........11111111111...........',
-  '.......11111111111111111........',
-  '.......11111111111111111........',
-  '......1111111000001111111.......',
-  '.....111111110000011111111......',
-  '.....111111110000011111111......',
-  '.....111111110000011111111......',
-  '.....110011110000011110011......',
-  '.....110011110000011110011......',
-  '.....110011110000011110011......',
-  '.....110011110000011110011......',
-  '.....110011110000011110011......',
-  '.....110011110000011110011......',
-  '.....110011110000011110011......',
-  '.....110011110000011110011......',
-  '.....110011110000011110011......',
-  '.....110011110000011110011......',
+  '............00000000............',
+  '...........0111111110...........',
+  '..........012112211210..........',
+  '..........012112211210..........',
+  '..........011111111110..........',
+  '.........02222222222220.........',
+  '......01111111111111111110......',
+  '.......000000000000000000.......',
+  '...........cccccccccc...........',
+  '...........cc0dccd0cc...........',
+  '...........cdddccdddc...........',
+  '...........cdeddcdedc...........',
+  '...........cded00dedc...........',
+  '...........cd000000dc...........',
+  '...........cdde00eddc...........',
+  '...........cddeeeeddc...........',
+  '............cddddddc............',
+  '.............cddddc.............',
+  '..............cccc..............',
+  '..............cccc..............',
+  '..........3337cccc7333..........',
+  '........3333377cc7733333........',
+  '......33333477bbbb77433333......',
+  '.....033333477bbbb774333330.....',
+  '....0333333347bbbb7433333330....',
+  '..5.0223333347bbbb7433333220....',
+  '....0223333347bbbb7433333220....',
+  '..5.0223333347bbbb7433333220....',
+  '....0223333347bbbb7433333220....',
+  '...50223333347bbbb7433333220....',
+  '...60222dd0347bbbb7433333220....',
+  '.6b888ded90347bbbb7433333220....',
+  '....02cccc0347bbbb7433333220....',
+  '....022333334333333433333220....',
+  '....022333334333333433333220....',
+  '....022333334339933433333220....',
+  '....022333334333333433333220....',
+  '....000000000000000000000000....',
 ];
 
-/* --- C · the lot · 32x48 ---------------------------------------------
-   The reference frame: a whole man, standing on ground, with a pool of dark
-   under him. Squat on purpose — a heavy coat and short legs read as weight,
-   and weight is most of what makes a shape ominous rather than merely dark. */
+/* --- C. 32x48 standing figure ----------------------------------------
+   Board scale. Face is nine pixels and does not need to be more, because
+   at this framing recognition is carried entirely by the coat line and the
+   hat — the test is whether he reads at 1x with the face blanked. */
 const BOSS_C = [
-  '.......................9........',
-  '......................9.........',
   '................................',
-  '......................9.........',
-  '.......................9........',
-  '.............111111....9........',
-  '.............111111...a.........',
-  '.............111111...9.........',
-  '.............111111...a.........',
-  '..........1111111111.a..........',
-  '...........00000000..a..........',
-  '.............00000055a..........',
-  '.............000000167..........',
+  '................................',
+  '................................',
   '.............000000.............',
-  '...........1111111111...........',
-  '..........111111111111..........',
-  '.........11111111111111.........',
-  '........1111110000111111........',
-  '........1111110000111111........',
-  '........1111110000111111........',
-  '........1111110000111111........',
-  '........0011110000111100........',
-  '........0011110000111100........',
-  '........0011110000111100........',
-  '........0011110000111100........',
-  '........0011110000111100........',
-  '........0011110000111100........',
-  '........0011110000111100........',
-  '........0011110000111100........',
-  '........0011110000111100........',
-  '........0011110000111100........',
-  '........0011110000111100........',
-  '.......100111100001111001.......',
-  '.......100111100001111001.......',
-  '.......100111100001111001.......',
-  '.......100111100001111001.......',
-  '.......100111100001111001.......',
-  '.......100111100001111001.......',
-  '............111..111............',
-  '............111..111............',
-  '............111..111............',
-  '............111..111............',
-  '............111..111............',
-  '............111..111............',
-  '..........00000..00000..........',
-  '..........00000..00000..........',
+  '............01111110............',
+  '............01111110............',
+  '............02222220............',
+  '..........011111111110..........',
+  '...........0000000000...........',
+  '.............cccccc.............',
+  '.............c0dd0c.............',
+  '.............cddddc.............',
+  '.............cd00dc.............',
+  '..............cddc..............',
+  '..............cccc..............',
+  '...........3337cc7333...........',
+  '........0333337bb7333330........',
+  '......033333377bb773333330......',
+  '......033333477bb774333330......',
+  '......033333477bb774333330......',
+  '......033333477bb774333330......',
+  '......033333477bb774333330......',
+  '......03333334333343333330......',
+  '......03333334333343333330......',
+  '......03333334333343333330......',
+  '......03333334333343333330......',
+  '......03333334333343333330......',
+  '......03222234333343222230......',
+  '......03222234399343222230......',
+  '......03333334333343333330......',
+  '......03333334333343333330......',
+  '......03333334333343333330......',
+  '......03333334333343333330......',
+  '......03333334333343333330......',
+  '......03333334333343333330......',
+  '......03333334333343333330......',
+  '......03333334333343333330......',
+  '......00333334333343333300......',
+  '........0222222002222220........',
+  '..........022220022220..........',
+  '..........022220022220..........',
+  '..........022220022220..........',
+  '..........022220022220..........',
+  '..........022220022220..........',
+  '..........022220022220..........',
   '.........00000000000000.........',
-  '...........1111111111...........',
+  '.........05555500555550.........',
+  '........0000000000000000........',
 ];
 
 const SPRITES = [
   {
-    id: 'A', name: 'The ember', rows: BOSS_A, spec: '24 x 24',
+    id: 'A', name: 'The stamp', rows: BOSS_A,
+    spec: '24 x 24 · 6 colours',
     notes: [
-      ['Where it goes', 'Beside a name, in a row — the rival families list, a crew line. At 1x the coal is doing nearly all the work, and it is enough: an orange pixel in a dark shape is a man smoking in a doorway.'],
-      ['What it buys', 'A cast. Twenty of these is a weekend, because a silhouette has no face to get wrong twenty times.'],
-      ['What it costs', 'Every character at this size is the same shape in a different hat. Distinguishing two capos means distinguishing two coat outlines, and there are not many coats.'],
+      ['Where it goes', 'Beside a name, in a row — the rival families list, a crew line, the sit-down table. Never larger than 2x.'],
+      ['What it buys', 'One sprite per character is affordable. Twenty of these is a weekend; twenty of B is not.'],
+      ['What it costs', 'No expression, no props, no state. This man cannot look worried when his family is losing, because there is nowhere on him to put it.'],
     ],
+    cost: 2,
   },
   {
-    id: 'B', name: 'The doorway', rows: BOSS_B, spec: '32 x 40',
+    id: 'B', name: 'The sitting', rows: BOSS_B,
+    spec: '32 x 40 · 12 colours',
     notes: [
-      ['Where it goes', 'A panel header — the sit-down, a leader dossier, the succession screen. The one place the game stops and looks at a person.'],
-      ['What it buys', 'Smoke long enough to animate. Four frames of a wavering column is the cheapest way to make a still interface feel like somebody is waiting in it.'],
-      ['What it costs', 'It is the widest of the three and the game has no wide empty space in its panels. Something has to move to make room.'],
+      ['Where it goes', 'A panel header — the sit-down modal, a leader dossier, the succession screen. The one place the game stops and looks at a person.'],
+      ['What it buys', 'A face with enough rows to change, and a hand with something in it. Variants become possible: swap eight rows and he is older, or the cigar is out.'],
+      ['What it costs', 'Slowest to draw and the only one of the three that needs all four new palette entries. A cast of twenty at this fidelity is a real art budget.'],
     ],
+    cost: 4,
   },
   {
-    id: 'C', name: 'The lot', rows: BOSS_C, spec: '32 x 48',
+    id: 'C', name: 'The standing', rows: BOSS_C,
+    spec: '32 x 48 · 9 colours',
     notes: [
-      ['Where it goes', 'On ground — a district, a board. The territory system is about someone standing somewhere, and this is the only one of the three that is standing anywhere.'],
-      ['What it buys', 'Weight. The coat, the short legs and the pool of dark underneath do what a face cannot, which is imply that he was there before you looked.'],
-      ['What it costs', 'It needs a floor and a light to exist against, so it cannot be dropped into the interface — it drags a scene in with it.'],
+      ['Where it goes', 'On a board or a district — a token that occupies ground, which is the thing the territory system is actually about.'],
+      ['What it buys', 'Reads at 1x from the coat alone. Silhouette carries it, so palette swaps alone make a whole family look like a family.'],
+      ['What it costs', 'The face is nine pixels and will never be the character; identity has to come from clothing, and the game has to say who this is somewhere else.'],
     ],
+    cost: 3,
   },
 ];
 
 /* ======================================================================
-   3. THE ROOM
+   3. RENDER
 
-   A silhouette is not a sprite you can place, it is a hole that needs
-   something behind it. This paints the least room that makes the hole
-   readable: a lit back wall, a darker return either side, a strip light,
-   a floor, one painted line. Backdrop for judging by — not an asset.
+   Nearest-neighbour at integer scale, always. A pixel sprite drawn at 1.5x
+   is not a pixel sprite.
    ====================================================================== */
-function drawField(ctx, w, h, s, kind, crt) {
-  /* Under the crt skin the room goes through the same hand mapping the
-     figure does, because a silhouette judged against no wall is not judged
-     at all — it is just missing. */
-  const CRT_ROOM = { '#3d5464': '#555555', '#7593a8': '#aaaaaa', '#ded3bc': '#ffffff',
-                     '#15110e': '#000000', '#2c3d49': '#555555' };
-  const P = PALETTE, fill = (x0, y0, x1, y1, hex) => {
-    ctx.fillStyle = crt ? (CRT_ROOM[hex] || hex) : hex;
-    ctx.fillRect(x0 * s, y0 * s, (x1 - x0) * s, (y1 - y0) * s);
-  };
-  if (kind === 'well') { fill(0, 0, w, h, P.c.hex); return; }
-  if (kind !== 'lot') return;
-
-  const ceiling = Math.round(h * 0.10);
-  const floorY = Math.round(h * 0.82);
-  const pillar = Math.round(w * 0.18);
-
-  fill(0, 0, w, h, P.c.hex);                       // the room, in shadow
-  fill(pillar, ceiling, w, floorY, P.d.hex);       // the wall, running out of frame
-  fill(0, 0, w, ceiling, '#15110e');               // ceiling, and whatever is up there
-  fill(pillar, ceiling, pillar + 1, floorY, '#2c3d49');  // the pillar's lit edge
-  fill(Math.round(w * 0.30), ceiling - 2, Math.round(w * 0.86), ceiling - 1, P.e.hex);  // the tube
-  fill(0, floorY, w, h, P.c.hex);                  // floor
-  fill(pillar, floorY, w, floorY + 1, '#2c3d49');  // where the wall meets it
-  fill(Math.round(w * 0.48), h - 3, w, h - 2, P.e.hex);  // a painted line, going nowhere
-}
-
-/* ======================================================================
-   4. THE CRT SKIN
-
-   The shipped `crt` skin is not monochrome, it is the sixteen CGA colours.
-   That killed the lit-portrait draft: nearest-colour snapping put every lit
-   cheekbone at #ff5555, because #b3835a genuinely is closer to bright red
-   than to anything else in the set.
-
-   This direction barely notices. Black stays black, the coal is the one
-   thing CGA is good at, and the room goes grey. Mapped by hand anyway,
-   because meaning should pick the colour, not distance.
-   ====================================================================== */
-const CRT_MAP = {
-  '0': '#000000', '1': '#000000', '2': '#000000',
-  '5': '#aa0000', '6': '#ff5555', '7': '#ffff55',
-  '9': '#555555', 'a': '#aaaaaa',
-  'c': '#555555', 'd': '#aaaaaa', 'e': '#ffffff',
-};
-
-/* ======================================================================
-   5. RENDER — nearest-neighbour, integer scale, always
-   ====================================================================== */
+/* Defaults, overridable by query string so a still can be captured at an
+   exact setting: ?scale=8&bg=ledger&grid=on */
 const params = new URLSearchParams(location.search);
-let scale = Number(params.get('scale')) || 6;
-let bg = params.get('bg') || 'lot';
+let scale = Number(params.get('scale')) || 4;
+let bg = params.get('bg') || 'alpha';
 let grid = params.get('grid') || 'off';
 
-function draw(canvas, rows, s, opts) {
-  opts = opts || {};
-  const pad = opts.pad || 0;
-  const w = rows[0].length + pad * 2, h = rows.length + pad * 2;
-  canvas.width = w * s; canvas.height = h * s;
+function draw(canvas, rows, s, showGrid) {
+  const w = rows[0].length, h = rows.length;
+  canvas.width = w * s;
+  canvas.height = h * s;
   const ctx = canvas.getContext('2d');
   ctx.imageSmoothingEnabled = false;
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-  const crt = !!opts.crt;
-  drawField(ctx, w, h, s, opts.field, crt);
-
-  for (let y = 0; y < rows.length; y++) {
-    for (let x = 0; x < rows[y].length; x++) {
-      const key = rows[y][x];
+  for (let y = 0; y < h; y++) {
+    const row = rows[y];
+    for (let x = 0; x < row.length; x++) {
+      const key = row[x];
       if (key === '.') continue;
       const entry = PALETTE[key];
       if (!entry) { console.warn('unknown palette key', key, 'at', x, y); continue; }
-      ctx.fillStyle = crt ? CRT_MAP[key] : entry.hex;
-      ctx.fillRect((x + pad) * s, (y + pad) * s, s, s);
+      ctx.fillStyle = bg === 'crt' ? CRT_MAP[key] : entry.hex;
+      ctx.fillRect(x * s, y * s, s, s);
     }
   }
 
-  if (opts.grid && s >= 4) {
+  if (showGrid && s >= 4) {
     ctx.strokeStyle = 'rgba(230,221,205,0.12)';
+    ctx.lineWidth = 1;
     for (let x = 0; x <= w; x++) { ctx.beginPath(); ctx.moveTo(x * s + 0.5, 0); ctx.lineTo(x * s + 0.5, h * s); ctx.stroke(); }
     for (let y = 0; y <= h; y++) { ctx.beginPath(); ctx.moveTo(0, y * s + 0.5); ctx.lineTo(w * s, y * s + 0.5); ctx.stroke(); }
   }
 }
 
+/* --- The CRT skin ------------------------------------------------------
+   A sprite has to survive the shipped `crt` skin, which is not monochrome —
+   it is the sixteen CGA colours, which is worse. There is no brown in that
+   palette and nothing anywhere near skin.
+
+   Snapping each colour to its nearest CGA entry automatically was the first
+   attempt and it fails in a specific, funny way: #b3835a (the lit side of a
+   face) is closer to #ff5555 than to anything else in the set, so every
+   cheekbone in the game turns bright red. The distances are not wrong; the
+   metric just does not know that a face is a face.
+
+   So the mapping is by hand — one CGA colour chosen per palette key, by what
+   the pixel MEANS rather than by what it measures. That is the real cost line
+   for characters on this skin: every sprite needs this table, and no automatic
+   conversion will produce it.
+   ------------------------------------------------------------------------ */
+const CRT_MAP = {
+  '0': '#000000', // outline stays outline
+  '1': '#000000', // felt is the darkest thing on him
+  '2': '#000000',
+  '3': '#555555', // the suit is the whole midtone budget
+  '4': '#aaaaaa', // lapel edge, the only thing separating suit from suit
+  '5': '#555555',
+  '6': '#aaaaaa',
+  '7': '#ffffff', // shirt
+  '8': '#aa5500', // tobacco is the one thing CGA is actually good at
+  '9': '#ffff55', // brass
+  'a': '#aa0000',
+  'b': '#ff5555', // tie
+  'c': '#555555', // skin shadow
+  'd': '#aa5500', // skin mid — brown by luck, not by design
+  'e': '#aaaaaa', // skin highlight
+  'f': '#55ffff',
+};
+
 function build() {
   const sheet = document.getElementById('sheet');
   sheet.innerHTML = '';
+
   SPRITES.forEach((sp) => {
     const card = document.createElement('div');
     card.className = 'card';
-    card.innerHTML = '<header><h2>' + sp.id + ' &mdash; ' + sp.name + '</h2>' +
-                     '<span class="spec">' + sp.spec + '</span></header>';
+
+    const head = document.createElement('header');
+    head.innerHTML = '<h2>' + sp.id + ' &mdash; ' + sp.name + '</h2><span class="spec">' + sp.spec + '</span>';
+    card.appendChild(head);
 
     const stage = document.createElement('div');
     stage.className = 'stage';
     stage.dataset.bg = bg;
     const canvas = document.createElement('canvas');
-    // The room needs margin around him, or he is a man in a cupboard.
-    const roomy = bg === 'lot' || bg === 'well' || bg === 'crt';
-    draw(canvas, sp.rows, scale, {
-      grid: grid === 'on',
-      field: bg === 'well' ? 'well' : (bg === 'lot' || bg === 'crt') ? 'lot' : 'none',
-      crt: bg === 'crt',
-      pad: roomy ? 10 : 0,
-    });
+    canvas.dataset.sprite = sp.id;
     stage.appendChild(canvas);
     card.appendChild(stage);
 
@@ -499,56 +522,82 @@ function build() {
       notes.appendChild(p);
     });
     card.appendChild(notes);
+
     sheet.appendChild(card);
+    draw(canvas, sp.rows, scale, grid === 'on');
   });
 }
 
+/* The 1x proof. Every sprite dropped into mock interface at the size the
+   interface would actually give it. */
 function buildContext() {
   const wrap = document.getElementById('context');
   wrap.innerHTML = '';
-  const rivals = [['Salvatore Falcone', '4 districts'], ['Ottavia Vasari', '3 districts'], ['Guido Kestler', '2 districts']];
 
-  [['On the panel as it is — 1x', false, true], ['In a lit well — 1x', true, false], ['In a lit well — 2x', true, false]].forEach(([title, well, bad], i) => {
+  const rivals = [
+    ['Falcone', 'Salvatore Falcone', '4 districts'],
+    ['Vasari', 'Ottavia Vasari', '3 districts'],
+    ['Kestler', 'Guido Kestler', '2 districts'],
+  ];
+
+  // A, at 1x and 2x, in a list.
+  [1, 2].forEach((s) => {
     const panel = document.createElement('div');
     panel.className = 'fake-panel';
-    panel.innerHTML = '<div class="title' + (bad ? ' bad' : '') + '">Rival families &mdash; ' + title + '</div>';
-    rivals.forEach(([name, land]) => {
+    panel.innerHTML = '<div class="title">Rival families &mdash; A at ' + s + 'x</div>';
+    rivals.forEach(([, name, land]) => {
       const line = document.createElement('div');
       line.className = 'fake-line';
       const c = document.createElement('canvas');
-      draw(c, BOSS_A, i === 2 ? 2 : 1, { field: well ? 'well' : 'none', pad: well ? 1 : 0 });
-      if (well) { const box = document.createElement('span'); box.className = 'well'; box.appendChild(c); line.appendChild(box); }
-      else line.appendChild(c);
-      const n = document.createElement('span'); n.className = 'name'; n.textContent = name; line.appendChild(n);
-      const v = document.createElement('span'); v.className = 'dim'; v.textContent = land; line.appendChild(v);
+      draw(c, BOSS_A, s, false);
+      line.appendChild(c);
+      const n = document.createElement('span');
+      n.className = 'name';
+      n.textContent = name;
+      line.appendChild(n);
+      const v = document.createElement('span');
+      v.className = 'dim';
+      v.textContent = land;
+      line.appendChild(v);
       panel.appendChild(line);
     });
     wrap.appendChild(panel);
   });
 
+  // B, in a dossier header.
   const dossier = document.createElement('div');
   dossier.className = 'fake-panel';
-  dossier.innerHTML = '<div class="title">Sit-down &mdash; B at 2x, over the lot</div>';
-  const row = document.createElement('div');
-  row.style.cssText = 'display:flex;gap:14px';
+  dossier.innerHTML = '<div class="title">Sit-down &mdash; B at 2x</div>';
+  const dRow = document.createElement('div');
+  dRow.style.display = 'flex';
+  dRow.style.gap = '14px';
   const dc = document.createElement('canvas');
-  draw(dc, BOSS_B, 2, { field: 'lot', pad: 4 });
-  row.appendChild(dc);
-  const t = document.createElement('div');
-  t.innerHTML = '<div style="font-family:var(--font-display);letter-spacing:.1em;text-transform:uppercase">Salvatore Falcone</div>' +
+  draw(dc, BOSS_B, 2, false);
+  dRow.appendChild(dc);
+  const dText = document.createElement('div');
+  dText.innerHTML =
+    '<div style="font-family:var(--font-display);letter-spacing:.1em;text-transform:uppercase">Salvatore Falcone</div>' +
     '<div style="color:var(--text-faint)">Boss, Falcone &middot; 61</div>' +
-    '<div style="color:var(--text-dim);margin-top:8px;max-width:28ch">Moves slowly and has never once had to move twice.</div>';
-  row.appendChild(t);
-  dossier.appendChild(row);
+    '<div style="color:var(--text-dim);margin-top:8px;max-width:30ch">' +
+    'Moves slowly and has never once had to move twice.</div>';
+  dRow.appendChild(dText);
+  dossier.appendChild(dRow);
   wrap.appendChild(dossier);
 
+  // C, on a strip of ground.
   const board = document.createElement('div');
   board.className = 'fake-panel';
-  board.innerHTML = '<div class="title">District &mdash; C at 1x and 2x, on ground</div>';
-  const brow = document.createElement('div');
-  brow.style.cssText = 'display:flex;gap:18px;align-items:flex-end';
-  [1, 2].forEach((s) => { const c = document.createElement('canvas'); draw(c, BOSS_C, s, { field: 'lot', pad: 4 }); brow.appendChild(c); });
-  board.appendChild(brow);
+  board.innerHTML = '<div class="title">District &mdash; C at 1x and 2x</div>';
+  const bRow = document.createElement('div');
+  bRow.style.display = 'flex';
+  bRow.style.gap = '18px';
+  bRow.style.alignItems = 'flex-end';
+  [1, 2].forEach((s) => {
+    const c = document.createElement('canvas');
+    draw(c, BOSS_C, s, false);
+    bRow.appendChild(c);
+  });
+  board.appendChild(bRow);
   wrap.appendChild(board);
 }
 
@@ -557,17 +606,12 @@ function buildRamp() {
   ramp.innerHTML = '';
   Object.entries(PALETTE).forEach(([key, v]) => {
     const d = document.createElement('div');
-    d.style.background = bg === 'crt' ? CRT_MAP[key] : v.hex;
+    d.style.background = v.hex;
+    if (v.isNew) d.dataset.new = '1';
     d.title = v.name + ' — ' + v.note + (bg === 'crt' ? ' → ' + CRT_MAP[key] : '');
+    if (bg === 'crt') d.style.background = CRT_MAP[key];
     d.innerHTML = '<span>' + key + '</span>';
     ramp.appendChild(d);
-  });
-}
-
-function syncControls() {
-  [['scale', String(scale)], ['bg', bg], ['grid', grid]].forEach(([id, v]) => {
-    [...document.getElementById(id).querySelectorAll('button')].forEach((b) =>
-      b.setAttribute('aria-pressed', String(b.dataset.v === v)));
   });
 }
 
@@ -581,8 +625,15 @@ function wire(id, apply) {
   });
 }
 
+function syncControls() {
+  [['scale', String(scale)], ['bg', bg], ['grid', grid]].forEach(([id, v]) => {
+    [...document.getElementById(id).querySelectorAll('button')].forEach((b) =>
+      b.setAttribute('aria-pressed', String(b.dataset.v === v)));
+  });
+}
+
 wire('scale', (v) => { scale = Number(v); build(); });
-wire('bg', (v) => { bg = v; build(); buildRamp(); });
+wire('bg', (v) => { bg = v; build(); buildContext(); buildRamp(); });
 wire('grid', (v) => { grid = v; build(); });
 
 syncControls();
