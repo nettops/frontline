@@ -9,6 +9,72 @@ pieces and what is deliberately allowed to differ. Short version: palette
 family, light logic and craft floor are fixed; pixel scale, fidelity, framing
 and mood are not, and should not be.
 
+## pixel-crew.html — rank you can see, familiarity you have to earn
+
+Models for the roster, on two axes that are both already in the simulation.
+
+```bash
+open prototypes/pixel-crew.html          # or: xdg-open
+```
+
+### Rank, worn
+
+`RankId` in `sim/types.ts` is seven values, `street_criminal` up to
+`crime_lord`, and rank is the one thing about a man the player is always
+allowed to see — so it goes on the outside. A half-figure cut at the waist
+cannot show an overcoat, so it is carried by the four things the frame can
+show: headgear (cap → fedora → homburg), collar (open → tie), build, and how
+good the cloth is. That last one is the only gradient that runs the whole
+ladder, and it is doing most of the work.
+
+### Familiarity, earned
+
+This is the part worth having. Every `Npc` carries a `familiarity`, 0..100,
+starting at `STARTING_FAMILIARITY = 5`. And `memories.ts` already gates recall
+on it:
+
+```ts
+if (npc.familiarity < RECALL.visibleAbove) return [];   // 55
+```
+
+The game has always said the player cannot read a man he has not worked with.
+`perceive()` blurs his stats, `memory.ts` hides what he is carrying — every
+system obeys it except the art, which drew a new hire and a man you had run
+twenty jobs with identically.
+
+So the sprite resolves as familiarity rises, and it breaks on the game's own
+constants rather than on invented ones:
+
+| | | |
+| --- | --- | --- |
+| **5** | a shape | `STARTING_FAMILIARITY` — the silhouette, two near-blacks and the outline. Rank still reads. Nothing else does. |
+| **30** | you would know him again | drawn but drained: pulled toward a neutral, hue and contrast both flattened |
+| **55** | a face, and a past | `RECALL.visibleAbove`. The palette is simply correct — his face arrives on the same line his memories do |
+| **88** | you know him | lit: warm key from the upper left, the shadow side dropped, a rim off an exact silhouette |
+
+Nothing is redrawn below the top tier. It is one sprite and four palettes —
+the transform is about twenty lines. The top tier adds a light pass over the
+same flat sprite rather than a second drawing.
+
+### Why this is the useful version of "crew models"
+
+The roster at the bottom of the page is the point: seven crew at mixed
+familiarity, and **two of them are shapes**. That is not the renderer failing.
+It is the answer to "who would you actually trust with this", available at a
+glance, in a game whose central claim is that you never really know your
+people. A roster where everyone is equally drawn throws that away for free.
+
+This is the fidelity axis in `ART-DIRECTION.md` doing a job rather than being
+decoration — the resolution *is* the information.
+
+### What it does not do yet
+
+Ranks are hand-specced here. In the game a crew member's look would have to be
+derived from the person — seeded off the same RNG that generates them, so the
+same man looks the same across a save — which is the open question already
+noted under `pixel-cast.html` and still the one thing standing between these
+sheets and something shippable.
+
 ## pixel-portrait.html — the same man at two fidelities
 
 The demonstration for `ART-DIRECTION.md`, and the reason that note exists.
