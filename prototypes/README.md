@@ -4,11 +4,13 @@ Not shipped. Nothing in `src/` imports anything here, and nothing here is in the
 build output — that is the point of the folder. These are things that were built
 to be looked at and then argued with.
 
-## pixel-arms.html — sixteen pieces, and a warning about where they go
+## pixel-arms.html — thirty-one pieces, and a warning about where they go
 
-Sixteen pieces of 1978 hardware, side-on in a fixed 48 × 16 cell, muzzle left,
-in three finishes. Drafted off a modern shooter's weapon sheet, of which almost
-nothing survived contact with this game and two things did.
+Thirty-one pieces of 1978 hardware, side-on in a fixed 48 × 16 cell, business
+end left, in three finishes: firearms, edge and point and wire, blunt objects
+that are also tools, fire, and charges. Drafted off a modern shooter's weapon
+sheet, of which almost nothing survived contact with this game and two things
+did.
 
 ### To look at it
 
@@ -16,8 +18,8 @@ nothing survived contact with this game and two things did.
 open prototypes/pixel-arms.html          # or: xdg-open
 ```
 
-`?scale=4&finish=nickel&bg=paper` — finishes are `blued`, `blacked`, `nickel`;
-grounds are `panel`, `paper`, `alpha`.
+`?scale=4&finish=nickel&by=kind&bg=paper` — finishes are `blued`, `blacked`,
+`nickel`; sorts are `cls` and `kind`; grounds are `panel`, `paper`, `alpha`.
 
 ### What translated, and what did not
 
@@ -37,6 +39,17 @@ unit, and a razor in a coat pocket and a shotgun carried down a street are not
 the same risk. The classes are `pocket`, `coat`, `long`, and the cell says
 which by how much of it the thing fills — the sprite is the stat.
 
+**The other sort: what it leaves behind.** Every row carries one line of it,
+and switching the sheet to **by kind** groups on it. This is the axis that
+turned out to matter most, because it exposes something in the simulation:
+`EvidenceTrace.source` is `'operation' | 'violence' | 'finance' | 'informant'`,
+which puts a straight razor and a bundle of sticks in the same bucket. They
+are not the same bucket. A razor leaves a body and nothing that traces back; a
+charge leaves a crater and three agencies, and in 1978 that is federal rather
+than city. If hardware is ever modelled, that distinction is worth more than
+any damage number would be — it is the difference between the case the player
+is already playing against and a different one opening beside it.
+
 **Across the sheet: where it came from.** Not rarity, which this game has no
 concept of. Provenance. *Blued* is what you buy, with a serial on it and a
 paper trail somebody else started. *Blacked* is what you use, and no loss when
@@ -49,12 +62,14 @@ The metal ramp is the game's own `--carbon` and `--carbon-dim` — the cold
 institutional blue reserved for law enforcement. That started as an accident of
 what was already in `theme.css` and then it stopped being one: it is the right
 colour for steel and the right joke about it. Walnut reuses the brown skin ramp
-from `pixel-cast.html` unchanged. Two new darks for the deepest metal, and
-nothing else.
+from `pixel-cast.html` unchanged, and the charges use `--stamp` and
+`--stamp-deep` for wrapped paper and `--ok`/`--ok-dim` for a surplus tin —
+both already in `theme.css`. Two new darks for the deepest metal, and nothing
+else.
 
 ### The warning
 
-**Fifteen of these sixteen sprites have nowhere to go.** The simulation does
+**Thirty of these thirty-one sprites have nowhere to go.** The simulation does
 not model weapons. Crew do not carry anything, operations roll a consequence
 rather than a firefight, and violence is a number in `evidence: 'violence'`.
 The one sprite the game can ask for today is the crate, because
@@ -70,8 +85,11 @@ The cheapest version, if one is wanted: the class is already a heat modifier
 and nothing else. A piece carried on an operation shifts the heat it generates
 and what a failure leaves behind, and provenance decides whether a recovered
 one points at you. That is three numbers and one field on a person, and it
-would use nine of the sixteen. The rest are set dressing until something wants
-them.
+would use most of the firearms and all of the close work. Charges are the one
+group that cannot be done that cheaply — the whole reason to have them is that
+they change *who* is looking, and there is nowhere in `lawEnforcement.ts` that
+currently models a second agency arriving. Draw them, park them, and do not
+ship them until that exists.
 
 ### One deliberate limit
 
