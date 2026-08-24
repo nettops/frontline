@@ -129,6 +129,36 @@ export interface CivicFigureDef {
    before this and the repair here is a bar placement rather than a better
    reading; mean sentiment across worked districts remains a nearly constant
    number, and if it is ever asked to carry more it will need a sharper input.
+
+   ## And every figure above was plotted against a family that had stopped working
+
+   `ladder.probe`'s bot ended its job loop on a `break` against a list sorted by
+   expected value, so one job it could not crew stopped every cheaper job below
+   it being considered. It stood still on two days in five, and the freeze
+   deepened as the board opened — 46 jobs before day 90 falling to 21 after day
+   180. Every figure in the tables above is a reading of that family.
+
+   With the bot fixed and given the heat counterplay it never had, the same
+   four read:
+
+       captain   24/36     union   36/36     judge   16/36     alderman  0/36
+
+   The captain and the judge held. The other two broke in opposite directions
+   and both are the reading rather than the bar:
+
+     - **The union owes everybody.** 36 of 36, whatever they do. Counting
+       controlled ground was the right correction and it is still a number a
+       working family maxes out; it is a subscription again.
+
+     - **The alderman owes nobody.** 0 of 36. Mean sentiment where working fell
+       from 44 to 35 the moment the family started working, because working a
+       district is what costs sentiment. That makes him the one figure in this
+       game whose favour gets *further away* the more you play, which is
+       backwards, and it is the sharper input the paragraph above said he would
+       need. A bar placement cannot fix a reading that runs the wrong way.
+
+   Neither bar is moved. `ladder.probe` is left red on both, which is what that
+   file's own comment says to do with a target for this config.
 */
 export const CIVIC_FIGURES: CivicFigureDef[] = [
   {

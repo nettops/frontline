@@ -135,7 +135,26 @@ export const CAREER_SHAPES: CareerShapeDef[] = [
  * compounding group without naming all of it.
  */
 export const SHAPE_BARS = {
-  /** Districts held for the Kingpin. The 75th percentile at day 300 is 4. */
+  /**
+   * Districts held for the Kingpin. The 75th percentile at day 300 was 4.
+   *
+   * **This bar no longer separates anybody, and no value of it would.**
+   * `ladder.probe`'s bot was ending its job loop on a `break` against a list
+   * sorted by expected value, so it stood still on two days in five and got
+   * quieter the better the board got. Every distribution in that file was a
+   * statement about a family that had largely stopped working.
+   *
+   * With it fixed, districts held at day 300 read: 35 careers on exactly 4,
+   * one on 3. A point mass. A bar of 4 hands "The Kingpin" to 35 of 36 careers
+   * — the horoscope this file's header forbids — and a bar of 5 hands it to
+   * nobody. There is nowhere between them to stand.
+   *
+   * So this is not a re-plot. The Kingpin needs to read something with spread
+   * in it: districts at *dominance* rather than control, or ground held
+   * against ground the rivals hold, or how long it was held. Left at 4 and
+   * left failing in `ladder.probe`, deliberately, because a bar that reports a
+   * broken reading is worth more than one moved to hide it.
+   */
   kingpinDistricts: 4,
   /**
    * Estate for the Financial Boss.

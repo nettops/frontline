@@ -48,7 +48,7 @@ import {
 import { canPromote, canRecruit, promote, recruit, recruitCost } from '../crew';
 import { cleanWorth, putAway, takeBack, totalFunds, weeklyWageBill } from '../economy';
 import { HOLDINGS } from '../../config/economy';
-import { isLayingLow } from '../heat';
+import { isLayingLow, startLayLow } from '../heat';
 import { fearLevel, maxCrew } from '../player';
 import { acquireBusiness, canAcquire, healthPressure, launderCut, launderOutlook } from '../business';
 import { BUSINESSES, HEALTH } from '../../config/businesses';
@@ -63,7 +63,7 @@ import { claimStrength, eligibleHeirs, heirOf, nameHeir } from '../succession';
 import { CLAIM } from '../../config/succession';
 import { estate } from '../estate';
 import { TERRITORIES } from '../../config/territories';
-import { OPERATIONS } from '../../config/operations';
+import { OPERATIONS, DEFAULT_APPROACH, type ApproachId } from '../../config/operations';
 import {
   atWar,
   bond,
@@ -659,6 +659,9 @@ interface Climb {
    * exactly what counting ids would hide.
    */
   /** Loans taken to reach a front. See `Policy.financeFronts`. */
+  /** Jobs launched per era, and days the job loop launched nothing. */
+  launchEra: number[];
+  deadDays: number;
   borrowed: number;
   /**
    * The other families, and whether anything was ever open against them.
@@ -927,6 +930,18 @@ function climb(seed: number, days: number, policy: Policy = {}): Climb {
   let legalWeeks = 0;
   /** Loans taken to reach a front. Zero on every arm but `financeFronts`. */
   let borrowed = 0;
+  /**
+   * Jobs launched before day 90, 90-179, and after — and days the job loop was
+   * entered and came out having launched nothing.
+   *
+   * Here because this bot spent years standing still without anybody noticing.
+   * A probe that does not work is not a slow probe, it is a probe measuring a
+   * different game, and no other reading in this file could see it: every bar
+   * was a statement about a family that happened to be idle on two days in
+   * five and got quieter the better the board got.
+   */
+  const launchEra = [0, 0, 0];
+  let deadDays = 0;
   const rivalWatch = {
     weeks: 0,
     neutralWeeks: 0,
@@ -1348,7 +1363,37 @@ function climb(seed: number, days: number, policy: Policy = {}): Climb {
       }
     }
 
-    if (!isLayingLow(state) && state.org.heat < 70) {
+    /*
+       The counterplay against heat, which no bot in this project has ever had.
+
+       F7, and it was hiding behind a defect. This block used to open
+       `if (!isLayingLow(state) && state.org.heat < 70)` — so at 70 the bot
+       simply stopped, which is the worst available answer: it loses the
+       income *and* does not get the accelerated decay. Round 13's loudest
+       complaint was that the punishment for heat is 14 days of pressing +1
+       week, and this bot was doing exactly that on purpose.
+
+       The game's actual answer is `startLayLow`: street heat comes off four
+       times faster, and since round 13 quiet work still moves while dark.
+       Nothing in this project had ever exercised either half.
+
+       So the same 70 the bot already used as its line now triggers the cure
+       rather than a wait. No new threshold is invented here — the number was
+       already this bot's, it was just being spent on standing still.
+
+       **And while dark it stops, which the first version of this got wrong.**
+       Quiet work does still move while laying low, so the obvious rule was to
+       keep earning on it. Measured, that took mean heat from 65 to **98.9**:
+       `addHeat` resets `quietDays`, so a family that runs one quiet job a day
+       while dark pays the respect for going quiet and never cools at all.
+       `canLaunch` says so directly — a job launched while dark still costs
+       that day's decay, and that is what keeps quiet work a decision rather
+       than a free lunch. The bot was taking the lunch.
+    */
+    if (!isLayingLow(state) && state.org.heat >= 70) startLayLow(state);
+    const how: ApproachId = DEFAULT_APPROACH;
+
+    if (!isLayingLow(state)) {
       /*
          Finish the district you started, then start the next one.
 
@@ -1551,7 +1596,7 @@ function climb(seed: number, days: number, policy: Policy = {}): Climb {
                   setup.id,
                   hands.slice(0, setup.crewRequired).map((n) => n.id),
                   sc.territoryId,
-                  undefined,
+                  how,
                   sc.id,
                 ),
               );
@@ -1563,6 +1608,7 @@ function climb(seed: number, days: number, policy: Policy = {}): Climb {
           }
         }
 
+        const launchedBefore = launchEra[0] + launchEra[1] + launchEra[2];
         const options = availableOperations(state)
           .filter((o) => operationCost(state, o) <= spendable)
           /*
@@ -1595,22 +1641,24 @@ function climb(seed: number, days: number, policy: Policy = {}): Climb {
         for (const def of options) {
           const bodies = crewNeeded(state, def);
           /*
-             This is a `break` and it should probably be a `continue`.
+             `continue`, and it was a `break` for years.
 
              `options` is sorted by expected value, not by how many bodies a
-             job needs, so one body-hungry job at the top stops everything
-             below it from being considered at all. Measured while diagnosing
-             score expiry: on 533 days a ready, fully staffable score target
-             sat further down this list when the loop broke out over a job the
-             family could not crew — 77% of the days a window was open, ready
-             and unused.
+             job needs, so one body-hungry job at the top of the list stopped
+             every cheaper job below it from being considered at all. A day
+             where the best job wanted twelve and the family had six was a day
+             the bot did nothing, while a four-man job it could have run sat
+             two rows down.
 
-             Left alone deliberately. It is a defect in this bot rather than in
-             the game, and every pre-committed bar in this file was set against
-             a bot that does this. Changing it is its own piece of work with
-             its own re-baselining.
+             Found while diagnosing why score windows expire: on 533 days a
+             ready, fully staffable score target sat further down this list
+             when the loop broke out — 77% of the days a window was open, ready
+             and unused. The line two below it has always been a `continue` for
+             exactly this reason, about money.
+
+             The re-baseline this caused is recorded at the bars that moved.
           */
-          if (idle(state).length < bodies) break;
+          if (idle(state).length < bodies) continue;
           // The game refuses a second solo job now, so the bot does not have
           // to. Kept as a comment because the line that used to be here was a
           // workaround for a real defect nobody had noticed.
@@ -1626,8 +1674,10 @@ function climb(seed: number, days: number, policy: Policy = {}): Climb {
               // A prepared job runs where it was prepared. Anywhere else and
               // the gear was got ready for somewhere the crew never went.
               sc ? sc.territoryId : where,
+              how,
             ),
           );
+          if (out) launchEra[state.day < 90 ? 0 : state.day < 180 ? 1 : 2] += 1;
           if (out && policy.scores && SCORE_TARGETS[def.id]) {
             if (sc) {
               scoring.prepped += 1;
@@ -1641,6 +1691,7 @@ function climb(seed: number, days: number, policy: Policy = {}): Climb {
             }
           }
         }
+        if (launchEra[0] + launchEra[1] + launchEra[2] === launchedBefore) deadDays += 1;
       }
     }
 
@@ -2738,6 +2789,8 @@ function climb(seed: number, days: number, policy: Policy = {}): Climb {
       dialTurns: newSys.dialTurns,
       dialWeeks: newSys.dialWeeks,
     },
+    launchEra,
+    deadDays,
     borrowed,
     rivals: {
       weeks: rivalWatch.weeks,
@@ -3430,6 +3483,13 @@ describe('the ladder, over the 300 days a person plays', () => {
        The bar stays where it was written. Moving it to 25% would make the suite
        green and would mean nothing, and this project has a rule about that
        which exists because the alternative has cost it four rounds.
+
+       **Red again since the bot was fixed, at 32%.** It read 34% against a bot
+       that stood still on two days in five, which is the same claim measured
+       against a career with less of everything in it: a family that works
+       meets more authored situations early, so the authored pool supplies more
+       of the late ones too. The shortfall is unchanged in kind — six generated
+       shapes against twenty-two authored ones — and so is the bar.
     */
     expect(lived.length, 'nothing lived long enough to have a back half').toBeGreaterThan(8);
     expect(allLate, 'no late situations at all, so the share below is meaningless').toBeGreaterThan(20);
@@ -3590,6 +3650,24 @@ describe('the systems nobody had measured', () => {
        are targets for `config/civic.ts`; neither may be moved to make the
        config pass.
     */
+    /*
+       **Two of the four are red since the bot was fixed, in opposite
+       directions, and that is this bar working.**
+
+       With the bot idle on two days in five: captain 25, union 29, judge 20,
+       alderman 14 — all four inside. A family that actually works reads
+       captain 24, union 36, judge 16, alderman 0.
+
+       The union owes every career whatever they do, which makes it a fixture
+       rather than a relationship. The alderman owes nobody: he reads mean
+       sentiment across worked districts, working a district costs sentiment,
+       and that figure fell from 44 to 35 the moment the bot stopped standing
+       still — so his favour is the one thing in this game that gets further
+       away the more you play.
+
+       Both are `config/civic.ts` work and neither bar moves. The comment above
+       says so, and it said so before either of them went red.
+    */
     for (const f of CIVIC_FIGURES) {
       const owed = c.filter((x) => x.byFigure[f.id]?.everOwed).length;
       expect(owed, `the ${f.id} is out of reach of almost every career`).toBeGreaterThanOrEqual(9);
@@ -3632,7 +3710,33 @@ describe('the systems nobody had measured', () => {
        system working.
 
        A target for `SHAPE_BARS`, not a threshold on this file.
+
+       **Red since the bot was fixed, and it cannot be fixed here.** With the
+       bot idle on two days in five this read kingpin 12, don 10, diplomat 8,
+       unremarkable 4, financier 2 — a spread. A family that actually works
+       reads kingpin 35 of 36, because `kingpinDistricts` is 4 and the district
+       count has collapsed to a point mass: 35 careers hold exactly 4 and one
+       holds 3. No value of that bar separates anybody — 4 names everyone, 5
+       names nobody.
+
+       So this is not a bar to re-plot. It is `SHAPE_BARS.kingpinDistricts`
+       reading a quantity that no longer varies across careers, and the fix is
+       to give the Kingpin something with spread in it to read. Recorded in
+       `config/legacy.ts` beside the bar.
     */
+    /*
+       What the Kingpin bar is actually reading, printed because it turned out
+       to have no spread at all. See the note under the assertion.
+    */
+    const d = RUNS_300.map((r) => r.bestDistricts).sort((a, b) => a - b);
+    const hist = new Map<number, number>();
+    for (const n of d) hist.set(n, (hist.get(n) ?? 0) + 1);
+    // eslint-disable-next-line no-console
+    console.log(
+      `         districts held at day 300 — ` +
+        [...hist].sort((a, b) => a[0] - b[0]).map(([k, n]) => `${k}: ${n}`).join(', ') +
+        ` · 40th/median/75th/90th ${pct(d, 0.4)} / ${median(d)} / ${pct(d, 0.75)} / ${pct(d, 0.9)}`,
+    );
     const named = [...shapes].filter(([k]) => k !== 'unremarkable').sort((a, b) => b[1] - a[1]);
     if (named.length) {
       expect(
@@ -3956,6 +4060,49 @@ describe('the month in front of the job', () => {
       pct(withScores, 0.75),
       'building up to jobs leaves the family with nobody spare most weeks',
     ).toBeLessThan(0.75);
+  });
+
+  it('says whether the bot works at all, which it did not', () => {
+    const era = [0, 1, 2].map((i) => median(RUNS_300.map((r) => r.launchEra[i])));
+    const dead = RUNS_300.map((r) => r.deadDays).sort((a, b) => a - b);
+
+    // eslint-disable-next-line no-console
+    console.log(
+      `work: jobs launched per career, median — before day 90 ${era[0]}, ` +
+        `day 90-179 ${era[1]}, day 180-299 ${era[2]}
+` +
+        `      days the loop ran and launched nothing, 25th/median/75th ` +
+        `${pct(dead, 0.25)} / ${median(dead)} / ${pct(dead, 0.75)} of 300`,
+    );
+
+    /*
+       The bar that would have caught it, added after it did not.
+
+       This bot's job loop ended `if (idle(state).length < bodies) break;`
+       against a list sorted by expected value rather than by bodies, so one
+       twelve-man job at the top stopped every cheaper job below it from being
+       considered. On a day the family could not crew its best option it did
+       nothing at all — and because the best option gets bigger as the board
+       opens, the freeze deepened over a career:
+
+           jobs launched per career, median      before day 90 / 90-179 / 180+
+             with the break                            46 / 22 / 21
+             with continue                            109 / 84 / 94
+           days the loop ran and launched nothing
+             with the break                       116 of 300
+             with continue                          0
+
+       Every pre-committed figure in this file was set against the first row.
+       The four bars that moved when it was fixed carry their own notes.
+
+       A bar on idleness rather than on volume, because volume is a policy and
+       standing still is a defect. A quarter of a career is generous — the
+       point is to catch a return to a third or a half, not to pin a rate.
+    */
+    expect(
+      median(dead) / 300,
+      'the bot is idle on most of the days it could be working',
+    ).toBeLessThan(0.25);
   });
 
   it('says why a window shuts, and whether the game took it', () => {

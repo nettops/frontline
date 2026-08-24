@@ -346,6 +346,11 @@ anything.
 
 ## 8. What the arm measured, and what it moved
 
+> **Every figure in sections 8 and 9 was measured before the probe bot itself
+> was repaired.** That bot stood still on two days in five. Section 11 carries
+> the corrected readings; the sections below are left as they were written,
+> because what was believed at the time is the point of the record.
+
 Thirty-six careers, 300 days, the same seeds as every other bar in
 `ladder.probe.test.ts`, against the same bot with the feature switched off.
 
@@ -502,7 +507,97 @@ stake it, nobody to send, or still preparing on the last morning.
 
 ## 10. Still open
 
-**The probe's `break`.** §9.2. Its own piece of work.
+**~~The probe's `break`.~~** Done — §11.
 
 **Phase two stays deferred.** The take-up bar is met, so named targets are no
 longer blocked by §6's condition; they are simply not built.
+
+---
+
+## 11. The instrument was wrong underneath all of it
+
+Everything above was measured through `ladder.probe`'s bot, and that bot's job
+loop ended:
+
+    for (const def of options) {
+      const bodies = crewNeeded(state, def);
+      if (idle(state).length < bodies) break;
+
+`options` is sorted by expected value, not by how many bodies a job needs. So
+one twelve-man job at the top of the list stopped every cheaper job below it
+from being considered, and on a day the family could not crew its best option
+it did nothing at all. Because the best option gets bigger as the board opens,
+the freeze deepened over a career.
+
+    jobs launched per career, median   before day 90 / 90-179 / 180+
+      with the break                        46 / 22 / 21
+      with continue                        109 / 84 / 94
+    days the job loop ran and launched nothing
+      with the break                   116 of 300
+      with continue                      0
+
+Found while diagnosing section 9's "ready, not picked". Recorded there as the
+instrument's fault and then fixed, along with the second thing it was hiding.
+
+### 11.1 The bot had no answer to heat, and that was the bigger half
+
+With the freeze gone the bot worked every day, and mean heat went from 56.8 to
+**65.4** with **0 of 804** cases ever closing. Its rule at 70 was to *stop* —
+which is the worst answer available, because it loses the income and does not
+get the accelerated decay either. Round 13's loudest complaint was that the
+punishment for heat is fourteen days of pressing +1 week, and this bot was
+doing exactly that on purpose. F7 in full: no instrument in this project had
+ever laid low.
+
+The same 70 now triggers `startLayLow` instead of a wait. No new threshold —
+the number was already the bot's.
+
+**The first version of that kept working on quiet jobs while dark**, since
+`canLaunch` allows it. Mean heat went to **98.9**. `addHeat` resets
+`quietDays`, so a family that runs one quiet job a day while dark pays the
+respect and never cools — which is what `canLaunch`'s own comment says keeps
+quiet work a decision rather than a free lunch. The bot was taking the lunch.
+Going properly dark brought mean heat to **57.4** while doing five times the
+work of the frozen bot.
+
+### 11.2 What that did to this feature
+
+    take-up               35/36 careers   ->  36/36
+    first score, median   day 89          ->  day 67
+    windows shut          116/414 (28%)   ->  12/594 (2%)
+    prepared night        59% odds        ->  58%
+    bare night            43%             ->  42%
+    bodies, prepared/bare 3 / 4           ->  3 / 4
+
+**Section 9.3 needs correcting.** It argued heat should not pause the clock,
+and that a score dying of heat was the feature working — measured against a bot
+with no answer to heat, where "too hot to work" was 40% of every day a doomed
+score lived. With the counterplay it is **3%**, and expiry is almost entirely
+money: 9 of the 12 remaining windows shut because the family could not stake
+the job.
+
+The conclusion stands and the evidence for it does not. Heat still should not
+pause the clock — it is a choice and not a refusal — but the case for that is
+now that a player with the counterplay barely meets it, rather than that
+meeting it is a fair punishment.
+
+### 11.3 Three bars are red and stay red
+
+The fixed instrument reports three things the frozen one could not see. All
+three are pre-committed targets whose own comments forbid moving them, and all
+three are config work rather than probe work.
+
+**The union owes every career** — 36 of 36, whatever they do. A subscription
+rather than a relationship.
+
+**The alderman owes nobody** — 0 of 36, down from 14. He reads mean sentiment
+across worked districts, and working a district is what costs sentiment, so his
+favour is the one thing in this game that gets further away the more you play.
+`config/civic.ts` already predicted he would need "a sharper input"; this is it.
+
+**The Kingpin names 35 careers in 36.** `SHAPE_BARS.kingpinDistricts` is 4 and
+the district count has collapsed to a point mass — 35 careers hold exactly 4,
+one holds 3. No value of that bar separates anybody. It needs a reading with
+spread in it, not a re-plot.
+
+Recorded at each bar and in `config/civic.ts` and `config/legacy.ts`.
