@@ -584,6 +584,47 @@ table.data tr.clickable {
    `.table-wrap`, which scrolls, so the width has somewhere to go — and a table
    that scrolls is the behaviour that wrapper exists for. A shredded name is not.
 */
+/*
+   Crew portraits.
+
+   Pixel art in an interface made of type, so the two rules that matter are:
+   never resample it, and never let it become the loudest thing in a row. It
+   sits at the same optical weight as the name beside it and is drawn at
+   whatever integer scale the caller asks for.
+*/
+.crew-portrait {
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  display: block;
+  flex: none;
+  background: var(--ink-700);
+  border: 1px solid var(--line-soft);
+}
+
+.name-cell.with-portrait {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+}
+
+.name-cell.with-portrait > div {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.portrait-block {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  margin-bottom: 12px;
+}
+
+.portrait-block .crew-portrait {
+  background: var(--ink-800);
+}
+
 .name-cell {
   display: flex;
   flex-direction: column;

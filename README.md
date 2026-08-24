@@ -41,6 +41,15 @@ shrinks only by working alongside them. Weekly, everyone re-evaluates their
 position against pay, promotions, danger and whatever they are still holding
 against you. Skimming starts silently; you are not told.
 
+Their portraits obey the same rule. A crew member's face is derived from his id
+— never stored, and never drawn from the simulation's RNG, so it survives a
+reload without costing the seeded stream a roll — and how much of it you can
+see is his `familiarity`, resolved on the same `PERCEPTION_TIERS` that blur his
+stats. A man you have not worked with is a silhouette with a rank on it. At 60
+he has a face, which is the same line `memories.ts` uses to start telling you
+what he is carrying. At 85 he is lit. It is one sprite and a palette per tier:
+`ui/art/`.
+
 **Heat** is sticky. It decays only after quiet days, decays slower the higher it
 is, and feeds back into operation success — so attention causes failures which
 cause attention. The main lever against it is working *beneath your standing*:

@@ -11,6 +11,11 @@ and mood are not, and should not be.
 
 ## pixel-crew.html — rank you can see, familiarity you have to earn
 
+> **Shipped.** This one is in the game. The parts library, the derivation and
+> the familiarity resolve now live in `src/ui/art/` and the portraits render in
+> the Organization panel; this page stays as the place the idea was argued out.
+> See the note at the end of this entry for what moved and what did not.
+
 Models for the roster, on two axes that are both already in the simulation.
 
 ```bash
@@ -67,13 +72,36 @@ people. A roster where everyone is equally drawn throws that away for free.
 This is the fidelity axis in `ART-DIRECTION.md` doing a job rather than being
 decoration — the resolution *is* the information.
 
-### What it does not do yet
+### What shipped, and how
 
-Ranks are hand-specced here. In the game a crew member's look would have to be
-derived from the person — seeded off the same RNG that generates them, so the
-same man looks the same across a save — which is the open question already
-noted under `pixel-cast.html` and still the one thing standing between these
-sheets and something shippable.
+The open question under this entry used to be deriving a look from the person
+rather than hand-speccing it. That is done, and it is in `src/ui/art/`:
+
+| | |
+| --- | --- |
+| `art/parts.ts` | the library, ported from `pixel-cast.html`. Pure — no React, no canvas, no simulation |
+| `art/look.ts` | `lookFor(npc)`. FNV-1a over `npc.id`, **not** the simulation's RNG |
+| `art/paint.ts` | the familiarity resolve on `PERCEPTION_TIERS`, and the painter |
+| `ui/CrewPortrait.tsx` | the component |
+
+Two constraints drove the whole shape of it.
+
+**It cannot take a draw.** `sim/rng.ts` is a seeded stream with determinism
+tests over it, so rolling for a hat would shift every subsequent roll in the
+game and break the suite. The look is a hash of the id instead, which also
+means it survives a reload for free.
+
+**It cannot invent a fact.** The tiers are `PERCEPTION_TIERS` from
+`config/npcs.ts`, not numbers picked for the art — so the portrait gets a face
+on the same line `memories.ts` starts showing you what he is carrying. And
+hairstyle is drawn from one list for everybody, because `Npc` has no field for
+sex and the name lists are mixed: inferring one from a name would be the art
+asserting something the simulation does not know.
+
+Seven tests cover the properties that matter, in
+`src/ui/__tests__/crewLook.test.ts` — stability across calls, independence from
+anything that changes while he works for you, and that a stranger resolves to a
+couple of values while a man you know resolves to the full palette.
 
 ## pixel-portrait.html — the same man at two fidelities
 

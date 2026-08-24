@@ -9,6 +9,7 @@ import {
   secretKnown,
   visibleTraits,
 } from '../../sim/npc';
+import { CrewPortrait } from '../CrewPortrait';
 import { readTies } from '../../sim/ties';
 import { canSitDownWith, openSitdown } from '../../sim/sitdown';
 import { REASONS, SITDOWN } from '../../config/sitdown';
@@ -105,11 +106,20 @@ export default function CrewPanel() {
                       onClick={() => setSelectedId(npc.id === selectedId ? null : npc.id)}
                     >
                       <td>
-                        <div className="name-cell">
-                          <span className="name-main">{npc.name}</span>
-                          <span className="name-sub">
-                            {ROLE_LABEL[npc.role]} · {npc.age}
-                          </span>
+                        {/*
+                           The portrait is drawn at the resolution the player
+                           has earned — see ui/art/paint.ts. A man you have not
+                           worked with is a silhouette here, which is the same
+                           rule perceive() and memories.ts already follow.
+                        */}
+                        <div className="name-cell with-portrait">
+                          <CrewPortrait npc={npc} />
+                          <div>
+                            <span className="name-main">{npc.name}</span>
+                            <span className="name-sub">
+                              {ROLE_LABEL[npc.role]} · {npc.age}
+                            </span>
+                          </div>
                         </div>
                       </td>
                       <td>
@@ -220,7 +230,14 @@ export default function CrewPanel() {
                   const tight = after > income;
                   return (
                   <tr key={npc.id}>
-                    <td className="name-main">{npc.name}</td>
+                    <td>
+                      <div className="name-cell with-portrait">
+                        <CrewPortrait npc={npc} />
+                        <div>
+                          <span className="name-main">{npc.name}</span>
+                        </div>
+                      </div>
+                    </td>
                     <td className="mono">{npc.age}</td>
                     <td className="dim">
                       {visibleTraits(npc).length > 0
@@ -325,14 +342,19 @@ function CrewDetail({ npc, onClose }: { npc: Npc; onClose: () => void }) {
     >
       <div className="grid-2">
         <div>
-          <div className="row between" style={{ marginBottom: 4 }}>
-            <span className="tiny">How well you know them</span>
-            <span className="tiny">{Math.round(npc.familiarity)}%</span>
+          <div className="portrait-block">
+            <CrewPortrait npc={npc} scale={3} />
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div className="row between" style={{ marginBottom: 4 }}>
+                <span className="tiny">How well you know them</span>
+                <span className="tiny">{Math.round(npc.familiarity)}%</span>
+              </div>
+              <Bar value={npc.familiarity} tone="cold" />
+              <p className="faint" style={{ marginTop: 6 }}>
+                {tier?.label}
+              </p>
+            </div>
           </div>
-          <Bar value={npc.familiarity} tone="cold" />
-          <p className="faint" style={{ marginTop: 6 }}>
-            {tier?.label}
-          </p>
 
           <div style={{ marginTop: 14 }}>
             {READABLE_STATS.map((stat) => (
