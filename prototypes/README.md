@@ -4,6 +4,86 @@ Not shipped. Nothing in `src/` imports anything here, and nothing here is in the
 build output — that is the point of the folder. These are things that were built
 to be looked at and then argued with.
 
+## pixel-alley.html — the arms deal, as a scene
+
+One cinematic frame: two men from behind at the open boot of an old maroon
+sedan, in an alley, warm low sun. 320 x 200, drawn procedurally, blitted to a
+canvas at an integer scale with smoothing off.
+
+### To look at it
+
+```bash
+open prototypes/pixel-alley.html          # or: xdg-open
+```
+
+No controls — it is a picture. It scales to the viewport by whole pixels only,
+so it stays sharp at any window size.
+
+### Why it is built differently from every other sheet here
+
+Everything else on this branch is hand-authored rows of palette keys. That
+technique cannot carry dithered light ramps, contact shadows, ambient
+occlusion or atmospheric falloff, so this one draws into an `ImageData` buffer
+through named passes: a 4 x 4 Bayer matrix for every gradient, a deterministic
+PRNG for grit, `quad()` for trapezoids, `mul()` for shadow that darkens what it
+lands on rather than painting over it, and `contact()` because nothing sits on
+the ground without one.
+
+The drawing code is the source. There is no image file.
+
+### Pixel scale, stated plainly
+
+The cast sheet is 32 x 40 because it was drawn for a panel. The figures here
+are ~140px tall because this is a close third-person camera. **Those two scales
+cannot both be right in one image**, and the file does not pretend otherwise —
+these are drawn at scene scale in the same palette family, not cast sprites
+enlarged. If the game ever wants both, that is a decision about how many pixel
+scales the project is willing to own, and it should be made deliberately.
+
+### The light
+
+One key: low warm sun from the upper left, which is where the reference puts
+it. Everything follows from that one decision — the left plane of every object
+is the lit plane, shadows fall down and right, the boot interior sits two full
+steps below the sunlit deck around it, and the only cool light in frame is weak
+sky fill in the shadows. Depth is carried by three things in order: the two
+figures as the darkest masses, cut by the frame and rim-lit on the sun side;
+the car in the middle; and a background pulled toward a haze colour and
+desaturated so it reads as distance.
+
+### The boot is a box, not a rectangle
+
+Aperture rim, far wall, two side walls, floor, and occlusion in every seam —
+five surfaces at different angles to the light. The contents are laid out
+back-to-front, each with a dropped shadow before its body and one highlight on
+its sun side, which is what stops a pile of objects reading as stickers.
+
+### Three bugs worth recording
+
+**The rim light flood-filled the figures.** The pass tested the pixel to its
+left to find an edge, but it was reading the buffer it had just written, so
+each lit pixel lit its neighbour and both men turned into orange slabs. It now
+compares against a snapshot taken before the figure was drawn, which gives an
+exact silhouette rather than a guess from brightness — the pavement is darker
+than a lit sleeve, so a luminance test speckles the whole figure.
+
+**`(i * 27) % 27` is always zero,** so all thirteen locks of hair drew in one
+column.
+
+**Square shoulders.** The first pass tapered the coat into the neck, which
+reads as a cone. A back needs a horizontal shoulder line with the trapezius in
+shadow under it; that one band is most of what makes the silhouette a person.
+
+### What it is and is not
+
+It is concept art for a beat the simulation does not have, same as
+`pixel-scene.html` and stated for the same reason: nothing in `src/` puts the
+player at a car boot, and `contraband.ts` is deliberately abstract about how
+anything moves. Nothing in `src/` is touched, and this does not belong in the
+shipping UI — that interface is typed data on tobacco-dark surfaces, and
+dropping a cinematic frame into it would break the visual argument the whole
+game is built on.
+
 ## pixel-scene.html — the buyer
 
 One composed scene rather than a sheet, drafted off a reference of two men at
