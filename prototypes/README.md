@@ -4,6 +4,90 @@ Not shipped. Nothing in `src/` imports anything here, and nothing here is in the
 build output — that is the point of the folder. These are things that were built
 to be looked at and then argued with.
 
+## pixel-boss.html — three mockups, awaiting a pick
+
+The game has no character art. Three drafts of the same man — the boss of a
+rival family — drawn to three different specs, because the thing actually being
+decided is not what he looks like but what every character drawn after him is
+committed to.
+
+### To look at it
+
+Open the file. No dev server, no build, no assets — it is one self-contained
+page.
+
+```bash
+open prototypes/pixel-boss.html          # or: xdg-open
+```
+
+Query string sets the controls, for capturing a still at an exact setting:
+`?scale=8&bg=ledger&grid=on`. Backgrounds are `alpha`, `ledger`, `paper`, `crt`.
+
+### The three
+
+| | Grid | Colours | Framing | Where it would live |
+| --- | --- | --- | --- | --- |
+| **A** The stamp | 24 × 24 | 6 | bust | beside a name, in a row |
+| **B** The sitting | 32 × 40 | 12 | half-figure, holds a cigar | a panel header, the sit-down |
+| **C** The standing | 32 × 48 | 9 | full figure | a district, a board |
+
+They are the same man on purpose. What varies between them is only the spec, so
+the comparison is about cost and reach rather than about taste.
+
+Each is authored in the page as rows of palette keys, one character per pixel:
+
+```js
+'........cdeddedc........',
+'........cdd00ddc........',
+```
+
+That is the whole asset pipeline, and it is deliberate — the art is source, so a
+change to a face shows up in a diff as a changed face, and nobody has to open a
+binary to review it.
+
+### What it costs, in the only two places it costs anything
+
+**Four new palette entries.** `theme.css` defines ten colours and not one of
+them is skin, because until now nothing in this interface has been a person.
+Characters need a warm three-step skin ramp and one lift above `--line` to keep
+a lapel off a shoulder. They are pulled toward the tobacco end so a face does
+not read as an asset from a different game — but they are still four tokens the
+visual system did not have, and they are marked NEW in the palette strip at the
+bottom of the page.
+
+**The CRT skin cannot have them for free.** The shipped `crt` skin is not
+monochrome, it is the sixteen CGA colours, which is worse: no brown, nothing
+near skin. Snapping each colour to its nearest CGA entry — the obvious
+automatic answer — turns every lit cheekbone bright red, because `#b3835a` is
+genuinely closer to `#ff5555` than to anything else in the set. The metric is
+not wrong; it just does not know a face is a face. The page ships a hand-picked
+CGA colour per palette key instead, and the `crt mono` background renders
+through it. So: every sprite the game gains needs that table written by hand,
+and no conversion will produce it.
+
+### The open question
+
+Which spec, and it is not a tie.
+
+**A** is the only one whose cast is affordable — twenty of these is a weekend,
+twenty of B is an art budget — and the only one that fits where character art
+would help most, which is a row of names the player cannot currently tell apart.
+It also cannot ever show state: this man has no room on him to look worried when
+his family is losing, and the game's whole subject is people whose feelings
+about you change.
+
+**B** is the one that can. It is also the only one that can hold a prop, which
+matters more than it sounds — the sit-down is the one screen where the game
+stops and looks at a person.
+
+**C** is the only one that answers a question the game is actually asking,
+because territory is about someone standing on ground. It is also the one whose
+face will never be the character.
+
+The likely real answer is A now and B later for the four or five people the game
+names repeatedly, with C parked until the territory view is something you look
+at rather than read. That is a recommendation, not a decision.
+
 ## crt-curved-tube.html — parked, awaiting approval
 
 A curved-CRT presentation layer for the game. Green phosphor, real barrel
