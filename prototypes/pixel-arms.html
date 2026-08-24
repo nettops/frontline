@@ -1,0 +1,637 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Pixel armoury — the arms trade</title>
+<style>
+/* =========================================================================
+   PIXEL ARMOURY — disposable. Nothing in src/ is touched.
+
+   The reference for this was a modern shooter's weapon sheet: sixty guns in
+   three metal finishes, an ammo column and a crosshair column. Almost none of
+   that translates. This game is 1978, nobody aims anything, and the one place
+   hardware already exists in the simulation is `TRADE_IDS = ['product','arms']`
+   in config/contraband.ts — a workshop that makes crates.
+
+   What DID translate is the sheet's craft, which is worth stealing whole:
+
+     · side-on silhouette, muzzle left, one strong outline, three values
+     · a fixed cell so a list of them lines up
+     · the same sprite re-tinted rather than redrawn — the reference's
+       black/silver/gold is one shape and three palettes
+
+   So the finishes here are the reference's trick pointed at something the game
+   already has an opinion about. Not rarity — provenance. Blued is what you
+   buy, blacked is what you use and can lose, nickel is what you were given
+   and therefore cannot sell.
+
+   The classes are the other half. contraband.ts prices heat per unit; a
+   sawn-off under a coat and a shotgun carried down a street are not the same
+   risk, and the sheet says which is which by how much of the cell it fills.
+
+   One deliberate limit, following the note at the top of contraband.ts: these
+   are objects, drawn as objects. Nothing here says how anything is made,
+   modified, or concealed, and nothing should be added that does.
+   ========================================================================= */
+
+:root {
+  --ink-900:#0c0a09; --ink-800:#15110e; --ink-700:#1c1713; --ink-600:#241d18;
+  --line:#332a22; --text:#e6ddcd; --text-dim:#9c9083; --text-faint:#6b6157;
+  --brass:#c9a227; --brass-dim:#7d6720; --stamp:#c2352b; --paper:#ded3bc;
+  --carbon:#7593a8; --carbon-dim:#3d5464;
+  --font-display: Bahnschrift,'Avenir Next Condensed','Arial Narrow','Segoe UI',system-ui,sans-serif;
+  --font-mono: ui-monospace,'Cascadia Mono',Consolas,'SF Mono',Menlo,monospace;
+}
+* { box-sizing:border-box; }
+body { margin:0; padding:28px 32px 64px; background:var(--ink-900); color:var(--text);
+       font-family:var(--font-mono); font-size:12px; line-height:1.55; }
+h1 { font-family:var(--font-display); font-size:22px; letter-spacing:.14em; text-transform:uppercase; margin:0 0 4px; }
+.sub { color:var(--text-dim); max-width:80ch; margin:0 0 22px; }
+h3 { font-family:var(--font-display); font-size:13px; letter-spacing:.14em; text-transform:uppercase;
+     color:var(--text-dim); margin:32px 0 4px; }
+.lede { color:var(--text-faint); margin:0 0 14px; max-width:82ch; }
+.controls { display:flex; flex-wrap:wrap; gap:18px; align-items:center; padding:10px 14px;
+            margin-bottom:22px; background:var(--ink-800); border:1px solid var(--line); }
+.controls label { color:var(--text-dim); text-transform:uppercase; letter-spacing:.1em; font-size:10px; }
+.seg { display:inline-flex; border:1px solid var(--line); }
+.seg button { background:var(--ink-700); color:var(--text-dim); border:0; border-right:1px solid var(--line);
+              padding:4px 10px; font:inherit; font-size:11px; cursor:pointer; }
+.seg button:last-child { border-right:0; }
+.seg button[aria-pressed="true"] { background:var(--brass-dim); color:var(--ink-900); }
+
+.rack { border:1px solid var(--line); background:var(--ink-800); margin-bottom:16px; }
+.rack > .head { padding:7px 12px; border-bottom:1px solid var(--line); display:flex; justify-content:space-between; }
+.rack > .head b { font-family:var(--font-display); font-weight:400; letter-spacing:.12em; text-transform:uppercase; }
+.rack > .head span { color:var(--text-faint); }
+.item { display:flex; align-items:center; gap:14px; padding:3px 12px; border-bottom:1px solid #241e18; }
+.item:last-child { border-bottom:0; }
+.item .nm { width:130px; }
+.item .tag { color:var(--brass-dim); font-size:10px; letter-spacing:.08em; text-transform:uppercase; }
+canvas { image-rendering:pixelated; display:block; }
+
+.tri { display:flex; gap:20px; flex-wrap:wrap; }
+.tri .col { background:var(--ink-800); border:1px solid var(--line); padding:10px 12px; }
+.tri .col b { display:block; font-weight:400; font-family:var(--font-display);
+              letter-spacing:.1em; text-transform:uppercase; margin-bottom:2px; }
+.tri .col p { color:var(--text-faint); margin:0 0 8px; max-width:34ch; }
+
+.panel { background:var(--ink-800); border:1px solid var(--line); padding:12px 14px; min-width:330px; }
+.panel .title { font-family:var(--font-display); letter-spacing:.12em; text-transform:uppercase;
+                color:var(--text-dim); font-size:11px; margin-bottom:8px; }
+.line { display:flex; align-items:center; gap:10px; padding:3px 0; border-bottom:1px solid #241e18; }
+.line:last-child { border-bottom:0; }
+.line .n { flex:1; }
+.line .v { color:var(--brass); }
+.line .d { color:var(--text-faint); }
+.row-wrap { display:flex; gap:20px; flex-wrap:wrap; align-items:flex-start; }
+.ramp { display:flex; gap:22px; flex-wrap:wrap; }
+.ramp div b { display:block; color:var(--text-dim); font-weight:400; margin-bottom:4px; font-size:11px; }
+.ramp i { width:26px; height:18px; display:inline-block; }
+</style>
+</head>
+<body>
+
+<h1>Pixel armoury — the arms trade</h1>
+<p class="sub">
+  Sixteen pieces of 1978 hardware, drawn side-on in a fixed 48×16 cell, muzzle
+  left. The reference sheet this came from sorts by damage; this one sorts by
+  what the game already charges for, which is whether the thing fits under a
+  coat. Three finishes, one shape each — the same trick the reference uses for
+  black, silver and gold, pointed at provenance instead of rarity.
+</p>
+
+<div class="controls">
+  <label for="scale">Scale</label>
+  <span class="seg" id="scale">
+    <button data-v="1">1x</button><button data-v="2">2x</button>
+    <button data-v="3" aria-pressed="true">3x</button><button data-v="4">4x</button>
+    <button data-v="6">6x</button>
+  </span>
+  <label for="finish">Finish</label>
+  <span class="seg" id="finish">
+    <button data-v="blued" aria-pressed="true">blued</button>
+    <button data-v="blacked">blacked</button>
+    <button data-v="nickel">nickel</button>
+  </span>
+  <label for="bg">Ground</label>
+  <span class="seg" id="bg">
+    <button data-v="panel" aria-pressed="true">panel</button>
+    <button data-v="paper">paper</button>
+    <button data-v="alpha">alpha</button>
+  </span>
+</div>
+
+<div id="racks"></div>
+
+<h3>Three finishes, one sprite</h3>
+<p class="lede">
+  Nothing below is redrawn. The grid holds palette keys and the finish supplies
+  four hexes for the metal, which is the whole reason a sheet like this can
+  afford variants at all.
+</p>
+<div class="tri" id="finishes"></div>
+
+<h3>Where it would live</h3>
+<p class="lede">
+  Left: the arms trade already exists and its unit is a crate, so the crate is
+  the only sprite here the simulation can currently ask for. Right: hardware as
+  a line item, at the size a list would actually give it.
+</p>
+<div class="row-wrap" id="context"></div>
+
+<h3>Palette</h3>
+<p class="lede">
+  The metal ramp is the game's own <code>--carbon</code> and
+  <code>--carbon-dim</code> — the cold institutional blue it uses for law
+  enforcement. That was an accident of what was in the file and then it was
+  not, because it is the right colour for steel and the right joke about it.
+  Wood reuses the brown skin ramp from <code>pixel-cast.html</code>. Two new
+  darks, and nothing else.
+</p>
+<div class="ramp" id="ramp"></div>
+
+<script>
+/* ======================================================================
+   1. PALETTE
+
+   '0' outline · '1''2''3''4' metal, dark to bright · '5''6''7' walnut
+   '8''9' brass · 'g' grip · 'r' rag or tape · 'w' glass
+   ====================================================================== */
+const FINISH = {
+  blued:   ['#171a1e', '#2b333a', '#3d5464', '#6b7f8c'],
+  blacked: ['#101012', '#1c1c1f', '#2a2a2e', '#3d3d42'],
+  nickel:  ['#4a4a4e', '#7d7d82', '#b0b0b4', '#ded3bc'],
+};
+const FIXED = {
+  '0': '#0c0a09',
+  '5': '#3b2519', '6': '#5f3d27', '7': '#855838',
+  '8': '#7d6720', '9': '#c9a227',
+  'g': '#15110e', 'r': '#c2352b', 'w': '#ded3bc',
+};
+function palette(finish) {
+  const m = FINISH[finish];
+  return Object.assign({}, FIXED, { '1': m[0], '2': m[1], '3': m[2], '4': m[3] });
+}
+
+/* ======================================================================
+   2. THE RACK
+
+   Every sprite is 48 x 16. Muzzle left, and the class is legible from how
+   much of the cell the thing takes up — which is the point of a fixed cell.
+   ====================================================================== */
+const ARMS = {
+  snub: { name: 'Snub .38', cls: 'pocket', rows: [
+    '................................................',
+    '................................................',
+    '................................................',
+    '....................00..........................',
+    '............00000000110.........................',
+    '.....00000002222222220..........................',
+    '....033333333233322220..........................',
+    '....022222222234322220..........................',
+    '.....00000000233322220..........................',
+    '............02222222200.........................',
+    '.............000200gggg0........................',
+    '...............0222gggg0........................',
+    '................0000gggg0.......................',
+    '...................0gggg0.......................',
+    '....................0gggg0......................',
+    '.....................0000.......................',
+  ] },
+  auto32: { name: 'Flat .32', cls: 'pocket', rows: [
+    '................................................',
+    '................................................',
+    '................................................',
+    '................................................',
+    '....0000000000000000............................',
+    '...033333333333333330...........................',
+    '...022222222222211120...........................',
+    '...022222222222222220...........................',
+    '....000000022222222220..........................',
+    '..........0222gggggg20..........................',
+    '..........0200g1111g0...........................',
+    '..........0222g1111g0...........................',
+    '...........00001111gg0..........................',
+    '..............01111gg0..........................',
+    '..............0gggggg0..........................',
+    '...............000000...........................',
+  ] },
+  razor: { name: 'Razor', cls: 'pocket', rows: [
+    '................................................',
+    '................................................',
+    '................................................',
+    '................................................',
+    '......................00000000000000000.........',
+    '.....0000000000000000022ggggggggggggggg0........',
+    '....03333333333333333322g1111111111111g0........',
+    '....04444444444444444422gg9gggggggggggg0........',
+    '.....0wwwwwwwwwwwwwwww22ggggggggggggggg0........',
+    '......000000000000000022ggggggggggggggg0........',
+    '......................00000000000000000.........',
+    '................................................',
+    '................................................',
+    '................................................',
+    '................................................',
+    '................................................',
+  ] },
+  bottle: { name: 'Bottle', cls: 'pocket', rows: [
+    '..............0rr0..............................',
+    '.............0rrrr0.............................',
+    '.............0rrrr0.............................',
+    '.............0rrrr0.............................',
+    '.............033330.............................',
+    '.............033330.............................',
+    '.............033330.............................',
+    '............03333330............................',
+    '...........0333333330...........................',
+    '...........034ww44430...........................',
+    '...........0222222220...........................',
+    '...........0222222220...........................',
+    '...........034ww44430...........................',
+    '...........034ww44430...........................',
+    '...........0333333330...........................',
+    '...........0222222220...........................',
+  ] },
+  auto45: { name: 'Service .45', cls: 'coat', rows: [
+    '................................................',
+    '................................................',
+    '................................................',
+    '...00000000000000000000.........................',
+    '..0333333333333333333330........................',
+    '..0222222222222222111120........................',
+    '..0111111222222222222220........................',
+    '..0222222222222222222220........................',
+    '...0000000002222222222220.......................',
+    '..........02222gggggggg20.......................',
+    '..........02020g555555g0........................',
+    '..........02020g566665g0........................',
+    '..........022200569665gg0.......................',
+    '...........000.0566665gg0.......................',
+    '...............0555555gg0.......................',
+    '................0gggggggg0......................',
+  ] },
+  magnum: { name: 'Long .357', cls: 'coat', rows: [
+    '................................................',
+    '................................................',
+    '................................................',
+    '........................00......................',
+    '...............000000000110.....................',
+    '..000000000000022222222220......................',
+    '.0333333333333332333222220......................',
+    '.0222222222222222343222220......................',
+    '.0222222222222002333222220......................',
+    '..000000000000.022222222200.....................',
+    '................000200555550....................',
+    '..................0222566660....................',
+    '...................0000666650...................',
+    '......................0666650...................',
+    '.......................0555550..................',
+    '........................00000...................',
+  ] },
+  quiet: { name: 'Quiet .22', cls: 'coat', rows: [
+    '................................................',
+    '................................................',
+    '................................................',
+    '..00000000000000................................',
+    '.012112112112111000000000.......................',
+    '.0222222222222233333333330......................',
+    '.0121121121121122222222220......................',
+    '.0121121121121122222222220......................',
+    '.01211211211211100222222220.....................',
+    '..000000000000000222gggggg0.....................',
+    '................0202gggggg0.....................',
+    '................0222gggggg0.....................',
+    '.................0000gggggg0....................',
+    '....................0gggggg0....................',
+    '....................0gggggg0....................',
+    '.....................000000.....................',
+  ] },
+  lupara: { name: 'Sawn-off', cls: 'coat', rows: [
+    '................................................',
+    '................................................',
+    '................................................',
+    '....................000000......................',
+    '...00000000000000000222222000000................',
+    '..0333333333333333332111155555550...............',
+    '..02222222222222222221111556666660..............',
+    '..03333333333333333321111256777760..............',
+    '..02222222222222222221111256777760..............',
+    '...00000000000000000222222067777650.............',
+    '....................000200266666650.............',
+    '......................02222666666550............',
+    '.......................0000055555550............',
+    '............................055555550...........',
+    '.............................0000000............',
+    '................................................',
+  ] },
+  mac: { name: 'Machine pistol', cls: 'coat', rows: [
+    '................................................',
+    '................................................',
+    '..........00000000000000000.....................',
+    '.........03333333333333333300000000.............',
+    '...000000022222222222222222111111110............',
+    '..0121212122111111111111122111111110............',
+    '..0121212122111111111111122000000110............',
+    '..0121212122222222222222222111111110............',
+    '...000000022222222222222222111111110............',
+    '.........02222222222222222200000000.............',
+    '..........000011110020ggggg0....................',
+    '.............012210022ggggg0....................',
+    '.............012210.00ggggg0....................',
+    '.............012210...0ggggg0...................',
+    '.............012210...0ggggg0...................',
+    '.............011110....00000....................',
+  ] },
+  bar: { name: 'Tire iron', cls: 'coat', rows: [
+    '................................................',
+    '................................................',
+    '.....0000000....................................',
+    '...0023333330...................................',
+    '..02222222220...................................',
+    '..02002222220000000000000000000000000...........',
+    '..0200200033333333333333333333333333300000......',
+    '..022220.0222222222222222222222222233333320.....',
+    '...0000..0222222222222222222222222222222220.....',
+    '..........000000000000000000000000222222220.....',
+    '.................................0222222220.....',
+    '..................................00000000......',
+    '................................................',
+    '................................................',
+    '................................................',
+    '................................................',
+  ] },
+  pump: { name: 'Pump gun', cls: 'long', rows: [
+    '................................................',
+    '................................................',
+    '................................................',
+    '........................0000000000000...........',
+    '.00000000000000000000000222222227777700.........',
+    '033333333333333333333333211111117666665000......',
+    '022222222222222222222222211111111766666665000...',
+    '.011111155555555111110002111111112766666666650..',
+    '.011111155656565111110.021111111120766666666650.',
+    '..0000005565656500000..022222222220076666666650.',
+    '........00000000........00000020020.07666666650.',
+    '.............................022220..0766666650.',
+    '..............................0000....005555550.',
+    '........................................000000..',
+    '................................................',
+    '................................................',
+  ] },
+  double: { name: 'Double gun', cls: 'long', rows: [
+    '................................................',
+    '................................................',
+    '................................................',
+    '..........................000000000.............',
+    '.000000000000000000000000022227777700...........',
+    '0333333333333333333333333321117666665000........',
+    '0222222222222222222222222221111766666665000.....',
+    '02222222222222222222222222211112766666666650....',
+    '022222222222222222222222222111120766666666650...',
+    '.00000666666666666600000002222220076666666650...',
+    '.....065555555555560......0002002007666666650...',
+    '......0000000000000.........022220.0766666650...',
+    '.............................0000...005555550...',
+    '......................................000000....',
+    '................................................',
+    '................................................',
+  ] },
+  bolt: { name: 'Scoped rifle', cls: 'long', rows: [
+    '................................................',
+    '....................0000000000000000............',
+    '...................022111111111111220...........',
+    '...................0w22222222222222w0...........',
+    '...................022111111111111220...........',
+    '....................00001111111110000...........',
+    '.000000000000000000000222222222277777000........',
+    '0333333333333333333333211111111176666665000.....',
+    '022222222222222222222221111111112766666666500...',
+    '.000000000000055555555555111111120766666666650..',
+    '.............0566666666652222222200766666666650.',
+    '.............05666666666500020020..076666666650.',
+    '..............00000000000..022220...07666666650.',
+    '............................0000.....0055555550.',
+    '.......................................0000000..',
+    '................................................',
+  ] },
+  heirloom: { name: 'The heirloom', cls: 'long', rows: [
+    '................................................',
+    '................................................',
+    '....................0...........................',
+    '...................0100000000000000.............',
+    '..0000000000000000012222222222222220............',
+    '.023232323232323232321111111111111200...........',
+    '.022222222222222222221111111111177777000........',
+    '.022222222222222222221111111111176666665000.....',
+    '..0000555555000000002111111111111766666666500...',
+    '.....05666650......022222222222222766666666650..',
+    '.....05666650.......001111110200200766666666650.',
+    '.....05666650........0122221022220.076666666650.',
+    '.....05666650........012222100000...07666666650.',
+    '.....05555550........01222210........0055555550.',
+    '......000000.........01222210..........0000000..',
+    '.....................01111110...................',
+  ] },
+  bat: { name: 'Bat', cls: 'long', rows: [
+    '................................................',
+    '................................................',
+    '................................................',
+    '................................................',
+    '................................................',
+    '...000000000..................00000000000.......',
+    '..0666666666000000000000000000666666665550......',
+    '..0777777777rrrrrrr77777777777655555555550......',
+    '..0777777776rrrrrrr66666666666655555555550......',
+    '..0666666666000000000000000000666666665550......',
+    '...000000000..................00000000000.......',
+    '................................................',
+    '................................................',
+    '................................................',
+    '................................................',
+    '................................................',
+  ] },
+  crate: { name: 'A crate', cls: 'trade', rows: [
+    '................................................',
+    '................................................',
+    '........00000000000000000000000000000000........',
+    '.......0555777777777777777777777777775550.......',
+    '.......0555777777777777777777777777775550.......',
+    '.......0555655555555555555555555555565550.......',
+    '.......0555655555555555555555555555565550.......',
+    '.......0555666666666666666666666666665550.......',
+    '.......0555666668686868686868686866665550.......',
+    '.......0555655555555555555555555555565550.......',
+    '.......0555655555555555555555555555565550.......',
+    '.......0555666666666666666666666666665550.......',
+    '.......0555666666666666666666666666665550.......',
+    '.......0555655555555555555555555555565550.......',
+    '.......0555655555555555555555555555565550.......',
+    '.......0555555555555555555555555555555550.......',
+  ] },
+};
+
+const CLASSES = [
+  ['pocket', 'Pocket', 'Goes anywhere. Nothing about carrying it is a decision.'],
+  ['coat',   'Coat',   'Concealable while standing still. Not while running.'],
+  ['long',   'Long',   'Cannot be carried down a street without the street knowing.'],
+  ['trade',  'Trade',  'Not carried at all — the unit the arms trade already counts.'],
+];
+
+/* ======================================================================
+   3. RENDER
+   ====================================================================== */
+const params = new URLSearchParams(location.search);
+let scale = Number(params.get('scale')) || 3;
+let finish = params.get('finish') || 'blued';
+let bg = params.get('bg') || 'panel';
+
+function draw(canvas, rows, s, pal) {
+  canvas.width = 48 * s; canvas.height = 16 * s;
+  const ctx = canvas.getContext('2d');
+  ctx.imageSmoothingEnabled = false;
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  for (let y = 0; y < rows.length; y++) {
+    for (let x = 0; x < rows[y].length; x++) {
+      const k = rows[y][x];
+      if (k === '.') continue;
+      const hex = pal[k];
+      if (!hex) { console.warn('no colour for', k); continue; }
+      ctx.fillStyle = hex;
+      ctx.fillRect(x * s, y * s, s, s);
+    }
+  }
+}
+
+function ground(el) {
+  el.style.background = bg === 'paper' ? '#ded3bc'
+    : bg === 'alpha' ? 'repeating-conic-gradient(#221c17 0 25%, #191512 0 50%) 0 0/12px 12px'
+    : '';
+}
+
+function buildRacks() {
+  const wrap = document.getElementById('racks');
+  wrap.innerHTML = '';
+  const pal = palette(finish);
+  CLASSES.forEach(([cls, label, note]) => {
+    const rack = document.createElement('div');
+    rack.className = 'rack';
+    rack.innerHTML = '<div class="head"><b>' + label + '</b><span>' + note + '</span></div>';
+    Object.entries(ARMS).filter(([, v]) => v.cls === cls).forEach(([, v]) => {
+      const row = document.createElement('div');
+      row.className = 'item';
+      const c = document.createElement('canvas');
+      draw(c, v.rows, scale, pal);
+      ground(c);
+      row.appendChild(c);
+      const n = document.createElement('span'); n.className = 'nm'; n.textContent = v.name;
+      row.appendChild(n);
+      const t = document.createElement('span'); t.className = 'tag'; t.textContent = cls;
+      row.appendChild(t);
+      rack.appendChild(row);
+    });
+    wrap.appendChild(rack);
+  });
+}
+
+function buildFinishes() {
+  const wrap = document.getElementById('finishes');
+  wrap.innerHTML = '';
+  const notes = {
+    blued: 'What you buy. Factory finish, a serial on it, and a paper trail somebody else started.',
+    blacked: 'What you use. Matte, unremarkable, and no loss when it goes in a river.',
+    nickel: 'What you were given. Worth more than the job and impossible to sell without saying who from.',
+  };
+  Object.keys(FINISH).forEach((f) => {
+    const col = document.createElement('div');
+    col.className = 'col';
+    col.innerHTML = '<b>' + f + '</b><p>' + notes[f] + '</p>';
+    ['auto45', 'lupara', 'snub'].forEach((k) => {
+      const c = document.createElement('canvas');
+      draw(c, ARMS[k].rows, Math.max(2, scale), palette(f));
+      col.appendChild(c);
+    });
+    wrap.appendChild(col);
+  });
+}
+
+function buildContext() {
+  const wrap = document.getElementById('context');
+  wrap.innerHTML = '';
+  const pal = palette(finish);
+
+  const trade = document.createElement('div');
+  trade.className = 'panel';
+  trade.innerHTML = '<div class="title">The arms trade</div>';
+  const cr = document.createElement('div');
+  cr.style.cssText = 'display:flex;gap:12px;align-items:center';
+  const cc = document.createElement('canvas');
+  draw(cc, ARMS.crate.rows, 2, pal);
+  cr.appendChild(cc);
+  const ct = document.createElement('div');
+  ct.innerHTML = '<div>Stock <span style="color:var(--brass)">31 crates</span></div>' +
+    '<div class="d">Workshop · Dockside · 2 districts carrying</div>' +
+    '<div class="d">Unit value $16,500 · heat 0.34/unit</div>';
+  cr.appendChild(ct);
+  trade.appendChild(cr);
+  wrap.appendChild(trade);
+
+  [1, 2].forEach((s) => {
+    const p = document.createElement('div');
+    p.className = 'panel';
+    p.innerHTML = '<div class="title">Carried &mdash; ' + s + 'x</div>';
+    ['snub', 'lupara', 'razor', 'pump'].forEach((k) => {
+      const line = document.createElement('div'); line.className = 'line';
+      const c = document.createElement('canvas'); draw(c, ARMS[k].rows, s, pal);
+      line.appendChild(c);
+      const n = document.createElement('span'); n.className = 'n'; n.textContent = ARMS[k].name;
+      line.appendChild(n);
+      const d = document.createElement('span'); d.className = 'd'; d.textContent = ARMS[k].cls;
+      line.appendChild(d);
+      p.appendChild(line);
+    });
+    wrap.appendChild(p);
+  });
+}
+
+function buildRamp() {
+  const wrap = document.getElementById('ramp');
+  wrap.innerHTML = '';
+  const sets = [['Metal — ' + finish, FINISH[finish]],
+                ['Walnut', ['#3b2519', '#5f3d27', '#855838']],
+                ['Brass', ['#7d6720', '#c9a227']],
+                ['Other', ['#15110e', '#c2352b', '#ded3bc']]];
+  sets.forEach(([label, hexes]) => {
+    const d = document.createElement('div');
+    d.innerHTML = '<b>' + label + '</b>' + hexes.map((h) => '<i style="background:' + h + '"></i>').join('');
+    wrap.appendChild(d);
+  });
+}
+
+function wire(id, apply) {
+  const box = document.getElementById(id);
+  box.addEventListener('click', (e) => {
+    const btn = e.target.closest('button');
+    if (!btn) return;
+    [...box.querySelectorAll('button')].forEach((b) => b.setAttribute('aria-pressed', String(b === btn)));
+    apply(btn.dataset.v);
+  });
+}
+wire('scale', (v) => { scale = Number(v); everything(); });
+wire('finish', (v) => { finish = v; everything(); });
+wire('bg', (v) => { bg = v; everything(); });
+
+function syncControls() {
+  [['scale', String(scale)], ['finish', finish], ['bg', bg]].forEach(([id, v]) => {
+    [...document.getElementById(id).querySelectorAll('button')].forEach((b) =>
+      b.setAttribute('aria-pressed', String(b.dataset.v === v)));
+  });
+}
+function everything() { buildRacks(); buildFinishes(); buildContext(); buildRamp(); }
+syncControls();
+everything();
+const _y = params.get('y');   // _scrollTo — for capturing a still of a lower rack
+if (_y) requestAnimationFrame(() => requestAnimationFrame(() => window.scrollTo(0, Number(_y))));
+</script>
+</body>
+</html>
