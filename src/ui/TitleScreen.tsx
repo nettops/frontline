@@ -4,20 +4,26 @@ import { newGame } from '../sim/state';
 import { loadGame, allMeta, type SlotId } from '../sim/save';
 import { DIFFICULTIES } from '../config/difficulty';
 import { MODES, MODE_BY_ID, SANDBOX_STARTS } from '../config/modes';
+import {
+  DEFAULT_NATIONALITY,
+  NATIONALITIES,
+  nationalityDef,
+  type NationalityId,
+} from '../config/nationalities';
 import type { DifficultyId, GameMode } from '../sim/types';
-import { SkinToggle } from './components';
 
 export default function TitleScreen() {
   const [name, setName] = useState('');
   const [mode, setMode] = useState<GameMode>('career');
   const [difficulty, setDifficulty] = useState<DifficultyId>('normal');
   const [sandboxStart, setSandboxStart] = useState(SANDBOX_STARTS[0].id);
+  const [nationality, setNationality] = useState<NationalityId>(DEFAULT_NATIONALITY);
   const [error, setError] = useState<string | null>(null);
   const saves = allMeta();
   const hasSaves = Object.values(saves).some(Boolean);
 
   const start = () => {
-    setGame(newGame({ name, difficulty, mode, sandboxStart }));
+    setGame(newGame({ name, difficulty, mode, sandboxStart, nationality }));
   };
 
   const resume = (slot: SlotId) => {
@@ -25,6 +31,10 @@ export default function TitleScreen() {
     if (result.ok) setGame(result.state);
     else setError(result.error);
   };
+
+  /* A name from the chosen pool, to show the picker doing something. */
+  const example = nationalityDef(nationality);
+  const exampleName = `e.g. ${example.first[0]} ${example.last[0]}`;
 
   const startLabel =
     mode === 'simulation'
@@ -56,6 +66,30 @@ export default function TitleScreen() {
           </div>
         </div>
 
+        {/*
+           Sits above the name field because it decides what goes in it, and
+           because "where are your people from" is the question a 1935 city
+           asks first. Hidden in Simulation for the same reason the name is:
+           there is nobody in that mode for it to be about.
+        */}
+        {mode !== 'simulation' && (
+          <div className="field">
+            <span className="field-label">Where your people are from</span>
+            <div className="choice-list">
+              {NATIONALITIES.map((n) => (
+                <button
+                  key={n.id}
+                  className={n.id === nationality ? 'choice selected' : 'choice'}
+                  onClick={() => setNationality(n.id)}
+                >
+                  <div className="choice-name">{n.name}</div>
+                  <div className="choice-blurb">{n.blurb}</div>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* No name to give and no crew to lose — asking for either would be
             asking about somebody who is not in this game. */}
         {mode !== 'simulation' && (
@@ -68,7 +102,15 @@ export default function TitleScreen() {
               className="input"
               value={name}
               maxLength={28}
-              placeholder="Nobody"
+              /*
+                 An example from the chosen community rather than the word
+                 "Nobody", so the picker visibly does something before you
+                 commit to it. Marked "e.g." because it is not a promise: the
+                 real fallback name is drawn from the seed, which does not
+                 exist until you press the button, so the name you actually
+                 get will be a different one out of the same pool.
+              */
+              placeholder={exampleName}
               onChange={(e) => setName(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && start()}
             />
@@ -126,7 +168,10 @@ export default function TitleScreen() {
                 .map(([slot, meta]) => (
                   <button key={slot} className="choice" onClick={() => resume(slot)}>
                     <div className="choice-name">
-                      {meta!.name} — {meta!.rank}
+                      {/* Was "Nobody — Street Criminal". The day is what tells
+                          two careers apart anyway, and it does not contradict
+                          being the boss of them. */}
+                      {meta!.name} — day {meta!.day}
                       {meta!.mode && meta!.mode !== 'career' && (
                         <span className="choice-tag">{MODE_BY_ID[meta!.mode].name}</span>
                       )}
@@ -147,15 +192,6 @@ export default function TitleScreen() {
             {error}
           </p>
         )}
-
-        {/*
-          The skin is chosen before the game starts as often as during one, and
-          this is the only screen you are guaranteed to see. Bottom of the card
-          rather than the top: it is a preference, not part of setting up a run.
-        */}
-        <div className="row" style={{ marginTop: 24, justifyContent: 'flex-end' }}>
-          <SkinToggle />
-        </div>
       </div>
     </div>
   );

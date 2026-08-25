@@ -3,25 +3,48 @@ import { useGame, mutate } from '../../store';
 import { Panel, Empty, KeyValue, Bar } from '../components';
 import {
   armsSaleValue,
+  buildPlant,
   buildWorkshop,
+  canBuildPlant,
   canBuildWorkshop,
+  armsSupplier,
+  canOpenArmsSupply,
   canOpenSupply,
+  supplierTrust,
+  walkChance,
+  dropArmsSupply,
+  openArmsSupply,
   canSellArms,
   closeRoute,
   dropSupply,
   openRoute,
   openSupply,
+  plantList,
   portHolder,
   portMultiplier,
   readSuppliers,
   readTrade,
   sellArms,
 } from '../../sim/contraband';
+import {
+  acceptOrder,
+  gangCost,
+  readOrders,
+  refuseOrder,
+} from '../../sim/orders';
 import { people, prosperity, territoryDef } from '../../sim/territory';
 import { formatMoney } from '../../sim/util';
 import { rivals } from '../../sim/faction';
-import { TRADES, TRADE_IDS, WORKSHOP, ARMS_SALE, type TradeId } from '../../config/contraband';
-import { RANK_BY_ID } from '../../config/economy';
+import {
+  ARMS_SALE,
+  ARMS_SUPPLIERS,
+  PLANT,
+  TRADES,
+  TRADE_IDS,
+  WORKSHOP,
+  type TradeId,
+} from '../../config/contraband';
+import { priced } from '../../sim/market';
 import { CONTROL_LABEL } from '../../config/territories';
 import { houseName, houseShort } from '../../sim/houses';
 
@@ -63,11 +86,13 @@ export default function ContrabandPanel() {
         ))}
       </div>
 
+      <Orders />
+
       {!read.unlocked ? (
         <Panel title={def.name}>
           <Empty>
-            {def.blurb} Nobody would deal with you at your standing — this needs a{' '}
-            {RANK_BY_ID[def.minRank].name}.
+            {def.blurb} Nobody deals with somebody who has nowhere to put it — this
+            wants {def.minFronts} fronts running.
           </Empty>
         </Panel>
       ) : (
@@ -171,7 +196,29 @@ export default function ContrabandPanel() {
             </Panel>
           </div>
 
-          {tab === 'product' ? <Supply /> : <Workshops />}
+          {tab === 'product' ? (
+            <>
+              {/*
+                 Both places product can come from, in the order a career meets
+                 them. The arrangement is how everybody starts; the plant is
+                 what a career with $185,000 and a district it really holds can
+                 do about never being walked out on again.
+              */}
+              <Supply />
+              <Plants />
+            </>
+          ) : (
+            <>
+              {/*
+                 Both doors into the arms trade, in the order a career meets
+                 them. A workshop is $120,000 and measured peak funds run p90
+                 $94,345, so for most careers the source above is the only one
+                 of these two that will ever be a real choice.
+              */}
+              <ArmsSupply />
+              <Workshops />
+            </>
+          )}
 
           <Panel title="Where it runs">
             <p className="faint" style={{ marginTop: 0 }}>
@@ -261,6 +308,123 @@ export default function ContrabandPanel() {
   );
 }
 
+/**
+ * People who want a quantity of something by a date.
+ *
+ * Deliberately above the tabs rather than inside one, because an order is a
+ * claim on the whole trade — accepting one changes what the weekly buy is
+ * aiming at and holds stock back from the street, and both of those are true
+ * whichever tab happens to be open.
+ *
+ * The panel has to state the consequence at the point of accepting, because
+ * every other surface in the game will show it later and none of them will say
+ * where it came from. A family's strength goes up on the Rivals panel. A
+ * gang's neighbourhood turns on the Territory panel. Eighteen months later
+ * neither of those reads as something the player agreed to.
+ */
+function Orders() {
+  const state = useGame();
+  const rows = readOrders(state);
+  const unlocked = TRADE_IDS.some((id) => readTrade(state, id).unlocked);
+  if (!unlocked) return null;
+
+  return (
+    <Panel title="What other people want">
+      {rows.length === 0 ? (
+        <Empty>
+          Nobody is asking you for anything. They will, once there is enough moving that
+          somebody outside notices.
+        </Empty>
+      ) : (
+        <table className="table">
+          <thead>
+            <tr>
+              <th>Who</th>
+              <th className="num">Wants</th>
+              <th className="num">Pays</th>
+              <th className="num">By</th>
+              <th>Progress</th>
+              <th />
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map(({ order, buyer, blurb, value, daysLeft, owed, onHand }) => {
+              const offered = order.status === 'offered';
+              const short = owed > onHand;
+              return (
+                <tr key={order.id}>
+                  <td>
+                    <div className="name-cell">
+                      <span className="name-main">{buyer}</span>
+                      <span className="name-sub">{blurb}</span>
+                    </div>
+                  </td>
+                  <td className="num mono">
+                    {order.units} {TRADES[order.trade].unit[order.units === 1 ? 0 : 1]}
+                  </td>
+                  <td className="num mono brass">
+                    {formatMoney(value)}
+                    <span className="tiny faint"> · {formatMoney(order.unitPrice)} ea</span>
+                  </td>
+                  <td className="num mono">
+                    {daysLeft} {daysLeft === 1 ? 'day' : 'days'}
+                  </td>
+                  <td>
+                    {offered ? (
+                      <span className="tiny faint">Not answered</span>
+                    ) : (
+                      <>
+                        <Bar
+                          value={(order.delivered / Math.max(1, order.units)) * 100}
+                          tone={short ? 'hot' : 'ok'}
+                        />
+                        <span className="tiny faint">
+                          {order.delivered} of {order.units} · {onHand} on the shelf
+                        </span>
+                      </>
+                    )}
+                  </td>
+                  <td>
+                    {offered ? (
+                      <div className="btn-row">
+                        <button
+                          className="btn small primary"
+                          title={
+                            order.buyerKind === 'gang'
+                              ? gangCost(order)
+                              : 'They are buying capability rather than goods. Every unit makes them harder to fight.'
+                          }
+                          onClick={() => mutate((s) => acceptOrder(s, order.id), true)}
+                        >
+                          Say yes
+                        </button>
+                        <button
+                          className="btn small"
+                          onClick={() => mutate((s) => refuseOrder(s, order.id), true)}
+                        >
+                          No
+                        </button>
+                      </div>
+                    ) : (
+                      <span className={short ? 'tiny hot' : 'tiny good'}>
+                        {short ? `${owed - onHand} short` : 'Covered'}
+                      </span>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      )}
+      <p className="faint" style={{ marginBottom: 0 }}>
+        Saying yes holds those units back from your own streets and makes the weekly buy aim
+        higher. Not delivering on the day costs you the buyer, and nothing else.
+      </p>
+    </Panel>
+  );
+}
+
 /** What one district would take, for the table. */
 function districtShare(
   state: ReturnType<typeof useGame>,
@@ -278,6 +442,91 @@ function districtShare(
 }
 
 /** Where product comes from, and what the waterfront is doing to the price. */
+/** Somewhere to buy finished crates, beside the shops that make them. */
+function ArmsSupply() {
+  const state = useGame();
+  const current = armsSupplier(state);
+  const [message, setMessage] = useState<string | null>(null);
+
+  return (
+    <Panel title="Buying them in">
+      <p className="dim" style={{ marginTop: 0 }}>
+        Dearer per crate than making them, and there is no building for anybody to raid.
+      </p>
+      <table className="table">
+        <thead>
+          <tr>
+            <th>Arrangement</th>
+            <th className="num">Per crate</th>
+            <th className="num">Ceiling</th>
+            <th className="num">Retainer</th>
+            <th className="num">Standing</th>
+            <th className="num">They walk</th>
+            <th />
+          </tr>
+        </thead>
+        <tbody>
+          {ARMS_SUPPLIERS.map((def) => {
+            const mine = current?.id === def.id;
+            const check = canOpenArmsSupply(state, def.id);
+            return (
+              <tr key={def.id}>
+                <td>
+                  <div className="name-cell">
+                    <span className={mine ? 'name-main brass' : 'name-main'}>{def.name}</span>
+                    <span className="name-sub">{def.blurb}</span>
+                  </div>
+                </td>
+                <td className="num mono">
+                  {formatMoney(Math.round(priced(state, TRADES.arms.unitCost) * def.priceMultiplier))}
+                </td>
+                <td className="num mono">{def.ceiling}/wk</td>
+                <td className="num mono">{formatMoney(def.retainer)}</td>
+                <td style={{ minWidth: 90 }}>
+                  {mine ? (
+                    <>
+                      <Bar value={supplierTrust(state, def.id)} />
+                      <span className="tiny faint">{Math.round(supplierTrust(state, def.id))}/100</span>
+                    </>
+                  ) : (
+                    <span className="tiny faint">&mdash;</span>
+                  )}
+                </td>
+                <td className="num mono">
+                  {mine
+                    ? `${(walkChance(state, def) * 100).toFixed(1)}%`
+                    : `${(def.failureChancePerWeek * 100).toFixed(1)}%`}
+                </td>
+                <td>
+                  <button
+                    className={mine ? 'btn small danger' : 'btn small'}
+                    disabled={!mine && !check.ok}
+                    title={mine ? 'End this arrangement.' : check.message}
+                    onClick={() => {
+                      const result = mutate(
+                        (s) => (mine ? dropArmsSupply(s) : openArmsSupply(s, def.id)),
+                        true,
+                      );
+                      if (result) setMessage(result.message);
+                    }}
+                  >
+                    {mine ? 'End it' : 'Open it'}
+                  </button>
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+      {message && (
+        <p className="dim" style={{ marginTop: 12 }}>
+          {message}
+        </p>
+      )}
+    </Panel>
+  );
+}
+
 function Supply() {
   const state = useGame();
   const suppliers = readSuppliers(state);
@@ -301,6 +550,18 @@ function Supply() {
             <th className="num">Per unit</th>
             <th className="num">Ceiling</th>
             <th className="num">Retainer</th>
+            {/*
+               The relationship, where the player can see it.
+
+               `failureChancePerWeek` used to be a constant nobody could move —
+               dockside lasted a mean of 18.4 weeks and was gone inside a year
+               in 21 of 24 careers, for reasons the player never caused and
+               could never prevent. Trust is the lever, so it has to be on the
+               same row as the arrangement it protects, with the odds it is
+               buying stated as a number rather than implied.
+            */}
+            <th className="num">Standing</th>
+            <th className="num">They walk</th>
             <th />
           </tr>
         </thead>
@@ -318,6 +579,21 @@ function Supply() {
               <td className="num mono">{formatMoney(price)}</td>
               <td className="num mono">{def.ceiling}/wk</td>
               <td className="num mono">{formatMoney(def.retainer)}</td>
+              <td style={{ minWidth: 90 }}>
+                {current ? (
+                  <>
+                    <Bar value={supplierTrust(state, def.id)} />
+                    <span className="tiny faint">{Math.round(supplierTrust(state, def.id))}/100</span>
+                  </>
+                ) : (
+                  <span className="tiny faint">&mdash;</span>
+                )}
+              </td>
+              <td className="num mono">
+                {current
+                  ? `${(walkChance(state, def) * 100).toFixed(1)}%`
+                  : `${(def.failureChancePerWeek * 100).toFixed(1)}%`}
+              </td>
               <td>
                 {/*
                   Both halves of this were silent. Opening can fail on rank or
@@ -350,6 +626,68 @@ function Supply() {
           {message}
         </p>
       )}
+    </Panel>
+  );
+}
+
+/**
+ * Your own supply, and what it costs to stop asking anybody for theirs.
+ *
+ * The panel has to state the fork in both directions or it reads as a straight
+ * upgrade with a price tag. It is cheaper per unit and it cannot walk out on
+ * you; it is also a weekly bill, the loudest thing in the trade, and a
+ * building with an address that a warrant can name.
+ */
+function Plants() {
+  const state = useGame();
+  const plants = plantList(state);
+  const eligible = readTrade(state, 'product').eligible;
+  const covered = plants.length * PLANT.supplyPerWeek;
+
+  return (
+    <Panel title="Making it yourself">
+      <p className="faint" style={{ marginTop: 0 }}>
+        Premises of your own do not make the trade bigger. They make it cheaper — a unit
+        costs {Math.round(PLANT.unitCostShare * 100)}% of the going figure — and they cannot
+        stop taking your calls. In exchange: {formatMoney(PLANT.upkeep)} a week whether or
+        not anything moves, {PLANT.supplyPerWeek} a week each and no more, and an address.
+      </p>
+      {plants.length === 0 ? (
+        <Empty>Nothing of your own. Everything you sell, somebody sold you first.</Empty>
+      ) : (
+        <>
+          {plants.map((plant, i) => (
+            <KeyValue
+              key={i}
+              label={territoryDef(plant.territoryId).name}
+              value={`${PLANT.supplyPerWeek}/wk`}
+              tone="brass"
+            />
+          ))}
+          <KeyValue
+            label="Covered at your own price"
+            value={`${covered} a week`}
+            tone="good"
+          />
+        </>
+      )}
+
+      <div className="btn-row" style={{ marginTop: 12 }}>
+        {eligible.map((t) => {
+          const check = canBuildPlant(state, t.id);
+          return (
+            <button
+              key={t.id}
+              className="btn small"
+              disabled={!check.ok}
+              title={check.message}
+              onClick={() => mutate((s) => buildPlant(s, t.id), true)}
+            >
+              Open in {territoryDef(t.id).name} — {formatMoney(priced(state, PLANT.cost))}
+            </button>
+          );
+        })}
+      </div>
     </Panel>
   );
 }

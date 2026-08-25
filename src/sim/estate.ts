@@ -23,6 +23,7 @@
 
 import type { GameState } from './types';
 import { acquisitionCost, businessDef, ownedBusinesses } from './business';
+import { possessionsVisible, possessionsWorth } from './possessions';
 
 export interface Estate {
   /** Clean money in the wallet. */
@@ -33,7 +34,25 @@ export interface Estate {
   fronts: number;
   /** What the ground is worth to whoever holds it. */
   ground: number;
+  /**
+   * The boss's own things, at face.
+   *
+   * Counted the same way `holdings` is, and for the same reason: buying one is
+   * not supposed to move rank in either direction. What it moves is what you
+   * can do tomorrow. See `config/possessions.ts`.
+   */
+  possessions: number;
   total: number;
+  /**
+   * How much of the total is out where people can see it.
+   *
+   * Lives here rather than in `legacy.ts` because it is a fact about what the
+   * family owns, and `legitimacy` had been computing its own version from two
+   * of the four fields above — which meant adding a fifth field silently
+   * lowered legitimacy for everybody who used it, by growing the denominator
+   * and not the numerator.
+   */
+  visible: number;
 }
 
 /**
@@ -130,5 +149,16 @@ export function estate(state: GameState): Estate {
      Finances panel has told the player since the beginning. A family whose
      entire worth is a suitcase nobody can explain has not built anything.
   */
-  return { cash, holdings, fronts, ground, total: cash + holdings + fronts + ground };
+  const owned = possessionsWorth(state);
+
+  return {
+    cash,
+    holdings,
+    fronts,
+    ground,
+    possessions: owned,
+    total: cash + holdings + fronts + ground + owned,
+    // A watch under a cuff is a drawer. Only the seen share counts as seen.
+    visible: fronts + ground + possessionsVisible(state),
+  };
 }

@@ -12,6 +12,11 @@ import { addEvidence, addLog } from './util';
 import { tickOperations } from './operations';
 import { tickBusinesses } from './business';
 import { tickContraband } from './contraband';
+import { tickOrders } from './orders';
+import { tickScores } from './scores';
+import { closeWeek } from './ledger';
+import { tickPossessions } from './possessions';
+import { tickLaunderer } from './launderers';
 import { tickTerritory } from './territory';
 import { tickDelegation } from './delegation';
 import { tickPromises } from './promises';
@@ -21,7 +26,7 @@ import { tickDeposition } from './succession';
 import { tickFactions } from './faction';
 import { tickInvestigations } from './investigation';
 import { tickWars } from './diplomacy';
-import { spend, tickEconomy, tickHoldings, totalFunds } from './economy';
+import { spend, tickEconomy, tickHoldings } from './economy';
 import { tickLoans, tickMarket, type LoanHooks } from './market';
 import { tickHeat } from './heat';
 import { addNote, driftNpcs, tickNpcs, crewList } from './npc';
@@ -30,11 +35,12 @@ import { ageCapos, tickCapos } from './capos';
 import { tickPerception } from './perception';
 import { tickCivic } from './civic';
 import { tickHome } from './personal';
+import { tickCards } from './cards';
 import { tickWhispers } from './whispers';
 import { tickEvents } from './events';
 import { tickWorld } from './world';
-import { tickFear, tickPlayer, tickRecord, tickStanding } from './player';
-import { recruitCost, refreshRecruits } from './crew';
+import { tickFear, tickRecord, tickStanding } from './player';
+import { refreshRecruits } from './crew';
 import { addInfluence, territoryDef } from './territory';
 import { bond } from './diplomacy';
 import { DRIFT_INTERVAL_DAYS } from '../config/npcs';
@@ -59,16 +65,42 @@ export function advanceDay(state: GameState): void {
   //     which is the join between the two halves of the economy, and the
   //     first thing that has ever strained the laundering system.
   tickContraband(state, rng);
+  // 1b. And whatever is left on the shelf goes to whoever was promised it.
+  //     After the trade, always: the buy aims at the street plus the orders,
+  //     the street takes everything that is not reserved, and this hands over
+  //     what that leaves. Daily rather than weekly, because a deadline is a
+  //     day.
+  tickOrders(state);
+  // 1b2. Windows that have shut. Beside the orders and for the same reason: a
+  //      deadline is a day, not a week. A job that is already out when its
+  //      window shuts still gets to finish — the window is about when you had
+  //      to move, not about how long the night takes.
+  tickScores(state);
+  // 1c. Whoever keeps the books takes their fee and forms an opinion. Before
+  //     the fronts, because `launderCut` reads the opinion and the fronts
+  //     apply it the same morning — a week where somebody walks has to be a
+  //     week the family pays the stranger's rate, not one where the panel and
+  //     the payday disagree.
+  tickLaunderer(state, rng);
   // 2. Fronts earn and launder, before wages — a business should be able to
   //    fund the crew that holds the district it sits in.
   tickBusinesses(state, rng);
   // 3. Everybody you owe collects, before the crew get paid — they are the
   //    only creditors in the game who do something about it.
   if (state.day % PAYDAY_INTERVAL === 0) {
-    tickLoans(state, rng, (amount) => spend(state, amount), loanHooks(state, rng));
+    tickLoans(state, rng, (amount) => spend(state, amount, 'debt'), loanHooks(state, rng));
   }
   // 3a. Wages out.
   tickEconomy(state);
+  // 3b. What the boss keeps, and what keeping it does for him.
+  //
+  //     After wages, because the upkeep on a yacht is a standing bill and
+  //     belongs beside the other standing bills. Before the book is ruled off
+  //     at 5d, or the charge lands in `unaccounted`. And before influence and
+  //     feeling drift at 7, for the reason 6a runs where it does — a district
+  //     the foundation worked this morning should read as worked when the
+  //     drift asks about it this afternoon.
+  tickPossessions(state);
   // 4. Heat decays only if nothing above generated any.
   tickHeat(state);
   // 4a. Being feared fades, and charges rent while it lasts.
@@ -91,6 +123,13 @@ export function advanceDay(state: GameState): void {
   //     marked this morning should be aggrieved when the drift asks him this
   //     afternoon how he feels about you.
   if (state.day % DRIFT_INTERVAL_DAYS === 0) markStanding(state);
+  // 5d. Rule off the week's book.
+  //
+  //     After every phase that moves money and before anything that only
+  //     reads it. The close differences the wallet against what was written
+  //     down and books the gap as `unaccounted`, so a category nobody has
+  //     labelled yet shows up on the panel rather than disappearing.
+  if (state.day % PAYDAY_INTERVAL === 0) closeWeek(state);
   // 6. The weekly re-evaluation of everybody's position.
   if (state.day % DRIFT_INTERVAL_DAYS === 0) driftNpcs(state, rng);
   // 6a. Anybody holding a district of yours decides what to do with it this
@@ -113,6 +152,12 @@ export function advanceDay(state: GameState): void {
   //      so it can sit anywhere in the week. Here, beside the other opinions
   //      being formed about you.
   tickHome(state);
+  // 7a3. And the room slowly stops watching your hands.
+  //
+  //      Decay only — sitting down is a player action, never a tick. Touches
+  //      nothing but its own record, so it sits with the other quiet weekly
+  //      readings rather than anywhere load-bearing.
+  tickCards(state);
   // 7b. The people outside the family form an opinion.
   //
   //     After `tickTerritory` on purpose: a union boss counts the ground you
@@ -171,10 +216,8 @@ export function advanceDay(state: GameState): void {
     */
     tickRecord(state);
     // 15. Has the organization earned the next rank?
-    tickPlayer(state);
   }
 
-  checkGameOver(state);
 }
 
 /**
@@ -297,27 +340,22 @@ export function advanceDays(state: GameState, days: number): number {
   return days;
 }
 
-/**
- * The last way to lose that is not somebody removing you.
- *
- * Conviction and assassination go through `removePlayer`, which only ends the
- * game when there is nobody left to hand it to. This is the other floor: no
- * people, and no money to get any.
- *
- * Neither applies outside a career. Sandbox exists to be experimented with and
- * Simulation has no organization to lose in the first place — it would end on
- * day one, every time, having started with nothing by design.
- */
-function checkGameOver(state: GameState): void {
-  if (state.mode !== 'career') return;
-  const crew = crewList(state).length;
-  const hasActiveWork = Object.keys(state.activeOperations).length > 0;
-  if (crew === 0 && !hasActiveWork && totalFunds(state) < recruitCost(state)) {
-    state.gameOver = {
-      reason:
-        'Nobody left and nothing to pay anyone with. Whatever this was, it is over.',
-      day: state.day,
-    };
-    addLog(state, 'The organization is finished.', 'failure');
-  }
-}
+/*
+   There is no bankruptcy ending any more, and there never should have been.
+
+   `checkGameOver` used to stop a career with no crew, no work running and less
+   money than a recruit costs. It read as a floor and it was a declaration: the
+   game deciding, on the player's behalf, that a bad run was a finished one.
+
+   It was also not true. `work_it_yourself` asks for no crew, no investment and
+   one day, pays $180 to $420 at 82%, and is open from the first rank. Every
+   morning that function fired, the player had something they could do — the
+   run was taken away at the exact point it got interesting.
+
+   A career now ends the two ways a 1935 boss's career ends: a conviction, or
+   somebody kills you. Both go through `removePlayer` in succession.ts, and
+   both still only stop the game when there is nobody left to hand it to.
+   `careerEnd.test.ts` holds all of that, including the part that makes it
+   safe — that there is always a job on the board.
+*/
+

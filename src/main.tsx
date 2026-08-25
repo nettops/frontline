@@ -1,13 +1,18 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './ui/App';
-import { apply as applySkin } from './ui/skin';
 import './styles/theme.css';
-import './styles/crt.css';
 
-// Before the first paint, so a player who chose the terminal does not get one
-// frame of the ledger on the way in.
-applySkin();
+/*
+   There is one skin, and it is the ledger.
+
+   The terminal skin is built and parked: `styles/crt.css` and `ui/skin.ts` are
+   both still on disk and neither is imported, so Vite emits neither. Turning
+   it back on is three lines — the two imports above and an `applySkin()` call
+   here — plus a switch somewhere a player can reach. `ui/__tests__/skin.test.ts`
+   guards the parked state and will fail the moment any of that comes back,
+   which is the point: it should be a decision, not a merge.
+*/
 
 /*
    The script-driver's harness, in dev only.

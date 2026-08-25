@@ -18,6 +18,14 @@ import {
   weeklyRevenue,
 } from '../../sim/business';
 import { DEFAULT_PRESSURE, PRESSURES } from '../../config/pressure';
+import {
+  canRetainLauderer,
+  dropLaunderer,
+  launderer,
+  readLaunderers,
+  retainLaunderer,
+} from '../../sim/launderers';
+import { LAUNDER_CUT_BASE } from '../../config/businesses';
 import { territoryDef } from '../../sim/territory';
 import { formatMoney, formatShortDay, formatPercent } from '../../sim/util';
 import { HEALTH, EXPOSURE_ALARMING_ABOVE, SHUTTER_REFUND_SHARE } from '../../config/businesses';
@@ -122,6 +130,8 @@ export default function BusinessesPanel() {
         the business the most interesting thing about you.
       </p>
 
+      <Books />
+
       <div className="grid-2">
         <Panel title="The pipeline">
           <KeyValue label="Dirty cash waiting" value={formatMoney(backlog)} tone="good" />
@@ -152,14 +162,22 @@ export default function BusinessesPanel() {
           */}
           {capacity > 0 && (
             <p
-              className={outlook.limit === 'nothing' ? 'hot tiny' : 'faint tiny'}
+              className={
+                outlook.limit === 'nothing'
+                  ? 'hot tiny'
+                  : outlook.limit === 'pushing' || outlook.limit === 'capacity'
+                    ? 'brass tiny'
+                    : 'faint tiny'
+              }
               style={{ marginTop: 10, marginBottom: 0 }}
             >
               {outlook.limit === 'nothing'
                 ? `Nothing will wash this week. ${formatMoney(outlook.heldBack)} of dirty cash is spoken for by wages, and there is no surplus behind it.`
-                : outlook.limit === 'capacity'
-                  ? `About ${formatMoney(outlook.clean)} clean this week — you have more dirty money than capacity. Another front is the answer.`
-                  : `About ${formatMoney(outlook.clean)} clean this week, after ${formatMoney(outlook.heldBack)} is held back for wages. Capacity is not the limit; earnings are.`}
+                : outlook.limit === 'pushing'
+                  ? `About ${formatMoney(outlook.clean)} clean this week — ${outlook.load.toFixed(1)}x what these premises comfortably take. All of it goes through and they age at that rate. Another front spreads it.`
+                  : outlook.limit === 'capacity'
+                    ? `About ${formatMoney(outlook.clean)} clean this week — you have more dirty money than these premises will take, and the rest waits. Another front, or lean on the ones you have.`
+                    : `About ${formatMoney(outlook.clean)} clean this week, after ${formatMoney(outlook.heldBack)} is held back for wages. Capacity is not the limit; earnings are.`}
             </p>
           )}
           <p className="faint tiny" style={{ marginTop: 10, marginBottom: 0 }}>
@@ -501,5 +519,112 @@ export default function BusinessesPanel() {
         )}
       </Panel>
     </>
+  );
+}
+
+/**
+ * Who keeps the books, and what knowing you is worth to them.
+ *
+ * The cut used to be one number on the pipeline panel and nothing a player
+ * could act on. Measured over 36 careers it took $156,255 out of a trading
+ * family and bought nothing — the only charge in the game that does. So the
+ * headline rate is what a *stranger* charges, this is the alternative, and the
+ * panel has to state the whole trade rather than only the discount: a retainer
+ * up front, a fee every week whether or not a dollar moves, a name that
+ * appears on things, and somebody who can stop taking your calls.
+ *
+ * The standing column is the point. It is the only part of this that cannot be
+ * bought, because heat holds it down — the rate improves for a family nobody
+ * is looking at.
+ */
+function Books() {
+  const state = useGame();
+  const rows = readLaunderers(state);
+  const held = launderer(state);
+  const [message, setMessage] = useState<string | null>(null);
+
+  return (
+    <Panel title="Who handles it">
+      <p className="dim" style={{ marginTop: 0 }}>
+        Nobody takes {formatPercent(LAUNDER_CUT_BASE)} of everything for a reason — that is
+        what a stranger charges. Somebody of your own takes less, and takes less again the
+        longer they have known you, which is worth more than any of the other numbers on this
+        page and cannot be bought in a hurry.
+      </p>
+      <table className="table">
+        <thead>
+          <tr>
+            <th>Arrangement</th>
+            <th className="num">Takes now</th>
+            <th className="num">At best</th>
+            <th className="num">Retainer</th>
+            <th className="num">A week</th>
+            <th className="num">Standing</th>
+            <th className="num">They walk</th>
+            <th />
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map(({ def, current, trust, rate, walk, retainer, fee }) => {
+            const check = canRetainLauderer(state, def.id);
+            return (
+              <tr key={def.id}>
+                <td>
+                  <div className="name-cell">
+                    <span className={current ? 'name-main brass' : 'name-main'}>{def.name}</span>
+                    <span className="name-sub">{def.blurb}</span>
+                  </div>
+                </td>
+                <td className="num mono">{formatPercent(rate)}</td>
+                <td className="num mono good">{formatPercent(def.bestCut)}</td>
+                <td className="num mono">{formatMoney(retainer)}</td>
+                <td className="num mono">{formatMoney(fee)}</td>
+                <td style={{ minWidth: 90 }}>
+                  {current ? (
+                    <>
+                      <Bar value={trust} />
+                      <span className="tiny faint">{Math.round(trust)}/100</span>
+                    </>
+                  ) : (
+                    <span className="tiny faint">&mdash;</span>
+                  )}
+                </td>
+                <td className="num mono">
+                  {current
+                    ? `${(walk * 100).toFixed(1)}%`
+                    : `${(def.failureChancePerWeek * 100).toFixed(1)}%`}
+                </td>
+                <td>
+                  <button
+                    className={current ? 'btn small danger' : 'btn small'}
+                    disabled={!current && !check.ok}
+                    title={current ? 'End this arrangement.' : check.message}
+                    onClick={() => {
+                      const result = mutate(
+                        (g) => (current ? dropLaunderer(g) : retainLaunderer(g, def.id)),
+                        true,
+                      );
+                      if (result) setMessage(result.message);
+                    }}
+                  >
+                    {current ? 'End it' : 'Take them on'}
+                  </button>
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+      {!held && (
+        <p className="faint tiny" style={{ marginBottom: 0 }}>
+          Nobody handles it. Every dollar you wash is costing you the stranger's rate.
+        </p>
+      )}
+      {message && (
+        <p className="dim" style={{ marginTop: 12, marginBottom: 0 }}>
+          {message}
+        </p>
+      )}
+    </Panel>
   );
 }
