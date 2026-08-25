@@ -181,6 +181,41 @@ export function tickStandingOrders(state: GameState): void {
   const remaining: StandingOrder[] = [];
   for (const order of standingList(state)) {
     order.pattern = (order.pattern ?? 0) * (1 - PATTERN.decayShare);
+
+    /*
+       And a long job is not one night's work.
+
+       This used to rise once per *firing* and fade once per *day*, so how deep
+       a groove got was governed by how long the job took rather than by how
+       much of the calendar you spent on that street. Measured, a one-day grind
+       settled at 76.8 of 100 and a three-day job at 16.6 — under
+       `noticeAbove`, which meant the mechanic was close to invisible on the
+       slower half of the board. Nobody chose that; it fell out of the
+       arithmetic.
+
+       So a pair being worked *today* wears the groove today, whether or not
+       anything was launched this morning. Three men parked outside the same
+       warehouse for three days are three days of routine, and nobody watching
+       stopped on the second morning.
+
+       Charged off `activeOperations` rather than off the order, so a job the
+       player hand-runs on a pair an order already works counts too — the same
+       rule `patternOn` follows, for the same reason: the police are watching
+       the pattern, not reading your minutes.
+
+       Safe for the one-day case the figures were swept on. `tickOperations`
+       resolves at phase 1 and this runs at 1b4, so a one-day job is already
+       home before this sees it and still accrues exactly once.
+    */
+    if (order.status === 'standing') {
+      const stillOut = Object.values(state.activeOperations).some(
+        (op) => op.defId === order.defId && op.territoryId === order.territoryId,
+      );
+      if (stillOut) {
+        order.pattern = Math.min(order.pattern + PATTERN.perFire, PATTERN.cap);
+      }
+    }
+
     // A called-off order is only still here to carry what it left behind.
     if (order.status !== 'standing' && order.pattern < 0.5) continue;
     remaining.push(order);

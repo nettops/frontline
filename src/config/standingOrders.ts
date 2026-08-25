@@ -37,12 +37,34 @@ export const PATTERN = {
   /**
    * What one more night on the same corner adds.
    *
-   * **Provisional, and due a sweep against the fire counts.** Sized here from
-   * the shape rather than measured: with the decay below, a pattern that rises
-   * by this much per firing settles at `perFire / decayShare`, so 2 against
-   * 0.026 plateaus near 77 of a possible 100. That is deliberate — it means an
-   * order left running forever ends up somewhere bad and stays there, without
-   * needing a hard ceiling to say so.
+   * Charged per *day the pair is being worked*, not per job launched. With the
+   * decay below, a pair worked continuously settles at `perFire / decayShare`
+   * — 2 against 0.026, so near 77 of a possible 100. An order left running
+   * forever ends up somewhere bad and stays there, with no hard ceiling needed
+   * to say so.
+   *
+   * **Per day rather than per firing is a repair, and it mattered.** It used to
+   * rise once when a job went out and fade once a day, so the depth of a groove
+   * was governed by how long the job took rather than by how much of the
+   * calendar you spent on that street. Measured across the board:
+   *
+   *     job                  days   plateau before   after
+   *     corner shakedown     1      76.8             69.4
+   *     protection racket    3      —                48.5
+   *     truck hijacking      3      16.6             29.3
+   *     backroom card game   7      —                76.8
+   *
+   * A three-day job sat at 16.6 — under `noticeAbove`, so the whole mechanic
+   * was close to invisible on the slower half of the board, and nobody chose
+   * that. Now the deepest groove belongs to the seven-day job, which is right:
+   * a crew tied up on the same operation continuously is the most predictable
+   * thing in the city.
+   *
+   * The one-day case is unchanged in mechanism, which is what lets the sweep
+   * below stand — `tickOperations` resolves at phase 1 and the tick runs at
+   * 1b4, so a one-day job is already home and still accrues exactly once. The
+   * 76.8-to-69.4 difference is the fixture, not the change: it fired 243 days
+   * of 250 rather than 250, and 2 x (243/250) / 0.026 predicts 74.8.
    */
   perFire: 2,
 
@@ -90,6 +112,21 @@ export const PATTERN = {
    * The faster-decay column is not chosen despite winning on careers, because
    * it wins by winning: +$194,402 against the hand is automation coming out
    * ahead of playing, which is the one thing `RUNS_AUTO` exists to forbid.
+   *
+   * **Re-run after the per-day repair above, and every figure came back
+   * identical to the digit.** That is not the reassurance it looks like. Every
+   * automation arm in `ladder.probe` grinds a one-day job — `AUTO_PLUS` and
+   * `AUTO_CYCLED` both settle on `corner_shakedown`, `AUTO` on `burglary_run`
+   * — so the probe did not confirm the repair, it was blind to it, which is
+   * precisely why nothing moved.
+   *
+   * What verifies the repair is the plateau table under `perFire` and two
+   * tests in `__tests__/standingOrders.test.ts`. That is deliberately not
+   * treated as a gap to be filled with another arm: the paired estate has now
+   * failed to price a mechanic three separate times in that file, while "where
+   * does the groove settle on a three-day job" is a quantity this mechanic
+   * moves on purpose and reads to one decimal place. Same reasoning that put
+   * `crewSkill.floor` behind the teaching bar rather than the estate.
    */
   weight: 0.006,
 
