@@ -3719,18 +3719,18 @@ describe('the systems nobody had measured', () => {
 
        A target for `SHAPE_BARS`, not a threshold on this file.
 
-       **Red since the bot was fixed, and it cannot be fixed here.** With the
-       bot idle on two days in five this read kingpin 12, don 10, diplomat 8,
-       unremarkable 4, financier 2 — a spread. A family that actually works
-       reads kingpin 35 of 36, because `kingpinDistricts` is 4 and the district
-       count has collapsed to a point mass: 35 careers hold exactly 4 and one
-       holds 3. No value of that bar separates anybody — 4 names everyone, 5
-       names nobody.
+       **Went red when the bot was fixed, and the bar was not the problem.**
+       With the bot idle on two days in five this read kingpin 12, don 10,
+       diplomat 8, unremarkable 4, financier 2. A family that actually works
+       read kingpin 35 of 36, because the shape counted districts at a
+       *foothold* and the histogram of that was `2:1 3:1 4:31 5:3` — a point
+       mass, where no value of any bar separates anybody.
 
-       So this is not a bar to re-plot. It is `SHAPE_BARS.kingpinDistricts`
-       reading a quantity that no longer varies across careers, and the fix is
-       to give the Kingpin something with spread in it to read. Recorded in
-       `config/legacy.ts` beside the bar.
+       `careerShape` counts dominance now and reads financier 14, kingpin 10,
+       don 9, unremarkable 3. Recorded in `config/legacy.ts` beside the bar.
+
+       The instrument, not the bar. That is the third time in this pass, after
+       the union boss and the alderman.
     */
     /*
        What the Kingpin bar is actually reading, printed because it turned out

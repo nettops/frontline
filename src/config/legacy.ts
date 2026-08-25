@@ -136,24 +136,33 @@ export const CAREER_SHAPES: CareerShapeDef[] = [
  */
 export const SHAPE_BARS = {
   /**
-   * Districts held for the Kingpin. The 75th percentile at day 300 was 4.
+   * Districts you **dominate** for the Kingpin.
    *
-   * **This bar no longer separates anybody, and no value of it would.**
-   * `ladder.probe`'s bot was ending its job loop on a `break` against a list
-   * sorted by expected value, so it stood still on two days in five and got
-   * quieter the better the board got. Every distribution in that file was a
-   * statement about a family that had largely stopped working.
+   * The number never moved. What it counts did, and that was the whole defect.
    *
-   * With it fixed, districts held at day 300 read: 35 careers on exactly 4,
-   * one on 3. A point mass. A bar of 4 hands "The Kingpin" to 35 of 36 careers
-   * — the horoscope this file's header forbids — and a bar of 5 hands it to
-   * nobody. There is nowhere between them to stand.
+   * `careerShape` read `playerInfluence(t) >= 25` — a foothold — and a family
+   * with three districts under control has a toe in six or seven besides. It
+   * survived only because the probe bot ending its job loop on a `break` stood
+   * still on two days in five, so every distribution in that file described a
+   * family that had largely stopped working. With the bot fixed the histogram
+   * of what this was reading came out `2:1 3:1 4:31 5:3` and the Kingpin was
+   * the verdict on 35 careers in 36 — the horoscope this file's header
+   * forbids, arriving at the population level where no single-career test can
+   * see it.
    *
-   * So this is not a re-plot. The Kingpin needs to read something with spread
-   * in it: districts at *dominance* rather than control, or ground held
-   * against ground the rivals hold, or how long it was held. Left at 4 and
-   * left failing in `ladder.probe`, deliberately, because a bar that reports a
-   * broken reading is worth more than one moved to hide it.
+   * Control is no better: `2:1 3:4 4:30 5:1`. The highest district gate
+   * anywhere in `OPERATIONS` is three, so nothing in the game asks for a
+   * fourth district and a rational player stops there. That is the same
+   * finding that took the union boss off ground in `config/civic.ts`, and the
+   * same shape of defect as the alderman reading public feeling: a bar
+   * re-placed against a quantity that had stopped varying, rather than the
+   * quantity being questioned.
+   *
+   * Dominance is the only band that spreads — `1:4 2:6 3:15 4:11` — and it is
+   * also the honest reading of "the city moved around you". A foot in the door
+   * is not a map somebody else inherits. Four is the 75th of that
+   * distribution, so the bar stays exactly where it was and now names 10
+   * careers in 36 instead of 35.
    */
   kingpinDistricts: 4,
   /**

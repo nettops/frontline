@@ -219,9 +219,9 @@ export interface CivicFigureDef {
        before   captain 24/36 · union 36/36 · judge 16/36 · alderman  0/36
        after    captain 28/36 · union 17/36 · judge 15/36 · alderman 17/36
 
-   `SHAPE_BARS.kingpinDistricts` still reads the ground count and is still a
-   fixture for the same reason. It is recorded in `config/legacy.ts` and
-   `ladder.probe` stays red on it.
+   `SHAPE_BARS.kingpinDistricts` had the same defect a third time — it counted
+   districts at a foothold and named 35 careers in 36. It counts dominance now;
+   see `config/legacy.ts`.
 */
 export const CIVIC_FIGURES: CivicFigureDef[] = [
   {

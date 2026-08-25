@@ -11,7 +11,7 @@
 
 import { clamp } from './rng';
 import { estate } from './estate';
-import { territoryList, playerInfluence } from './territory';
+import { territoryList, playerInfluence, controlLevel } from './territory';
 import { figure } from './civic';
 import { possessions } from './possessions';
 import { POSSESSION_BY_ID } from '../config/possessions';
@@ -76,7 +76,28 @@ export interface CareerShape {
  */
 export function careerShape(state: GameState): CareerShape {
   const worth = estate(state);
-  const held = territoryList(state).filter((t) => playerInfluence(t) >= 25).length;
+  /*
+     Districts you dominate, not districts you have a foot in.
+
+     This counted influence at 25 — a foothold — and a family with three
+     districts under control has a toe in six or seven besides. Measured over
+     36 careers at day 300, the histogram of what it was reading was
+     `2:1 3:1 4:31 5:3`, and the Kingpin was the verdict on 35 of them: the
+     horoscope this file's header forbids, arriving at the population level
+     where no single-career test could see it. Control reads no better —
+     `2:1 3:4 4:30 5:1` — because the highest district gate anywhere in
+     `OPERATIONS` is three, so nothing asks for a fourth and a rational player
+     stops there.
+
+     Dominance is the only band that spreads: `1:4 2:6 3:15 4:11`. It is also
+     the honest reading of "the city moved around you" — a foot in the door is
+     not a map somebody else inherits.
+
+     The same defect the union boss had in `config/civic.ts`, twice over: a bar
+     re-placed against a quantity that had stopped varying, rather than the
+     quantity being questioned.
+  */
+  const held = territoryList(state).filter((t) => controlLevel(t) === 'dominance').length;
   const owed = CIVIC_FIGURES.reduce((sum, def) => sum + figure(state, def.id).owed, 0);
   const peak = state.org.record?.estate ?? worth.total;
   const notoriety = state.city?.notoriety ?? 0;
