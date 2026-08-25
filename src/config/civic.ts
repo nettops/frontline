@@ -54,8 +54,11 @@ export type CivicWatches =
   | 'quiet'
   /** Districts held. More is better — a union boss counts halls. */
   | 'ground'
-  /** Public feeling across the districts you work. Higher is better. */
-  | 'standing'
+  /**
+   * Legitimate businesses standing in ground that does not resent you.
+   * Higher is better — somebody in office needs people to be seen with.
+   */
+  | 'respectability'
   /** Notoriety in the papers. Lower is better — a judge cannot be seen. */
   | 'discretion';
 
@@ -157,8 +160,35 @@ export interface CivicFigureDef {
        backwards, and it is the sharper input the paragraph above said he would
        need. A bar placement cannot fix a reading that runs the wrong way.
 
-   Neither bar is moved. `ladder.probe` is left red on both, which is what that
-   file's own comment says to do with a target for this config.
+   ## The alderman, fixed
+
+   Plotted first. Five candidate readings across 36 careers at day 300, as the
+   25th / median / 75th:
+
+       mean sentiment where working   34.6 / 37.2 / 38.3   (max 40.7)
+       best sentiment where working   49.1 / 50.0 / 50.0   (max 50.0)
+       districts above 50                0 /    0 /    0
+       fronts in non-hostile ground    7.0 /  8.0 /  9.0   (max 10)
+       legitimacy                       35 /   42 /   48   (max 71)
+
+   The first three say the same thing: public feeling has **no upside**.
+   `SENTIMENT_RECOVERY_PER_WEEK` climbs back only as far as `SENTIMENT_START`,
+   and not one career in thirty-six ever had a single district above it. Every
+   bar this figure has carried — 60, then 45, then 50 — was outside the range
+   of the quantity it was set against.
+
+   He reads fronts in ground that is not hostile now, over `respectableFronts`.
+   Feeling stays in it as a gate rather than as the whole of it, so the
+   foundation and the rest of the sentiment economy still matter to him, and a
+   business nobody there can stand still does not count.
+
+   After: captain 24/36 · union 36/36 · judge 16/36 · **alderman 13/36**, with
+   his median best standing at 79 against a bar of 85 — a stretch a third of
+   careers make, which is what the figure is for.
+
+   The union is still open and its bar does not move. `ladder.probe` stays red
+   on it, which is what that file's own comment says to do with a target for
+   this config.
 */
 export const CIVIC_FIGURES: CivicFigureDef[] = [
   {
@@ -254,21 +284,24 @@ export const CIVIC_FIGURES: CivicFigureDef[] = [
     title: 'Somebody in office',
     blurb:
       'The building takes their calls. The same arrangement the City screen sells for money, reached the other way.',
-    watches: 'standing',
+    watches: 'respectability',
     grants: 'lose_the_paperwork',
     /*
-       Was 60, and never once reached in 36 careers.
+       Twice sized against a quantity that could not carry a bar, and now
+       sized against one that can.
 
-       The alderman reads the average public feeling across the districts you
-       work, and `ladder.probe` measures that at 38 across the population, with
-       the best week of the median career at 46. A bar of 60 was not demanding,
-       it was outside the range of the quantity it was set against — the figure
-       was unreachable content in every career the probe has ever run.
+       It was 60, then 45, then 50, all against the average public feeling in
+       the districts you work. That reading tops out at 40.7 across 36 careers
+       and *falls* as you play, so every one of those numbers was outside the
+       range of the thing it was measuring; see the note in `scoreFor`.
 
-       45 sits just above the median career's best, so keeping a neighbourhood
-       on side is what buys it, which is what the figure is for.
+       He reads fronts in ground that is not hostile now, and `ladder.probe`
+       measures those at 7 / 8 / 9 of a possible 10 at day 300. Against
+       `respectableFronts` of 10 that is a score of 70 / 80 / 90, so this sits
+       between the median and the 75th, which is where DIRECTOR section 5 puts
+       a bar and where the other three figures were placed.
     */
-    owesAbove: 50,
+    owesAbove: 85,
     needsInfluence: 6,
   },
 ];
@@ -278,6 +311,15 @@ export const CIVIC_BY_ID: Record<string, CivicFigureDef> = Object.fromEntries(
 );
 
 export const CIVIC = {
+  /**
+   * Fronts in non-hostile ground that read as a full civic presence.
+   *
+   * The same shape as the union's four districts: a ceiling past which the
+   * figure is not impressed further. Ten is what the compounding career holds
+   * at day 300, so the bar above can sit inside the distribution rather than
+   * beyond it.
+   */
+  respectableFronts: 10,
   /** Everybody decides how they feel about you once a week. */
   intervalDays: 7,
   /**

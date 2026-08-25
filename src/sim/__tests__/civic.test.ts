@@ -20,9 +20,11 @@ import {
   civicRead,
   figure,
   helpFigure,
+  scoreFor,
   spendFavour,
   tickCivic,
 } from '../civic';
+import { withFronts } from './helpers';
 import { CIVIC, CIVIC_BY_ID, CIVIC_FIGURES, FAVOUR_EFFECT } from '../../config/civic';
 import { SENTIMENT_HOSTILE_BELOW, HOME_TERRITORY } from '../../config/territories';
 import type { GameState } from '../types';
@@ -49,6 +51,99 @@ function weeks(state: GameState, n: number): void {
     tickCivic(state);
   }
 }
+
+/*
+   The alderman, and the reading that ran the wrong way.
+
+   He watched the average public feeling across the districts you work. Two
+   things about that turned out to be fatal, and neither was visible until
+   `ladder.probe`'s bot stopped standing still on two days in five.
+
+   **It has no upside.** `SENTIMENT_RECOVERY_PER_WEEK` climbs back only as far
+   as `SENTIMENT_START`, which is 50, and nothing in ordinary play pushes a
+   district above it. Measured at day 300 across 36 careers: the best worked
+   district reads 49.1 / 50.0 / 50.0 and *no* career had a single district over
+   50. The quantity is a ceiling the game presses everybody against from below.
+
+   **It falls with play.** Working a district is what costs feeling, so the
+   mean across worked districts read 34.6 / 37.2 / 38.3 with a maximum of 40.7
+   — against a bar of 50. The figure was not fragile, he was unreachable by
+   construction, and his favour was the one thing in this game that got further
+   away the more you played.
+
+   So he reads what you have *built* in the neighbourhood instead: legitimate
+   businesses standing in ground that does not resent you. That is a ward
+   politician's actual interest, it is what `lose_the_paperwork` is a favour
+   about, and it keeps public feeling in the reading as a gate rather than as
+   the whole of it — a front nobody there can stand does not count.
+*/
+describe('somebody in office', () => {
+  /**
+   * `n` real fronts through the real acquisition path, then public feeling set
+   * where the test wants it. A hand-built Business object was tried first and
+   * `ownedBusinesses` correctly refused to count it.
+   */
+  function fronts(state: GameState, n: number, sentiment: number[] = []): string[] {
+    const made = withFronts(state, n);
+    made.forEach((b, i) => {
+      const t = state.territories[b.territoryId];
+      if (sentiment[i] !== undefined) t.sentiment = sentiment[i];
+    });
+    return made.map((b) => b.territoryId);
+  }
+
+  const alderman = CIVIC_BY_ID['alderman'];
+
+  it('reads nothing when there is nothing to be seen with', () => {
+    expect(scoreFor(game(), alderman)).toBe(0);
+  });
+
+  it('rises with legitimate business in ground that does not resent you', () => {
+    const state = game();
+    fronts(state, 1, [50]);
+    const one = scoreFor(state, alderman);
+    fronts(state, 2, [50, 50]);
+    const two = scoreFor(state, alderman);
+
+    expect(one).toBeGreaterThan(0);
+    expect(two).toBeGreaterThan(one);
+  });
+
+  it('does not count a front nobody in the district can stand', () => {
+    const state = game();
+    const made = fronts(state, 2, [50, 50]);
+    const before = scoreFor(state, alderman);
+    state.territories[made[1]].sentiment = SENTIMENT_HOSTILE_BELOW - 5;
+    expect(scoreFor(state, alderman)).toBeLessThan(before);
+  });
+
+  /*
+     The defect itself, as a test. Working a district costs public feeling, and
+     under the old reading that alone pushed him away.
+  */
+  it('does not fall because you worked the neighbourhood', () => {
+    const state = game();
+    fronts(state, 3, [50, 50, 50]);
+    const before = scoreFor(state, alderman);
+
+    for (const t of Object.values(state.territories)) {
+      t.sentiment = Math.max(SENTIMENT_HOSTILE_BELOW + 1, t.sentiment - 15);
+    }
+    expect(scoreFor(state, alderman)).toBe(before);
+  });
+
+  it('is reachable — a bar above what the reading can ever return is not a bar', () => {
+    const state = game();
+    const made = fronts(state, CIVIC.respectableFronts);
+    for (const id of made) {
+      state.territories[id].sentiment = Math.max(
+        state.territories[id].sentiment,
+        SENTIMENT_HOSTILE_BELOW + 1,
+      );
+    }
+    expect(scoreFor(state, alderman)).toBeGreaterThanOrEqual(alderman.owesAbove);
+  });
+});
 
 describe('the people who are not in your family', () => {
   it('starts everybody at arm’s length rather than absent', () => {
