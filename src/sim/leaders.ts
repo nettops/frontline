@@ -31,6 +31,18 @@ import { LAST_NAMES } from '../config/npcs';
 import { houseDef, housePersonality } from './houses';
 
 /**
+ * As much of a house as naming a boss needs.
+ *
+ * Structural rather than the config `HouseDef`, because the two callers hold
+ * different things: the founding has the drawn definition, while a succession
+ * twenty years later has only the faction, which carries its own copy.
+ */
+export interface HouseNaming {
+  shortName: string;
+  firstNames?: string[];
+}
+
+/**
  * A new boss.
  *
  * The reputation line and the personality bias are picked together rather than
@@ -38,15 +50,18 @@ import { houseDef, housePersonality } from './houses';
  * actually more aggressive than his predecessor. Getting that wrong is how you
  * end up with flavour text that quietly contradicts the simulation.
  */
-export function newLeader(rng: Rng, day: number, familyName: string): FactionLeader {
+export function newLeader(rng: Rng, day: number, house: HouseNaming): FactionLeader {
   const reputation = rng.pick(LEADER_REPUTATIONS);
   const bias = LEADER_BIAS[reputation.suits];
   // Half the time he is one of the family, half the time he married in or
   // came up through it. Either way the surname is the one people use.
-  const surname = rng.chance(0.55) ? familyName : rng.pick(LAST_NAMES);
+  const surname = rng.chance(0.55) ? house.shortName : rng.pick(LAST_NAMES);
+  // A house may keep its own list; most do not. Either way this is one draw,
+  // which is the only property of it the seeded stream cares about.
+  const given = rng.pick(house.firstNames ?? LEADER_FIRST_NAMES);
 
   return {
-    name: `${rng.pick(LEADER_FIRST_NAMES)} ${surname}`,
+    name: `${given} ${surname}`,
     age: rng.int(LEADER_AGE_ON_TAKING[0], LEADER_AGE_ON_TAKING[1]),
     since: day,
     // Jittered, so two bosses of the same type are not the same boss.
@@ -126,7 +141,7 @@ export function replaceLeader(
    * new boss from his first day.
    */
   const heir = promoteFromWithin(state, faction);
-  const successor = newLeader(rng, state.day, def.shortName);
+  const successor = newLeader(rng, state.day, { ...def, firstNames: faction.firstNames });
   if (heir) {
     successor.name = heir.name;
     successor.age = heir.age;

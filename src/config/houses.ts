@@ -11,7 +11,7 @@
  * families sat in the same three corners with the same temperaments in every
  * game ever played, which meant the opening was solved after two runs. So:
  *
- *   houses    three drawn from ten, with their own names and characters
+ *   houses    three drawn from twelve, with their own names and characters
  *   seats     which corner of the city each of them starts in
  *   character district wealth and population jittered per seed
  *
@@ -31,6 +31,15 @@ export interface HouseDef {
   blurb: string;
   /** How they are spoken about before you know anything concrete. */
   reputation: string;
+  /**
+   * What the men who run this house tend to be called.
+   *
+   * Optional, and most houses do not set it: the default pool in
+   * factionLeaders.ts covers a family that has been in the city long enough
+   * that nobody asks. A house set apart by having come from somewhere gets its
+   * own list, so the succession log reads like the family it is about.
+   */
+  firstNames?: string[];
   personality: FactionPersonality;
   /** Wealth and muscle at the founding, before the per-seed jitter. */
   wealth: number;
@@ -38,12 +47,18 @@ export interface HouseDef {
 }
 
 /*
- * Ten houses, four temperaments.
+ * Twelve houses, four temperaments.
  *
  * The personalities are spread deliberately rather than rolled: two families
  * that are both cautious and commercial produce a quiet city where nothing
  * happens, and a draw that can produce one is a draw that will. `newHouses`
  * takes one from each of three different temperament groups.
+ *
+ * A house is written as a way of doing business, never as a nationality with
+ * a temperament attached. Beauvais are careful because they have lost
+ * everything once; Rowe are indifferent to territory because their money is in
+ * routes rather than corners. Those are strategies the AI actually plays, and
+ * they are the only reason either house is in the pool.
  */
 export const HOUSES: HouseDef[] = [
   {
@@ -167,6 +182,48 @@ export const HOUSES: HouseDef[] = [
     wealth: 830_000,
     strength: 51,
   },
+  {
+    id: 'beauvais',
+    name: 'The Beauvais Family',
+    shortName: 'Beauvais',
+    colour: '#4f5f9a',
+    blurb:
+      'Arrived with capital, a family name and a long memory of losing both. The money moves through eleven small businesses and never sits anywhere long enough to be counted.',
+    reputation: 'They have been on the wrong end of one bad year already. There will not be a second.',
+    firstNames: [
+      'Fritznel', 'Marcelle', 'Dieudonné', 'Yolande', 'Renaud', 'Ghislaine',
+      'Josaphat', 'Carmelle', 'Wilner', 'Edwidge', 'Lucien', 'Micheline',
+      'Ossé', 'Roselene', 'Prosper', 'Antoinette',
+    ],
+    // Dispossessed once, and the lesson they took from it was not to be gentle.
+    // The first pass had them at 0.45 aggression, which put a third quiet
+    // earner in the pool and produced exactly the city this file warns about:
+    // no rival attacked anybody in a whole sample. Frightened money is the
+    // dangerous kind — same note the Castellan carry.
+    personality: { aggression: 0.8, ambition: 0.5, commerce: 0.95, caution: 1.1 },
+    wealth: 810_000,
+    strength: 50,
+  },
+  {
+    id: 'rowe',
+    name: 'The Rowe Combine',
+    shortName: 'Rowe',
+    colour: '#8f4f7a',
+    blurb:
+      'Boats, produce, and a way out of the city for anything that fits in a crate. They care what moves and when, not who is standing on which corner.',
+    reputation: 'They have never once argued about a street. They do not think in streets.',
+    firstNames: [
+      'Winston', 'Icilda', 'Delroy', 'Enid', 'Everton', 'Merlene', 'Neville',
+      'Doreen', 'Lascelles', 'Pearline', 'Errol', 'Vashti', 'Byron', 'Ossie',
+      'Clovis', 'Ivorine',
+    ],
+    // Indifferent to turf, which is not the same as harmless: they move on a
+    // route the moment it is worth more than the trouble, and the ambition is
+    // what makes them expand rather than settle.
+    personality: { aggression: 0.6, ambition: 0.95, commerce: 1.05, caution: 0.55 },
+    wealth: 560_000,
+    strength: 60,
+  },
 ];
 
 /** Grouped by temperament, so a draw cannot produce three of the same city. */
@@ -174,11 +231,11 @@ export const HOUSE_GROUPS: string[][] = [
   // Settled and commercial.
   ['falcone', 'moreau', 'rask'],
   // Traders and organisers.
-  ['vasari', 'okonkwo', 'brannigan'],
+  ['vasari', 'okonkwo', 'brannigan', 'rowe'],
   // Hungry and quick to move.
   ['kestler', 'delgado'],
   // Old money, frightened.
-  ['castellan', 'sokolov'],
+  ['castellan', 'sokolov', 'beauvais'],
 ];
 
 /**
