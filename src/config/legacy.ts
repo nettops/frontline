@@ -194,8 +194,37 @@ export const SHAPE_BARS = {
    * the heavier-weighted shapes take most of the careers that clear it. This
    * lands it at 3, with the most common shape at 14 of 36 and the horoscope
    * bar clear.
+   *
+   * **Re-plotted a third time, and the first two were plotted against the
+   * wrong number.** `careerShape` compares `estate(state).total` — what the
+   * family is worth now — and both earlier placements were sized against
+   * `bestEstate`, the peak the record keeps. Those are different
+   * distributions, and nobody had noticed because the bar happened to land
+   * somewhere defensible anyway.
+   *
+   * Repairing the probe bot moved it again regardless. Swept against the
+   * quantity the claim actually reads, 36 careers at day 300:
+   *
+   *     estate now   25th $1,581,225 · 40th $1,908,076 · median $2,203,324
+   *                  60th $2,346,873 · 75th $2,808,211
+   *     heavier shapes had already taken 10 of 36
+   *
+   *     bar 1,850,000  clears 23/36, named financier 14/36 (39%)
+   *     bar 2,000,000  clears 20/36, named 12/36 (33%)
+   *     bar 2,350,000  clears 14/36, named  9/36 (25%)
+   *     bar 2,500,000  clears 12/36, named  7/36 (19%)
+   *     bar 3,000,000  clears  6/36, named  3/36 (8%)
+   *
+   * 1,850,000 had fallen below the median again and read 39% against a
+   * horoscope bar of 40% — one career from the failure this comment records
+   * happening twice before.
+   *
+   * 2,350,000 is the 60th percentile, which is inside the median-to-75th band
+   * and at the median end of it. That end rather than the middle for the
+   * reason recorded above: the heavier shapes take most of what clears this,
+   * so the top of the band puts the shape near extinction.
    */
-  financierEstate: 1_850_000,
+  financierEstate: 2_350_000,
   /**
    * Legitimacy for the Legitimate Boss, 0..100.
    *

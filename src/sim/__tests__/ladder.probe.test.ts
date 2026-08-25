@@ -62,6 +62,7 @@ import {
 import { claimStrength, eligibleHeirs, heirOf, nameHeir } from '../succession';
 import { CLAIM } from '../../config/succession';
 import { estate } from '../estate';
+import { SHAPE_BARS } from '../../config/legacy';
 import { TERRITORIES } from '../../config/territories';
 import { OPERATIONS, DEFAULT_APPROACH, type ApproachId } from '../../config/operations';
 import {
@@ -539,6 +540,8 @@ interface Climb {
     legitimacy: { final: number; peak: number; low: number };
     /** What the career would be called if it stopped here. */
     shape: string;
+    /** What the family is worth at the end, which is what the shapes read. */
+    finalEstate: number;
     /**
      * Whether the possessions catalogue is reachable at all.
      *
@@ -2759,6 +2762,12 @@ function climb(seed: number, days: number, policy: Policy = {}): Climb {
         low: newSys.weeks ? newSys.legLow : 0,
       },
       shape: careerShape(state).id,
+      /*
+         What `careerShape` actually compares against: the estate *now*, not
+         the peak `bestEstate` keeps. Two placements of `financierEstate` were
+         sized against the wrong one of those.
+      */
+      finalEstate: estate(state).total,
       tables: {
         weeksOpen: newSys.tableWeeks,
         weeksWorthSitting: newSys.worthSitting,
@@ -3745,6 +3754,24 @@ describe('the systems nobody had measured', () => {
         [...hist].sort((a, b) => a[0] - b[0]).map(([k, n]) => `${k}: ${n}`).join(', ') +
         ` · 40th/median/75th/90th ${pct(d, 0.4)} / ${median(d)} / ${pct(d, 0.75)} / ${pct(d, 0.9)}`,
     );
+    /*
+       What the Financial Boss is actually compared against, printed because
+       two placements of that bar were sized against the wrong number.
+
+       `careerShape` reads `estate(state).total` — what the family is worth
+       now. `bestEstate` is the peak the record keeps, and they are different
+       distributions. Nobody had noticed, because the bar happened to land
+       somewhere defensible anyway.
+    */
+    const es = RUNS_300.map((r) => r.newSystems.finalEstate).sort((a, b) => a - b);
+    const money = (n: number) => `$${Math.round(n).toLocaleString('en-US')}`;
+    // eslint-disable-next-line no-console
+    console.log(
+      `         estate now, 25th / median / 60th / 75th: ` +
+        `${money(pct(es, 0.25))} / ${money(median(es))} / ${money(pct(es, 0.6))} / ` +
+        `${money(pct(es, 0.75))} (the financier bar is ${money(SHAPE_BARS.financierEstate)})`,
+    );
+
     const named = [...shapes].filter(([k]) => k !== 'unremarkable').sort((a, b) => b[1] - a[1]);
     if (named.length) {
       expect(
