@@ -29,12 +29,17 @@ import { availableOperations, launchOperation } from '../../sim/operations';
 import { operableTerritories, playerInfluence } from '../../sim/territory';
 import { availableCrew } from '../../sim/npc';
 import { TIPS } from '../tips';
+import { Rng } from '../../sim/rng';
+import { buyPossession } from '../../sim/possessions';
+import { acquireBusiness, canAcquire } from '../../sim/business';
+import { BUSINESSES } from '../../config/businesses';
 
 /** Reached by playing a career straightforwardly. */
 const ORDINARY = [
   'first_job', 'it_saves', 'reading_people', 'wages', 'dirty_money', 'heat',
-  'case_open', 'ground', 'step_up', 'sitdown', 'grievance', 'delegate',
+  'case_open', 'ground', 'sitdown', 'grievance', 'delegate',
   'leaks', 'rivals', 'war', 'heir', 'trade', 'why',
+  'something_of_your_own', 'the_game',
 ];
 
 /** Reachable, but only by doing something this bot never does. */
@@ -73,6 +78,24 @@ describe('the advice', () => {
         if (canRecruit(s, id).ok) {
           recruit(s, id);
           break;
+        }
+      }
+      /*
+         Buys a front whenever one is for sale.
+
+         The bot did not, and did not need to: the trade used to open on rank,
+         which it reached by playing. The trade reads premises now — two of
+         them — so a bot that never buys any can never see the `trade` tip, and
+         the tip would have been filed as unreachable when in fact it is the
+         bot that is incomplete. Buying the cheapest thing on offer is well
+         inside "playing a career straightforwardly".
+      */
+      for (const t of Object.values(s.territories)) {
+        for (const def of BUSINESSES) {
+          if (canAcquire(s, def.id, t.id).ok) {
+            acquireBusiness(s, def.id, t.id);
+            break;
+          }
         }
       }
       const where =
@@ -125,6 +148,36 @@ describe('the advice', () => {
     // And it goes away once there is money, rather than nagging.
     s.org.cash = 500_000;
     expect(tip.when(s)).toBe(false);
+  });
+
+  /*
+     And the possessions tip, in all three states it has.
+
+     Written after a mutation check found the affordability gate untested: the
+     predicate could be replaced with `true` and everything still passed,
+     because `runDaysSolvent` hands the bot a million dollars every morning so
+     the tip fires either way. A gate nothing exercises is a gate that will be
+     deleted by accident.
+  */
+  it('offers the catalogue only to a boss who could actually buy something', () => {
+    const s = newGame({ name: 'Skint', difficulty: 'normal', mode: 'career', seed: 4 });
+    const tip = TIPS.find((t) => t.id === 'something_of_your_own')!;
+    expect(tip, 'the tip is gone').toBeDefined();
+
+    // Nothing clean, so nothing to say.
+    s.org.cash = 100;
+    s.org.dirtyCash = 500_000;
+    expect(
+      tip.when(s),
+      'a boss with nothing clean and a suitcase of dirty is being pointed at a shop',
+    ).toBe(false);
+
+    s.org.cash = 50_000;
+    expect(tip.when(s)).toBe(true);
+
+    // And it stops once the point has been taken.
+    buyPossession(s, new Rng(s.rng), 'watch');
+    expect(tip.when(s), 'the tip keeps nagging after the boss has bought something').toBe(false);
   });
 
   it('accounts for every tip in the list', () => {

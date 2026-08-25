@@ -19,7 +19,8 @@ import { passedOver } from './ties';
 import { remember } from './memory';
 import { spend, totalFunds } from './economy';
 import { reduceHeat } from './heat';
-import { fearLevel, maxCrew, rankDef } from './player';
+import { fearLevel, maxCrew } from './player';
+import { controlledTerritories } from './territory';
 import {
   FEAR,
   ROLE_LABEL,
@@ -89,9 +90,20 @@ export function canRecruit(state: GameState, recruitId: string): ActionResult {
   if (!npc) return { ok: false, message: 'That person is no longer around.' };
 
   if (crewList(state).length >= maxCrew(state)) {
+    /*
+       Names the figure, the bar and the way back.
+
+       It used to say "A Street Criminal cannot hold more than 3 people. Move
+       up first." — a title the game no longer shows anywhere, and a remedy
+       ("move up") that pointed at a ladder that has been taken out. Ground is
+       both the real constraint now and something the player can go and get.
+    */
+    const held = controlledTerritories(state).length;
     return {
       ok: false,
-      message: `A ${rankDef(state).name} cannot hold more than ${maxCrew(state)} people. Move up first.`,
+      message:
+        `You hold ${held} ${held === 1 ? 'district' : 'districts'}, which feeds ` +
+        `${maxCrew(state)} people. Take more ground before you take on anybody else.`,
     };
   }
 
@@ -113,7 +125,7 @@ export function recruit(state: GameState, recruitId: string): ActionResult {
   const npc = state.recruits[recruitId]!;
 
   const cost = recruitCost(state);
-  if (!spend(state, cost)) {
+  if (!spend(state, cost, 'crew')) {
     return { ok: false, message: 'You cannot cover what it takes to bring them in.' };
   }
 
@@ -134,17 +146,19 @@ function nextRole(role: RoleId): RoleId | null {
   return idx >= 0 && idx < ROLE_ORDER.length - 1 ? ROLE_ORDER[idx + 1] : null;
 }
 
-export function canPromote(state: GameState, npc: Npc): ActionResult {
+export function canPromote(_state: GameState, npc: Npc): ActionResult {
   const next = nextRole(npc.role);
   if (!next) return { ok: false, message: 'There is nowhere higher to put them.' };
 
-  const ceiling = rankDef(state).maxRole;
-  if (ROLE_ORDER.indexOf(next) > ROLE_ORDER.indexOf(ceiling)) {
-    return {
-      ok: false,
-      message: `${withArticle(rankDef(state).name).replace(/^./, (c) => c.toUpperCase())} cannot appoint ${withArticle(ROLE_LABEL[next])}.`,
-    };
-  }
+  /*
+     No ceiling on who you can promote.
+
+     `rankDef(state).maxRole` used to stop a player naming a capo before the
+     ladder said they were senior enough to have one. You are the boss of this
+     outfit from the first morning, so there is nobody above you to withhold
+     permission — and the appointment already carries its own costs, in wages
+     and in what a disappointed man remembers.
+  */
   if (isOutOfReach(npc)) {
     return {
       ok: false,

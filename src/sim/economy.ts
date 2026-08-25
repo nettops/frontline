@@ -15,6 +15,9 @@ import { remember } from './memory';
 import { retainLawyer, weeklyLegalCost } from './investigation';
 import { repaymentAgainst } from './market';
 import { trainAttribute } from './player';
+import { takeCut } from './partner';
+import { note } from './ledger';
+import type { LedgerKey } from '../config/ledger';
 import { LAWYER_BY_LEVEL } from '../config/lawEnforcement';
 import {
   ARREARS_CLEARED_LOYALTY,
@@ -40,8 +43,12 @@ export function canAfford(state: GameState, amount: number): boolean {
  * and it keeps the clean pool intact for the legitimate economy later.
  * Returns false and spends nothing if the funds are not there.
  */
-export function spend(state: GameState, amount: number): boolean {
-  return spendSplit(state, amount) !== null;
+export function spend(
+  state: GameState,
+  amount: number,
+  key: LedgerKey = 'other_out',
+): boolean {
+  return spendSplit(state, amount, key) !== null;
 }
 
 /** What a payment actually came out of. */
@@ -60,7 +67,11 @@ export interface Payment {
  * balance that rank progression is actually gated on. Anything that might have
  * to give money back should take it with this and return it with `refund`.
  */
-export function spendSplit(state: GameState, amount: number): Payment | null {
+export function spendSplit(
+  state: GameState,
+  amount: number,
+  key: LedgerKey = 'other_out',
+): Payment | null {
   if (amount <= 0) return { dirty: 0, clean: 0 };
   if (!canAfford(state, amount)) return null;
 
@@ -68,6 +79,7 @@ export function spendSplit(state: GameState, amount: number): Payment | null {
   const clean = amount - dirty;
   state.org.dirtyCash -= dirty;
   state.org.cash -= clean;
+  note(state, key, -amount);
   return { dirty, clean };
 }
 
@@ -75,6 +87,7 @@ export function spendSplit(state: GameState, amount: number): Payment | null {
 export function refund(state: GameState, paid: Payment): void {
   state.org.dirtyCash += paid.dirty;
   state.org.cash += paid.clean;
+  note(state, 'other_in', paid.dirty + paid.clean);
 }
 
 // ---------------------------------------------------------------- holdings ---
@@ -144,14 +157,52 @@ export function tickHoldings(state: GameState): void {
   state.org.holdings = held * (1 + HOLDINGS.yieldPerWeek);
 }
 
-export function earnDirty(state: GameState, amount: number): void {
+/**
+ * Criminal income, less anybody's share of it.
+ *
+ * The partner's cut is taken here rather than at each of the eight call sites,
+ * because this is the funnel every dirty dollar already passes through and one
+ * guard in a shared function cannot be forgotten by the ninth caller.
+ *
+ * Use `refundDirty` for money that is being handed back rather than earned.
+ */
+export function earnDirty(state: GameState, amount: number, key: LedgerKey = 'other_in'): void {
   if (amount <= 0) return;
-  state.org.dirtyCash += amount;
+  const kept = amount - takeCut(state, amount);
+  state.org.dirtyCash += kept;
+  note(state, key, kept);
 }
 
-export function earnClean(state: GameState, amount: number): void {
+/**
+ * Money returning to the drawer that was never income.
+ *
+ * A cancelled job hands back most of its outlay, and a partner taking a share
+ * of your own returned stake is not a fee, it is a leak — and one that only
+ * ever shows up on a week that is already going badly. Same effect as
+ * `earnDirty` in every other respect.
+ */
+export function refundDirty(state: GameState, amount: number): void {
+  if (amount <= 0) return;
+  state.org.dirtyCash += amount;
+  note(state, 'other_in', amount);
+}
+
+/**
+ * `key` of `'transfer'` books nothing.
+ *
+ * Money changing colour is not income. Laundering takes dirty out and puts
+ * clean in, and the only thing the family actually lost is the cut — booking
+ * the arriving clean as earnings would show a career washing its way to a
+ * fortune it never made.
+ */
+export function earnClean(
+  state: GameState,
+  amount: number,
+  key: LedgerKey | 'transfer' = 'other_in',
+): void {
   if (amount <= 0) return;
   state.org.cash += amount;
+  if (key !== 'transfer') note(state, key, amount);
 }
 
 /** Weekly wage bill for everyone currently on the books. */
@@ -328,7 +379,7 @@ export function tickEconomy(state: GameState): void {
   // Lawyers are paid before the crew — they are the ones keeping you out of a
   // cell, and they do not accept late payment.
   const legal = weeklyLegalCost(state);
-  if (legal > 0 && !spend(state, legal)) {
+  if (legal > 0 && !spend(state, legal, 'law')) {
     retainLawyer(state, 'none');
     addLog(state, 'You could not cover the retainer. Your counsel has withdrawn.', 'failure');
   } else if (legal > 0) {
@@ -393,7 +444,7 @@ export function tickEconomy(state: GameState): void {
   const remainder = due - fromDirty;
   const fromClean = remainder > 0 && remainder <= state.org.cash ? remainder : 0;
   const paid = fromDirty + fromClean;
-  if (paid > 0) spend(state, paid);
+  if (paid > 0) spend(state, paid, 'wages');
   state.org.wagesOwed = Math.max(0, Math.round(due - paid));
 
   if (state.org.wagesOwed === 0) {

@@ -23,13 +23,22 @@
 import { addLog } from './util';
 import { activeCases } from './investigation';
 import { clamp } from './rng';
+import { priced } from './market';
+import { earnDirty } from './economy';
 import { crewList } from './npc';
-import { territoryList, territoryDef, adjustSentiment, playerInfluence } from './territory';
+import { ownedBusinesses } from './business';
+import {
+  adjustSentiment,
+  playerInfluence,
+  territoryDef,
+  territoryList,
+} from './territory';
 import {
   CIVIC,
   CIVIC_ATTRIBUTE,
   CIVIC_BY_ID,
   CIVIC_FIGURES,
+  CIVIC_WORK,
   FAVOUR_EFFECT,
   type CivicFigureDef,
 } from '../config/civic';
@@ -48,6 +57,36 @@ function roster(state: GameState): CivicStanding[] {
     }));
   }
   return state.civic;
+}
+
+/** Everybody, for callers that need the whole set rather than one figure. */
+export function civicRoster(state: GameState): CivicStanding[] {
+  return roster(state);
+}
+
+/**
+ * Do somebody outside the family a favour, and have it count.
+ *
+ * Returns whether the standing actually moved. The caller has already spent
+ * the money by the time this is asked — that is deliberate, and it is the rule
+ * `INFLUENCE_FROM.approachCooldownDays` set: the credit is rate-limited, the
+ * action is not. A boss may keep writing cheques to the same councilman every
+ * week and the councilman will keep taking them; what he will not do is think
+ * twice as well of you for the second one.
+ *
+ * It grants no influence. Helping a man makes *him* think better of you, which
+ * is the fiction and the whole shape of this file: standing is a consequence of
+ * how the family is run, never a thing bought. An earlier version paid +1 to
+ * the player's influence as well, which made nine memos and $81,000 into the
+ * patron's Influence 9 — a `contactCost` shop reintroduced by the back door.
+ */
+export function helpFigure(state: GameState, id: string, standing: number): boolean {
+  const held = figure(state, id);
+  const since = state.day - (held.lastHelpedDay ?? -Infinity);
+  if (since < CIVIC.helpCooldownDays) return false;
+  held.lastHelpedDay = state.day;
+  held.standing = clamp(held.standing + standing, 0, 100);
+  return true;
 }
 
 export function figure(state: GameState, id: string): CivicStanding {
@@ -71,20 +110,70 @@ export function figure(state: GameState, id: string): CivicStanding {
  * "higher is better for you" so the drift below has one direction to worry
  * about.
  */
-function scoreFor(state: GameState, def: CivicFigureDef): number {
+/**
+ * What each of them is looking at, 0..100. Exported so the readings can be
+ * tested directly — a figure whose bar sits outside the range of his own
+ * quantity is a defect no end-to-end test can see.
+ */
+export function scoreFor(state: GameState, def: CivicFigureDef): number {
   switch (def.watches) {
     case 'quiet':
       return clamp(100 - state.org.heat, 0, 100);
-    case 'ground': {
-      const held = territoryList(state).filter((t) => playerInfluence(t) >= 25).length;
-      // Four districts is a family with real ground; more does not impress
-      // them further, it just means somebody else has less.
-      return clamp((held / 4) * 100, 0, 100);
+    case 'payroll': {
+      /*
+         Who gets hired, which is the first thing his own blurb says he cares
+         about — and the second thing this figure has been asked to read.
+
+         He counted districts held. That was right while the ladder asked for
+         ground and wrong the moment it stopped: the highest district gate
+         anywhere in `OPERATIONS` is three, so ground saturates for every
+         player who opens the board and buys nothing after that. Measured
+         across 36 careers at day 300, districts controlled read 4 / 4 / 4 with
+         a minimum of 3 — a point mass. He owed all thirty-six whatever they
+         did.
+
+         Counting footholds instead of control was tried first and failed the
+         same way one repair earlier, for the same reason. The quantity is the
+         problem, not the threshold on it: nothing in this game asks for a
+         fourth district, so a rational player stops where the board stops.
+
+         A payroll has no such ceiling and it is the only candidate that
+         measured with real spread — 31 / 34 / 38 across the population, from
+         17 to 47. A union boss counts members.
+      */
+      const onTheBooks = crewList(state).filter((n) => n.status !== 'dead').length;
+      return clamp((onTheBooks / CIVIC.unionPayroll) * 100, 0, 100);
     }
-    case 'standing': {
-      const worked = territoryList(state).filter((t) => playerInfluence(t) >= 10);
-      if (worked.length === 0) return 0;
-      return clamp(worked.reduce((sum, t) => sum + t.sentiment, 0) / worked.length, 0, 100);
+    case 'respectability': {
+      /*
+         What you have built in the neighbourhood, not what it is putting up
+         with.
+
+         This read the average public feeling across the districts you work,
+         and that quantity ran the wrong way twice over.
+
+         It has no upside: `SENTIMENT_RECOVERY_PER_WEEK` climbs back only as
+         far as `SENTIMENT_START`, and nothing in ordinary play pushes a
+         district past it. Measured over 36 careers at day 300, the best worked
+         district read 49.1 / 50.0 / 50.0 and not one career had a single
+         district above 50.
+
+         And it falls with play, because working a district is what costs
+         feeling. The mean across worked districts read 34.6 / 37.2 / 38.3 with
+         a population maximum of 40.7 — against a bar of 50. He was not
+         fragile, he was unreachable by construction, and his favour was the
+         one thing in this game that got further away the more you played.
+
+         Fronts are the ward politician's actual interest and the thing
+         `lose_the_paperwork` is a favour about. Feeling stays in the reading
+         as a gate rather than as the whole of it: a business nobody in the
+         district can stand is not something anybody wants to be photographed
+         next to.
+      */
+      const seen = ownedBusinesses(state).filter(
+        (b) => (state.territories[b.territoryId]?.sentiment ?? 0) >= SENTIMENT_HOSTILE_BELOW,
+      ).length;
+      return clamp((seen / CIVIC.respectableFronts) * 100, 0, 100);
     }
     case 'discretion': {
       /*
@@ -243,6 +332,46 @@ export function spendFavour(state: GameState, id: string, target?: string): Favo
   held.owed -= 1;
   addLog(state, done.message, 'crew');
   return done;
+}
+
+/**
+ * Whether they will find you work, and why not.
+ *
+ * Same three gates as calling in the favour for anything else — they must know
+ * you, take meetings at your level, and actually owe you one. Deliberately not
+ * a looser set: this is a second use of one currency, not a cheaper one.
+ */
+export function canAskForWork(state: GameState, id: string): FavourCheck {
+  return canSpendFavour(state, id);
+}
+
+/**
+ * Call in a favour as money instead of as protection.
+ *
+ * Spends the favour and takes `CIVIC_WORK.standingCost` off the relationship,
+ * which is the actual price — see the note in `config/civic.ts` for why the
+ * favour alone is not one. The money is dirty: it is a job, not a gift.
+ */
+export function askForWork(state: GameState, id: string): FavourResult {
+  const check = canAskForWork(state, id);
+  if (!check.ok) return { ok: false, message: check.reason ?? 'No.' };
+
+  const def = CIVIC_BY_ID[id];
+  const held = figure(state, id);
+
+  const pay = Math.round(
+    priced(state, CIVIC_WORK.basePay + def.owesAbove * CIVIC_WORK.payPerOwesAbove),
+  );
+
+  held.owed -= 1;
+  held.standing = clamp(held.standing - CIVIC_WORK.standingCost, 0, 100);
+  earnDirty(state, pay);
+
+  const message =
+    `${def.title} put something your way. $${pay.toLocaleString('en-US')}, and they ` +
+    `will remember that you asked for it.`;
+  addLog(state, message, 'money');
+  return { ok: true, message };
 }
 
 function apply(state: GameState, def: CivicFigureDef, target?: string): FavourResult {

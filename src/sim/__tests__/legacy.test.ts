@@ -20,7 +20,12 @@ import { figure } from '../civic';
 import { SHAPE_BARS } from '../../config/legacy';
 import { CIVIC_FIGURES } from '../../config/civic';
 import { territoryList } from '../territory';
+import { CONTROL_THRESHOLDS } from '../../config/territories';
 import type { GameState } from '../types';
+
+/** The floor of the top control band, which is what the Kingpin reads. */
+const DOMINANCE_FROM =
+  CONTROL_THRESHOLDS.find((c) => c.level === 'dominance')?.min ?? 75;
 
 function game(seed = 7): GameState {
   return newGame({ name: 'Legacy', difficulty: 'normal', seed });
@@ -75,13 +80,35 @@ describe('what the career turns out to have been', () => {
   it('names the ground when there is ground', () => {
     const state = game();
     const all = territoryList(state);
-    for (let i = 0; i < SHAPE_BARS.kingpinDistricts; i++) all[i].influence.player = 60;
+    for (let i = 0; i < SHAPE_BARS.kingpinDistricts; i++) {
+      all[i].influence.player = DOMINANCE_FROM;
+    }
 
     const shape = careerShape(state);
     expect(shape.id).toBe('kingpin');
     expect(shape.because, 'the verdict did not say what earned it').toContain(
       String(SHAPE_BARS.kingpinDistricts),
     );
+  });
+
+  /*
+     The horoscope condition, at the one place a single-career test can see it.
+
+     This counted districts at influence 25 — a foothold — and a family with
+     three districts under control has a toe in six or seven besides. Measured
+     across 36 careers at day 300, the histogram of what it was reading was
+     `2:1 3:1 4:31 5:3`: a point mass, so the shape was the verdict on 35 of
+     them. Control is no better, `2:1 3:4 4:30 5:1`, because nothing in the
+     game asks for a fourth district and a rational player stops there.
+
+     Dominance is the only band that spreads — `1:4 2:6 3:15 4:11` — and it is
+     also the honest reading of "the city moved around you". A foot in the door
+     is not a map you drew.
+  */
+  it('does not name the ground for a foot in every door', () => {
+    const state = game();
+    for (const t of territoryList(state)) t.influence.player = 60;
+    expect(careerShape(state).id).not.toBe('kingpin');
   });
 
   it('names fear when the family ran on it', () => {
@@ -160,7 +187,11 @@ describe('what the career turns out to have been', () => {
   it('takes the heavier shape when two of them fit', () => {
     const state = game();
     const all = territoryList(state);
-    for (let i = 0; i < SHAPE_BARS.kingpinDistricts; i++) all[i].influence.player = 60;
+    // Dominance, not a foothold — the Kingpin stopped counting doors he has a
+    // toe in, and a fixture granting the old precondition grants nothing.
+    for (let i = 0; i < SHAPE_BARS.kingpinDistricts; i++) {
+      all[i].influence.player = DOMINANCE_FROM;
+    }
     state.org.fear = SHAPE_BARS.streetKingFear + 20;
 
     expect(careerShape(state).id).toBe('kingpin');

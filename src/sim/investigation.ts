@@ -29,6 +29,8 @@ import { remember } from './memory';
 import { spend, totalFunds } from './economy';
 import { ownedBusinesses } from './business';
 import { seizeStock } from './contraband';
+import { seizeOnePossession } from './possessions';
+import { POSSESSION_BY_ID } from '../config/possessions';
 import { gainFear, gainRespect } from './player';
 import { removePlayer } from './succession';
 import { worldMod } from './world';
@@ -51,11 +53,12 @@ import {
   CASE_INTEL_STRENGTH_ABOVE,
   CASE_INTEL_SUSPECTS_ABOVE,
   COLD_CASE_AFTER_DAYS,
-  COLD_CASE_DECAY_PER_WEEK,
+  COLD_CASE_DECAY_SHARE,
   CONTACT,
   DESTROY_EVIDENCE,
   EVIDENCE_ABSORPTION,
   EVIDENCE_DECAY_PER_WEEK,
+  EVIDENCE_HELD_DECAY_SCALE,
   EVIDENCE_STALE_AFTER_DAYS,
   EVIDENCE_WORTHLESS_BELOW,
   FINANCIAL_LAUNDER_PENALTY,
@@ -159,10 +162,12 @@ function availableFor(
 /** Old crimes go cold on their own if nobody ever picks them up. */
 function decayEvidence(state: GameState): void {
   for (const trace of Object.values(state.evidence)) {
-    if (trace.attachedTo.length > 0) continue;
     if (state.day - trace.day < EVIDENCE_STALE_AFTER_DAYS) continue;
 
-    trace.strength -= EVIDENCE_DECAY_PER_WEEK;
+    // Held evidence fades slower, not never. See EVIDENCE_HELD_DECAY_SCALE for
+    // what "never" cost: 98 of 98 surviving traces were in somebody's file.
+    const held = trace.attachedTo.length > 0;
+    trace.strength -= EVIDENCE_DECAY_PER_WEEK * (held ? EVIDENCE_HELD_DECAY_SCALE : 1);
     if (trace.strength < EVIDENCE_WORTHLESS_BELOW) {
       delete state.evidence[trace.id];
     }
@@ -523,16 +528,34 @@ function applyStageEffect(
     case 'warrants': {
       const share = rng.float(WARRANT_SEIZURE_SHARE[0], WARRANT_SEIZURE_SHARE[1]);
       const seized = Math.round((state.org.cash + state.org.dirtyCash) * share);
-      spend(state, seized);
+      spend(state, seized, 'law');
       record(
         state,
         investigation,
         `They came through the doors and took $${seized.toLocaleString('en-US')}.`,
         true,
       );
-      // And whatever was in the building. Stock is the only asset in this
-      // game that physically exists somewhere, and this is the price of that.
+      // And whatever was in the building. Stock and the boss's own things are
+      // the assets in this game that physically exist somewhere, and this is
+      // the price of that.
       seizeStock(state, rng, agency.shortName);
+      /*
+         One thing, the best one, and nothing comes back.
+
+         Deliberately not the lot. A raid that empties a man out in a single
+         visit ends a career rather than pressuring it, and the whole reason
+         for having possessions at all is that losing one is specific — the
+         Lincoln, taken on day 212 — which a list of four is not.
+      */
+      const took = seizeOnePossession(state, agency.shortName);
+      if (took) {
+        record(
+          state,
+          investigation,
+          `They took ${POSSESSION_BY_ID[took.defId]?.name.toLowerCase() ?? 'property of yours'} as well.`,
+          true,
+        );
+      }
       cover(state, rng, 'raid', { named: true });
       return;
     }
@@ -712,7 +735,18 @@ export function tickInvestigations(state: GameState, rng: Rng): void {
       momentum *
       worldMod(state, 'agencyWork') *
       pressureWork(state);
-    const visibility = state.org.heat * HEAT_EVIDENCE_CONTRIBUTION;
+    /*
+       Ambient attention is why they are looking. It is not something they
+       found — so a family that has genuinely gone still should not be feeding
+       it, and this now runs through the same gate `work` does.
+
+       Ungated, this was 2.07 a week against a cold-case decay of 1.80, which
+       is most of why a cold case grew in 90.4% of the weeks it was cold. The
+       comment below already diagnosed this in an earlier form and the fix that
+       followed was applied to `lastProgressDay` instead, so the case went cold
+       on schedule and then kept growing anyway.
+    */
+    const visibility = state.org.heat * HEAT_EVIDENCE_CONTRIBUTION * momentum;
     investigation.strength += work + visibility;
     if (ledger) {
       ledger.work += work;
@@ -749,7 +783,9 @@ export function tickInvestigations(state: GameState, rng: Rng): void {
     // 3. A case with nothing to chew on loses momentum, and can die entirely.
     if (state.day - investigation.lastProgressDay >= COLD_CASE_AFTER_DAYS) {
       investigation.status = 'cold';
-      const cooled = Math.max(0, investigation.strength - COLD_CASE_DECAY_PER_WEEK);
+      // A share of what the file holds, not a flat figure. See
+      // COLD_CASE_DECAY_SHARE.
+      const cooled = Math.max(0, investigation.strength * (1 - COLD_CASE_DECAY_SHARE));
       if (ledger) {
         ledger.coldWeeks += 1;
         ledger.decayed += investigation.strength - cooled;
@@ -787,7 +823,7 @@ function tickContacts(state: GameState, rng: Rng): void {
     if (contact.burned) continue;
     const agency = AGENCY_BY_ID[contact.agencyId];
 
-    if (!spend(state, contact.upkeep)) {
+    if (!spend(state, contact.upkeep, 'law')) {
       contact.burned = true;
       addLog(
         state,
@@ -1109,7 +1145,7 @@ export function buyContact(state: GameState, agencyId: string): LegalAction {
   if (!check.ok) return check;
 
   const cost = contactCost(state, agencyId);
-  if (!spend(state, cost)) return { ok: false, message: 'You cannot cover it.' };
+  if (!spend(state, cost, 'law')) return { ok: false, message: 'You cannot cover it.' };
 
   const agency = AGENCY_BY_ID[agencyId];
   state.law.contacts[agencyId] = {
@@ -1135,7 +1171,7 @@ export function destroyEvidence(
   if (!investigation || investigation.status === 'closed') {
     return { ok: false, message: 'There is nothing to get at.' };
   }
-  if (!spend(state, DESTROY_EVIDENCE.cost)) {
+  if (!spend(state, DESTROY_EVIDENCE.cost, 'law')) {
     return { ok: false, message: 'You cannot cover it.' };
   }
 
@@ -1175,7 +1211,7 @@ export function pressureWitness(
   const investigation = state.law.investigations[caseId];
   const npc = state.npcs[npcId];
   if (!investigation || !npc) return { ok: false, message: 'Nobody to lean on.' };
-  if (!spend(state, PRESSURE_WITNESS.cost)) {
+  if (!spend(state, PRESSURE_WITNESS.cost, 'law')) {
     return { ok: false, message: 'You cannot cover it.' };
   }
 

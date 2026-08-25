@@ -61,14 +61,32 @@ import {
   availableOperations,
   launchOperation,
   operationCost,
+  opsBoard,
+  standing,
   successBreakdown,
 } from '../operations';
 import { controlledTerritories, operableTerritories, playerInfluence } from '../territory';
+import { OPERATIONS } from '../../config/operations';
+import { TERRITORIES } from '../../config/territories';
 import { availableCrew, crewList } from '../npc';
-import { RANKS, rankIndex } from '../../config/economy';
 import type { GameState } from '../types';
 
-const WORLDS = 12;
+/*
+   Twelve until an unrelated change moved Pacing from 3.8 to 2.6 and the axis
+   read as collapsed.
+
+   It had not collapsed. Re-run at 48 the same two builds read 3.4 against 3.4,
+   with the longest quiet stretch at 406 days against 403 — the entire apparent
+   drop was the random stream being reshuffled, which every change to this
+   project does. Pacing is the axis most exposed to it: `longestGap` is a mean
+   of *per-career maxima*, and a mean of maxima at twelve samples moves further
+   on noise than most real changes move it on purpose.
+
+   So the bar of 3 was being read off an instrument whose noise band is wider
+   than the bar. Raising the sample is not moving the threshold — it is making
+   the threshold mean something. Costs about twenty seconds.
+*/
+const WORLDS = 48;
 const DAYS = 1460;
 
 interface Run {
@@ -175,7 +193,20 @@ function play(seed: number): Run {
   */
   const promised = new Map<string, number>();
   let lastBest: string | null = null;
-  let lastRank = rankIndex(s.player.rank);
+  /*
+     How far up the board the career has got.
+
+     All three of these read `rankIndex(s.player.rank)`, and `player.rank` has
+     been pinned at the first rung since the ladder came out — so `lastRank`
+     never moved, the "first" below never fired once in any career, and
+     `endRank` was the same number in every world. That silently zeroed half of
+     the Difficulty axis (`distinctEnds` was always 1) and starved the Pacing
+     axis of the firsts it counts.
+
+     `standing()` is the live measure and is what `ladder.probe` switched to:
+     the highest tier of the job table the board actually opens.
+  */
+  let lastRank = standing(s);
   /*
      The log is read by date, not by length, because it is a ring buffer.
 
@@ -224,7 +255,33 @@ function play(seed: number): Run {
       (a, b) => playerInfluence(b.territory) - playerInfluence(a.territory),
     );
     const unfinished = ranked.filter((o) => playerInfluence(o.territory) < 50);
-    const wanted = RANKS[rankIndex(s.player.rank) + 1]?.requires.territories ?? 0;
+    /*
+       How much ground the next thing worth having asks for.
+
+       This read `RANKS[rankIndex(player.rank) + 1].requires.territories`, and
+       `player.rank` is pinned — so it was always Enforcer's requirement, which
+       is 0, so `expanding` was always false and this bot never expanded on
+       purpose in its entire run. `ladder.probe` hit the same bug and fixed it
+       by asking the job gates instead; this does the same, more cheaply.
+    */
+    const board = opsBoard(s);
+    const wanted = OPERATIONS.filter((o) => o.opens && !o.opens.met(board))
+      .sort((a, b) => a.tier - b.tier)
+      .reduce<number>((need, op) => {
+        if (need > 0) return need;
+        for (let n = board.districtsControlled + 1; n <= TERRITORIES.length; n++) {
+          if (
+            op.opens!.met({
+              ...board,
+              districtsControlled: n,
+              districtsHeld: Math.max(board.districtsHeld, n),
+            })
+          ) {
+            return n;
+          }
+        }
+        return 0;
+      }, 0);
     const expanding =
       controlledTerritories(s).length < wanted && unfinished.length > 0 && s.day % 21 < 7;
     const where = (expanding ? unfinished[0] : (ranked[0] ?? unfinished[0]))?.territory.id ?? null;
@@ -310,7 +367,7 @@ function play(seed: number): Run {
       r.landed.push(res.success);
     }
 
-    const rankNow = rankIndex(s.player.rank);
+    const rankNow = standing(s);
     if (rankNow > lastRank) {
       lastRank = rankNow;
       if (r.firstRankBy === null) r.firstRankBy = s.day;
@@ -335,7 +392,7 @@ function play(seed: number): Run {
     }
   }
 
-  r.endRank = rankIndex(s.player.rank);
+  r.endRank = standing(s);
   return r;
 }
 

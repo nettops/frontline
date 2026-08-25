@@ -120,6 +120,9 @@ interface Run {
   crewLeaderDay: number | null;
   /** Jobs actually started across the whole career. */
   launches: number;
+  /** Expected money from every job started, and the slice of it that was solo. */
+  jobIncome: number;
+  soloIncome: number;
   /** Nights out per person per eight-week window, every weekly sample. */
   nightsSeen: number[];
   /** How often the proposed carry/bench marks would have fired. */
@@ -158,6 +161,8 @@ function play(seed: number, days: number): Run {
   const nightsSeen: number[] = [];
   const marks = { carrying: 0, benched: 0, people: 0, samples: 0 };
   let launches = 0;
+  let jobIncome = 0;
+  let soloIncome = 0;
   const why: Why = {
     layingLow: 0,
     tooHot: 0,
@@ -267,6 +272,9 @@ function play(seed: number, days: number): Run {
             )
           ) {
             launchedToday += 1;
+            const gain = ((def.payout[0] + def.payout[1]) / 2) * def.baseSuccess - def.investment;
+            jobIncome += gain;
+            if (def.crewRequired === 0 && def.investment === 0) soloIncome += gain;
           }
         }
         if (launchedToday > 0) {
@@ -479,6 +487,8 @@ function play(seed: number, days: number): Run {
         idleByCrew,
         crewLeaderDay,
         launches,
+        jobIncome,
+        soloIncome,
         nightsSeen,
         marks,
         why,
@@ -504,6 +514,8 @@ function play(seed: number, days: number): Run {
     idleByCrew,
     crewLeaderDay,
     launches,
+    jobIncome,
+    soloIncome,
     nightsSeen,
     marks,
     why,
@@ -565,9 +577,34 @@ describe('a career with no safety net', () => {
       'a career was left with nothing it could do — see work_it_yourself',
     ).toBe(0);
 
-    // ...and the rescue must not have become the strategy. If solo work were
-    // worth doing on its own the peak treasury would have climbed; it did not.
-    expect(median(RUNS.map((r) => r.peakFunds))).toBeLessThan(40_000);
+    /*
+       ...and the rescue must not have become the strategy.
+
+       This read `median(peakFunds) < 40_000` and called it a test of solo
+       work, on the reasoning that if the rescue were worth doing on its own
+       the treasury would climb. That holds only while nothing else about the
+       job table moves, and it is a proxy two steps from the claim: it watches
+       a *career's* wealth to decide something about *one job*.
+
+       Restaking the paid jobs above the street moved the treasury to $51,330
+       and this failed, having detected a change that had nothing to do with
+       solo work — the paid jobs got cheaper to enter, which is the opposite of
+       solo becoming attractive. Measured at the same moment, solo work was
+       0.6% of expected job income across 24 careers.
+
+       So it asks the question directly now. A quarter of all launches being
+       solo is fine and expected, because the bot reaches for it whenever the
+       crew is out; what would be wrong is solo work *paying* for the career.
+       The bar is 5% of income, which is an order of magnitude above the 0.6%
+       measured and still far below any reading that could be called a
+       strategy.
+    */
+    const soloShare =
+      RUNS.reduce((n, r) => n + r.soloIncome, 0) / RUNS.reduce((n, r) => n + r.jobIncome, 0);
+    expect(
+      soloShare,
+      `solo work is ${(soloShare * 100).toFixed(1)}% of expected job income`,
+    ).toBeLessThan(0.05);
   });
   it('reports whether the organization can grow its way to a surplus', () => {
     /*

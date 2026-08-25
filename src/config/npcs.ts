@@ -424,8 +424,6 @@ export const DRIFT = {
   fearSettlePerTick: 1.5,
   /** Player leadership resists all decay. At leadership 20, ~+3 per tick. */
   leadershipResistFactor: 0.16,
-  /** Respect for the boss climbs with successful operations and rank. */
-  respectDriftPerRank: 1.2,
   /** Ambition creeps up in people who taste success. */
   ambitionPerSuccess: 0.4,
 

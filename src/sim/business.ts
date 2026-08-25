@@ -10,12 +10,14 @@
  */
 
 import { Rng, clamp } from './rng';
-import type { Business, GameState, Territory } from './types';
+import type { Business, GameState, Id, Territory } from './types';
 import { addEvidence, addLog, formatMoney, nextId } from './util';
 import { canAfford, earnClean, spend, weeklyWageBill } from './economy';
 import { trainAttribute } from './player';
 import { addHeat } from './heat';
 import { launderRestriction } from './investigation';
+import { launderer, laundererRate } from './launderers';
+import { note } from './ledger';
 import { worldMod } from './world';
 import {
   DEFAULT_PRESSURE,
@@ -36,6 +38,7 @@ import {
 import { RIVAL_IDS } from '../config/factions';
 import {
   ACQUISITION_PREMIUM_CONTESTED,
+  ACQUISITION_SCALE,
   BUSINESSES,
   BUSINESS_BY_ID,
   HEALTH,
@@ -208,12 +211,26 @@ export interface LaunderOutlook {
   capacity: number;
   /** Dirty cash held back to meet the coming payroll. */
   heldBack: number;
-  /** What could actually go through this week. */
+  /** What will go through this week. No longer capped by `capacity`. */
   washable: number;
   /** What would come out clean at the end of it. */
   clean: number;
-  /** Which of the two is the binding constraint. */
-  limit: 'capacity' | 'dirty' | 'nothing';
+  /**
+   * How hard that leans on the premises: what is going through, over what they
+   * comfortably hold. One is a full week. Two is twice as fast a way to lose a
+   * front.
+   */
+  load: number;
+  /**
+   * What is actually deciding the week.
+   *
+   * `'capacity'` still means "you have more dirty money than these fronts will
+   * take, and the rest waits" — which is true of any front you have not told
+   * to lean. `'pushing'` is the new one: the ceiling is off because something
+   * is set to `hard`, all of it is going through, and the premises are aging
+   * at the rate you are pushing them.
+   */
+  limit: 'pushing' | 'capacity' | 'dirty' | 'nothing';
 }
 
 /**
@@ -235,23 +252,66 @@ export function launderOutlook(state: GameState): LaunderOutlook {
     totalLaunderCapacity(state) * launderRestriction(state) * worldMod(state, 'launderCapacity'),
   );
   const heldBack = weeklyWageBill(state);
+  /*
+     Everything the payroll has not already spoken for, and no ceiling on it.
+
+     This was `Math.min(capacity, surplus)`. Capacity is a risk dial now rather
+     than a wall — see the comment on the laundering block in `tickBusinesses`
+     — so the readout has to stop promising a limit the simulation no longer
+     enforces.
+  */
+  /*
+     The ceiling is gone on any front being leaned on, and nowhere else — see
+     the allocation comment in `tickBusinesses`. So the readout has to ask the
+     same question the tick asks: is anything set to `hard`?
+  */
+  const leaning = ownedBusinesses(state).some(
+    (b) => b.status === 'operating' && pressureOf(b).id === 'hard',
+  );
   const surplus = Math.max(0, state.org.dirtyCash - heldBack);
-  const washable = Math.min(capacity, surplus);
+  const washable = capacity <= 0 ? 0 : leaning ? surplus : Math.min(capacity, surplus);
   const clean = Math.round(washable * (1 - launderCut(state)));
+  const load = capacity > 0 ? washable / capacity : 0;
   return {
     capacity,
     heldBack,
     washable,
     clean,
-    limit: washable <= 0 ? 'nothing' : surplus > capacity ? 'capacity' : 'dirty',
+    load,
+    limit:
+      washable <= 0
+        ? 'nothing'
+        : load > 1
+          ? 'pushing'
+          : surplus > capacity
+            ? 'capacity'
+            : 'dirty',
   };
 }
 
+/**
+ * What the wash takes, this week.
+ *
+ * `LAUNDER_CUT_BASE` is 0.24 and it used to be the whole answer — the single
+ * most punitive charge in the game and the only one that buys nothing.
+ * Measured over 36 careers of 300 days a trading family sold $1,632,268, paid
+ * $694,777 for stock, $105,821 in wages and **$156,255 to nobody at all**.
+ *
+ * So the base is what a *stranger* charges. Somebody who handles it for you
+ * charges less, and charges less again the longer you keep them — see
+ * `config/launderers.ts`. The Business attribute still buys the rate down on
+ * top of whichever of the two applies, because that lever was right and is not
+ * what changed.
+ *
+ * `LAUNDER_CUT_MIN` still floors a family dealing with strangers. A retained
+ * arrangement is floored by its own `bestCut` instead, which is the whole
+ * reason to have one.
+ */
 export function launderCut(state: GameState): number {
-  return Math.max(
-    LAUNDER_CUT_MIN,
-    LAUNDER_CUT_BASE - state.player.attributes.business * LAUNDER_CUT_PER_BUSINESS_POINT,
-  );
+  const skill = state.player.attributes.business * LAUNDER_CUT_PER_BUSINESS_POINT;
+  const held = launderer(state);
+  if (!held) return Math.max(LAUNDER_CUT_MIN, LAUNDER_CUT_BASE - skill);
+  return Math.max(held.bestCut, laundererRate(state, held) - skill);
 }
 
 // ----------------------------------------------------------- acquisition ---
@@ -267,7 +327,18 @@ export function acquisitionCost(state: GameState, def: BusinessDef, t: Territory
   // Buying in somewhere you do not securely hold means paying somebody off.
   const premium = isContested(t) ? ACQUISITION_PREMIUM_CONTESTED : 1;
   const haggle = 1 - Math.min(0.2, state.player.attributes.negotiation * 0.01);
-  return Math.round(base * premium * haggle);
+  /*
+     And who is standing in the room. See `ACQUISITION_SCALE`.
+
+     Reads `org.record.estate` — the high-water mark — rather than calling
+     `estate()`, and that is not only about the fiction. `estate.ts` imports
+     `acquisitionCost` from this file to value a front, so asking it what the
+     family is worth from inside the pricing function would be a cycle.
+  */
+  const ever = state.org.record?.estate ?? 0;
+  const grown = clamp(ever / ACQUISITION_SCALE.fullPriceAt, 0, 1);
+  const small = 1 - ACQUISITION_SCALE.maxDiscount * (1 - grown);
+  return Math.round(base * premium * haggle * small);
 }
 
 export interface AcquireCheck {
@@ -394,7 +465,7 @@ export function acquireBusiness(
   const rest = check.cost - fromHoldings;
   if (rest > 0 && !canAfford(state, rest)) return null;
   state.org.holdings = (state.org.holdings ?? 0) - fromHoldings;
-  if (rest > 0 && !spend(state, rest)) {
+  if (rest > 0 && !spend(state, rest, 'premises')) {
     // Put it back rather than losing it to a failed purchase.
     state.org.holdings = (state.org.holdings ?? 0) + fromHoldings;
     return null;
@@ -478,6 +549,88 @@ export function tickBusinesses(
   const keepBack = weeklyWageBill(state);
   const washable = Math.max(0, state.org.dirtyCash - keepBack);
 
+  /*
+     What each front will carry, worked out before any of them carries it.
+
+     ## Why the ceiling is off, and off only where you asked for it
+
+     Capacity was a hard wall — `moved = min(capacity, washable - laundered)`,
+     walking the fronts in order until the pile ran out — and measured across
+     36 careers of 300 days that wall was what stood between the contraband
+     trade and the rest of the game: **once a trade is running the fronts were
+     saturated on 74% of paydays**, the trade earned a median $1,632,268 and
+     moved what the family is worth by 6.5%, because `estate` counts clean
+     money and never counts dirty. HANDOFF F22.
+
+     The first attempt took the wall away for everybody. Measured, that made
+     every career worse, including careers with no trade at all: median peak
+     estate fell 29% and trade income fell 85%, while cases opened, careers
+     ended and fronts lost stayed **identical**. So it did not deliver the risk
+     and it did cost the player. Two reasons, and neither was the raid:
+
+     - the family paid the 22% cut on money it was going to spend as dirty
+       anyway. Wages are held back; stock, retainers and job costs are not, and
+       `pay` spends dirty first. Washing the lot every week is a leak.
+     - every front sat permanently over the decay threshold, so health — and
+       with it front revenue and front value, which *is* most of the estate —
+       ground down everywhere at once.
+
+     So the wall comes off where the player has said to lean on the place, and
+     nowhere else. `hard` on the pressure dial already means "how dirty do I
+     want this business", already multiplies capacity, already adds exposure
+     and wear and an inspection chance. It now also means there is no ceiling:
+     everything goes through, and `exposure` below is `moved / capacity`, which
+     the wall used to bound at one and no longer does. A front run at three
+     times what it comfortably takes ages three times as fast, and exposure is
+     already wired to heat above 50, to `finance` evidence above 70, to the
+     health pressure that kills a front, and to whose books a financial
+     investigation subpoenas first. None of that had to be built.
+
+     A front nobody has touched behaves exactly as it did before this comment
+     existed, which is the promise `config/pressure.ts` opens with.
+  */
+  const room = new Map<Id, number>();
+  for (const business of operating) {
+    room.set(
+      business.id,
+      Math.max(
+        1,
+        Math.round(
+          launderCapacity(state, business) *
+            launderRestriction(state) *
+            worldMod(state, 'launderCapacity'),
+        ),
+      ),
+    );
+  }
+
+  /*
+     Filled to capacity in order, exactly as it always was, and then the
+     remainder handed to whichever fronts are being leaned on.
+
+     Split among those in proportion to what they hold rather than given to the
+     first one in the list: otherwise a family with four hard fronts puts one
+     of them at maximum exposure and leaves three untouched, which is not what
+     the dial is being asked for.
+  */
+  const alloc = new Map<Id, number>();
+  let left = washable;
+  for (const business of operating) {
+    const take = Math.min(room.get(business.id)!, Math.max(0, left));
+    alloc.set(business.id, take);
+    left -= take;
+  }
+  const leaning = operating.filter((b) => pressureOf(b).id === 'hard');
+  if (left > 0 && leaning.length > 0) {
+    const leaningRoom = leaning.reduce((sum, b) => sum + room.get(b.id)!, 0);
+    for (const business of leaning) {
+      alloc.set(
+        business.id,
+        alloc.get(business.id)! + Math.round(left * (room.get(business.id)! / leaningRoom)),
+      );
+    }
+  }
+
   for (const business of operating) {
     const def = businessDef(business);
 
@@ -492,25 +645,24 @@ export function tickBusinesses(
     revenue += earned;
     business.revenueTotal += earned;
 
-    // Laundering takes whatever is left of the washable surplus, up to
-    // capacity — reduced sharply once investigators are inside the books, and
-    // again when the whole city's books are being looked at.
-    const capacity = Math.max(
-      1,
-      Math.round(
-        launderCapacity(state, business) *
-          launderRestriction(state) *
-          worldMod(state, 'launderCapacity'),
-      ),
-    );
+    // `capacity` is still reduced sharply once investigators are inside the
+    // books, and again when the whole city's books are being looked at. On a
+    // front being leaned on it decides the risk rather than the ceiling; on
+    // every other front it is still both.
+    const capacity = room.get(business.id)!;
     capacityTotal += capacity;
-    const moved = Math.min(capacity, Math.max(0, washable - laundered));
+    const moved = alloc.get(business.id) ?? 0;
     business.lastLaundered = moved;
 
     if (moved > 0) {
       laundered += moved;
       business.launderedTotal += moved;
-      // Exposure tracks how hard you leaned on it, not how much it holds.
+      /*
+         Exposure tracks how hard you leaned on it, not how much it holds — and
+         since the ceiling came off, that ratio can go above one. A front run
+         at three times what it comfortably takes ages three times as fast.
+         That is the entire price of the wall being gone.
+      */
       business.exposure = clamp(
         business.exposure + (moved / capacity) * def.exposureRate,
         0,
@@ -629,7 +781,11 @@ export function tickBusinesses(
      purpose. That is spending money by definition — for the lawyer, the
      contact, the payroll — and it stays in the wallet.
   */
-  earnClean(state, cleaned);
+  earnClean(state, cleaned, 'transfer');
+  // The share the wash took, which is the only cost in this game that buys
+  // nothing — see F23. It never touched the wallet, so it has to be written
+  // down here or the book would show the family losing it to nobody.
+  note(state, 'wash', -cut);
   /*
      All of it, and the withdrawal cost is a real decision rather than a bug.
 
@@ -649,6 +805,9 @@ export function tickBusinesses(
   */
   if (revenue > 0) {
     state.org.holdings = (state.org.holdings ?? 0) + revenue;
+    // The legitimate side's own takings, which is the one row on the ledger
+    // that never has to be explained to anybody.
+    note(state, 'fronts', revenue);
   }
 
   /*

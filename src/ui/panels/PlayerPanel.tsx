@@ -1,10 +1,18 @@
 import { useGame, mutate } from '../../store';
 import { Panel, Bar, KeyValue } from '../components';
-import { nextRank, rankRequirements } from '../../sim/player';
 import { estate } from '../../sim/estate';
 import { careerShape, legitimacy } from '../../sim/legacy';
+import { maxCrew } from '../../sim/player';
 import { authorityRead } from '../../sim/authority';
 import { canGoHome, goHome, homeRead } from '../../sim/personal';
+import {
+  buyPossession,
+  canBuyPossession,
+  possessionRows,
+  possessionValue,
+  sellPossession,
+} from '../../sim/possessions';
+import { Rng } from '../../sim/rng';
 import { controlledTerritories } from '../../sim/territory';
 import { formatMoney } from '../../sim/util';
 import {
@@ -12,11 +20,18 @@ import {
   ATTRIBUTE_IDS,
   ATTRIBUTE_LABEL,
   ATTRIBUTE_MAX,
-  RANK_BY_ID,
-  ROLE_LABEL,
   attributeProgressNeeded,
 } from '../../config/economy';
 import { DIFFICULTY_BY_ID } from '../../config/difficulty';
+import {
+  POSSESSION,
+  POSSESSIONS,
+  POSSESSION_KIND_LABEL,
+  type PossessionKind,
+} from '../../config/possessions';
+
+/** So the sentence in the panel cannot drift away from the number. */
+const POSSESSION_SELL_SHARE = POSSESSION.sellBackShare;
 
 /**
  * The four things a family is worth, side by side.
@@ -51,6 +66,18 @@ function Worth() {
       <KeyValue label="Clean money to hand" value={formatMoney(e.cash)} />
       <KeyValue label="Put away" value={formatMoney(e.holdings)} tone="brass" />
       <KeyValue label="Fronts" value={formatMoney(e.fronts)} tone="brass" />
+      {/*
+         Yours, as against the organization's.
+
+         Caught in the browser rather than by a test, and it is the ordinary
+         shape of every defect this project keeps finding: buying a $1,800
+         watch moved clean cash from $2,500 to $700 and left "In all" at
+         $2,500, with no line anywhere saying where the money had gone. The
+         arithmetic was right and the screen was lying by omission — which is
+         the same complaint round 11 made about rank showing one figure here
+         and another there.
+      */}
+      <KeyValue label="Yours" value={formatMoney(e.possessions)} tone="brass" />
       <KeyValue label="In all" value={formatMoney(e.total)} />
       {/*
         Districts are shown as a count, not as money, because that is how rank
@@ -68,7 +95,143 @@ function Worth() {
           ? ' You hold no district outright yet — influence has to reach Control, and every rank above Enforcer asks for districts by name.'
           : ''}
         {e.fronts === 0 && ' A business is the only thing that earns clean money on its own.'}
+        {e.possessions > 0 &&
+          ' Your own things count here at what they cost, the same as money put away — buying one moved this total not at all.'}
       </p>
+    </Panel>
+  );
+}
+
+/**
+ * The things that are yours rather than the organization's.
+ *
+ * The design note is in `config/possessions.ts`. Two decisions about *this
+ * screen* are worth writing down.
+ *
+ * **Both columns of the trade are on every row.** What it is worth and what it
+ * would come back as, side by side, because the loss on resale is the entire
+ * price of owning something and a screen that showed only the price would be
+ * hiding the mechanic. Round 14's whole complaint about priced memos was a
+ * figure that appeared in one place and vanished in another.
+ *
+ * **"Who sees it" is a column rather than a footnote.** It is the only thing
+ * separating two items of the same price, and a player who cannot see it is
+ * choosing between a necklace and an apartment on the strength of the prose.
+ */
+function Possessions() {
+  const state = useGame();
+  const owned = possessionRows(state);
+  const ownedIds = new Set(owned.map((row) => row.def.id));
+  const kinds: PossessionKind[] = ['home', 'car', 'jewellery'];
+
+  const seen = (visibility: number) =>
+    visibility >= 0.75 ? 'Everybody' : visibility >= 0.4 ? 'People notice' : 'Nobody much';
+
+  return (
+    <Panel title="What is yours">
+      <p className="dim" style={{ marginTop: 0 }}>
+        The fronts belong to the organization. These belong to you. They count
+        toward what the family is worth exactly as money put away does, so
+        buying one moves your rank not at all — what it costs is that the money
+        has stopped being money, and it comes back at{' '}
+        {Math.round(POSSESSION_SELL_SHARE * 100)} cents on the dollar. What
+        people can see raises how legitimate you look and puts your name in the
+        paper, which are not the same thing.
+      </p>
+
+      {owned.length > 0 && (
+        <table className="table" style={{ marginBottom: 14 }}>
+          <thead>
+            <tr>
+              <th>Yours</th>
+              <th className="num">Worth</th>
+              <th className="num">Sells for</th>
+              <th>Who sees it</th>
+              <th />
+            </tr>
+          </thead>
+          <tbody>
+            {owned.map((row) => (
+              <tr key={row.possession.id}>
+                <td>
+                  <div>{row.def.name}</div>
+                  <div className="faint tiny">Bought on day {row.possession.boughtDay}</div>
+                </td>
+                <td className="num mono">{formatMoney(row.value)}</td>
+                <td className="num mono">{formatMoney(row.back)}</td>
+                <td className="dim">{seen(row.def.visibility)}</td>
+                <td>
+                  <button
+                    className="btn small"
+                    title={`Sell it for ${formatMoney(row.back)}. You paid ${formatMoney(row.possession.paid)}`}
+                    onClick={() => mutate((g) => sellPossession(g, row.def.id), true)}
+                  >
+                    Sell
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+
+      {kinds.map((kind) => {
+        const offer = POSSESSIONS.filter((d) => d.kind === kind && !ownedIds.has(d.id));
+        if (offer.length === 0) return null;
+        return (
+          <div key={kind} style={{ marginBottom: 10 }}>
+            <div className="tiny" style={{ margin: '4px 0 6px' }}>
+              {POSSESSION_KIND_LABEL[kind]}
+            </div>
+            <table className="table">
+              <tbody>
+                {offer.map((def) => {
+                  const check = canBuyPossession(state, def.id);
+                  return (
+                    <tr key={def.id}>
+                      <td>
+                        <div>{def.name}</div>
+                        <div className="faint tiny">{def.blurb}</div>
+                      </td>
+                      <td className="num mono">{formatMoney(possessionValue(state, def))}</td>
+                      <td className="dim">{seen(def.visibility)}</td>
+                      <td>
+                        <button
+                          className="btn small"
+                          disabled={!check.ok}
+                          /*
+                             The refusal goes in the tooltip *and* under the
+                             row when it bites. `refusals.test.ts` exists
+                             because a priced option put its figure in the
+                             hint and its refusal in the disabled reason, and
+                             the panel rendered one instead of the other — so
+                             the price vanished exactly when the player could
+                             not pay it.
+                          */
+                          title={check.reason ?? 'Buy it'}
+                          onClick={() =>
+                            mutate((g) => buyPossession(g, new Rng(g.rng), def.id), true)
+                          }
+                        >
+                          Buy
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+            {offer.some((def) => !canBuyPossession(state, def.id).ok) && (
+              <p className="faint tiny" style={{ margin: '4px 0 0' }}>
+                {canBuyPossession(
+                  state,
+                  offer.find((def) => !canBuyPossession(state, def.id).ok)!.id,
+                ).reason}
+              </p>
+            )}
+          </div>
+        );
+      })}
     </Panel>
   );
 }
@@ -76,9 +239,6 @@ function Worth() {
 export default function PlayerPanel() {
   const state = useGame();
   const { player, org } = state;
-  const rank = RANK_BY_ID[player.rank];
-  const next = nextRank(state);
-  const reqs = rankRequirements(state);
   const difficulty = DIFFICULTY_BY_ID[state.difficulty];
   const authorityNow = authorityRead(state);
   const houseNow = homeRead(state);
@@ -88,68 +248,10 @@ export default function PlayerPanel() {
     <>
       <div className="page-head">
         <h1 className="page-title">{player.name}</h1>
-        <span className="tiny">
-          {rank.name} · {difficulty.name}
-        </span>
+        <span className="tiny">{difficulty.name}</span>
       </div>
-      <p className="page-sub">{rank.blurb}</p>
 
       <div className="grid-2">
-        <Panel title="Advancement">
-          {next ? (
-            <>
-              <p className="dim" style={{ marginTop: 0 }}>
-                Rank is not earned by time served. It is recognition of what you
-                already control — meet every line and it will be offered to you.
-                What you have ever managed counts, not only what you hold today.
-              </p>
-              <div className="tiny" style={{ margin: '4px 0 10px' }}>
-                Toward {RANK_BY_ID[next].name}
-              </div>
-              {reqs.map((req) => (
-                <div className="kv" key={req.label}>
-                  <span className="kv-key">
-                    {req.met ? <span className="good">✓</span> : <span className="faint">·</span>}{' '}
-                    {req.label}
-                  </span>
-                  {/*
-                    Both figures when they differ, because they are different
-                    things and the table used to name only one.
-
-                    This column measures the best the family has ever managed —
-                    a rung once earned stays earned. The Overview shows what you
-                    hold today. Round 11 read "Crew 13 / 16" here beside "Crew 8
-                    of 22" there, and "$92,017" beside "In all $80,917", and
-                    twice misjudged the distance to a promotion. The rule was
-                    stated once in small text and never at the point of use.
-                  */}
-                  <span className={req.met ? 'kv-val good' : 'kv-val'}>
-                    {req.money
-                      ? `${formatMoney(req.current)} / ${formatMoney(req.needed)}`
-                      : `${req.current} / ${req.needed}`}
-                    {req.now < req.current && (
-                      <span className="faint">
-                        {' '}
-                        (now {req.money ? formatMoney(req.now) : req.now})
-                      </span>
-                    )}
-                  </span>
-                </div>
-              ))}
-              {player.pendingRank && (
-                <p className="brass" style={{ marginBottom: 0 }}>
-                  You have been offered {RANK_BY_ID[player.pendingRank].name}. Answer it
-                  on the overview.
-                </p>
-              )}
-            </>
-          ) : (
-            <p className="brass" style={{ margin: 0 }}>
-              There is nothing above this.
-            </p>
-          )}
-        </Panel>
-
         <Worth />
 
         <Panel title="Standing">
@@ -242,10 +344,21 @@ export default function PlayerPanel() {
           <KeyValue label="Shaping into" value={careerShape(state).name} tone="brass" />
           <KeyValue label="Operations completed" value={player.opsCompleted} tone="good" />
           <KeyValue label="Operations failed" value={player.opsFailed} tone="hot" />
-          <KeyValue label="People you can command" value={rank.maxCrew} />
-          <KeyValue label="Highest rank you can appoint" value={ROLE_LABEL[rank.maxRole]} />
+          {/*
+             The cap the outfit actually has, and no ceiling on appointments.
+
+             Both rows read the rank table. `maxCrew` there is 3 for every
+             career now that `player.rank` never moves, and `maxRole` was the
+             ceiling `canPromote` used to enforce before it stopped: you are the
+             boss from the first morning, so there is nobody above you to
+             withhold permission to name a capo. One row is corrected and the
+             other is gone.
+          */}
+          <KeyValue label="People you can command" value={maxCrew(state)} />
         </Panel>
       </div>
+
+      <Possessions />
 
       <Panel title="What you are good at">
         <p className="dim" style={{ marginTop: 0 }}>

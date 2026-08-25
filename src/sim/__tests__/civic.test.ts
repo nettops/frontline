@@ -19,9 +19,14 @@ import {
   canSpendFavour,
   civicRead,
   figure,
+  helpFigure,
+  scoreFor,
   spendFavour,
   tickCivic,
 } from '../civic';
+import { withFronts } from './helpers';
+import { Rng } from '../rng';
+import { crewList, generateNpc } from '../npc';
 import { CIVIC, CIVIC_BY_ID, CIVIC_FIGURES, FAVOUR_EFFECT } from '../../config/civic';
 import { SENTIMENT_HOSTILE_BELOW, HOME_TERRITORY } from '../../config/territories';
 import type { GameState } from '../types';
@@ -48,6 +53,167 @@ function weeks(state: GameState, n: number): void {
     tickCivic(state);
   }
 }
+
+/*
+   The alderman, and the reading that ran the wrong way.
+
+   He watched the average public feeling across the districts you work. Two
+   things about that turned out to be fatal, and neither was visible until
+   `ladder.probe`'s bot stopped standing still on two days in five.
+
+   **It has no upside.** `SENTIMENT_RECOVERY_PER_WEEK` climbs back only as far
+   as `SENTIMENT_START`, which is 50, and nothing in ordinary play pushes a
+   district above it. Measured at day 300 across 36 careers: the best worked
+   district reads 49.1 / 50.0 / 50.0 and *no* career had a single district over
+   50. The quantity is a ceiling the game presses everybody against from below.
+
+   **It falls with play.** Working a district is what costs feeling, so the
+   mean across worked districts read 34.6 / 37.2 / 38.3 with a maximum of 40.7
+   — against a bar of 50. The figure was not fragile, he was unreachable by
+   construction, and his favour was the one thing in this game that got further
+   away the more you played.
+
+   So he reads what you have *built* in the neighbourhood instead: legitimate
+   businesses standing in ground that does not resent you. That is a ward
+   politician's actual interest, it is what `lose_the_paperwork` is a favour
+   about, and it keeps public feeling in the reading as a gate rather than as
+   the whole of it — a front nobody there can stand does not count.
+*/
+/*
+   The union boss, and the ground that stopped meaning anything.
+
+   He counted districts held, over four. That was right when the ladder asked
+   for ground and wrong the moment it stopped: the highest district gate
+   anywhere in `OPERATIONS` is three, so ground saturates for every player who
+   opens the board and buys nothing after that. Measured across 36 careers at
+   day 300, districts controlled read 4 / 4 / 4 with a minimum of 3 and a
+   maximum of 4 — a point mass, and a bar of 60 wants 2.4 of it. He owed every
+   career in the population whatever they did, which is a subscription rather
+   than a relationship.
+
+   This is not the probe's stopping rule showing through. Nothing in the game
+   asks for a fourth district, so a rational player stops where the bot stops.
+
+   He reads the payroll now, which is the first thing his own blurb says he is
+   interested in and the only candidate with real spread in it:
+
+       districts controlled    4.0 / 4.0 / 4.0   (min 3, max 4)
+       districts at dominance  3.0 / 3.0 / 4.0   (min 1, max 4)
+       districts with a man    3.0 / 4.0 / 4.0   (min 1, max 5)
+       crew on the books        31 /  34 /  38   (min 17, max 47)
+       influence, all told     323 / 357 / 386
+*/
+describe('a union boss', () => {
+  const union = CIVIC_BY_ID['union'];
+
+  function hire(state: GameState, n: number): void {
+    const rng = new Rng(state.rng);
+    for (let i = 0; i < n; i++) {
+      const npc = generateNpc(state, rng, 'soldier');
+      state.npcs[npc.id] = npc;
+    }
+  }
+
+  it('rises with people on the books', () => {
+    const state = game();
+    const before = scoreFor(state, union);
+    hire(state, 12);
+    const after = scoreFor(state, union);
+    expect(after).toBeGreaterThan(before);
+  });
+
+  /*
+     The defect. Ground saturates at what the job board asks for, so a figure
+     reading it owes everybody who ever progressed.
+  */
+  it('is not bought by holding the ground the board already asked for', () => {
+    const state = game();
+    for (const t of Object.values(state.territories)) t.influence.player = 80;
+    expect(scoreFor(state, union)).toBeLessThan(union.owesAbove);
+  });
+
+  it('does not count men who are gone', () => {
+    const state = game();
+    hire(state, 20);
+    const full = scoreFor(state, union);
+    for (const npc of crewList(state).slice(0, 10)) npc.status = 'dead';
+    expect(scoreFor(state, union)).toBeLessThan(full);
+  });
+
+  it('is reachable — a real payroll clears him', () => {
+    const state = game();
+    hire(state, CIVIC.unionPayroll);
+    expect(scoreFor(state, union)).toBeGreaterThanOrEqual(union.owesAbove);
+  });
+});
+
+describe('somebody in office', () => {
+  /**
+   * `n` real fronts through the real acquisition path, then public feeling set
+   * where the test wants it. A hand-built Business object was tried first and
+   * `ownedBusinesses` correctly refused to count it.
+   */
+  function fronts(state: GameState, n: number, sentiment: number[] = []): string[] {
+    const made = withFronts(state, n);
+    made.forEach((b, i) => {
+      const t = state.territories[b.territoryId];
+      if (sentiment[i] !== undefined) t.sentiment = sentiment[i];
+    });
+    return made.map((b) => b.territoryId);
+  }
+
+  const alderman = CIVIC_BY_ID['alderman'];
+
+  it('reads nothing when there is nothing to be seen with', () => {
+    expect(scoreFor(game(), alderman)).toBe(0);
+  });
+
+  it('rises with legitimate business in ground that does not resent you', () => {
+    const state = game();
+    fronts(state, 1, [50]);
+    const one = scoreFor(state, alderman);
+    fronts(state, 2, [50, 50]);
+    const two = scoreFor(state, alderman);
+
+    expect(one).toBeGreaterThan(0);
+    expect(two).toBeGreaterThan(one);
+  });
+
+  it('does not count a front nobody in the district can stand', () => {
+    const state = game();
+    const made = fronts(state, 2, [50, 50]);
+    const before = scoreFor(state, alderman);
+    state.territories[made[1]].sentiment = SENTIMENT_HOSTILE_BELOW - 5;
+    expect(scoreFor(state, alderman)).toBeLessThan(before);
+  });
+
+  /*
+     The defect itself, as a test. Working a district costs public feeling, and
+     under the old reading that alone pushed him away.
+  */
+  it('does not fall because you worked the neighbourhood', () => {
+    const state = game();
+    fronts(state, 3, [50, 50, 50]);
+    const before = scoreFor(state, alderman);
+
+    for (const t of Object.values(state.territories)) {
+      t.sentiment = Math.max(SENTIMENT_HOSTILE_BELOW + 1, t.sentiment - 15);
+    }
+    expect(scoreFor(state, alderman)).toBe(before);
+  });
+
+  it('is reachable — a bar above what the reading can ever return is not a bar', () => {
+    const state = game();
+    const made = fronts(state, CIVIC.respectableFronts);
+    for (const id of made) {
+      state.territories[id].sentiment = Math.max(
+        state.territories[id].sentiment,
+        SENTIMENT_HOSTILE_BELOW + 1,
+      );
+    }
+    expect(scoreFor(state, alderman)).toBeGreaterThanOrEqual(alderman.owesAbove);
+  });
+});
 
 describe('the people who are not in your family', () => {
   it('starts everybody at arm’s length rather than absent', () => {
@@ -253,7 +419,17 @@ describe('spending a favour', () => {
   it('brings a hostile district back over the bar fronts need', () => {
     const state = game();
     state.player.attributes.influence = 9;
-    for (const t of Object.values(state.territories)) t.influence.player = 60;
+    /*
+       A payroll rather than ground. The union boss counted districts when this
+       was written and counts members now, and a fixture that grants the old
+       precondition grants nothing — it left him owing nothing and the
+       assertion below measuring an empty room.
+    */
+    const rng = new Rng(state.rng);
+    for (let i = 0; i < CIVIC.unionPayroll; i++) {
+      const npc = generateNpc(state, rng, 'soldier');
+      state.npcs[npc.id] = npc;
+    }
     weeks(state, 20);
 
     const home = state.territories[HOME_TERRITORY];
@@ -268,5 +444,78 @@ describe('spending a favour', () => {
       home.sentiment,
       'the district is still below the bar that refuses to sell you a front',
     ).toBeGreaterThan(SENTIMENT_HOSTILE_BELOW);
+  });
+});
+
+/*
+   Doing a councilman a favour, and the shop that was hiding inside it.
+
+   `gen_someone_outside` offered $9,000 to fix a civic figure's problem, and
+   paid out +1 to the player's influence and +12 to that figure's standing. It
+   was uncapped and the memo pool regenerates, so nine of them bought the
+   patron's Influence 9 for $81,000 — in an economy whose median career peaks
+   at $982,554.
+
+   `INFLUENCE_FROM` already records this exact bug in another form:
+   `demand_tribute` cost nothing and "twenty demands in one afternoon were
+   credited ten times over, on the attribute the game presents as the hard one
+   to train." It was fixed with a fortnight's cooldown on the credit. The memo
+   route had the identical hole and nobody found it, because until the heat
+   work landed the bot was too poor to walk through it.
+
+   Two things changed. The influence grant is gone — helping a man makes *him*
+   think better of you, which is the fiction; it does not buy general political
+   pull, which is the shop `civic.ts` exists to refuse. And the standing is
+   rate-limited on the same terms `approach` is: the credit is capped, the
+   action is not. You may help as often as you like and the money goes either
+   way.
+*/
+describe('helping somebody outside the family', () => {
+  it('makes that man think better of you', () => {
+    const state = game();
+    const before = figure(state, 'captain').standing;
+    expect(helpFigure(state, 'captain', 12)).toBe(true);
+    expect(figure(state, 'captain').standing).toBeGreaterThan(before);
+  });
+
+  it('credits it once a fortnight and not twice', () => {
+    const state = game();
+    helpFigure(state, 'captain', 12);
+    const after = figure(state, 'captain').standing;
+
+    state.day += 1;
+    expect(helpFigure(state, 'captain', 12)).toBe(false);
+    expect(figure(state, 'captain').standing).toBe(after);
+  });
+
+  it('credits it again once the fortnight is up', () => {
+    const state = game();
+    helpFigure(state, 'captain', 12);
+    const after = figure(state, 'captain').standing;
+
+    state.day += CIVIC.helpCooldownDays;
+    expect(helpFigure(state, 'captain', 12)).toBe(true);
+    expect(figure(state, 'captain').standing).toBeGreaterThan(after);
+  });
+
+  it('is per person, so one man on the phone does not silence the rest', () => {
+    const state = game();
+    helpFigure(state, 'captain', 12);
+    expect(helpFigure(state, 'judge', 12)).toBe(true);
+  });
+
+  it('buys nothing at all in the way of general pull', () => {
+    /*
+       The whole point. A man you helped thinks better of you; the city does
+       not hand you influence for it. Influence is what `INFLUENCE_FROM` is
+       for, and it is deliberately the hard one.
+    */
+    const state = game();
+    const before = state.player.attributes.influence;
+    for (let i = 0; i < 12; i++) {
+      state.day += CIVIC.helpCooldownDays;
+      helpFigure(state, 'captain', 12);
+    }
+    expect(state.player.attributes.influence).toBe(before);
   });
 });

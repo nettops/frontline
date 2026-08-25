@@ -154,7 +154,7 @@ describe('operations', () => {
     const state = fresh();
     const ops = availableOperations(state);
     expect(ops.length).toBeGreaterThan(0);
-    expect(ops.every((o) => o.minRank === 'street_criminal')).toBe(true);
+    expect(ops.every((o) => o.tier === 0)).toBe(true);
   });
 
   it('occupies crew for the duration and releases them on resolve', () => {
@@ -252,22 +252,22 @@ describe('heat', () => {
     expect(state.org.heat).toBe(after);
   });
 
-  it('bleeds off much more slowly at high heat than at low heat', () => {
-    const low = fresh();
-    addHeat(low, 15, 'street', 'test');
-    const high = fresh();
-    addHeat(high, 95, 'street', 'test');
+  /*
+     A test asserting the opposite of this stood here, and it was right at the
+     time: 'bleeds off much more slowly at high heat than at low heat'.
 
-    for (const s of [low, high]) {
-      for (let i = 0; i < 10; i++) {
-        s.day += 1;
-        tickHeat(s);
-      }
-    }
-    const lowDrop = 15 - low.org.heat;
-    const highDrop = 95 - high.org.heat;
-    expect(lowDrop).toBeGreaterThan(highDrop);
-  });
+     That was the intent — high heat should be sticky — and it was implemented
+     as a decay multiplier falling from 1.0 to 0.22, which measured across the
+     whole scale meant a family at 20 shed 1.17 points a day and one at 90 shed
+     0.44. Against generation that scales with everything the player does and
+     removal that scaled with nothing, it made the meter a one-way door: median
+     heat 80 over 74,585 career-days, a third of them in the top band.
+
+     The intent survives, in time rather than as a rate. Coming down from 80 is
+     a month of doing nothing. What replaced this test lives in
+     `heatRatchet.test.ts`, which asserts both halves — that more comes off
+     when there is more of it, and that a week of quiet is still only a dent.
+  */
 });
 
 // ----------------------------------------------------------- loyalty ------

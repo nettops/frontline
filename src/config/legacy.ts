@@ -124,9 +124,6 @@ export const CAREER_SHAPES: CareerShapeDef[] = [
   },
 ];
 
-export const SHAPE_BY_ID: Record<string, CareerShapeDef> = Object.fromEntries(
-  CAREER_SHAPES.map((s) => [s.id, s]),
-);
 
 /**
  * The bars each shape is tested against.
@@ -138,10 +135,96 @@ export const SHAPE_BY_ID: Record<string, CareerShapeDef> = Object.fromEntries(
  * compounding group without naming all of it.
  */
 export const SHAPE_BARS = {
-  /** Districts held for the Kingpin. The 75th percentile at day 300 is 4. */
+  /**
+   * Districts you **dominate** for the Kingpin.
+   *
+   * The number never moved. What it counts did, and that was the whole defect.
+   *
+   * `careerShape` read `playerInfluence(t) >= 25` — a foothold — and a family
+   * with three districts under control has a toe in six or seven besides. It
+   * survived only because the probe bot ending its job loop on a `break` stood
+   * still on two days in five, so every distribution in that file described a
+   * family that had largely stopped working. With the bot fixed the histogram
+   * of what this was reading came out `2:1 3:1 4:31 5:3` and the Kingpin was
+   * the verdict on 35 careers in 36 — the horoscope this file's header
+   * forbids, arriving at the population level where no single-career test can
+   * see it.
+   *
+   * Control is no better: `2:1 3:4 4:30 5:1`. The highest district gate
+   * anywhere in `OPERATIONS` is three, so nothing in the game asks for a
+   * fourth district and a rational player stops there. That is the same
+   * finding that took the union boss off ground in `config/civic.ts`, and the
+   * same shape of defect as the alderman reading public feeling: a bar
+   * re-placed against a quantity that had stopped varying, rather than the
+   * quantity being questioned.
+   *
+   * Dominance is the only band that spreads — `1:4 2:6 3:15 4:11` — and it is
+   * also the honest reading of "the city moved around you". A foot in the door
+   * is not a map somebody else inherits. Four is the 75th of that
+   * distribution, so the bar stays exactly where it was and now names 10
+   * careers in 36 instead of 35.
+   */
   kingpinDistricts: 4,
-  /** Estate for the Financial Boss. */
-  financierEstate: 250_000,
+  /**
+   * Estate for the Financial Boss.
+   *
+   * Was 250,000, sized against a day-300 distribution whose median career
+   * held one front and about $30,000. Restaking the job table above the
+   * street tier moved that distribution a long way: `ladder.probe` now reads
+   * the estate at 120,067 / 483,657 / 852,354 for the 40th, median and 75th,
+   * so the old bar had fallen *below the median career* and handed 15 of 36
+   * careers the same name — the horoscope this file's header forbids, and the
+   * same way `legitimateAbove` failed before it.
+   *
+   * 750,000 was just under the 75th when it was set, which is where that bar
+   * was put and for the same reason: the quarter of careers that really did
+   * compound.
+   *
+   * **Re-plotted.** The heat work made decay a share of the load, and the
+   * estate distribution moved out from under this figure — 40th / median /
+   * 75th went from 476,920 / 541,253 / 863,865 to
+   * 1,300,875 / 1,484,565 / 2,261,574. A bar at 750,000 now sits well below
+   * the median, so "The Financial Boss" was the verdict on 15 careers in 36
+   * and the horoscope condition this file's header forbids had quietly come
+   * true again.
+   *
+   * Re-derived rather than nudged, and placed by DIRECTOR section 5 — between
+   * the median and the 75th — rather than by the original "just under the
+   * 75th". At the 75th the shape went nearly extinct, 1 career in 36, because
+   * the heavier-weighted shapes take most of the careers that clear it. This
+   * lands it at 3, with the most common shape at 14 of 36 and the horoscope
+   * bar clear.
+   *
+   * **Re-plotted a third time, and the first two were plotted against the
+   * wrong number.** `careerShape` compares `estate(state).total` — what the
+   * family is worth now — and both earlier placements were sized against
+   * `bestEstate`, the peak the record keeps. Those are different
+   * distributions, and nobody had noticed because the bar happened to land
+   * somewhere defensible anyway.
+   *
+   * Repairing the probe bot moved it again regardless. Swept against the
+   * quantity the claim actually reads, 36 careers at day 300:
+   *
+   *     estate now   25th $1,581,225 · 40th $1,908,076 · median $2,203,324
+   *                  60th $2,346,873 · 75th $2,808,211
+   *     heavier shapes had already taken 10 of 36
+   *
+   *     bar 1,850,000  clears 23/36, named financier 14/36 (39%)
+   *     bar 2,000,000  clears 20/36, named 12/36 (33%)
+   *     bar 2,350,000  clears 14/36, named  9/36 (25%)
+   *     bar 2,500,000  clears 12/36, named  7/36 (19%)
+   *     bar 3,000,000  clears  6/36, named  3/36 (8%)
+   *
+   * 1,850,000 had fallen below the median again and read 39% against a
+   * horoscope bar of 40% — one career from the failure this comment records
+   * happening twice before.
+   *
+   * 2,350,000 is the 60th percentile, which is inside the median-to-75th band
+   * and at the median end of it. That end rather than the middle for the
+   * reason recorded above: the heavier shapes take most of what clears this,
+   * so the top of the band puts the shape near extinction.
+   */
+  financierEstate: 2_350_000,
   /**
    * Legitimacy for the Legitimate Boss, 0..100.
    *

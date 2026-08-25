@@ -65,8 +65,178 @@ across 183 source files, counted 2026-08-22.
 ## 3. The recurring failure mode
 
 **Instruments that return believable numbers while measuring nothing.** This
-project has produced **29 instances** of it, and round 15 found the newest one.
+project has produced **39 instances** of it.
+
+## Three rules, added 2026-08-23, that would have caught four of them
+
+A single session produced four measurement errors — a price plotted off a bot
+weaker than the standard one, a median that could not see a seven-career
+effect, a per-career mean subtracted from a median inside one ledger line, and
+a comparison across two arms that are not the same worlds. None was a coding
+mistake. All four were a statistic pointed at the wrong population. These are
+mechanical and are enforced by helpers rather than by remembering.
+
+**1. Comparing two probe arms means `pairedGap`, never two medians.** Arms are
+separate simulations that diverge at the first decision a policy changes, so
+their populations are different worlds. `RUNS_BOOKS` read $359,270 lower sales
+than `RUNS_TRADING` on the medians while stock spend was flat — a difference
+neither arm's policy can produce. Paired, it is $5,483.
+`helpers.pairedGap(arm, against, pick, participated)` takes the median of the
+per-seed difference. Both arms must be built from the same seed list in the
+same order.
+
+**2. No bar reads a population containing non-participants.** Mixing adoption
+into an effect size measures neither. Three bars in `ladder.probe` were placed
+that way in one afternoon: the plant's take-up read 7 of 36 built when the game
+had *offered* one to 16 and the gap was the bot's own reserve rule; the plant's
+volume bar was a median over an arm where seven careers in thirty-six hold a
+plant, so a mutation adding forty units a week of throughput left it green; the
+launderer's rate read 18.4% against 17.4% needed because nine careers that
+never hired anybody sat in the average at 22.8%. All three were repaired by
+changing what the bar watched. **In none of them did the number move** — that
+is the test of whether a repair is honest. `pairedGap` takes a `participated`
+predicate for exactly this and it is not optional in practice.
+
+**3. `median` and `mean` never appear in the same expression.** `helpers.mean`
+exists so no probe writes `total / RUNS.length` inline, which is how a mean
+ends up in a line of medians without anybody noticing what changed. A washing
+readout subtracted a per-career mean of the wash cut from a median of sales and
+printed the result as a ledger; the cut line was overstated by $30,577 and it
+was invisible because both figures were dollars. Default to the median — these
+careers have a long right tail (F15) and the mean describes a family nobody
+plays. Where a line genuinely needs both, print them separately and mark the
+mean, as the `— means` suffix in `ladder.probe` does.
+
+**And the standing one these three sit under: measure a new feature with the
+standard bot, or the measurement is about the bot.** A probe written alongside
+a feature reported a median peak of $176,843 and orders reaching 13 careers in
+36; on `ladder.probe`'s bot the same figures are $236,014 and 102 of 144. It
+opened a supply in 14 careers of 36 where the standard one reaches two fronts
+in 132 of 144.
+
 Recent examples:
+
+- **Three bars in one file pointed at populations containing people who never
+  used the thing being measured.** The plant's take-up bar read 7 of 36 built
+  and failed, when the game had *offered* one to 16 and the gap was the bot's
+  own reserve rule. The plant's volume bar was a median over an arm where seven
+  careers in thirty-six hold a plant, so a mutation adding forty units a week
+  of throughput left it green. The launderer's rate bar read 18.4% against
+  17.4% needed, dragged up by the nine careers in thirty-six that never hired
+  anybody, sitting in the average at 22.8%. **Mixing adoption into an effect
+  size measures neither.** All three were repaired by changing what the bar
+  watches; in none of them did the number move.
+
+- **A net measure asked to answer a gross question, and it inverted the
+  answer.** `wash.dirtyIn` is the sum of the *daily rise* in dirty cash, and it
+  was reached for to ask how much dirty money a trading career earns. The
+  trading arm reported **less** dirty income than the arm that does not trade —
+  $750k against $866k — while laundering more than twice as much, because
+  `tickContraband` buys next week's stock out of the same pocket the sale just
+  filled and most of the flow cancels inside one day. The first draft of the
+  laundering comparison had it as the denominator and printed "laundered 100%
+  of dirty income", which is the arithmetic of a cancelled denominator wearing
+  the clothes of a finding. The accumulator is still correct for the bot that
+  does not trade; it is simply not a gross figure and must not be read as one.
+
+- **A population statistic cannot see a minority effect, and one was asked
+  to.** `ladder.probe` gained an assertion that a plant must not raise volume,
+  written as a bound on the median trade income of the owning arm against the
+  buying arm. Mutation check: **making a plant add forty units a week of
+  throughput left it green.** Seven careers in thirty-six build a plant, so the
+  median career in the owning arm does not have one and nothing a minority does
+  can move the statistic. The bound was also measuring revenue rather than
+  volume, so a plant-holder filling orders looked like throughput leaking. Both
+  faults were in one line. The claim is a claim about one function and is now
+  tested on that function — `plant.test.ts` asserts `throughput` is identical
+  either side of `buildPlant`, and the same mutation turns it red. **Before
+  writing a population assertion, ask what share of the population the effect
+  is in.**
+
+- **A pre-committed bar pointed at the wrong quantity, and failing is how it
+  was found.** The same probe pre-committed "a quarter of careers build a
+  plant, or it is the PATRON shape again" before anything was plotted, which is
+  the right order. It read 7 of 36 and went red. The diagnostic beside it: the
+  game *offered* a plant to 16 of 36, and the gap was entirely the bot's own
+  rule against spending below one and a half times the price. The bar now reads
+  reachability and take-up stays in the log unasserted. **The number did not
+  move.** This is the alderman's fault in a different costume — a bar reading a
+  quantity that answers a different question — and the repair is the same one:
+  change what it watches, not where it sits.
+
+- **A bot written alongside a feature flattered the feature, twice in one
+  afternoon.** The product plant was priced at $185,000 off a probe written for
+  it, which reported peak funds after the trade opens with a median of
+  $176,843. The same probe said orders reached 13 careers in 36 with a median
+  of *zero* offers — the PATRON shape, and grounds for redesigning the whole
+  feature. Both numbers were the bot. It opened a supply in 14 careers of 36
+  where `ladder.probe`'s bot reaches two fronts in **132 of 144**; re-measured
+  there, the median peak is $236,014 and 102 careers of 144 are offered
+  something. The price moved to $250,000 and the redesign was not needed.
+  **A new feature is measured with the standard bot, or the measurement is
+  about the bot.** The weak bot did earn its keep once — it found a real fault
+  the strong one would have hidden, because the weekly roll picks one name from
+  the candidate list and families who cannot buy were crowding out the gang who
+  could.
+
+- **The reservation that holds order stock back from the street was untested,
+  and seventeen tests said otherwise.** `orders.test.ts` asserted
+  `reservedUnits` returned the right number, which is the *quantity* and not
+  the *behaviour*. Deleting `- reservedUnits(state, trade)` from the
+  distribution loop in `contraband.ts` left every one of them green — the
+  commitment the whole feature turns on could be silently sold on the street
+  and nothing would notice. Caught by mutating rather than by reading. The
+  replacement puts a shelf holding exactly what is owed, no money to buy more,
+  and streets with room, and asserts nothing moves. **Asserting on the number a
+  system computes is not asserting on what the system does with it.**
+
+- **A test that claimed to prove the card tiers meant something was measuring
+  the price.** It asserted the top room opens in fewer weeks than the bottom
+  room, which is true — and stayed true with the top room's respect bar set to
+  **zero**, because $12,000 is more than $400 and that was the entire content
+  of the claim. Caught by mutating the bar rather than by reading the test. The
+  fix separated the two gates and immediately found a real defect behind the
+  fake one: the bar had gone in at 55 on intuition and was cleared in **77% of
+  weeks**, so the "invitation you cannot ask for" was an invitation almost
+  everybody already had. The probe now prints the whole weekly respect
+  distribution against a ladder of bars, so the next person sizing a threshold
+  on respect reads it off the log. That is three bars this project has put in
+  the wrong place for want of plotting first.
+
+- **The clock trap, met again, and it would have passed.** `cards.test.ts`
+  built its fixture on day 40 and stepped by 7, so `tickCards` — gated on
+  `day % 7 === 0` — never ran once. It was caught only because the assertion
+  happened to be `toBe(0)` rather than `toBeLessThan(before)`; the weaker
+  assertion would have gone green against a decay that never executed. **When a
+  tick is gated on an interval, the fixture has to sit on the boundary**, and
+  the assertion should name the endpoint rather than the direction.
+
+- **The possessions layer went green on its first run, all sixteen tests.**
+  Which is how instance 27 happened, so every claim was re-checked by
+  reinstating the defect it names — clean-money-only replaced with `spend`, the
+  estate term dropped, the resale share set to 1, the visible share dropped,
+  the newspaper item cut, the seizure left unmarked. Nine of ten went red.
+  **The tenth did not: `warrant-takes-it`.** The test called
+  `seizeOnePossession` directly, so deleting the call from the warrants stage
+  changed nothing it could see — the unit worked and nothing reached it. Two
+  more turned up the same way afterwards, both on the new tip's predicate,
+  which could be replaced with `true` because the bot that exercises tips is
+  handed a million dollars every morning. **A unit test and a wiring test are
+  different tests, and this project keeps writing the first and reporting the
+  second.**
+
+- **The scorecard's Pacing axis has a noise band wider than its own bar.**
+  Building the second half of the middle game moved Pacing from 3.8 to 2.6, and
+  the axis reported itself collapsed. It had not. Re-measured at 48 careers
+  instead of 12, the two builds read **3.4 against 3.4** — longest quiet stretch
+  406 days against 403 — so the entire drop was the random stream reshuffling,
+  which *every* change to this project does. `longestGap` is a mean of
+  **per-career maxima**, and at twelve samples that statistic moves further on
+  noise than most deliberate changes move it on purpose. The sample is now 48.
+  Note what the fix was not: the bar stayed at 3. A bar being read off an
+  instrument that cannot resolve it is an instrument problem, and the two hours
+  lost to a Capo shift of 16 → 10 that turned out to be 34 → 29 at 96 seeds were
+  the same lesson arriving in a different costume.
 
 - **`layLowHonesty` had a blind spot shaped like the bug it hunts.** It was
   written to stop any screen claiming that going dark stops everything, and it
@@ -836,6 +1006,194 @@ refuses. It explains itself now, sharing the F10 string, but **F13** is that the
 reason does not *look* like a refusal — it renders as the option's hint line.
 Styling, and it belongs with iteration 6.
 
+## 6a. F22 — the washing machine was what stopped trade income becoming standing — REPAIRED 2026-08-23
+
+**Measured 2026-08-23** on `ladder.probe`, two populations of 36 careers over
+300 days, same seeds, one difference: whether the bot runs the two trades.
+
+    no trade  laundered $336,274 of $958,716 offered (35% used)
+              paydays: no fronts 11%, nothing to wash 47%, dirty ran out 15%,
+                       capacity ran out 27%
+              best estate $541,253
+
+    trading   laundered $748,631 of $1,060,958 offered (71% used)
+              paydays: no fronts 10%, nothing to wash 29%, dirty ran out 13%,
+                       capacity ran out 47%
+              trade income $1,632,268 · best estate $576,661
+
+    trading, counting only the paydays where a source was actually open:
+              no fronts 0%, nothing to wash 14%, dirty ran out 13%,
+              **capacity ran out 74%**
+
+**Once a trade is running, the fronts are saturated three paydays in four.**
+The whole-career figure of 47% badly understates it, because the median
+arrangement opens on day 91 of 300 and a third of every trading career predates
+the trade — splitting the counters by "was a source open" is what made the
+constraint visible, and the unsplit number would have supported the wrong
+conclusion.
+
+This unifies two findings that were open separately:
+
+- the trade earns a median **$1,632,268** and moves what the family is worth by
+  **6.5%**
+- the estate accumulates at **0.18x** annual income against a real-world 1-2x
+
+They are the same finding. `estate` counts clean cash, holdings and fronts and
+**never counts dirty money**, so every dollar the trade earns has to pass
+through a front to become standing — and the front is a per-week flow with no
+buffer. Unused capacity in a quiet week cannot be carried into a loud one, and
+the trade delivers in weekly spikes. Adding a trade to a career put an extra
+$412,357 through the machine, of which $83,215 went to the cut, and raised the
+estate by $35,408.
+
+### The repair, and the version of it that was thrown away
+
+**Direction taken: capacity is a risk dial, not a wall.** Laundering past what
+the premises comfortably hold is allowed, and what it costs you is exposure —
+which already runs to heat above 50, to `finance` evidence above 70, to the
+health pressure that erodes a front, and to whose books a financial
+investigation subpoenas first. Nothing new had to be built for the consequence.
+It was all there, behind a ceiling that stopped anybody reaching it.
+
+**The first attempt took the wall off for everybody, and it was wrong.**
+Measured over the same 36 careers:
+
+    median peak estate   $541,253 -> $383,622   (-29%)
+    trade income         $1,632,268 -> $242,896 (-85%)
+    cases opened, careers ended, fronts lost:   identical
+
+So it did not deliver the risk and it did cost the player. Two reasons, neither
+of them the raid:
+
+- the family paid the 22% cut on money it was going to spend as dirty anyway.
+  Wages are held back; stock, retainers and job costs are not, and `pay` spends
+  dirty first. Washing the lot every week is a straight leak.
+- every front sat permanently over the exposure decay threshold, so health —
+  and with it front revenue and front *value*, which is most of the estate —
+  ground down everywhere at once.
+
+**Shipped instead: the ceiling lifts only on `hard`.** The pressure dial in
+`config/pressure.ts` already asks "how dirty do I want this business", already
+multiplies capacity, and already carries exposure, wear and an inspection
+chance. It now also means there is no ceiling. A front nobody has touched
+behaves *exactly* as it did — every baseline population in `ladder.probe` is
+bit-identical after the change, which is the property that made it safe to
+ship.
+
+### What leaning is worth, measured
+
+`RUNS_LEANING` is the trading bot plus one behaviour: everything goes to `hard`
+on a week with more dirty money than the premises will take, and back to
+`normal` when the backlog clears.
+
+    laundered            $748,631 -> $1,165,545  (+56%)
+    capacity used        71% -> 106%
+    clean money in       $381,718 -> $595,303    (+56%)
+    front value at end   $294,697 -> $263,300    (-11%)
+    peak estate          $576,661 -> $586,738    (+1.7%)
+
+The door opens and the bot walks through it. The price is real and it is front
+value, through exposure and health. **At the median the two roughly cancel** —
+1.7% on 36 careers is inside this file's noise, and it is printed rather than
+asserted for that reason.
+
+Two things that are asserted, both large and directional: leaning puts at least
+20% more through the fronts, and it costs measurable front value.
+
+### Still open on F22
+
+The estate decomposition is the finding underneath the finding:
+
+    estate at the end   no trade  $532,031 = cash 648 + put away 228,961 + fronts 303,949
+                        trading   $573,177 = cash 4,803 + put away 320,437 + fronts 294,697
+                        leaning   $586,738 = cash 2,570 + put away 312,332 + fronts 263,300
+
+**Clean cash on hand is a rounding error in every arm.** What the estate is
+made of is holdings and front value, and the trade reaches it only through
+holdings — which is why a 56% rise in clean income buys 1.7% of estate. Whether
+leaning should pay better than break-even is a tuning question with a plotted
+answer, not a bar, and it has not been taken.
+
+## 6b. F23 — the wash cut was a tax that bought nothing — REPAIRED 2026-08-23
+
+The complaint that started it: *"how are we adding ways to create more cash
+flow and we lose 85% of our profits?"* Answered with a ledger nobody in this
+project had ever built, because `lifetime` is gross sales revenue and the trade
+buys before it sells out of the same pocket:
+
+    trading arm, 36 careers, 300 days
+
+      sold            $1,632,268
+      - stock            694,777   (43% of revenue)
+      - payroll          105,821
+      - the wash cut     156,255   (~21%, and it buys nothing)
+      = net              675,415
+
+      estate against the same careers not trading:  +$41,146
+
+Every other cost in this game buys something. Stock buys units, wages buy
+people, upkeep buys premises. `LAUNDER_CUT_BASE` at 0.24 evaporated, and it was
+the largest single charge a family ever paid.
+
+### What shipped
+
+**24% is what a stranger charges.** `config/launderers.ts` is the alternative —
+three people who will keep your books, charge less than a stranger, charge less
+again the longer you keep them, and can stop taking your calls. The shape is
+`SUPPLIERS` and `SUPPLY_TRUST` from the contraband economy, deliberately,
+because it is the same idea: a flat number is not a relationship.
+
+| | opens at | at best | retainer | a week |
+|---|---|---|---|---|
+| a bookkeeper with several clients | 16% | 10% | $45,000 | $250 |
+| an accountant of your own | 13% | 7% | $140,000 | $700 |
+| a firm downtown | 10% | 4% | $260,000 | $1,400 |
+
+Retainers off a plotted distribution — peak funds by day 100 (median $39,310,
+p75 $156,053) for the cheapest, by day 200 (median $125,927, p75 $232,915) for
+the rest. `launderCut` floors a retained arrangement at that person's own
+`bestCut` rather than at `LAUNDER_CUT_MIN`, which is why the firm is worth
+$260,000: a relationship is allowed to beat the stranger floor.
+
+### Measured, on a fourth probe arm
+
+`RUNS_BOOKS` is the trading bot which takes the best terms it can afford while
+keeping a reserve, and never drops them.
+
+    somebody on the books    27/36, median day 133
+    the cut those careers paid   17.2%   against 21.7% with nobody
+    lost in the wash         $156,255 -> $84,986   (-$71,269 a career)
+    estate at the end        $573,177 -> $594,871
+    trade income             $1,632,268 -> $1,272,998
+
+### Two things the measurement changed about the design
+
+**Trust as a target was unreachable, and copying `SUPPLY_TRUST` was the bug.**
+That function drifts toward `100 * kept * quiet`, which collapses to zero on
+any week over the heat ceiling. Weekly heat across 36 careers is **p10 37, p25
+62, median 81, p75 100** — so the target was zero four weeks in five and trust
+drifted down 10 for every 10 it gained. The first version reported a best
+standing of **0/100 across the entire population**. Heat now gates the *gain*
+(`driftPerWeek` on a quiet week, `hotDecayPerWeek` of 1.5 on a loud one) and
+`quiet` is a band between 40 and 80 rather than a ratio to 60, both ends off
+that distribution. `SUPPLY_TRUST` has the identical defect and was deliberately
+left alone — fixing it would reshuffle every seeded population in the project
+on a measurement about a different system.
+
+**The opening rate had to carry most of the value.** Even repaired, this bot's
+best standing among careers that hired is a median of **4 out of 100** — it
+hires on day 133 and never lays low. The relationship is real and a careful
+player will have it; pricing the feature on a curve nobody in the sample
+reaches is the PATRON shape in an accountant's suit. So the money is in signing
+(24% to 16%) and the relationship is upside on top.
+
+### Still open
+
+`RUNS_BOOKS` still shows the deeper F22 finding unchanged: estate is holdings
+plus front value, clean cash is a rounding error in every arm, and $71,269 a
+career saved from the cut moves peak estate by 3.8%. The wash is no longer the
+biggest leak. **Stock at 43% of revenue now is**, and nothing has looked at it.
+
 ## 7. What comes next
 
 **Two unmeasured iterations are now stacked.** Iteration 6 (lay-low, F14, F13)
@@ -870,16 +1228,73 @@ round, or not a round.
 pacing probe, and made every change since. Dispatch from a fresh agent, with the
 Browser pane open before dispatch — a proven prerequisite, not a precaution.
 
-## 7a. The failing test is deliberate
+## 7a. The failing tests are deliberate — 4 of them, as of 2026-08-23
 
-`ladder.probe.test.ts` → "gives a 300-day career more than three rungs" fails
-at `Capo 18/36, expected >= 24`. It is a **pre-committed design target for the
-rank table**, written before the table was touched, and `DIRECTOR.md` §5 forbids
-moving it to make the table pass. It closes when a career can reach Capo without
-first winning the front lottery — that is F15, not the ladder.
+The rank-table target that used to live here **closed** when the ladder came
+out; a career reaches every rung of the job table on time now. Four assertions
+remain red on purpose. All four are pre-committed targets, and `DIRECTOR.md` §5
+forbids moving any of them to make the code pass.
 
-**Do not delete it, weaken it, or add an allowlist.** If it is ever made green,
-the entry in the director log has to say what changed and why.
+| where | reads | wants |
+|---|---|---|
+| `grok.probe` → "actually played, and found the game" | 59 | ≥ 60 |
+| `ladder.probe` → "keeps finding something to say in the back half" | 0.3311 | ≥ 0.3333 |
+| `ladder.probe` → "the favour network is reachable" | alderman owed in 35/36 | ≤ 33 |
+| `scorecard.probe` → "does not let any measured axis collapse" | pacing | — |
+
+Three of the four are pacing drift of a percentage point or less. **The
+alderman is a design question, not a bar question**, and it is the one waiting
+on a decision: it watches *mean* sentiment across worked districts, and now
+that careers spread rather than concentrate that quantity has an interquartile
+range of one point — median 50, p75 51. No threshold placed on it can
+discriminate. The repair is to change what the figure watches; the suggestion
+on the table is sentiment in the player's **worst** district rather than the
+mean.
+
+**Do not delete these, weaken them, or add an allowlist.** If any is ever made
+green, the entry in the director log has to say what changed and why.
+
+### The rank ladder's remains — cleared 2026-08-23
+
+The ladder came out of the sim earlier in the cycle and three screens went on
+reading the old table. The **Overview told a boss holding three districts and
+twelve people that they were "12 of 3"**, because `RANK_BY_ID[player.rank]
+.maxCrew` is 3 for every career that will ever be played. Cleared:
+
+- `Dashboard.tsx` — crew cap reads `maxCrew(state)`; the "Toward <rank>: n/m
+  met" line is gone, having counted toward a promotion that cannot arrive.
+- `PlayerPanel.tsx` — the Advancement panel, the rank name and blurb in the
+  page head, the "You have been offered…" line, and "Highest rank you can
+  appoint" (there is no appointment ceiling any more) are gone. "People you can
+  command" reads `maxCrew`.
+- `player.ts` — `nextRank`, `rankRequirements` and `RankRequirement` deleted.
+  Zero callers in `src` after the above. `tickRecord` **stays**: the family's
+  high-water marks are read by the front-health floor in `business.ts` and by
+  `legacy.ts`, and the table was never their only customer.
+- `report.ts` — `rank` and `pendingRank` off the playtest snapshot, with the
+  "offered a step up" line that could not fire.
+- Tests: `rankRows.test.ts` deleted with the screen it guarded; `dynasty`,
+  `estate` and `holdings` were reading `rankRequirements` rows as a proxy for
+  `org.record`, `controlledTerritories` and `estate`, and now read those
+  directly — which is the better assertion regardless.
+
+What is left of `RankId` is `player.rank` on the save, so a game written before
+the ladder came out still loads, and the succession line, which records what a
+predecessor was called. Neither is read as a gate.
+
+### And a rule that came out of the orders build
+
+**A new weekly roll does not go on `state.rng`.** The shared stream is ordered
+and load-bearing: every probe plays fixed seeds, and several bars sit within a
+point of their thresholds by design. Adding one `rng.chance` a week to the
+shared stream reshuffled all 144 careers, turned four failing assertions into
+five, and moved `config/civic.ts`'s captain bar off its floor — none of which
+was a fact about the feature. The generator is stateless given (seed, calls),
+so derive a stream (`offerStream` in `sim/orders.ts` is the pattern) from the
+seed and the day: identically deterministic, identically save-safe, and it
+leaves every existing measurement bit-identical. Reach for it whenever a new
+system rolls on a schedule and nothing downstream needs to react to *that
+particular* draw.
 
 ## 8. Repo audit — 2026-08-21, after round 11
 

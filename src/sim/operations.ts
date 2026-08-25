@@ -11,6 +11,7 @@ import { Rng, clamp } from './rng';
 import type {
   ActiveOperation,
   GameState,
+  Id,
   Npc,
   OperationDef,
   OperationResult,
@@ -18,7 +19,7 @@ import type {
 } from './types';
 import { addEvidence, addLog, nextId, weightedPick } from './util';
 import { addHeat, heatSuccessPenalty, isLayingLow } from './heat';
-import { earnDirty, spend, totalFunds } from './economy';
+import { earnDirty, refundDirty, spend, totalFunds } from './economy';
 import { ownedBusinesses } from './business';
 import {
   addNote,
@@ -36,17 +37,32 @@ import { gainFear, gainRespect, trainAttribute } from './player';
 import { noteInfluenceTaken } from './faction';
 import { surveillancePenalty } from './investigation';
 import { worldMod, worldSuccessDelta } from './world';
+import {
+  botchSetup,
+  closeScore,
+  crewRelief,
+  disposeOf,
+  kitHeat,
+  landSetup,
+  prepDelta,
+  scoreById,
+  scoreOn,
+  setupsLeft,
+} from './scores';
+import { SETUP_BY_ID } from '../config/scores';
 import { activity, priced, prices } from './market';
 import {
   addInfluence,
   adjustSentiment,
   canOperateIn,
+  controlLevel,
   controlledTerritories,
   hasPresence,
   heatMultiplier,
   payoutMultiplier,
   successModifier,
   territoryDef,
+  territoryList,
 } from './territory';
 import {
   INFLUENCE_ON_FAILURE_SHARE,
@@ -84,7 +100,10 @@ import {
 } from '../config/operations';
 import { LAWYER_BY_LEVEL } from '../config/lawEnforcement';
 import { CANCEL_OPERATION_HEAT } from '../config/heat';
-import { ATTRIBUTE_MAX, FEAR, ROLE_ORDER, rankIndex } from '../config/economy';
+import { ATTRIBUTE_MAX, FEAR, ROLE_ORDER } from '../config/economy';
+import { civicRoster } from './civic';
+import { bond } from './diplomacy';
+import { rivals } from './faction';
 import { FAMILIARITY_PER_OPERATION, BEHAVIOUR } from '../config/npcs';
 import { DIFFICULTY_BY_ID } from '../config/difficulty';
 
@@ -95,34 +114,118 @@ import { DIFFICULTY_BY_ID } from '../config/difficulty';
  * operation history, and doing that twenty-three times to draw one table was
  * the obvious way to make a menu expensive.
  */
-function opsBoard(state: GameState): OpsBoard {
+export function opsBoard(state: GameState): OpsBoard {
   const opsBy: Record<string, number> = {};
   for (const r of state.operationHistory) {
     opsBy[r.defId] = (opsBy[r.defId] ?? 0) + 1;
   }
+  /*
+     Who you know, gathered here so `opens.met` stays a pure function of the
+     board. Both are read straight off state that already exists — a favour a
+     figure owes you, and the warmest a surviving rival feels toward you.
+
+     `owed` rather than `standing` for the civic half, and that is a design
+     decision rather than a convenience: standing drifts toward a target every
+     week in `tickCivic`, so a job gated on it would open and shut with nothing
+     the player did. A favour owed is the durable thing, and it is capped by
+     `CIVIC.maxOwed`, so this cannot become free.
+  */
+  const favoursOwed: Record<string, number> = {};
+  let owedTotal = 0;
+  let owedFigures = 0;
+  for (const f of civicRoster(state)) {
+    favoursOwed[f.id] = f.owed;
+    owedTotal += f.owed;
+    if (f.owed > 0) owedFigures += 1;
+  }
+
+  const bestRivalTrust = rivals(state)
+    .filter((f) => f.strength > 0)
+    .reduce((best, f) => Math.max(best, bond(state, 'player', f.id).trust), -100);
+
   return {
-    rank: rankIndex(state.player.rank),
     districtsHeld: controlledTerritories(state).length,
+    districtsControlled: territoryList(state).filter((t) => {
+      const level = controlLevel(t);
+      return level === 'control' || level === 'dominance';
+    }).length,
     fronts: ownedBusinesses(state).length,
     crew: crewList(state).filter((n) => n.status !== 'dead').length,
     opsBy,
+    favoursOwed,
+    owedTotal,
+    owedFigures,
+    bestRivalTrust,
   };
 }
 
+/*
+   No rank in it any more.
+
+   This read `rankIndex(def.minRank) <= board.rank`, with `opens` as a second
+   way in for six of twenty-three jobs. That stopped making sense the day the
+   player became the boss from the first morning: the screen said so, the table
+   still asked them to climb from Street Criminal, and the label that would
+   have explained the refusal had been taken off the screen. Measured, the five
+   jobs above Capo were shut on 100% of 3,600 days.
+
+   An absent `opens` now means always open, which is the street work, and
+   everything else names something the player can go and get.
+*/
 function isOpen(def: OperationDef, board: OpsBoard): boolean {
-  return rankIndex(def.minRank) <= board.rank || (def.opens?.met(board) ?? false);
+  return def.opens?.met(board) ?? true;
+}
+
+/**
+ * How big an outfit this is, on the same 0..5 scale the jobs are priced on.
+ *
+ * The heat model needs to know how far beneath the player a job sits — a
+ * corner shakedown draws nothing when a task force is already reading your
+ * mail. That used to be `rankIndex(player.rank)`, and there is no rank now.
+ *
+ * Rather than invent a second scale to sit beside the gates, this reads the
+ * gates: your standing is the top of the table you can actually reach. It
+ * needs no tuning of its own, it moves the moment the board moves, and it
+ * cannot drift away from what the player sees, because it is the same
+ * calculation the job list is drawn from.
+ */
+export function standing(state: GameState): number {
+  const board = opsBoard(state);
+  return OPERATIONS.reduce((top, op) => (isOpen(op, board) ? Math.max(top, op.tier) : top), 0);
+}
+
+/*
+   A job you are already building up to does not come off the board.
+
+   `opens` reads live state — fronts running, ground held, who owes you — so a
+   front shutting or a favour lapsing can close a gate behind a player who has
+   already put a man and most of a month into the job on the other side of it.
+   Measured, that was two expiries in 121, and §2.4 of the design rules it out
+   in as many words: a window expires because the player was slow, never
+   because the game moved the job out from under them.
+
+   `canLaunch` never checked `opens`, so the simulation has always allowed
+   this. The board was the only thing saying no.
+
+   Deliberately not folded into `isOpen`, which `standing` reduces over: what
+   the player can reach is a statement about the gates, and a score is a
+   statement about one job. Keeping them apart is what stops a single score
+   quietly moving the scale every heat calculation is priced on.
+*/
+function heldOpen(state: GameState, op: OperationDef): boolean {
+  return !!scoreOn(state, op.id);
 }
 
 /** Jobs the player's standing — or their record — allows them to take on. */
 export function availableOperations(state: GameState): OperationDef[] {
   const board = opsBoard(state);
-  return OPERATIONS.filter((op) => isOpen(op, board));
+  return OPERATIONS.filter((op) => isOpen(op, board) || heldOpen(state, op));
 }
 
 /** Jobs that exist but are still above the player — shown greyed out, as goals. */
 export function lockedOperations(state: GameState): OperationDef[] {
   const board = opsBoard(state);
-  return OPERATIONS.filter((op) => !isOpen(op, board));
+  return OPERATIONS.filter((op) => !isOpen(op, board) && !heldOpen(state, op));
 }
 
 /**
@@ -156,7 +259,7 @@ export function heatScale(
   const territory = territoryId ? state.territories[territoryId] : undefined;
   return heatScaleForDistance(
     heatDistance({
-      rankGap: rankIndex(state.player.rank) - rankIndex(def.minRank),
+      rankGap: standing(state) - def.tier,
       sentSeniority,
       stewarded: !!territory?.stewardId,
       crew: crewList(state).filter((n) => n.status !== 'dead').length,
@@ -211,6 +314,14 @@ export interface ChanceBreakdown {
   world: number;
   /** How you chose to do it. Zero on the straight approach. */
   approach: number;
+  /**
+   * A month of planning, less how closely the place has come to be watched.
+   *
+   * Zero for every job nobody has opened a score against, which is every job
+   * for a player who never touches the feature — and that is what makes the
+   * paired measurement of scores mean anything.
+   */
+  prep: number;
   total: number;
 }
 
@@ -310,6 +421,8 @@ export function successBreakdown(
 
   const approachTerm = APPROACH_BY_ID[approach].success;
 
+  const prepTerm = prepDelta(scoreOn(state, def.id));
+
   const total = clamp(
     def.baseSuccess +
       crewTerm +
@@ -319,7 +432,8 @@ export function successBreakdown(
       territoryTerm +
       diffTerm +
       worldTerm +
-      approachTerm,
+      approachTerm +
+      prepTerm,
     MIN_SUCCESS_CHANCE,
     MAX_SUCCESS_CHANCE,
   );
@@ -334,6 +448,7 @@ export function successBreakdown(
     difficulty: diffTerm,
     world: worldTerm,
     approach: approachTerm,
+    prep: prepTerm,
     total,
   };
 }
@@ -385,10 +500,11 @@ export function canLaunch(
       reason: `You have no way into ${territoryDef(territoryId).name}. Work somewhere next to it first.`,
     };
   }
-  if (crewIds.length !== def.crewRequired) {
+  const needed = crewNeeded(state, def);
+  if (crewIds.length !== needed) {
     return {
       ok: false,
-      reason: `Needs exactly ${def.crewRequired} available crew.`,
+      reason: `Needs exactly ${needed} available crew.`,
     };
   }
   /*
@@ -428,25 +544,60 @@ export function canLaunch(
   return { ok: true, reason: null };
 }
 
+/**
+ * How many bodies this actually needs tonight.
+ *
+ * A floor plan means nobody has to be a lookout and a man inside means two
+ * fewer going in, so a prepared job is a smaller job. Never below one, because
+ * `crewRequired: 0` carries a rule of its own — there is only one of you — and
+ * a job sliding into that state through preparation would inherit a refusal
+ * written about something else entirely.
+ */
+export function crewNeeded(state: GameState, def: OperationDef): number {
+  if (def.crewRequired === 0) return 0;
+  return Math.max(1, def.crewRequired - crewRelief(scoreOn(state, def.id)));
+}
+
 /** What this job costs to put together, in this year's money. */
 export function operationCost(state: GameState, def: OperationDef): number {
   return priced(state, def.investment);
 }
 
+/**
+ * `scoreId` is how a setup says which score it belongs to.
+ *
+ * Only setups need it. The job at the end of a score finds its own — there is
+ * at most one live score against any target, so asking the caller to pass it
+ * would be asking them to repeat something the state already knows, and a
+ * caller who forgot would silently run the job without spending the kit.
+ */
 export function launchOperation(
   state: GameState,
   defId: string,
   crewIds: string[],
   territoryId: string,
   approach: ApproachId = DEFAULT_APPROACH,
+  scoreId?: string,
 ): ActiveOperation | null {
   const def = OPERATION_BY_ID[defId];
   if (!def) return null;
+
+  const setup = SETUP_BY_ID[defId];
+  const score = setup
+    ? (scoreId ? scoreById(state, scoreId as Id) : undefined)
+    : scoreOn(state, defId);
+  if (setup) {
+    // A setup with nothing to prepare for is not a job, it is a bug in whoever
+    // called this. Nothing else in the game can reach these ids.
+    if (!score || score.status !== 'open') return null;
+    if (!setupsLeft(state, score).some((s) => s.id === defId)) return null;
+  }
+
   const check = canLaunch(state, def, crewIds, territoryId, approach);
   if (!check.ok) return null;
 
   const cost = operationCost(state, def);
-  if (!spend(state, cost)) return null;
+  if (!spend(state, cost, 'stakes')) return null;
 
   const crew = crewIds.map((id) => state.npcs[id]);
   const chance = successBreakdown(state, def, crew, territoryId, approach).total;
@@ -473,6 +624,12 @@ export function launchOperation(
       Math.round(((def.payout[0] + def.payout[1]) / 2) * APPROACH_BY_ID[approach].payout),
     ),
   };
+  if (score) {
+    op.scoreId = score.id;
+    // The night is out. No more setups against this one — gear that arrives
+    // while the job is running arrived too late to be in the car.
+    if (!setup) score.status = 'running';
+  }
   state.activeOperations[op.id] = op;
 
   addLog(
@@ -498,7 +655,10 @@ export function cancelOperation(state: GameState, opId: string): void {
       npc.unavailableUntilDay = null;
     }
   }
-  earnDirty(state, Math.round(op.investment * 0.7));
+  // Handed back, not earned — see `refundDirty`. A partner taking a share of
+  // your own returned stake is a leak, and one that only shows up on a week
+  // that is already going badly.
+  refundDirty(state, Math.round(op.investment * 0.7));
   delete state.activeOperations[opId];
   addHeat(state, CANCEL_OPERATION_HEAT, 'street', 'aborted job');
   addLog(state, `${def?.name ?? 'An operation'} was called off. Not cleanly.`, 'neutral');
@@ -534,6 +694,11 @@ function resolveOperation(state: GameState, rng: Rng, op: ActiveOperation): void
     ? (op.successChance - roll) / Math.max(op.successChance, 0.0001)
     : (roll - op.successChance) / Math.max(1 - op.successChance, 0.0001);
 
+  if (SETUP_BY_ID[op.defId]) {
+    resolveSetup(state, rng, op, def, crew, success);
+    return;
+  }
+
   /*
      The ordinary night, which was the one going unrecorded.
 
@@ -559,7 +724,9 @@ function resolveOperation(state: GameState, rng: Rng, op: ActiveOperation): void
   // Whether they knew you here is decided at launch, not after the fact.
   const unfamiliar = !hasPresence(territory);
   const influenceStep =
-    INFLUENCE_PER_OPERATION + rankIndex(def.minRank) * INFLUENCE_PER_OPERATION_TIER;
+    INFLUENCE_PER_OPERATION + def.tier * INFLUENCE_PER_OPERATION_TIER;
+
+  const score = op.scoreId ? scoreById(state, op.scoreId) : undefined;
 
   const result: OperationResult = {
     id: op.id,
@@ -618,10 +785,11 @@ function resolveOperation(state: GameState, rng: Rng, op: ActiveOperation): void
       approach.heat *
       heatScale(state, def, crew, territory.id) *
       heatMultiplier(territory, tDef, unfamiliar) *
-      crewTraitEffect(crew, 'heat');
+      crewTraitEffect(crew, 'heat') *
+      kitHeat(score);
     result.payout = payout;
     result.heat = heat;
-    earnDirty(state, payout);
+    earnDirty(state, payout, 'jobs');
     addHeat(state, heat, 'street', def.name);
     gainRespect(state, def.respect * approach.respect);
     /*
@@ -664,13 +832,15 @@ function resolveOperation(state: GameState, rng: Rng, op: ActiveOperation): void
     );
   } else {
     const recovered = Math.round(op.investment * FAILURE_INVESTMENT_RECOVERY);
-    earnDirty(state, recovered);
+    // Recovered outlay, not takings. See the note on the cancel path above.
+    refundDirty(state, recovered);
     const heat =
       def.heatOnFailure *
       approach.heat *
       heatScale(state, def, crew, territory.id) *
       heatMultiplier(territory, tDef, unfamiliar) *
-      crewTraitEffect(crew, 'heat');
+      crewTraitEffect(crew, 'heat') *
+      kitHeat(score);
     result.heat = heat;
     addHeat(state, heat, 'street', `${def.name} went wrong`);
     gainRespect(state, -Math.ceil(def.respect / 3));
@@ -688,6 +858,20 @@ function resolveOperation(state: GameState, rng: Rng, op: ActiveOperation): void
     addLog(state, `${def.name} in ${tDef.name} failed. ${result.consequence}`, 'failure');
   }
 
+  /*
+     The job is not over when the job is over.
+
+     Getting rid of the gear is the third phase, and it reads three things that
+     already existed: how much of this district is yours, how the night was
+     done, and whether it worked. `closeScore` comes after, because it empties
+     the kit — the order here is the whole of what makes a blown score punish
+     twice, once now and once when the case opens.
+  */
+  if (score) {
+    disposeOf(state, rng, score, crew, approachOf(op), success);
+    closeScore(state, score, 'done');
+  }
+
   // Men who worked a job together come out of it knowing each other slightly
   // better than they did, which over years is where every alliance and every
   // faction inside the organization comes from.
@@ -695,6 +879,60 @@ function resolveOperation(state: GameState, rng: Rng, op: ActiveOperation): void
 
   state.operationHistory.unshift(result);
   if (state.operationHistory.length > 200) state.operationHistory.length = 200;
+}
+
+/**
+ * A setup, which is an ordinary job that pays nothing.
+ *
+ * It takes the same roll, the same heat arithmetic and the same consequence
+ * table as everything else — a man can be hurt or taken stealing the car. What
+ * it does not do is enter `operationHistory`, and that omission is load-
+ * bearing rather than tidy: `opsBy` is a lifetime count of every job run and
+ * two live gates read it (`fence_goods >= 5`, `freelance_muscle >= 6`). A
+ * setup that counted would be a way of buying past both by preparing a job you
+ * never intend to run. `scores.test.ts` guards it.
+ *
+ * Nothing here touches respect, influence, public feeling or the completed
+ * count either. Preparation is not something the city sees you do.
+ */
+function resolveSetup(
+  state: GameState,
+  rng: Rng,
+  op: ActiveOperation,
+  def: OperationDef,
+  crew: Npc[],
+  success: boolean,
+): void {
+  const score = op.scoreId ? scoreById(state, op.scoreId) : undefined;
+  const territory = state.territories[op.territoryId];
+  const tDef = territoryDef(op.territoryId);
+  const approach = APPROACH_BY_ID[approachOf(op)];
+
+  for (const npc of crew) creditOperation(npc, state.day, success, def.name);
+
+  addHeat(
+    state,
+    (success ? def.heatOnSuccess : def.heatOnFailure) *
+      approach.heat *
+      heatScale(state, def, crew, territory.id) *
+      heatMultiplier(territory, tDef, !hasPresence(territory)) *
+      crewTraitEffect(crew, 'heat'),
+    'street',
+    def.name,
+  );
+
+  if (success) {
+    trainAttribute(state, def.attribute, 0.5);
+    if (score) landSetup(state, score, def.id);
+    addLog(state, `${def.name} in ${tDef.name} came off.`, 'success');
+  } else {
+    refundDirty(state, Math.round(op.investment * FAILURE_INVESTMENT_RECOVERY));
+    if (score) botchSetup(state, score, def.id);
+    const consequence = applyFailureConsequence(state, rng, def, crew, op.territoryId);
+    addLog(state, `${def.name} in ${tDef.name} went wrong. ${consequence}`, 'failure');
+  }
+
+  tiesFromOperation(state, rng, crew);
 }
 
 /**

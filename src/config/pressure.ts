@@ -19,6 +19,12 @@
  * happens to be yours, which is worth something to the only reading in the
  * game that measures what you look like from outside.
  *
+ * `hard` carries one thing the others do not: it is the only setting with no
+ * laundering ceiling. A backlog that would take a careful family thirty-nine
+ * weeks to clear goes through in one, and the premises age at the rate you
+ * pushed them. That is the whole of F22's repair, and it lives here rather
+ * than in `business.ts` because it is a decision the player makes.
+ *
  * One mechanic, four existing systems, no new subsystem. A front you never
  * touch behaves exactly as it did before this file existed.
  */
@@ -39,7 +45,16 @@ export interface PressureDef {
    */
   short: string;
   blurb: string;
-  /** Multiplier on how much dirty money the front can move in a week. */
+  /**
+   * Multiplier on how much dirty money the front can move in a week.
+   *
+   * On `hard` it is not a limit at all. That setting takes the ceiling off
+   * entirely — everything washable goes through, and `exposure` in
+   * `tickBusinesses` climbs at whatever multiple of this figure you pushed.
+   * Capacity stops deciding how much and starts deciding how fast the place
+   * becomes interesting. See HANDOFF F22 for why, and for the version of that
+   * change that applied to every front and had to be thrown away.
+   */
   launder: number;
   /** Multiplier on takings. Leaning harder does make more. */
   revenue: number;
@@ -79,7 +94,7 @@ export const PRESSURES: PressureDef[] = [
     name: 'Lean on it',
     short: 'Lean',
     blurb:
-      'Everything through the till and the staff told not to ask. It moves real money and it looks like exactly what it is.',
+      'Everything through the till and the staff told not to ask. There is no limit on what it will move and no hiding what it is.',
     launder: 1.9,
     revenue: 1.25,
     exposure: 1.4,

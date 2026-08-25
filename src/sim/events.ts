@@ -22,12 +22,12 @@ import { addEvidence, addLog, pushEvent, weightedPick, withArticle } from './uti
 import { askable, money, oneOf, payable, shortOf } from './memo';
 import { GEN_DEFS, isGenerated, resolveGenerated } from './eventgen';
 import { GEN_CHANCE_PER_DAY } from '../config/eventgen';
-import { addNote, crewList, generateNpc } from './npc';
+import { addNote, creditOperation, crewList, generateNpc } from './npc';
 import { informFromMemory, remember } from './memory';
 import { recordTie } from './ties';
 import { earnDirty, refund, spend, spendSplit, totalFunds } from './economy';
 import { addHeat, reduceHeat, startLayLow } from './heat';
-import { acceptPromotion, declinePromotion, gainFear, gainRespect, trainAttribute } from './player';
+import { gainFear, gainRespect, trainAttribute } from './player';
 import { dismiss, promote } from './crew';
 import {
   addInfluence,
@@ -60,6 +60,7 @@ import {
 } from './diplomacy';
 import { activeCases, hasContact } from './investigation';
 import { borrow, loans, priced } from './market';
+import { partnerOffer, refusePartner, takePartner } from './partner';
 import { FEAR, ROLE_LABEL } from '../config/economy';
 import { type FactionId } from '../config/factions';
 import { AGENCY_BY_ID, CONTACT } from '../config/lawEnforcement';
@@ -70,6 +71,39 @@ import { houseDef, houseShort } from './houses';
 
 /** Base chance per day that *something* happens, before difficulty pressure. */
 const EVENT_CHANCE_PER_DAY = 0.16;
+
+/**
+ * Sending people instead of money, on the short-notice job.
+ *
+ * Kept beside the event rather than in `config/`, because every other number
+ * in this file is, and one balance constant living somewhere else is a thing
+ * the next person has to go and find.
+ */
+const SHORT_NOTICE = {
+  crewNeeded: 2,
+  /** Labour is worth less than a stake, and everybody in the room knows it. */
+  rewardShare: 0.55,
+  /** And nobody is smoothing anything over on the night. */
+  oddsPenalty: 0.08,
+  /*
+     The actual price, and it is not the money.
+
+     The first version of this locked the two men out as `busy` for three days,
+     which the soak in `sim.test.ts` correctly refused: `busy` means *on an
+     operation*, and a man marked busy with no operation behind him is a hole
+     in the model. That was the right refusal for a better reason than the one
+     it gave. Time was a weak price anyway. What a boss with no money is really
+     staking here is people, and round 15 was explicit about which of his
+     holdings he would have missed:
+
+       "What I would actually have lost was Little Sicily... and four men whose
+       loyalty readings I could recite from memory. The money and the rank I
+       would not have missed at all."
+
+     So a rushed job that goes wrong hurts whoever was standing in it.
+  */
+  hurtDays: 9,
+} as const;
 /** Never stack more than this many unanswered events. */
 const MAX_PENDING = 3;
 
@@ -105,6 +139,17 @@ export interface EventDef {
 
 function activeCrew(state: GameState): Npc[] {
   return crewList(state).filter((n) => n.status === 'active' || n.status === 'busy');
+}
+
+/**
+ * The people who could actually be sent somewhere tonight.
+ *
+ * Not `activeCrew`, which counts the busy ones — it is used to decide whether
+ * a memo is worth raising at all, and a man on a job is still a man you have.
+ * This is the narrower question: who is standing there right now.
+ */
+function freeCrew(state: GameState): Npc[] {
+  return crewList(state).filter((n) => n.status === 'active');
 }
 
 function pickWhere(
@@ -527,6 +572,34 @@ const EVENT_DEFS: EventDef[] = [
               totalFunds(state) < cost ? 'You cannot cover the up-front cost' : undefined,
             cost: cost,
           },
+          {
+            /*
+               And the answer for a boss who has people but no money.
+
+               Round 15 spent 126 days watching every priced option grey out:
+               "the only clickable option was 'Leave them to it.' That is not a
+               decision, it is a cutscene with a button." This memo was the one
+               `obstacles.test.ts` caught — its free choice ran
+               `if (choiceId !== 'take') return;`, which is a button that does
+               nothing dressed as a decision.
+
+               A man who cannot put money in can put bodies in. It pays less,
+               because a stake is worth more than labour and everybody in the
+               room knows it, and it costs the two things an organization with
+               no money still has: people for a few days, and the attention
+               that comes of doing a rushed job with your own name on it.
+            */
+            id: 'send',
+            label: 'Send your own people instead',
+            hint:
+              `No money up front. A smaller cut, worse odds, and it is ` +
+              `${SHORT_NOTICE.crewNeeded} of your own people in the room`,
+            disabledReason:
+              freeCrew(state).length < SHORT_NOTICE.crewNeeded
+                ? `You would need ${SHORT_NOTICE.crewNeeded} people free tonight; ` +
+                  `you have ${freeCrew(state).length}`
+                : undefined,
+          },
           { id: 'pass', label: 'Pass', hint: 'Nothing gained, nothing noticed' },
         ],
       };
@@ -747,6 +820,34 @@ const EVENT_DEFS: EventDef[] = [
       };
     },
   },
+
+  /*
+     PARKED: the partner offer is built and not wired.
+
+     `sim/partner.ts`, `config/partner.ts` and fourteen tests are green, and
+     the mechanism does what it says. The event definition that put it in front
+     of a player has been taken back out, because it could not be shipped
+     without pushing a pre-committed axis under its bar.
+
+     Measured on `scorecard.probe`, 48 careers, against a 3.4 baseline and a
+     bar of 3:
+
+         weight 22, share 18%, permanent .......... Pacing 2.5, quiet 535 days
+         share 12%, total take capped at 3x ....... Pacing 2.6, quiet 536 days
+         no cut at all on jobs under $800 ......... Pacing 2.7, quiet 500 days
+         weight dropped 22 -> 4 ................... Pacing 2.8, quiet 480 days
+
+     Four changes, four readings inside 0.3 of each other, none of them over
+     the bar. That drift is the shape of stream noise rather than of an effect
+     being tuned, and the honest reading is that the cause was never isolated.
+     Two things are known and neither is the whole story: `dailyMemo` fills one
+     slot a day and a new definition costs an authored one, and the probe's own
+     bot signs every deal it is offered and never buys out — so it measures the
+     worst possible use of the feature and none of the good ones (F7).
+
+     What it would take to wire this up: a bot that can decline, and can buy
+     out when it can afford to. Until then the reading is not about the design.
+  */
 
   // -- territory ----------------------------------------------------------
   {
@@ -1608,13 +1709,6 @@ export function resolveEvent(
   }
 
   switch (event.defId) {
-    // ---------------------------------------------------- rank promotion --
-    case 'rank_offer': {
-      if (choiceId === 'accept') acceptPromotion(state, event.data.rank as never);
-      else declinePromotion(state);
-      return;
-    }
-
     // ----------------------------------------------------- crew pressure --
     case 'promotion_demand': {
       if (!npc) return;
@@ -1653,7 +1747,7 @@ export function resolveEvent(
         remember(npc, state.day, 'was_believed');
         addNote(npc, state.day, 'Was listened to.', 'good');
       } else if (choiceId === 'pay') {
-        if (spend(state, 3_000)) {
+        if (spend(state, 3_000, 'world')) {
           npc.stats.grievance = clamp(npc.stats.grievance - 25, 0, 100);
           npc.stats.greed = clamp(npc.stats.greed + 3, 0, 100);
           addNote(npc, state.day, 'Was paid to let something go.', 'neutral');
@@ -1722,7 +1816,7 @@ export function resolveEvent(
         }
         trainAttribute(state, 'leadership', 1);
       } else if (choiceId === 'pay') {
-        if (spend(state, 8_000)) {
+        if (spend(state, 8_000, 'world')) {
           npc.stats.fear = clamp(npc.stats.fear - 12, 0, 100);
           npc.stats.loyalty = clamp(npc.stats.loyalty + 6, 0, 100);
           npc.stats.greed = clamp(npc.stats.greed + 6, 0, 100);
@@ -1783,7 +1877,7 @@ export function resolveEvent(
       if (choiceId === 'lay_low') {
         startLayLow(state);
       } else if (choiceId === 'lawyer') {
-        if (spend(state, 25_000)) {
+        if (spend(state, 25_000, 'world')) {
           reduceHeat(state, 14, 'street');
           trainAttribute(state, 'influence', 1.5);
           addLog(state, 'The lawyer earned it. Attention moved elsewhere.', 'heat');
@@ -1813,7 +1907,7 @@ export function resolveEvent(
       const times = state.flags[pressed] ?? 0;
 
       if (choiceId === 'lawyer') {
-        if (spend(state, 20_000)) {
+        if (spend(state, 20_000, 'world')) {
           npc.stats.loyalty = clamp(npc.stats.loyalty + 14, 0, 100);
           npc.stats.fear = clamp(npc.stats.fear - 15, 0, 100);
           addNote(npc, state.day, 'You put a real lawyer on their case.', 'good');
@@ -1826,7 +1920,7 @@ export function resolveEvent(
           addLog(state, 'You could not cover it.', 'failure');
         }
       } else if (choiceId === 'family') {
-        if (spend(state, 6_000)) {
+        if (spend(state, 6_000, 'world')) {
           npc.stats.loyalty = clamp(npc.stats.loyalty + 8, 0, 100);
           addNote(npc, state.day, 'Their family was looked after while they were inside.', 'good');
           state.flags[pressed] = Math.max(0, times - 1);
@@ -1876,17 +1970,73 @@ export function resolveEvent(
 
     // ------------------------------------------------------- opportunity --
     case 'opportunity_score': {
-      if (choiceId !== 'take') return;
       const cost = event.data.cost as number;
       const reward = event.data.reward as number;
       const heat = event.data.heat as number;
-      if (!spend(state, cost)) {
+
+      if (choiceId === 'send') {
+        const free = freeCrew(state);
+        if (free.length < SHORT_NOTICE.crewNeeded) {
+          addLog(state, 'There was nobody free to send, so it went to somebody else.', 'failure');
+          return;
+        }
+        const sent = free.slice(0, SHORT_NOTICE.crewNeeded);
+        const names = sent.map((n) => n.name).join(' and ');
+        const odds =
+          0.5 + state.player.attributes.streetSmarts * 0.012 - SHORT_NOTICE.oddsPenalty;
+
+        if (rng.chance(odds)) {
+          const paid = Math.round(reward * SHORT_NOTICE.rewardShare);
+          earnDirty(state, paid);
+          addHeat(state, heat * 0.6, 'street', 'short-notice job');
+          gainRespect(state, 3);
+          for (const npc of sent) {
+            creditOperation(npc, state.day, true, 'a short-notice job');
+            addNote(npc, state.day, 'Went out on nothing but your word, and it worked.', 'good');
+          }
+          addLog(state, `${names} went instead of the money. It paid ${money(paid)}.`, 'success');
+          return;
+        }
+
+        addHeat(state, heat, 'street', 'short-notice job went wrong');
+        addEvidence(state, {
+          day: state.day,
+          source: 'operation',
+          strength: 15,
+          npcIds: sent.map((n) => n.id),
+          detail: 'An unplanned job went wrong and left a great deal behind.',
+        });
+        // The price, paid by the man who was standing closest to it.
+        const hurt = sent[0];
+        hurt.status = 'injured';
+        hurt.unavailableUntilDay = state.day + SHORT_NOTICE.hurtDays;
+        for (const npc of sent) {
+          creditOperation(npc, state.day, false, 'a short-notice job');
+          addNote(
+            npc,
+            state.day,
+            npc === hurt
+              ? 'Was hurt on something nobody had planned properly.'
+              : 'Was sent out on something nobody had planned properly.',
+            'bad',
+          );
+        }
+        addLog(
+          state,
+          `It fell apart with ${names} standing in it. ${hurt.name} took the worst of it.`,
+          'failure',
+        );
+        return;
+      }
+
+      if (choiceId !== 'take') return;
+      if (!spend(state, cost, 'world')) {
         addLog(state, 'The money was not there when it came to it.', 'failure');
         return;
       }
       // Deliberately close to a coin flip — street smarts tilt it slightly.
-      const chance = 0.5 + state.player.attributes.streetSmarts * 0.012;
-      if (rng.chance(chance)) {
+      const staked = 0.5 + state.player.attributes.streetSmarts * 0.012;
+      if (rng.chance(staked)) {
         earnDirty(state, reward);
         addHeat(state, heat * 0.6, 'street', 'short-notice job');
         gainRespect(state, 5);
@@ -1909,7 +2059,7 @@ export function resolveEvent(
     case 'recruit_offer': {
       if (choiceId !== 'take') return;
       const fee = event.data.fee as number;
-      if (!spend(state, fee)) {
+      if (!spend(state, fee, 'world')) {
         addLog(state, 'You could not cover the fee.', 'failure');
         return;
       }
@@ -1993,6 +2143,26 @@ export function resolveEvent(
           'neutral',
         );
       }
+      return;
+    }
+
+    /*
+       Kept while the definition above is parked, so re-wiring is one edit
+       rather than two. Unreachable until a `partner_offer` def exists again.
+    */
+    case 'partner_offer': {
+      /*
+         Re-read rather than carried on the event, because the offer is a
+         function of the day it is answered. A player who sits on this for a
+         week and earns their way out of the hole in the meantime should not
+         be able to sign a deal they no longer qualify for.
+      */
+      const offer = partnerOffer(state);
+      if (choiceId !== 'sign' || !offer) {
+        refusePartner(state);
+        return;
+      }
+      takePartner(state, offer);
       return;
     }
 
@@ -2101,7 +2271,7 @@ export function resolveEvent(
       if (choiceId !== 'accept') return;
       const agencyId = event.data.agencyId as string;
       const price = event.data.price as number;
-      if (!spend(state, price)) {
+      if (!spend(state, price, 'world')) {
         addLog(state, 'You could not cover it.', 'failure');
         return;
       }
@@ -2154,7 +2324,7 @@ export function resolveEvent(
           'crew',
         );
       } else if (choiceId === 'money') {
-        if (!spend(state, 40_000)) {
+        if (!spend(state, 40_000, 'world')) {
           addLog(state, 'You could not put anything behind it.', 'failure');
           return;
         }
@@ -2254,7 +2424,7 @@ export function resolveEvent(
       const where = territoryDef(territoryId).name;
 
       if (choiceId === 'pay') {
-        if (spend(state, demand)) {
+        if (spend(state, demand, 'world')) {
           // Paying is quiet, and quietly costs you the district's respect.
           addInfluence(state, territoryId, -2);
           addLog(state, `You paid to keep working ${where}. People heard that too.`, 'money');
@@ -2287,7 +2457,7 @@ export function resolveEvent(
       if (choiceId !== 'take') return;
       const territoryId = event.data.territoryId as string;
       const cost = event.data.cost as number;
-      if (!spend(state, cost)) {
+      if (!spend(state, cost, 'world')) {
         addLog(state, 'You could not cover it.', 'failure');
         return;
       }
@@ -2305,7 +2475,7 @@ export function resolveEvent(
     case 'community_friction': {
       const territoryId = event.data.territoryId as string;
       if (choiceId === 'money') {
-        if (spend(state, 12_000)) {
+        if (spend(state, 12_000, 'world')) {
           adjustSentiment(state, territoryId, 30);
           addInfluence(state, territoryId, 2);
           addLog(state, `${territoryDef(territoryId).name} has warmed to you again.`, 'money');
@@ -2345,7 +2515,7 @@ export function resolveEvent(
       if (!business) return;
 
       if (choiceId === 'accountant') {
-        if (spend(state, 15_000)) {
+        if (spend(state, 15_000, 'world')) {
           business.exposure = clamp(business.exposure - 45, 0, 100);
           trainAttribute(state, 'business', 2);
           addLog(state, 'The books are somebody else’s problem now, and they are clean.', 'money');
@@ -2371,7 +2541,7 @@ export function resolveEvent(
       if (choiceId !== 'buy') return;
       const territoryId = event.data.territoryId as string;
       const price = event.data.price as number;
-      const paid = spendSplit(state, price);
+      const paid = spendSplit(state, price, 'world');
       if (!paid) {
         addLog(state, 'You could not cover it.', 'failure');
         return;
@@ -2409,7 +2579,7 @@ export function resolveEvent(
         // Choosing to pay and not being able to used to fall silently through
         // to the free outcome, so the player was told nothing and got the
         // lesser thing while believing they had bought the greater one.
-        if (spend(state, 5_000)) {
+        if (spend(state, 5_000, 'world')) {
           npc.stats.loyalty = clamp(npc.stats.loyalty + 6, 0, 100);
           npc.stats.greed = clamp(npc.stats.greed + 2, 0, 100);
           addLog(state, `${money(5_000)} to ${npc.name} for what they did. It was noticed.`, 'money');
