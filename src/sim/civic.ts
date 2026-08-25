@@ -26,6 +26,7 @@ import { clamp } from './rng';
 import { priced } from './market';
 import { earnDirty } from './economy';
 import { crewList } from './npc';
+import { ownedBusinesses } from './business';
 import {
   adjustSentiment,
   controlledTerritories,
@@ -110,7 +111,12 @@ export function figure(state: GameState, id: string): CivicStanding {
  * "higher is better for you" so the drift below has one direction to worry
  * about.
  */
-function scoreFor(state: GameState, def: CivicFigureDef): number {
+/**
+ * What each of them is looking at, 0..100. Exported so the readings can be
+ * tested directly — a figure whose bar sits outside the range of his own
+ * quantity is a defect no end-to-end test can see.
+ */
+export function scoreFor(state: GameState, def: CivicFigureDef): number {
   switch (def.watches) {
     case 'quiet':
       return clamp(100 - state.org.heat, 0, 100);
@@ -129,10 +135,36 @@ function scoreFor(state: GameState, def: CivicFigureDef): number {
       // them further, it just means somebody else has less.
       return clamp((held / 4) * 100, 0, 100);
     }
-    case 'standing': {
-      const worked = territoryList(state).filter((t) => playerInfluence(t) >= 10);
-      if (worked.length === 0) return 0;
-      return clamp(worked.reduce((sum, t) => sum + t.sentiment, 0) / worked.length, 0, 100);
+    case 'respectability': {
+      /*
+         What you have built in the neighbourhood, not what it is putting up
+         with.
+
+         This read the average public feeling across the districts you work,
+         and that quantity ran the wrong way twice over.
+
+         It has no upside: `SENTIMENT_RECOVERY_PER_WEEK` climbs back only as
+         far as `SENTIMENT_START`, and nothing in ordinary play pushes a
+         district past it. Measured over 36 careers at day 300, the best worked
+         district read 49.1 / 50.0 / 50.0 and not one career had a single
+         district above 50.
+
+         And it falls with play, because working a district is what costs
+         feeling. The mean across worked districts read 34.6 / 37.2 / 38.3 with
+         a population maximum of 40.7 — against a bar of 50. He was not
+         fragile, he was unreachable by construction, and his favour was the
+         one thing in this game that got further away the more you played.
+
+         Fronts are the ward politician's actual interest and the thing
+         `lose_the_paperwork` is a favour about. Feeling stays in the reading
+         as a gate rather than as the whole of it: a business nobody in the
+         district can stand is not something anybody wants to be photographed
+         next to.
+      */
+      const seen = ownedBusinesses(state).filter(
+        (b) => (state.territories[b.territoryId]?.sentiment ?? 0) >= SENTIMENT_HOSTILE_BELOW,
+      ).length;
+      return clamp((seen / CIVIC.respectableFronts) * 100, 0, 100);
     }
     case 'discretion': {
       /*

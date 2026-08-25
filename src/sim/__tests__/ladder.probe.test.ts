@@ -3614,7 +3614,7 @@ describe('the systems nobody had measured', () => {
         `       what they are looking at: peak notoriety ` +
         `${Math.round(median(c.map((x) => x.peakNotoriety)))} (the judge reads 100 minus this), ` +
         `mean sentiment where working ${Math.round(median(c.map((x) => x.meanSentiment)))} ` +
-        `(the alderman reads this)
+        `(nobody reads this any more — see the alderman's note in config/civic.ts)
 ` +
         `       weeks with a favour actually spendable: ` +
         `${c.reduce((n, x) => n + x.weeksSpendable, 0)}`,
@@ -3659,14 +3659,18 @@ describe('the systems nobody had measured', () => {
        captain 24, union 36, judge 16, alderman 0.
 
        The union owes every career whatever they do, which makes it a fixture
-       rather than a relationship. The alderman owes nobody: he reads mean
+       rather than a relationship. The alderman owed nobody: he read mean
        sentiment across worked districts, working a district costs sentiment,
        and that figure fell from 44 to 35 the moment the bot stopped standing
-       still — so his favour is the one thing in this game that gets further
-       away the more you play.
+       still — so his favour was the one thing in this game that got further
+       away the more you played.
 
-       Both are `config/civic.ts` work and neither bar moves. The comment above
-       says so, and it said so before either of them went red.
+       **The alderman is fixed and reads 13/36.** He watches legitimate
+       business standing in ground that does not resent you, which is a
+       quantity with spread in it and one a player builds; the note in
+       `config/civic.ts` carries the plot. The union is still open, and its bar
+       does not move — the comment above says so and it said so before either
+       of them went red.
     */
     for (const f of CIVIC_FIGURES) {
       const owed = c.filter((x) => x.byFigure[f.id]?.everOwed).length;
