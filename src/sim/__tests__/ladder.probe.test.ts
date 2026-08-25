@@ -39,6 +39,7 @@ import { canOpenScore, liveScores, openScore, scoreOn, setupsLeft } from '../sco
 import { liveTraining, startTraining } from '../training';
 import { cancelStanding, liveStanding, setStanding } from '../standingOrders';
 import { canSilence, silence } from '../silence';
+import { SILENCE, MARK } from '../../config/silence';
 import { liveMarks } from '../marks';
 import { SCORE_TARGETS, SETUP_BY_ID } from '../../config/scores';
 import { PATTERN } from '../../config/standingOrders';
@@ -5505,6 +5506,109 @@ describe('dealing with the people who cost you money', () => {
       at(RUNS_CUTS_RARE, (r) => r.newSystems.cutting.tried),
       'the sparing arm was not actually sparing',
     ).toBeLessThan(at(RUNS_CUTS, (r) => r.newSystems.cutting.tried));
+  });
+
+  /*
+     The figures behind all of it, which were never plotted.
+
+     Everything in `config/silence.ts` was chosen from shape — what a botched
+     hit ought to feel like, what a man at large ought to cost — and then two
+     arms were built on top of them. That is the wrong order and it is the one
+     thing DIRECTOR section 5 exists to forbid, so this is the sweep that
+     should have come first.
+
+     Two levers, crossed rather than gridded. Each is varied with the other
+     held where it is, which answers "is this number defensible" for five
+     cells rather than nine.
+
+     **How often it works first time** (`SILENCE.base`) decides whether the
+     mark system is ever reached at all. Too high and a botched attempt is a
+     curiosity; too low and every removal is a six-month manhunt.
+
+     **How loud a survivor is** (`MARK.talksHeat`) is what stops a botched
+     attempt from being a free retry, and therefore what stops careful use from
+     being a free upgrade.
+
+     That lever started as `talksStrength`, an evidence trace, and the first
+     run of this grid found it did **nothing** — 2.5, 5 and 10 returned the
+     same estate to the dollar on both use-patterns. Case strength already
+     reads 100 in an ordinary career, so a trace added to it goes nowhere, and
+     a claim made confidently in three files rested on a number that was inert.
+     It now costs heat on the inside channel, which is the thread `dismiss`
+     cuts, and this grid re-runs against that.
+
+     Read against both use-patterns, because the interesting failure is one
+     that moves them the same way: if a knob makes sparing *and* indiscriminate
+     use both better, it is not pricing the decision, it is just a discount.
+  */
+  it.skip('sweeps what a botched hit costs and how loud a survivor is', () => {
+    const wasS = { ...SILENCE };
+    const wasM = { ...MARK };
+    const cell = (base: number, talks: number) => {
+      (SILENCE as unknown as Record<string, number>).base = base;
+      (MARK as unknown as Record<string, number>).talksHeat = talks;
+
+      const often = Array.from({ length: 36 }, (_, i) =>
+        climb(700 + i, HUMAN_DAYS, { cuts: true }),
+      );
+      const rare = Array.from({ length: 36 }, (_, i) =>
+        climb(700 + i, HUMAN_DAYS, { cutsRarely: true }),
+      );
+      const gap = (rs: typeof often) => {
+        const gs = rs
+          .map((r, i) => ({ r, against: RUNS_300[i] }))
+          .filter(({ r }) => r.newSystems.cutting.tried > 0)
+          .map(({ r, against }) => r.bestEstate - against.bestEstate)
+          .sort((a, b) => a - b);
+        return { median: median(gs), ahead: gs.filter((g) => g > 0).length, n: gs.length };
+      };
+      const tried = often.reduce((t, r) => t + r.newSystems.cutting.tried, 0);
+      const landed = often.reduce((t, r) => t + r.newSystems.cutting.landed, 0);
+      return {
+        rare: gap(rare),
+        often: gap(often),
+        firstTime: tried ? landed / tried : 0,
+        marksLanded: often.reduce((t, r) => t + r.newSystems.cutting.marksLanded, 0),
+        marksLapsed: often.reduce((t, r) => t + r.newSystems.cutting.marksLapsed, 0),
+      };
+    };
+
+    const rows: string[] = [];
+    const cells: [number, number, string][] = [
+      [0.6, wasM.talksHeat, 'base 0.60'],
+      [wasS.base, wasM.talksHeat, 'as shipped'],
+      [0.84, wasM.talksHeat, 'base 0.84'],
+      [wasS.base, 1, 'heat 1.0 '],
+      [wasS.base, 5, 'heat 5.0 '],
+    ];
+    for (const [b, t, label] of cells) {
+      const r = cell(b, t);
+      rows.push(
+        `  ${label.padEnd(11)} first-time ${(r.firstTime * 100).toFixed(0).padStart(2)}%` +
+          ` | sparingly ${String(r.rare.ahead).padStart(2)}/${r.rare.n}` +
+          ` at $${Math.round(r.rare.median).toLocaleString('en-US').padStart(11)}` +
+          ` | freely ${String(r.often.ahead).padStart(2)}/${r.often.n}` +
+          ` at $${Math.round(r.often.median).toLocaleString('en-US').padStart(12)}` +
+          ` | marks ${r.marksLanded} found / ${r.marksLapsed} lost`,
+      );
+    }
+
+    Object.assign(SILENCE as unknown as Record<string, number>, wasS);
+    Object.assign(MARK as unknown as Record<string, number>, wasM);
+
+    // eslint-disable-next-line no-console
+    console.log('silence sweep — against never cutting anybody\n' + rows.join('\n'));
+
+    /*
+       Instrument only, and no threshold on the money, for the same reason the
+       sparing arm carries none: a bar here would be deciding the answer before
+       reading it. What the grid is for is seeing whether the shipped column
+       sits somewhere defensible on a curve rather than at an arbitrary point
+       nobody ever looked at.
+    */
+    expect(rows.length, 'the grid was not actually swept').toBe(cells.length);
+    expect(SILENCE.base, 'the sweep did not put the config back').toBe(wasS.base);
+    expect(MARK.talksHeat, 'the sweep did not put the config back').toBe(wasM.talksHeat);
   });
 
   it('says whether shooting your worst people beats keeping them, and it must not', () => {

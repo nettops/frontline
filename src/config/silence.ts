@@ -34,9 +34,27 @@ export const SILENCE = {
   /**
    * The chance it goes the way you wanted, before anything about the man.
    *
-   * Not near-certain, because a certainty is not a decision — and not a coin
-   * flip either, because at even odds the expected cost of trying exceeds
-   * dismissal against almost anybody and the button would be decoration.
+   * **Swept, and the money could not choose.** Against the same 36 seeds, read
+   * on both use-patterns, with `MARK.talksHeat` held at 2.5:
+   *
+   *     base    first-time   sparingly            freely
+   *     0.60    41%          16/34 at −$14,454    7/36 at −$1,243,038
+   *     0.72    53%          16/34 at −$29,919    7/36 at   −$790,433
+   *     0.84    68%          20/34 at +$99,978   10/36 at   −$715,135
+   *
+   * 0.84 is disqualified outright: careful use at +$99,978 on 20 of 34 is a
+   * free upgrade, which is the one thing this must never be.
+   *
+   * 0.60 and 0.72 are **indistinguishable on money** — a shade over 1% of a
+   * $2.1M estate apart, on the identical 16 of 34. That is inside the noise
+   * floor this instrument has hit three separate times, so the estate does not
+   * get to choose and pretending otherwise would be reading tea leaves.
+   *
+   * So it is chosen on the direct quantity, the way `crewSkill.floor` decided
+   * teaching when the estate could not. At 0.60 the act usually goes wrong and
+   * silencing becomes a manhunt you start rather than a thing you do; at 0.72
+   * it is a coin flip weighted slightly your way, which you can commit to and
+   * still lose. That is the character it wants.
    */
   base: 0.72,
 
@@ -170,12 +188,47 @@ export const MARK = {
   talksEveryDays: 11,
 
   /**
-   * And how much, each time.
+   * The trace he leaves each time, which turned out to be decoration.
    *
-   * Deliberately smaller than the lump he left on the way out and deliberately
-   * unbounded in total. One week of him being at large is survivable; a year
-   * of it is a case with your name on the front, which is what makes calling
-   * a mark off a decision rather than a saving.
+   * **Swept at 2.5, 5 and 10 and it changed nothing to the dollar.** Both
+   * use-patterns returned identical estates across a fourfold change, because
+   * this feeds case-building and the case meter already reads 100 on every arm
+   * — an ordinary career saturates it without any help. Evidence added to a
+   * full meter goes nowhere.
+   *
+   * That is worth leaving here rather than deleting, because the header of
+   * `marks.ts` claimed for a while that this was the property the whole
+   * mechanic rested on. It was not. It is kept because a trace should exist
+   * where a man has talked, and it is not what makes him expensive.
    */
   talksStrength: 5,
+
+  /**
+   * What actually costs you, and the symmetry that names it.
+   *
+   * `dismiss` takes `DISMISS_HEAT_REDUCTION` off the **inside** channel, on
+   * the reasoning recorded there: cutting somebody loose cuts an inside
+   * thread, and that is the one channel going quiet cannot touch. A man who
+   * got away from you and is talking is the same thread being spliced back on.
+   *
+   * Heat rather than evidence because heat is not saturated — careers sit near
+   * 47 of 100 after the decay repair — so this lands somewhere with room,
+   * bites directly through `heatSuccessPenalty` and the lay-low decision, and
+   * only then feeds the case system at the rate that system chooses.
+   *
+   * **Swept once it was routed somewhere that could feel it**, with
+   * `SILENCE.base` held at 0.72:
+   *
+   *     talksHeat   sparingly            freely
+   *     1.0         20/34 at +$63,728   10/36 at −$645,504
+   *     2.5         16/34 at −$29,919    7/36 at −$790,433
+   *     5.0         16/34 at −$99,745    6/36 at −$989,893
+   *
+   * Monotonic and real, where the evidence version returned the same figure to
+   * the dollar across a fourfold change. At 1.0 careful use drifts to a free
+   * upgrade; at 5.0 it becomes a trap worth avoiding entirely. 2.5 leaves it at
+   * −$29,919 on 16 of 34 — 1.4% of an estate and a coin flip, which is as
+   * close to free as this instrument can resolve.
+   */
+  talksHeat: 2.5,
 } as const;
