@@ -3,6 +3,7 @@ import { useGame, mutate } from '../../store';
 import { Panel, Empty, KeyValue, Bar, Gauge } from '../components';
 import type { PanelId } from '../Rail';
 import { crewList, availableCrew } from '../../sim/npc';
+import { attention } from '../../sim/attention';
 import { payrollForecast, weeklyWageBill } from '../../sim/economy';
 import { isLayingLow, startLayLow } from '../../sim/heat';
 import { arrestRisk, weeklyLegalCost } from '../../sim/investigation';
@@ -190,6 +191,7 @@ export default function Dashboard({ onNavigate }: { onNavigate: (id: PanelId) =>
   const crew = crewList(state);
   const free = availableCrew(state);
   const ops = Object.values(state.activeOperations);
+  const wanting = attention(state);
   const laying = isLayingLow(state);
   const payroll = payrollForecast(state);
   const risk = arrestRisk(state);
@@ -217,7 +219,34 @@ export default function Dashboard({ onNavigate }: { onNavigate: (id: PanelId) =>
 
       {state.mode !== 'simulation' && (
       <div className="grid-2">
-        <Panel
+        {/*
+        What is waiting, and the one click that answers it.
+
+        The recurring loop touches three screens and nothing said which of them
+        had something on it. Every line names what would satisfy it, which is
+        the Rail's own rule about its badges — a demand for attention with no
+        statement of what it wants is what left a playtester carrying the
+        succession "!" for a hundred days.
+
+        The list is derived on read and is often empty. That is the point: one
+        that is always full is wallpaper.
+      */}
+      {wanting.length > 0 && (
+        <Panel title="Wanting you">
+          <div className="btn-row" style={{ flexWrap: 'wrap' }}>
+            {wanting.map((w) => (
+              <button
+                key={w.id}
+                className="btn small"
+                onClick={() => onNavigate(w.panel as PanelId)}
+              >
+                {w.text}
+              </button>
+            ))}
+          </div>
+        </Panel>
+      )}
+      <Panel
           title="Attention"
           action={!laying && <LayLow />}
         >

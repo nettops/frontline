@@ -27,7 +27,8 @@ import { priced } from './market';
 import { playerInfluence, territoryDef } from './territory';
 import { crewList } from './npc';
 import { isLayingLow } from './heat';
-import { availableOperations } from './operations';
+import { availableOperations, crewCompetence, launchOperation } from './operations';
+import { nightsWorked } from './standing';
 import { DISPOSAL, GEAR_BY_ID, SCORE, SCORE_TARGETS, SETUPS, SETUP_BY_ID } from '../config/scores';
 import type { GearDef, SetupDef } from '../config/scores';
 
@@ -193,6 +194,49 @@ export function openScore(
     'neutral',
   );
   return score;
+}
+
+/** How a batch fills its crews. The same two policies the panel offers. */
+export type SendPolicy = 'best' | 'rested';
+
+/**
+ * Launch everything this score still needs, in one move.
+ *
+ * Each setup went through the whole assemble panel on its own, so building up
+ * to one job was three to five full launches before the job itself. This is a
+ * loop over the call the panel already made one at a time — no new rules, and
+ * `launchOperation` still refuses anything it would have refused.
+ *
+ * Filled by policy rather than automatically, for the reason the panel ships
+ * two buttons: who you send is the decision `spread.probe` measures, and a
+ * silent default would quietly become the strategy.
+ *
+ * Returns the setups that actually went, so the caller can say so. It stops
+ * where the bench runs out rather than refusing the whole batch — half the
+ * groundwork is worth having, and a player who is short of people already
+ * knows it.
+ */
+export function readyEverything(
+  state: GameState,
+  score: Score,
+  how: SendPolicy,
+): string[] {
+  if (score.status !== 'open') return [];
+  const sent: string[] = [];
+
+  for (const setup of setupsLeft(state, score)) {
+    const free = crewList(state).filter((n) => n.status === 'active');
+    if (free.length < setup.crewRequired) continue;
+    const order =
+      how === 'best'
+        ? [...free].sort((a, b) => crewCompetence([b]) - crewCompetence([a]))
+        : [...free].sort((a, b) => nightsWorked(state, a.id) - nightsWorked(state, b.id));
+    const crew = order.slice(0, setup.crewRequired).map((n) => n.id);
+    if (launchOperation(state, setup.id, crew, score.territoryId, undefined, score.id)) {
+      sent.push(setup.id);
+    }
+  }
+  return sent;
 }
 
 // ------------------------------------------------------------- settling ---

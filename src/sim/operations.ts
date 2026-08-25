@@ -30,6 +30,7 @@ import {
   traitEffect,
 } from './npc';
 import { tiesFromOperation, tookTheBlame } from './ties';
+import { patternDelta, patternHeat, patternOn } from './standingOrders';
 import { remember } from './memory';
 import { keepPromise } from './promises';
 import { cover } from './perception';
@@ -50,6 +51,7 @@ import {
   setupsLeft,
 } from './scores';
 import { SETUP_BY_ID } from '../config/scores';
+import { learnFromWork } from './training';
 import { activity, priced, prices } from './market';
 import {
   addInfluence,
@@ -322,6 +324,15 @@ export interface ChanceBreakdown {
    * paired measurement of scores mean anything.
    */
   prep: number;
+  /**
+   * How well-read this job in this district has become.
+   *
+   * Zero for every job nobody has ever set a standing order on, which is every
+   * job for a player who never touches the automation — the same shape as
+   * `prep` above, and for the same reason: it keeps every paired measurement
+   * of the feature honest.
+   */
+  pattern: number;
   total: number;
 }
 
@@ -423,6 +434,15 @@ export function successBreakdown(
 
   const prepTerm = prepDelta(scoreOn(state, def.id));
 
+  /*
+     And the other direction: a month of planning against a year of routine.
+
+     Read by the pair rather than by who sent them, so hand-running a job an
+     order has already worn a groove into costs the same. The police are
+     watching the pattern, not reading your minutes.
+  */
+  const patternTerm = -patternDelta(patternOn(state, def.id, territoryId));
+
   const total = clamp(
     def.baseSuccess +
       crewTerm +
@@ -433,7 +453,8 @@ export function successBreakdown(
       diffTerm +
       worldTerm +
       approachTerm +
-      prepTerm,
+      prepTerm +
+      patternTerm,
     MIN_SUCCESS_CHANCE,
     MAX_SUCCESS_CHANCE,
   );
@@ -449,6 +470,7 @@ export function successBreakdown(
     world: worldTerm,
     approach: approachTerm,
     prep: prepTerm,
+    pattern: patternTerm,
     total,
   };
 }
@@ -742,7 +764,13 @@ function resolveOperation(state: GameState, rng: Rng, op: ActiveOperation): void
     consequence: null,
   };
 
-  for (const npc of crew) creditOperation(npc, state.day, success, def.name);
+  for (const npc of crew) {
+    creditOperation(npc, state.day, success, def.name);
+    // Going out is how you get good at going out. Bounded well below the top
+    // of the scale — street work makes journeymen, and only another man makes
+    // a specialist. See `config/training.ts`.
+    learnFromWork(state, npc, def.tier, success);
+  }
   result.approach = approachOf(op);
 
   const approach = APPROACH_BY_ID[approachOf(op)];
@@ -786,7 +814,8 @@ function resolveOperation(state: GameState, rng: Rng, op: ActiveOperation): void
       heatScale(state, def, crew, territory.id) *
       heatMultiplier(territory, tDef, unfamiliar) *
       crewTraitEffect(crew, 'heat') *
-      kitHeat(score);
+      kitHeat(score) *
+      patternHeat(patternOn(state, def.id, territory.id));
     result.payout = payout;
     result.heat = heat;
     earnDirty(state, payout, 'jobs');
@@ -840,7 +869,8 @@ function resolveOperation(state: GameState, rng: Rng, op: ActiveOperation): void
       heatScale(state, def, crew, territory.id) *
       heatMultiplier(territory, tDef, unfamiliar) *
       crewTraitEffect(crew, 'heat') *
-      kitHeat(score);
+      kitHeat(score) *
+      patternHeat(patternOn(state, def.id, territory.id));
     result.heat = heat;
     addHeat(state, heat, 'street', `${def.name} went wrong`);
     gainRespect(state, -Math.ceil(def.respect / 3));
@@ -908,7 +938,10 @@ function resolveSetup(
   const tDef = territoryDef(op.territoryId);
   const approach = APPROACH_BY_ID[approachOf(op)];
 
-  for (const npc of crew) creditOperation(npc, state.day, success, def.name);
+  for (const npc of crew) {
+    creditOperation(npc, state.day, success, def.name);
+    learnFromWork(state, npc, def.tier, success);
+  }
 
   addHeat(
     state,

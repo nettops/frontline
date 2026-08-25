@@ -34,6 +34,7 @@ import {
   closeScore,
   liveScores,
   openScore,
+  readyEverything,
   scoreOn,
   setupsFor,
 } from '../scores';
@@ -250,6 +251,81 @@ describe('the setups', () => {
       expect(board.opsBy[setup.id] ?? 0).toBe(0);
     }
     expect(state.operationHistory.every((r) => !SETUP_BY_ID[r.defId])).toBe(true);
+  });
+});
+
+/*
+   Getting everything ready in one move.
+
+   Each setup went through the whole assemble panel on its own, so building up
+   to one job was three to five full launches before the job itself — about
+   240 clicks a career on top of the twelve hundred the crew picker already
+   cost. The loop lives in sim rather than in the panel because there is no
+   jsdom here, and a batch action that decides what it can afford has to be
+   testable.
+*/
+describe('getting everything ready at once', () => {
+  it('sends everything it can staff, and says what went', () => {
+    const state = game();
+    const score = open(state);
+    const want = setupsFor(TARGET).length;
+
+    const sent = readyEverything(state, score, 'best');
+
+    expect(sent.length).toBe(want);
+    expect(Object.values(state.activeOperations).filter((o) => o.scoreId === score.id))
+      .toHaveLength(want);
+  });
+
+  it('leaves alone what is already out or already in hand', () => {
+    const state = game();
+    const score = open(state);
+    const first = setupsFor(TARGET)[0];
+    runSetup(state, score, first.id, true);
+
+    const sent = readyEverything(state, score, 'best');
+    expect(sent).not.toContain(first.id);
+    expect(sent.length).toBe(setupsFor(TARGET).length - 1);
+  });
+
+  it('stops when there is nobody left to send', () => {
+    const state = game();
+    const score = open(state);
+    // Leave two men standing, which cannot staff every setup this job allows.
+    const spare = availableCrew(state);
+    for (const npc of spare.slice(2)) npc.status = 'busy';
+
+    const sent = readyEverything(state, score, 'best');
+    expect(sent.length).toBeGreaterThan(0);
+    expect(sent.length).toBeLessThan(setupsFor(TARGET).length);
+  });
+
+  it('does nothing to a score whose night is already out', () => {
+    const state = game();
+    const score = open(state);
+    score.status = 'running';
+    expect(readyEverything(state, score, 'best')).toHaveLength(0);
+  });
+
+  /*
+     The two policies, and the same reason the panel ships two buttons: a
+     single fill would have a silent default and the default would become the
+     strategy.
+  */
+  it('honours which men it was told to send', () => {
+    const a = game();
+    const b = game();
+    const one = open(a);
+    const two = open(b);
+    readyEverything(a, one, 'best');
+    readyEverything(b, two, 'rested');
+
+    const who = (s: GameState) =>
+      Object.values(s.activeOperations)
+        .flatMap((o) => o.crewIds)
+        .sort()
+        .join(',');
+    expect(who(a)).not.toBe(who(b));
   });
 });
 

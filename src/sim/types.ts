@@ -244,6 +244,15 @@ export interface Npc {
   secret: string | null;
   /** The truth. Never rendered directly — always go through perceive(). */
   stats: NpcStats;
+  /**
+   * Progress toward the next point of skill, from work.
+   *
+   * Optional with a lazy read in `training.ts`, so a save written before
+   * anybody could get better loads with everybody's progress at zero — which
+   * for those saves is exactly true. Same accumulator shape as
+   * `player.attributeProgress`, against the same rising cost curve.
+   */
+  skillProgress?: number;
   /** 0..100. How well the player knows them; shrinks perception noise. */
   familiarity: number;
   daysInCrew: number;
@@ -540,6 +549,74 @@ export interface Score {
    * the lifecycle without naming the field that carries it.
    */
   status: 'open' | 'running' | 'done' | 'expired';
+  settledDay?: number;
+}
+
+/**
+ * One man being shown how by another.
+ *
+ * Both are off the board for the run of it. `status` carries the lifecycle the
+ * same way `Score` does — a pairing that loses either man to a cell or a
+ * hospital comes apart with nothing learned.
+ */
+export interface Training {
+  id: Id;
+  teacherId: Id;
+  studentId: Id;
+  startDay: number;
+  /** The day it finishes. Both men are held until then. */
+  endDay: number;
+  status: 'running' | 'done' | 'stopped';
+  settledDay?: number;
+}
+
+/**
+ * A job told to keep running itself.
+ *
+ * Deliberately holds no judgement: a policy for who to send and nothing about
+ * when *not* to go. See `standingOrders.ts` — the order does not read the
+ * room, and that is the cost of handing the decision over.
+ */
+export interface StandingOrder {
+  id: Id;
+  defId: string;
+  territoryId: string;
+  /** Which men it grabs. The same two policies the crew picker offers. */
+  how: 'best' | 'rested';
+  /** How it is done. Absent means the ordinary approach. */
+  approach?: ApproachId;
+  setDay: number;
+  launched: number;
+  /**
+   * How well-read this job in this district has become, 0..100.
+   *
+   * Optional, so an order written before patterns existed loads as a clean
+   * one. Kept on the order rather than on the district because it is a record
+   * of what *you* did there, and because it has to survive the order being
+   * called off — see `patternOn`.
+   */
+  pattern?: number;
+  status: 'standing' | 'stopped';
+  settledDay?: number;
+}
+
+/**
+ * Somebody who got away, and the fact that people are still looking.
+ *
+ * Optional on `GameState`, so a save written before this existed loads with
+ * nobody being looked for and `SAVE_VERSION` does not move.
+ */
+export interface Mark {
+  id: Id;
+  npcId: Id;
+  setDay: number;
+  lastTryDay: number;
+  /** The last time he told somebody something. He is not idle out there. */
+  lastTalkDay: number;
+  tries: number;
+  /** Falls on every miss. Below `MARK.hopelessBelow` he is gone for good. */
+  chance: number;
+  status: 'out' | 'landed' | 'lapsed' | 'called_off';
   settledDay?: number;
 }
 
@@ -1622,6 +1699,38 @@ export interface GameState {
    * `validate()`, for the same reason none of the others are.
    */
   scores?: Score[];
+
+  /**
+   * Who is being shown how, by whom, and until when.
+   *
+   * Optional with a lazy initialiser in `training.ts`, the same idiom as
+   * `promises`, `civic`, `orders`, `possessions` and `scores` — so
+   * `SAVE_VERSION` does not move and a save written before anybody could be
+   * taught anything loads with nobody being taught. Not in `validate()`, for
+   * the same reason none of the others are.
+   */
+  training?: Training[];
+
+  /**
+   * Jobs that run themselves until told otherwise.
+   *
+   * Optional with a lazy initialiser in `standingOrders.ts`, the same idiom as
+   * `promises`, `civic`, `orders`, `possessions`, `scores` and `training` — so
+   * `SAVE_VERSION` does not move and a save written before this existed loads
+   * with nothing running itself. Not in `validate()`.
+   *
+   * `standing` rather than `orders`, because `orders` is the contraband
+   * trade's and two things by that name in one save is a bug waiting for
+   * somebody tired.
+   */
+  standing?: StandingOrder[];
+  /**
+   * People who got away, and the fact that somebody is still looking.
+   *
+   * Optional with a lazy initialiser, so a save written before a botched
+   * silencing was possible loads with nobody being looked for.
+   */
+  marks?: Mark[];
 
   /** Counters and one-off markers. Cheaper than adding a field per flag. */
   flags: Record<string, number>;
