@@ -52,8 +52,8 @@ export type FavourKind =
 export type CivicWatches =
   /** Street heat. Lower is better — a captain wants a quiet division. */
   | 'quiet'
-  /** Districts held. More is better — a union boss counts halls. */
-  | 'ground'
+  /** Men on the books. More is better — a union boss counts members. */
+  | 'payroll'
   /**
    * Legitimate businesses standing in ground that does not resent you.
    * Higher is better — somebody in office needs people to be seen with.
@@ -186,9 +186,42 @@ export interface CivicFigureDef {
    his median best standing at 79 against a bar of 85 — a stretch a third of
    careers make, which is what the figure is for.
 
-   The union is still open and its bar does not move. `ladder.probe` stays red
-   on it, which is what that file's own comment says to do with a target for
-   this config.
+   ## The union, fixed — and it was the same defect
+
+   Plotted the same way. Five candidates across 36 careers at day 300:
+
+       districts controlled    4.0 / 4.0 / 4.0   (min 3, max 4)
+       districts at dominance  3.0 / 3.0 / 4.0   (min 1, max 4)
+       districts with a man    3.0 / 4.0 / 4.0   (min 1, max 5)
+       crew on the books        31 /  34 /  38   (min 17, max 47)
+       influence, all told     323 / 357 / 386
+
+   Ground is a point mass, and this is not the probe's stopping rule showing
+   through: the highest district gate anywhere in `OPERATIONS` is three, so a
+   rational player takes a third district and then stops, because nothing in
+   the game asks for a fourth. Counting footholds instead of control was tried
+   one repair earlier and failed the same way, for the same reason — the
+   quantity was the problem, not the threshold on it.
+
+   A payroll has no such ceiling and it is the first thing his own blurb says
+   he is interested in. `unionPayroll` 50 against a peak payroll of 35 / 38 /
+   41, so `owesAbove` 78 sits between the median and the 75th.
+
+   ## Both figures had the same defect
+
+   The alderman was reading a ceiling the game presses you against from below;
+   the union was reading one it presses you against from above. Neither could
+   carry a bar anywhere, and both had been re-placed more than once against the
+   quantity rather than having the quantity questioned. `scoreFor` is exported
+   now so each reading can be tested on its own — a figure whose bar sits
+   outside the range of his own quantity is a defect no end-to-end test sees.
+
+       before   captain 24/36 · union 36/36 · judge 16/36 · alderman  0/36
+       after    captain 28/36 · union 17/36 · judge 15/36 · alderman 17/36
+
+   `SHAPE_BARS.kingpinDistricts` still reads the ground count and is still a
+   fixture for the same reason. It is recorded in `config/legacy.ts` and
+   `ladder.probe` stays red on it.
 */
 export const CIVIC_FIGURES: CivicFigureDef[] = [
   {
@@ -239,7 +272,7 @@ export const CIVIC_FIGURES: CivicFigureDef[] = [
     title: 'A union boss',
     blurb:
       'Owns who gets hired on every site in three districts. Wants to know the ground is held by somebody who answers.',
-    watches: 'ground',
+    watches: 'payroll',
     grants: 'quiet_the_street',
     /*
        Was 40, against a quantity whose median best is 24.
@@ -264,10 +297,16 @@ export const CIVIC_FIGURES: CivicFigureDef[] = [
        figure every career reaches whatever they do is not a relationship, it
        is a fixture.
 
-       60 wants three districts, which is the 75th of the new distribution and
-       so sits where 32 sat in the old one.
+       60 wanted three districts, which was the 75th of that distribution.
+
+       **All of which was sizing a bar against the wrong quantity.** Ground
+       saturates — see the note in `scoreFor`. He reads the payroll now, and 78
+       is placed against the peak payroll a career reaches, 35 / 38 / 41, over
+       `unionPayroll`: a score of 70 / 76 / 82, so the bar sits between the
+       median and the 75th, which is where DIRECTOR section 5 puts one and
+       where the other three figures were placed.
     */
-    owesAbove: 60,
+    owesAbove: 78,
     needsInfluence: 0,
   },
   {
@@ -320,6 +359,20 @@ export const CIVIC = {
    * beyond it.
    */
   respectableFronts: 10,
+  /**
+   * A payroll that reads as a full local to the union boss.
+   *
+   * The same shape as `respectableFronts`: a ceiling past which the figure is
+   * not impressed further. What the bar is placed against is the *peak*
+   * payroll a career reaches, since standing is a running high-water mark, and
+   * `ladder.probe` measures that at 35 / 38 / 41. Fifty puts those at 70 / 76 /
+   * 82, which leaves the bar somewhere to stand inside the distribution.
+   *
+   * Forty was tried first and read 35 of 36 owed: it put the median career at
+   * 95 and the whole population against the ceiling, which is the same failure
+   * the ground reading had.
+   */
+  unionPayroll: 50,
   /** Everybody decides how they feel about you once a week. */
   intervalDays: 7,
   /**

@@ -25,6 +25,8 @@ import {
   tickCivic,
 } from '../civic';
 import { withFronts } from './helpers';
+import { Rng } from '../rng';
+import { crewList, generateNpc } from '../npc';
 import { CIVIC, CIVIC_BY_ID, CIVIC_FIGURES, FAVOUR_EFFECT } from '../../config/civic';
 import { SENTIMENT_HOSTILE_BELOW, HOME_TERRITORY } from '../../config/territories';
 import type { GameState } from '../types';
@@ -77,6 +79,74 @@ function weeks(state: GameState, n: number): void {
    about, and it keeps public feeling in the reading as a gate rather than as
    the whole of it — a front nobody there can stand does not count.
 */
+/*
+   The union boss, and the ground that stopped meaning anything.
+
+   He counted districts held, over four. That was right when the ladder asked
+   for ground and wrong the moment it stopped: the highest district gate
+   anywhere in `OPERATIONS` is three, so ground saturates for every player who
+   opens the board and buys nothing after that. Measured across 36 careers at
+   day 300, districts controlled read 4 / 4 / 4 with a minimum of 3 and a
+   maximum of 4 — a point mass, and a bar of 60 wants 2.4 of it. He owed every
+   career in the population whatever they did, which is a subscription rather
+   than a relationship.
+
+   This is not the probe's stopping rule showing through. Nothing in the game
+   asks for a fourth district, so a rational player stops where the bot stops.
+
+   He reads the payroll now, which is the first thing his own blurb says he is
+   interested in and the only candidate with real spread in it:
+
+       districts controlled    4.0 / 4.0 / 4.0   (min 3, max 4)
+       districts at dominance  3.0 / 3.0 / 4.0   (min 1, max 4)
+       districts with a man    3.0 / 4.0 / 4.0   (min 1, max 5)
+       crew on the books        31 /  34 /  38   (min 17, max 47)
+       influence, all told     323 / 357 / 386
+*/
+describe('a union boss', () => {
+  const union = CIVIC_BY_ID['union'];
+
+  function hire(state: GameState, n: number): void {
+    const rng = new Rng(state.rng);
+    for (let i = 0; i < n; i++) {
+      const npc = generateNpc(state, rng, 'soldier');
+      state.npcs[npc.id] = npc;
+    }
+  }
+
+  it('rises with people on the books', () => {
+    const state = game();
+    const before = scoreFor(state, union);
+    hire(state, 12);
+    const after = scoreFor(state, union);
+    expect(after).toBeGreaterThan(before);
+  });
+
+  /*
+     The defect. Ground saturates at what the job board asks for, so a figure
+     reading it owes everybody who ever progressed.
+  */
+  it('is not bought by holding the ground the board already asked for', () => {
+    const state = game();
+    for (const t of Object.values(state.territories)) t.influence.player = 80;
+    expect(scoreFor(state, union)).toBeLessThan(union.owesAbove);
+  });
+
+  it('does not count men who are gone', () => {
+    const state = game();
+    hire(state, 20);
+    const full = scoreFor(state, union);
+    for (const npc of crewList(state).slice(0, 10)) npc.status = 'dead';
+    expect(scoreFor(state, union)).toBeLessThan(full);
+  });
+
+  it('is reachable — a real payroll clears him', () => {
+    const state = game();
+    hire(state, CIVIC.unionPayroll);
+    expect(scoreFor(state, union)).toBeGreaterThanOrEqual(union.owesAbove);
+  });
+});
+
 describe('somebody in office', () => {
   /**
    * `n` real fronts through the real acquisition path, then public feeling set
@@ -349,7 +419,17 @@ describe('spending a favour', () => {
   it('brings a hostile district back over the bar fronts need', () => {
     const state = game();
     state.player.attributes.influence = 9;
-    for (const t of Object.values(state.territories)) t.influence.player = 60;
+    /*
+       A payroll rather than ground. The union boss counted districts when this
+       was written and counts members now, and a fixture that grants the old
+       precondition grants nothing — it left him owing nothing and the
+       assertion below measuring an empty room.
+    */
+    const rng = new Rng(state.rng);
+    for (let i = 0; i < CIVIC.unionPayroll; i++) {
+      const npc = generateNpc(state, rng, 'soldier');
+      state.npcs[npc.id] = npc;
+    }
     weeks(state, 20);
 
     const home = state.territories[HOME_TERRITORY];

@@ -3665,12 +3665,16 @@ describe('the systems nobody had measured', () => {
        still — so his favour was the one thing in this game that got further
        away the more you played.
 
-       **The alderman is fixed and reads 13/36.** He watches legitimate
-       business standing in ground that does not resent you, which is a
-       quantity with spread in it and one a player builds; the note in
-       `config/civic.ts` carries the plot. The union is still open, and its bar
-       does not move — the comment above says so and it said so before either
-       of them went red.
+       **Both are fixed, and both were the same defect.** Each was reading a
+       quantity the game presses every career against and then stops: public
+       feeling cannot rise past `SENTIMENT_START`, and nothing anywhere asks
+       for a fourth district. A bar cannot be placed inside a range that has no
+       inside. The alderman reads legitimate business in ground that does not
+       resent you; the union reads the payroll. `config/civic.ts` carries both
+       plots.
+
+           before   captain 24 · union 36 · judge 16 · alderman  0
+           after    captain 28 · union 17 · judge 15 · alderman 17
     */
     for (const f of CIVIC_FIGURES) {
       const owed = c.filter((x) => x.byFigure[f.id]?.everOwed).length;

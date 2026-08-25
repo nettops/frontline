@@ -29,7 +29,6 @@ import { crewList } from './npc';
 import { ownedBusinesses } from './business';
 import {
   adjustSentiment,
-  controlledTerritories,
   playerInfluence,
   territoryDef,
   territoryList,
@@ -120,20 +119,30 @@ export function scoreFor(state: GameState, def: CivicFigureDef): number {
   switch (def.watches) {
     case 'quiet':
       return clamp(100 - state.org.heat, 0, 100);
-    case 'ground': {
+    case 'payroll': {
       /*
-         Ground you hold, not ground you have a foot in.
+         Who gets hired, which is the first thing his own blurb says he cares
+         about — and the second thing this figure has been asked to read.
 
-         This counted influence at 25 — a foothold — and a family with three
-         districts under control has a toe in six or seven besides, so the
-         union boss was reading a number nearly every career maxed out. He was
-         owed by 35 of 36. `controlledTerritories` is the same line every other
-         system means when it says a district is yours.
+         He counted districts held. That was right while the ladder asked for
+         ground and wrong the moment it stopped: the highest district gate
+         anywhere in `OPERATIONS` is three, so ground saturates for every
+         player who opens the board and buys nothing after that. Measured
+         across 36 careers at day 300, districts controlled read 4 / 4 / 4 with
+         a minimum of 3 — a point mass. He owed all thirty-six whatever they
+         did.
+
+         Counting footholds instead of control was tried first and failed the
+         same way one repair earlier, for the same reason. The quantity is the
+         problem, not the threshold on it: nothing in this game asks for a
+         fourth district, so a rational player stops where the board stops.
+
+         A payroll has no such ceiling and it is the only candidate that
+         measured with real spread — 31 / 34 / 38 across the population, from
+         17 to 47. A union boss counts members.
       */
-      const held = controlledTerritories(state).length;
-      // Four districts is a family with real ground; more does not impress
-      // them further, it just means somebody else has less.
-      return clamp((held / 4) * 100, 0, 100);
+      const onTheBooks = crewList(state).filter((n) => n.status !== 'dead').length;
+      return clamp((onTheBooks / CIVIC.unionPayroll) * 100, 0, 100);
     }
     case 'respectability': {
       /*
