@@ -35,6 +35,7 @@ import {
   tickStandingOrders,
 } from '../standingOrders';
 import { OPERATION_BY_ID } from '../../config/operations';
+import { PATTERN } from '../../config/standingOrders';
 import { HOME_TERRITORY } from '../../config/territories';
 import { SAVE_VERSION } from '../state';
 import type { GameState } from '../types';
@@ -317,6 +318,51 @@ describe('the groove it wears', () => {
      this, the play is to set an order, let it wear the groove, and hand-run the
      same job past it for nothing.
   */
+  /*
+     A long job is not one night's work.
+
+     The groove used to rise once per *firing* and fade once per *day*, so how
+     deep it got was governed by how long the job took rather than by how much
+     of the calendar you spent on that street. A one-day grind settled at 76.8
+     of 100 and a three-day job at 16.6 — under `noticeAbove`, which meant the
+     mechanic was close to invisible on the slower half of the board. Nobody
+     chose that; it fell out of the arithmetic.
+
+     A pattern is now worn per day the pair is being worked. Three men parked
+     outside the same warehouse for three days are three days of routine, and
+     the police did not stop watching on the second morning.
+
+     This is safe for the tuned one-day case because `tickOperations` resolves
+     at phase 1 and this ticks at 1b4 — a one-day job is already home before
+     the tick sees it, so it still accrues exactly once and the swept figures
+     in `config/standingOrders.ts` still describe what they were measured on.
+  */
+  it('keeps wearing while a long job is still out', () => {
+    const state = game();
+    // Three days and three men, so it is still running tomorrow morning.
+    setStanding(state, 'truck_hijack', where, 'best');
+
+    tickStandingOrders(state);
+    const afterLaunch = patternOn(state, 'truck_hijack', where);
+    expect(afterLaunch).toBeGreaterThan(0);
+
+    // A day where it launches nothing, because the job is still out there.
+    state.day += 1;
+    tickStandingOrders(state);
+    expect(
+      patternOn(state, 'truck_hijack', where),
+      'a job still running counted for nothing, so long work never wears a groove',
+    ).toBeGreaterThan(afterLaunch);
+  });
+
+  it('does not double-count the day a job goes out', () => {
+    const state = game();
+    setStanding(state, JOB, where, 'best');
+    tickStandingOrders(state);
+    // One night out is one night of routine, whatever else happened today.
+    expect(patternOn(state, JOB, where)).toBeCloseTo(PATTERN.perFire, 5);
+  });
+
   it('is charged to the job whoever sent them', () => {
     const state = game();
     setStanding(state, JOB, where, 'best');
