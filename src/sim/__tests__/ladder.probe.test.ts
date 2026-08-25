@@ -38,6 +38,8 @@ import {
 import { canOpenScore, liveScores, openScore, scoreOn, setupsLeft } from '../scores';
 import { liveTraining, startTraining } from '../training';
 import { cancelStanding, liveStanding, setStanding } from '../standingOrders';
+import { canSilence, silence } from '../silence';
+import { liveMarks } from '../marks';
 import { SCORE_TARGETS, SETUP_BY_ID } from '../../config/scores';
 import { PATTERN } from '../../config/standingOrders';
 import { OPERATION_BY_ID } from '../../config/operations';
@@ -610,6 +612,26 @@ interface Climb {
       /** Times the order was re-pointed somewhere else. Zero on every arm but one. */
       moves: number;
     };
+    /**
+     * What a bot that deals with its worst people did.
+     *
+     * F7: nothing in this project has ever cut anybody, so `silence.ts` and
+     * `marks.ts` shipped invisible to every bar in this file.
+     */
+    cutting: {
+      /** Men the bot decided had to go. */
+      tried: number;
+      /** ...and how many of those went the way it wanted, first time. */
+      landed: number;
+      /** Marks left standing by the ones that did not. */
+      marksOut: number;
+      /** How those marks ended. A mechanic where one of these is zero is not a race. */
+      marksLanded: number;
+      marksLapsed: number;
+      /** Evidence filed by men who were still out there talking. */
+      talked: number;
+      firstDay: number | null;
+    };
     /** What a bot that puts its green men with its good ones did. */
     teaching: {
       started: number;
@@ -882,6 +904,11 @@ interface Policy {
    * the jobs loop alone entirely. That is the honest model of somebody who
    * turned it on and stopped paying attention, which is the case the bar is
    * about.
+   *
+   * Measured 0/36 ahead at −$2,105,689 once repetition started costing
+   * something, on 115 firings a career against the 234 it managed when nothing
+   * in the game noticed. Both figures moved when the pattern landed and both
+   * are recorded here rather than left describing the old game.
    */
   auto?: boolean;
   /**
@@ -938,6 +965,36 @@ interface Policy {
    * hand it replaces.
    */
   matchOps?: boolean;
+  /**
+   * Deals with the people who keep costing it money.
+   *
+   * F7, and the plainest case of it this file has had. Nothing in this project
+   * has ever cut anybody — not a probe, not a bot, not once — so `silence.ts`
+   * and `marks.ts` shipped with unit tests and nothing else, invisible to every
+   * bar around them while they all reported confidently.
+   *
+   * The policy is the one the feature was asked for: a man whose record is bad
+   * enough, often enough, is dealt with rather than let go. What happens next
+   * is not the bot's decision — a botched attempt leaves a mark and the mark
+   * plays itself, which is the half that needs measuring most.
+   */
+  cuts?: boolean;
+  /**
+   * ...and the same thing done sparingly, which is how anybody would do it.
+   *
+   * The arm above uses this nineteen times a career and shows that is ruinous.
+   * That is a real finding and it answers only half the question: it measures
+   * *indiscriminate* use, so it cannot say whether there is a good use of the
+   * mechanic at all — and a mechanic that is never the right call is a trap
+   * rather than a decision.
+   *
+   * So: only against somebody genuinely catastrophic, and no more than three
+   * times in four years. **The rule is fixed before the result is read**, and
+   * it is not iterated afterwards. Raising a threshold until an arm comes out
+   * ahead is tuning a bot to flatter a mechanic, which is DIRECTOR section 5
+   * wearing a different hat.
+   */
+  cutsRarely?: boolean;
 }
 
 /**
@@ -949,6 +1006,25 @@ interface Policy {
  * file measured an order making when nothing ever moved it.
  */
 const CYCLE_DAYS = 21;
+
+/**
+ * How badly a man has to be doing before this bot deals with him.
+ *
+ * Three losses and more losses than wins. Not a tuned figure and not meant to
+ * be: it is the plainest reading of "messing up too many jobs", and the arm
+ * exists to find out what happens next rather than to find the best moment to
+ * pull the trigger.
+ */
+const CUT_FAILURES_BEFORE = 3;
+
+/**
+ * And what "genuinely a disaster" means, for the arm that does this sparingly.
+ *
+ * Six losses against fewer than half as many wins, at most three times in four
+ * years. Both fixed before that arm was run once, and not revisited after.
+ */
+const CUT_FAILURES_SPARING = 6;
+const CUT_MOST_SPARING = 3;
 
 function climb(seed: number, days: number, policy: Policy = {}): Climb {
   const state = newGame({ name: 'Ladder', difficulty: 'normal', seed });
@@ -985,6 +1061,18 @@ function climb(seed: number, days: number, policy: Policy = {}): Climb {
   };
   /** What the risk-matched allocator did, for the arm that tests it. */
   const matched = { launched: 0, oddsSum: 0 };
+  /** What a bot that deals with its worst people did, for the arm that tests it. */
+  const cutting = {
+    tried: 0,
+    landed: 0,
+    marksOut: 0,
+    marksLanded: 0,
+    marksLapsed: 0,
+    talked: 0,
+    firstDay: null as number | null,
+  };
+  /** Marks already counted, so an ending is tallied once and not every day. */
+  const marksSeen = new Set<string>();
   const teaching = {
     started: 0,
     finished: 0,
@@ -1322,6 +1410,59 @@ function climb(seed: number, days: number, policy: Policy = {}): Climb {
       } else {
         hiring.atTheCap += 1;
       }
+    }
+
+    /*
+       Dealing with the people who keep costing you money.
+
+       Weekly, like the hiring above it and for the same reason: this is a
+       decision a boss makes looking at a sheet, not one he makes every
+       morning. The rule is the one the feature was asked for — a man with a
+       bad enough record, once there is a record to read.
+
+       Deliberately not clever about *which* bad earner. Picking the cheapest
+       to remove would be the bot playing the mechanic rather than exercising
+       it, and what needs measuring is what happens after the roll, not whether
+       a bot can optimise a roll.
+    */
+    if ((policy.cuts || policy.cutsRarely) && state.day % 7 === 0) {
+      // A boss who only does this when somebody is a genuine disaster, and
+      // even then not often. Both figures fixed before the arm was ever run.
+      const sparing = !!policy.cutsRarely;
+      const needs = sparing ? CUT_FAILURES_SPARING : CUT_FAILURES_BEFORE;
+      const spent = sparing && cutting.tried >= CUT_MOST_SPARING;
+      const worst = spent
+        ? undefined
+        : crewList(state)
+            .filter(
+              (n) =>
+                n.status === 'active' &&
+                n.opsFailed >= needs &&
+                (sparing ? n.opsFailed > n.opsCompleted * 2 : n.opsFailed > n.opsCompleted),
+            )
+            .sort((a, b) => b.opsFailed - a.opsFailed)[0];
+      if (worst && canSilence(state, worst.id).ok) {
+        cutting.tried += 1;
+        cutting.firstDay = cutting.firstDay ?? state.day;
+        const before = liveMarks(state).length;
+        silence(state, rng, worst.id);
+        if (worst.status === 'dead') cutting.landed += 1;
+        if (liveMarks(state).length > before) cutting.marksOut += 1;
+      }
+    }
+
+    /*
+       And how the marks ended, tallied once each.
+
+       Both endings matter and a zero in either is a finding: a mechanic that
+       always lands is a delayed certainty, and one that never does is
+       decoration with a heat cost.
+    */
+    for (const mark of state.marks ?? []) {
+      if (mark.status === 'out' || marksSeen.has(mark.id)) continue;
+      marksSeen.add(mark.id);
+      if (mark.status === 'landed') cutting.marksLanded += 1;
+      if (mark.status === 'lapsed') cutting.marksLapsed += 1;
     }
 
     for (const id of Object.keys(state.recruits)) {
@@ -3110,6 +3251,19 @@ function climb(seed: number, days: number, policy: Policy = {}): Climb {
         ...auto,
         launched: (state.standing ?? []).reduce((n, o) => n + o.launched, 0),
       },
+      cutting: {
+        ...cutting,
+        /*
+           What the men who got away told them, totalled at the end.
+
+           Read off the evidence rather than counted as it is filed, because
+           the point is what is on the books when the career finishes — a trace
+           that went cold on its own never cost anybody anything.
+        */
+        talked: Object.values(state.evidence)
+          .filter((e) => e.detail.includes('has been talking to somebody again'))
+          .reduce((sum, e) => sum + e.strength, 0),
+      },
       teaching,
       /*
          Who is still standing at the end, and who is on the books.
@@ -4314,6 +4468,43 @@ const RUNS_AUTO_CYCLED = Array.from({ length: 36 }, (_, i) =>
 );
 
 /*
+   A bot that deals with the people who keep costing it money.
+
+   The plainest case of F7 this file has had. Nothing in this project has ever
+   cut anybody — not a probe, not a bot, not once — so `silence.ts` and
+   `marks.ts` shipped with unit tests and nothing else. Every bar around them
+   went on reporting confidently about a game containing two mechanics that
+   nothing exercised.
+
+   Three questions, and only the first is about the feature paying off:
+
+   **Is it ever reachable?** A career has to actually arrive at a man bad
+   enough to be worth the decision, or this is a button nobody presses.
+
+   **Does removing your worst people beat keeping them?** It must not. A boss
+   who can improve the family by shooting the bottom of the roster has been
+   handed a free upgrade, and the informant trace exists precisely so that is
+   not true.
+
+   **Is a mark a race or a formality?** Some have to land and some have to
+   lapse. A zero in either direction is the mechanic failing in a way no
+   estate figure would show.
+*/
+const RUNS_CUTS = Array.from({ length: 36 }, (_, i) =>
+  climb(700 + i, HUMAN_DAYS, { cuts: true }),
+);
+
+/*
+   The same decision, taken the way a person would take it.
+
+   Paired against the same seeds and the same baseline as the arm above, so the
+   only thing between the two populations is how freely the thing is used.
+*/
+const RUNS_CUTS_RARE = Array.from({ length: 36 }, (_, i) =>
+  climb(700 + i, HUMAN_DAYS, { cutsRarely: true }),
+);
+
+/*
    The operations loop handed to something that allocates properly.
 
    Best and most careful on the riskiest work, whoever is left on the safe
@@ -4790,6 +4981,19 @@ describe('handing the job loop over', () => {
        cost something real — the bench it eats, the heat it draws on a job you
        stopped watching. If most careers come out ahead anyway, then turning it
        on is free and the only reason not to would be forgetting it exists.
+
+       Re-recorded when the pattern landed, because both figures moved and the
+       old ones stood in this comment claiming to describe a game that no
+       longer existed:
+
+                                 before the pattern   after
+           times it fired        178                  167
+           estate against hand   −$73,022             −$495,910
+           careers ahead         16/36                12/36
+           men left at the end   —                    29 against 32 by hand
+
+       It held at 16/36 by two careers and 3% of an estate, which is to say it
+       barely held. Charging for repetition is what made the bar mean anything.
     */
     expect(
       ahead,
@@ -5108,6 +5312,291 @@ describe('handing the job loop over', () => {
       rows.some((r) => r.includes('off')),
       'the grid was swept without the control, so none of it can be attributed',
     ).toBe(true);
+  });
+});
+
+describe('dealing with the people who cost you money', () => {
+  it('says whether an ordinary career ever arrives at that decision', () => {
+    const did = RUNS_CUTS.filter((r) => r.newSystems.cutting.tried > 0);
+    const days = did
+      .map((r) => r.newSystems.cutting.firstDay!)
+      .sort((a, b) => a - b);
+    const tries = RUNS_CUTS.map((r) => r.newSystems.cutting.tried).sort((a, b) => a - b);
+    const landed = RUNS_CUTS.reduce((t, r) => t + r.newSystems.cutting.landed, 0);
+    const tried = RUNS_CUTS.reduce((t, r) => t + r.newSystems.cutting.tried, 0);
+
+    // eslint-disable-next-line no-console
+    console.log(
+      `cutting: ${did.length}/${RUNS_CUTS.length} careers ever decided somebody had to go
+` +
+        (did.length
+          ? `         first time, 25th / median / 75th day: ` +
+            `${pct(days, 0.25)} / ${median(days)} / ${pct(days, 0.75)}
+`
+          : '') +
+        `         times a career, 25th / median / 75th: ` +
+        `${pct(tries, 0.25)} / ${median(tries)} / ${pct(tries, 0.75)}
+` +
+        `         ${tried} attempted, ${landed} went right first time` +
+        ` (${tried ? Math.round((landed / tried) * 100) : 0}%)`,
+    );
+
+    /*
+       Reachable, and reachable while there is still a game left to play in.
+
+       Same shape as the bars on the possessions catalogue and on teaching: a
+       feature only met in the last fortnight has not been a decision, it has
+       been a footnote.
+    */
+    expect(
+      did.length,
+      'no career ever arrives at a man bad enough to be worth the decision',
+    ).toBeGreaterThanOrEqual(Math.ceil(RUNS_CUTS.length / 2));
+    expect(
+      median(days),
+      'the decision is only ever reached at the very end of a career',
+    ).toBeLessThan(240);
+  });
+
+  it('says whether a mark is a race or a formality', () => {
+    const out = RUNS_CUTS.reduce((t, r) => t + r.newSystems.cutting.marksOut, 0);
+    const landed = RUNS_CUTS.reduce((t, r) => t + r.newSystems.cutting.marksLanded, 0);
+    const lapsed = RUNS_CUTS.reduce((t, r) => t + r.newSystems.cutting.marksLapsed, 0);
+    const talked = RUNS_CUTS.map((r) => r.newSystems.cutting.talked).sort((a, b) => a - b);
+
+    // eslint-disable-next-line no-console
+    console.log(
+      `cutting: ${out} marks left standing by attempts that missed
+` +
+        `         ${landed} were eventually found, ${lapsed} got beyond reach` +
+        `, ${out - landed - lapsed} still open at the end
+` +
+        `         evidence filed by men still out there talking, ` +
+        `25th / median / 75th: ${pct(talked, 0.25)} / ${median(talked)} / ${pct(talked, 0.75)}`,
+    );
+
+    /*
+       The instrument, then the property.
+
+       An arm where nothing ever missed would satisfy everything below by never
+       creating a mark at all — which is the shape of every false negative this
+       project has shipped.
+    */
+    expect(out, 'no attempt ever missed, so the mark system is untouched').toBeGreaterThan(0);
+
+    /*
+       And both endings have to happen.
+
+       All landing makes a mark a delayed certainty and the first roll
+       irrelevant. None landing makes it decoration with a heat bill. The
+       mechanic is only a race if the man sometimes wins.
+    */
+    expect(landed, 'a mark never once landed, so it is decoration').toBeGreaterThan(0);
+    expect(lapsed, 'nobody ever got beyond reach, so a mark is a delayed certainty').toBeGreaterThan(
+      0,
+    );
+    expect(
+      median(talked),
+      'men at large never told anybody anything, so a mark costs nothing to leave standing',
+    ).toBeGreaterThan(0);
+  });
+
+  /*
+     The half the arm above could not answer.
+
+     "Doing this constantly is ruinous" is a true statement about a bot, not
+     about the mechanic. What a player needs to know is whether there is ever a
+     right moment for it — and a mechanic with no right moment is a trap with a
+     button, not a decision.
+
+     Read against the same baseline as the indiscriminate arm, so the three
+     numbers sit on one scale.
+  */
+  it('says whether doing it rarely reads any differently from doing it always', () => {
+    const gapsFor = (rs: typeof RUNS_CUTS) =>
+      rs
+        .map((r, i) => ({ r, against: RUNS_300[i] }))
+        .filter(({ r }) => r.newSystems.cutting.tried > 0)
+        .map(({ r, against }) => r.bestEstate - against.bestEstate)
+        .sort((a, b) => a - b);
+    const rare = gapsFor(RUNS_CUTS_RARE);
+    const often = gapsFor(RUNS_CUTS);
+    const at = (rs: typeof RUNS_CUTS, f: (r: (typeof RUNS_CUTS)[number]) => number) =>
+      median(rs.map(f));
+
+    // eslint-disable-next-line no-console
+    console.log(
+      `cutting: done sparingly — ${rare.length}/${RUNS_CUTS_RARE.length} careers ever did it
+` +
+        `         used ${at(RUNS_CUTS_RARE, (r) => r.newSystems.cutting.tried)} times a career` +
+        ` against ${at(RUNS_CUTS, (r) => r.newSystems.cutting.tried)} doing it freely
+` +
+        `         estate against never cutting, 25th / median / 75th: ` +
+        `$${Math.round(pct(rare, 0.25)).toLocaleString('en-US')} / ` +
+        `$${Math.round(median(rare)).toLocaleString('en-US')} / ` +
+        `$${Math.round(pct(rare, 0.75)).toLocaleString('en-US')}
+` +
+        `         careers ahead: ${rare.filter((g) => g > 0).length}/${rare.length}` +
+        ` against ${often.filter((g) => g > 0).length}/${often.length} doing it freely
+` +
+        `         men left ${at(RUNS_CUTS_RARE, (r) => r.newSystems.crewLeft)}` +
+        ` against ${at(RUNS_CUTS, (r) => r.newSystems.crewLeft)} and ` +
+        `${at(RUNS_300, (r) => r.newSystems.crewLeft)} never cutting
+` +
+        `         skill floor ${at(RUNS_CUTS_RARE, (r) => r.newSystems.crewSkill.floor)}` +
+        ` against ${at(RUNS_300, (r) => r.newSystems.crewSkill.floor)}` +
+        `; heat-weeks ${Math.round(at(RUNS_CUTS_RARE, (r) => r.danger.heat))}` +
+        ` against ${Math.round(at(RUNS_300, (r) => r.danger.heat))}`,
+    );
+
+    /*
+       The instrument only. **No bar on the money here, deliberately.**
+
+       Either answer is informative and neither is a defect. If restraint reads
+       the same as excess, then the mechanic simply does not pay and it is a
+       pressure valve rather than a play — which is a legitimate thing for a
+       game about this world to contain. If restraint reads better, there is a
+       right moment and the arm above was measuring a bot rather than a
+       feature. Writing a threshold here would be deciding the answer before
+       reading it.
+    */
+    /*
+       What it measured, 36 careers at day 300, against the same baseline:
+
+                              sparingly (3x)      freely (19x)
+           reached            34/36               36/36
+           estate, median     +$7                 −$1,110,650
+           25th / 75th        −$654,305/+$358,418 −$1,538,094/+$335,267
+           careers ahead      17/34               11/36
+           men left           30                  27   (32 never cutting)
+           skill floor        22                  23   (20 never cutting)
+           heat-weeks         2,055               2,327 (2,043 never cutting)
+
+       **Restraint does not read like excess. It reads like nothing at all.**
+
+       A median of seven dollars on a $2.1M estate and a 17-of-34 split is a
+       dead heat — the mechanic used properly is free, and it hands back a
+       roster floor two points higher for twelve extra heat-weeks. Used freely
+       the same mechanic costs a million.
+
+       That distance is the feature. It is not a trap, because there is a right
+       way to use it and the right way costs nothing; it is not a free upgrade,
+       because there is a wrong way and the wrong way is ruinous. What separates
+       them is knowing when — the same question this game asks about a
+       sit-down, a district handed to somebody, and a standing order left where
+       it is.
+
+       **The prediction written before this ran was wrong**, and it is worth
+       recording how. The reasoning was that the gain is small (one man off a
+       roster of thirty-two) against a long-tailed bill (heat, a trace, and a
+       mark leaking evidence for months), so even careful use should lose. The
+       bill and the gain cancel almost exactly instead. The error was
+       over-estimating what a mark costs when there are only three of them.
+
+       Note also that the sparing arm reached 34/36 careers. Restraint here is
+       not rarity of *opportunity* — the opportunity is everywhere. It is
+       rarity of *decision*, which is the only kind worth measuring.
+    */
+    expect(
+      rare.length,
+      'the sparing arm never cut anybody, so it is the baseline under another name',
+    ).toBeGreaterThan(0);
+    expect(
+      at(RUNS_CUTS_RARE, (r) => r.newSystems.cutting.tried),
+      'the sparing arm was not actually sparing',
+    ).toBeLessThan(at(RUNS_CUTS, (r) => r.newSystems.cutting.tried));
+  });
+
+  it('says whether shooting your worst people beats keeping them, and it must not', () => {
+    const rows = RUNS_CUTS.map((r, i) => ({ r, against: RUNS_300[i] })).filter(
+      ({ r }) => r.newSystems.cutting.tried > 0,
+    );
+    const gaps = rows
+      .map(({ r, against }) => r.bestEstate - against.bestEstate)
+      .sort((a, b) => a - b);
+    const ahead = gaps.filter((g) => g > 0).length;
+    const at = (rs: typeof RUNS_CUTS, f: (r: (typeof RUNS_CUTS)[number]) => number) =>
+      median(rs.map(f));
+
+    // eslint-disable-next-line no-console
+    console.log(
+      `cutting: estate against never cutting anybody, 25th / median / 75th: ` +
+        `$${Math.round(pct(gaps, 0.25)).toLocaleString('en-US')} / ` +
+        `$${Math.round(median(gaps)).toLocaleString('en-US')} / ` +
+        `$${Math.round(pct(gaps, 0.75)).toLocaleString('en-US')}
+` +
+        `         careers where cutting came out ahead: ${ahead}/${gaps.length}
+` +
+        `         men left at the end ${at(RUNS_CUTS, (r) => r.newSystems.crewLeft)}` +
+        ` against ${at(RUNS_300, (r) => r.newSystems.crewLeft)} never cutting` +
+        `; crew skill floor ${at(RUNS_CUTS, (r) => r.newSystems.crewSkill.floor)}` +
+        ` against ${at(RUNS_300, (r) => r.newSystems.crewSkill.floor)}
+` +
+        `         heat-weeks ${Math.round(at(RUNS_CUTS, (r) => r.danger.heat))}` +
+        ` against ${Math.round(at(RUNS_300, (r) => r.danger.heat))}` +
+        `; case strength ${Math.round(at(RUNS_CUTS, (r) => r.danger.peakCase))}` +
+        ` against ${Math.round(at(RUNS_300, (r) => r.danger.peakCase))}`,
+    );
+
+    /*
+       The bar the feature is sold on.
+
+       Removing the bottom of your own roster must not be a free upgrade. If it
+       is, the correct play is to shoot anybody who has a bad month, and the
+       informant trace that exists to stop exactly that is not doing its job.
+
+       On the share of careers rather than the median, for the reason this file
+       has now recorded three times: the median of thirty-odd paired careers has
+       repeatedly failed to price a mechanic here.
+    */
+    /*
+       What it measured, 36 careers at day 300:
+
+           reached                36/36 careers, first on day 35
+           used                   19 times a career (25th 16, 75th 22)
+           landed first time      363 of 663, 55%
+           marks left standing    300 — 214 found, 49 beyond reach, 37 still open
+           men at large talking   46.2 of evidence, median career
+           estate against never   −$1,538,094 / −$1,110,650 / +$335,267
+           careers ahead          11/36
+           men left               27 against 32; skill floor 23 against 20
+           heat-weeks             2,327 against 2,043
+
+       **The mechanic does the thing it claims and it is not worth it.** The
+       floor of the roster genuinely rises — 23 against 20, because the bottom
+       of it keeps being removed — and the family is a million poorer for it.
+       That is the shape a decision is supposed to have: what you wanted
+       happens, and the bill is larger than the gain.
+
+       55% landing first time is the arithmetic working. `SILENCE.base` is 0.72
+       less up to 0.34 for competence, so a roster averaging 50 should land
+       just over half the time, and it does.
+
+       And a mark is a race rather than a formality: about five in six are
+       eventually found and one in six gets away for good. The man sometimes
+       wins, which is the only reason the first roll matters.
+
+       **The caveat, and it is a real limit on what this arm proves.** The bot
+       does this nineteen times a career, which nobody would. So this measures
+       *indiscriminate* use and shows it is ruinous — it does not establish
+       that there is a good use of it, because no arm here uses it sparingly.
+       A career that cut two men in four years would read nothing like this,
+       and the honest statement of what is known is: cutting people is not a
+       free upgrade. Whether it is ever the right call is unmeasured.
+
+       Resisted the obvious move of raising the bot's threshold until the arm
+       came out ahead. That is tuning a bot to make a mechanic look good, which
+       is DIRECTOR section 5 wearing a different hat.
+
+       One reading here discriminates nothing and is kept only so nobody adds
+       it again expecting more: **case strength is 100 on both arms.** It is at
+       its ceiling in an ordinary career already, so it cannot say anything
+       about what this costs.
+    */
+    expect(
+      ahead,
+      'shooting your worst earners is a free upgrade, so the trace they leave costs nothing',
+    ).toBeLessThan(Math.ceil(gaps.length / 2));
   });
 });
 
