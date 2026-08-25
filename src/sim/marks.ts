@@ -12,10 +12,15 @@
  * to somebody — the game does not keep asking you, and it does not get clever
  * on your behalf either.
  *
- * **The property everything rests on: he is talking the whole time.** Every
- * few days he is out there and breathing, he gives away a little more. That is
- * what makes a mark a race rather than a queue of rolls you eventually win,
- * and it is what stops the first attempt in `silence.ts` from being free.
+ * **He is talking the whole time, and that is what makes it a race** rather
+ * than a queue of rolls you eventually win.
+ *
+ * How he costs you took a correction. The first version filed evidence and
+ * called that the price, and a sweep found it moved nothing at all across a
+ * fourfold change — the case meter is at 100 in an ordinary career before any
+ * of this, so a trace added to it goes nowhere. What bites now is heat on the
+ * **inside** channel, which is the exact thread `dismiss` cuts when you let
+ * somebody go quietly. He is that thread spliced back on.
  *
  * Two more things hold the shape. The odds fall on every miss, because a man
  * who has survived one attempt and heard about a second is not living the way
@@ -93,8 +98,16 @@ export function callOffMark(state: GameState, id: Id): void {
   );
 }
 
-/** He tells somebody something. This is the clock the mark is racing. */
+/**
+ * He tells somebody something. This is the clock the mark is racing.
+ *
+ * Two halves, and only one of them is the price. The heat is what costs you —
+ * see `MARK.talksHeat` for why it goes on the inside channel and why evidence
+ * alone did nothing. The trace is kept because a man who has talked should
+ * leave one, not because it is load-bearing.
+ */
 function talks(state: GameState, npc: Npc): void {
+  addHeat(state, MARK.talksHeat, 'inside', `${npc.name} is talking to somebody`);
   addEvidence(state, {
     day: state.day,
     source: 'informant',

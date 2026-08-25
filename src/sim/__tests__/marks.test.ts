@@ -181,6 +181,28 @@ describe('what it does while it stands', () => {
     expect(after, 'a marked man sat quietly waiting to be found').toBeGreaterThan(before);
   });
 
+  /*
+     And what talking actually costs, which took a correction.
+
+     The first version filed evidence and called that the price. Swept at 2.5,
+     5 and 10 it moved nothing to the dollar, because case strength already
+     reads 100 in an ordinary career — a trace added to a full meter goes
+     nowhere. So the bill is heat on the **inside** channel now, which is the
+     exact thread `dismiss` cuts when you let somebody go quietly.
+
+     The test asserts the channel, not just the total, because that symmetry is
+     the reason this is the right place for it.
+  */
+  it('costs you inside the family, which is the thread letting him go would have cut', () => {
+    const { state } = marked();
+    const before = state.org.heatBy.inside;
+    days(state, MARK.talksEveryDays * 2 + 1, false);
+    expect(
+      state.org.heatBy.inside,
+      'a man at large cost nothing on the channel he is actually on',
+    ).toBeGreaterThan(before);
+  });
+
   it('stops him talking the moment it lands', () => {
     const { state, man } = marked();
     days(state, MARK.everyDays + 1, true);
