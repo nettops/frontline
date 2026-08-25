@@ -808,6 +808,16 @@ export interface Faction {
   colour: string;
   blurb: string;
   reputation: string;
+  /**
+   * The house's own pool of given names, if it keeps one.
+   *
+   * Carried on the faction for the same reason `blurb` is: the slot is what
+   * survives into the save, and the succession twenty years from now has to be
+   * able to name a boss without the draw still being around to ask. Absent on
+   * most houses and on any save written before this existed, and the default
+   * pool in config/factionLeaders.ts covers both.
+   */
+  firstNames?: string[];
   personality: FactionPersonality;
   wealth: number;
   /** Muscle, 0..100. Spent in war and recovered slowly in peace. */

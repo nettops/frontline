@@ -2332,6 +2332,26 @@ describe('the ladder', () => {
 const HUMAN_DAYS = 300;
 const RUNS_300 = Array.from({ length: 36 }, (_, i) => climb(700 + i, HUMAN_DAYS));
 
+/*
+   A wider sample, for the one question below that thirty-six cannot answer.
+
+   The back-half memo test asks whether the generator supplies at least a third
+   of the late situations. The answer is about 35%, so the bar is inside the
+   resampling noise of a thirty-six-career sample: adding two houses to the
+   pool in config/houses.ts moved this reading from 34.7% to 32.3% without
+   changing any behaviour at all — the same thirty-six seeds simply draw
+   different cities out of a larger pool. Substituting personalities that were
+   exact copies of houses already in the pool produced the same 32%, which is
+   what proves it is the sample and not the families.
+
+   So the sample is widened rather than the bar lowered. At a hundred and
+   twenty the reading is 34.5% here and 35.7–36.1% on two disjoint seed
+   windows, which is enough resolution to answer a question posed at a third.
+   It costs about eight seconds. The threshold below has not moved and must
+   not: the point of the number is that it was pre-committed.
+*/
+const MEMO_RUNS = Array.from({ length: 120 }, (_, i) => climb(700 + i, HUMAN_DAYS));
+
 /** Nearest-rank percentile. Small samples, so no interpolation to argue about. */
 function pct(xs: number[], p: number): number {
   const sorted = [...xs].sort((a, b) => a - b);
@@ -2476,7 +2496,7 @@ describe('the ladder, over the 300 days a person plays', () => {
      happens to be.
   */
   it('keeps finding something to say in the back half of a career', () => {
-    const lived = RUNS_300.filter((r) => r.days >= 240);
+    const lived = MEMO_RUNS.filter((r) => r.days >= 240);
     const late = lived.map((r) => r.memos.lateAndNew);
     const mid = median(late);
 
@@ -2485,7 +2505,7 @@ describe('the ladder, over the 300 days a person plays', () => {
 
     // eslint-disable-next-line no-console
     console.log(
-      `memos: ${lived.length}/${RUNS_300.length} careers reached day 240\n` +
+      `memos: ${lived.length}/${MEMO_RUNS.length} careers reached day 240\n` +
         `       distinct situations before day 180, 40th / median / 75th: ` +
         `${pct(lived.map((r) => r.memos.early), 0.4)} / ${median(lived.map((r) => r.memos.early))} / ` +
         `${pct(lived.map((r) => r.memos.early), 0.75)}\n` +
@@ -2521,6 +2541,11 @@ describe('the ladder, over the 300 days a person plays', () => {
        The bar stays where it was written. Moving it to 25% would make the suite
        green and would mean nothing, and this project has a rule about that
        which exists because the alternative has cost it four rounds.
+
+       It clears now, at about 35%, and the paragraph above is left standing
+       because it is the record of what the number was for. Nothing was turned
+       up to get there — more shapes were written. The margin is small enough
+       that the sample had to be widened to read it; see `MEMO_RUNS`.
     */
     expect(lived.length, 'nothing lived long enough to have a back half').toBeGreaterThan(8);
     expect(allLate, 'no late situations at all, so the share below is meaningless').toBeGreaterThan(20);

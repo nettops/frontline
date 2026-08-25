@@ -33,9 +33,10 @@ export interface HouseDraw {
  * Three houses from three different temperaments, in three different corners.
  *
  * The group constraint is the only rule, and it earns its place: drawing three
- * at random from ten produced cities where every family was cautious and
- * commercial, and a city where nobody ever moves is not a variation, it is a
- * broken game that happens to be reproducible.
+ * at random from the ten there were then produced cities where every family
+ * was cautious and commercial, and a city where nobody ever moves is not a
+ * variation, it is a broken game that happens to be reproducible. The pool has
+ * grown since; the rule is what keeps growing it safe.
  */
 export function drawHouses(rng: Rng, count: number): HouseDraw[] {
   const groups = rng.sample(HOUSE_GROUPS, Math.min(count, HOUSE_GROUPS.length));

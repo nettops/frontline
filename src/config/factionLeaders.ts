@@ -14,6 +14,15 @@
  * making it happen.
  */
 
+/**
+ * What a boss is called, when the house has no list of its own.
+ *
+ * The surname pool in npcs.ts was always mixed and the city was always a port,
+ * so this is the only place a name was ever narrower than the world around it —
+ * every house drew from here, and a family whose whole story is that they
+ * arrived from somewhere else got a boss named Salvatore. Houses that need
+ * their own list carry one on `HouseDef.firstNames` and fall back to this.
+ */
 export const LEADER_FIRST_NAMES = [
   'Salvatore', 'Emilio', 'Rosalia', 'Augusto', 'Cesare', 'Vittoria', 'Ignazio',
   'Rafaele', 'Ottavia', 'Bartolo', 'Ludovico', 'Serafina', 'Guido', 'Massimo',

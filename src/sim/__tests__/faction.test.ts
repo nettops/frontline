@@ -31,7 +31,7 @@ import {
   type FactionId,
   type FactionPersonality,
 } from '../../config/factions';
-import { housePersonality } from '../houses';
+import { leaderPersonality } from '../leaders';
 import type { FactionActionKind, GameState } from '../types';
 
 function fresh(seed = 909): GameState {
@@ -169,6 +169,16 @@ describe('rival decisions', () => {
     // player. Which slot that is depends on the draw.
     const who = mostAggressive(state);
     const t = state.territories['rail_yards'];
+    /*
+     * Just the two of them there. The draw can seat a third family in the
+     * yards, and a rival holding 50 is a better-scoring target than a player
+     * holding 15 — `significance` says somebody barely present is not worth
+     * the trip, which is the intended behaviour and not what this test is
+     * about. Clearing the street makes the fixture match the sentence above.
+     */
+    for (const other of RIVAL_IDS) {
+      if (other !== who) t.influence[other] = 0;
+    }
     t.influence[who] = 80;
     t.influence.player = 15;
     state.factions[who].wealth = 2_000_000;
@@ -213,9 +223,16 @@ describe('rival decisions', () => {
 
 /*
  * Which slot holds which kind of family is drawn per seed now, so a test about
- * temperament has to find the temperament rather than name a slot. These read
- * the family's own personality, which is exactly the quantity the assertions
- * below are about.
+ * temperament has to find the temperament rather than name a slot.
+ *
+ * It has to find it the way the AI does, too: this read the *house* personality
+ * at first, which is only half of what the scoring pass sees. A boss can be
+ * enough of a departure from his family to invert the order — an aggressive
+ * house under a careful man scores below a middling house under a hothead — and
+ * when the pool changed, `mostAggressive` duly picked a family that then sat
+ * there investing while a nominally calmer one took the yards off the player.
+ * The test was right about the behaviour and wrong about who. `leaderPersonality`
+ * is the quantity every decision in faction.ts is actually weighted by.
  */
 function byTemperament(
   state: GameState,
@@ -223,7 +240,10 @@ function byTemperament(
 ): FactionId {
   return rivals(state)
     .slice()
-    .sort((a, b) => pick(housePersonality(state, b.id)) - pick(housePersonality(state, a.id)))[0].id;
+    .sort(
+      (a, b) =>
+        pick(leaderPersonality(state, b)) - pick(leaderPersonality(state, a)),
+    )[0].id;
 }
 
 const mostAggressive = (s: GameState) => byTemperament(s, (p) => p.aggression);
