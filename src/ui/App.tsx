@@ -34,6 +34,19 @@ export default function App() {
   const state = useOptionalGame();
   const [panel, setPanel] = useState<PanelId>('dashboard');
   const [report, setReport] = useState<DayReport | null>(null);
+  /*
+     What was asked for, when the world interrupted it.
+
+     `advanceDays` stops on the first new memo and that is right — a memo is a
+     question, and answering it a week late answers a different question. What
+     was wrong is that the *intent* was thrown away: ask for a month, get
+     stopped on day three, and you re-clicked from scratch. Twenty-seven days
+     of quiet cost nine clicks.
+
+     Held in the view rather than in the save, because it is a statement about
+     what you were in the middle of doing, not about the organization.
+  */
+  const [remaining, setRemaining] = useState(0);
 
   /**
    * The only place time moves.
@@ -53,10 +66,14 @@ export default function App() {
     // be answering a different question.
     if (s.sitdown) return;
     const before = snapshot(s);
+    let moved = 1;
     mutate((g) => {
       if (days === 1) advanceDay(g);
-      else advanceDays(g, days);
+      else moved = advanceDays(g, days);
     }, true);
+    // What is left of what was asked for. `advanceDays` returns how far it
+    // actually got, so this is the remainder and nothing has to be inferred.
+    setRemaining(Math.max(0, days - moved));
     const next = buildReport(before, s);
     setReport(next);
     // A quiet day gets the small dry click; a day with news gets its own noise.
@@ -177,6 +194,28 @@ export default function App() {
       <main className="main">
         {report && (
           <Bulletin report={report} onGo={goto} onDismiss={() => setReport(null)} />
+        )}
+        {/*
+           Pick up where the week was interrupted.
+
+           Only when the desk is actually clear: a memo behind another memo is
+           not answered yet, and a conversation in progress stops the clock for
+           the same reason. `step` guards both again, so this is about not
+           offering something that would do nothing.
+        */}
+        {remaining > 0 && state.pendingEvents.length === 0 && !state.sitdown && (
+          <div className="btn-row" style={{ margin: '0 0 12px' }}>
+            <button
+              className="btn small primary"
+              onClick={() => step(remaining)}
+              title="You asked for longer than you got. This runs the rest of it."
+            >
+              Carry on — {remaining} more {remaining === 1 ? 'day' : 'days'}
+            </button>
+            <button className="btn small" onClick={() => setRemaining(0)}>
+              Leave it
+            </button>
+          </div>
         )}
         <Coach onGo={goto} panel={shown} />
         {/* Keyed on the panel so switching re-runs the entry animation — the

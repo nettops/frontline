@@ -28,6 +28,7 @@ import { Rng } from '../rng';
 import { advanceDay } from '../clock';
 import {
   availableOperations,
+  crewCompetence,
   crewNeeded,
   launchOperation,
   operationCost,
@@ -35,12 +36,16 @@ import {
   standing,
 } from '../operations';
 import { canOpenScore, liveScores, openScore, scoreOn, setupsLeft } from '../scores';
-import { SCORE_TARGETS } from '../../config/scores';
+import { liveTraining, startTraining } from '../training';
+import { cancelStanding, liveStanding, setStanding } from '../standingOrders';
+import { SCORE_TARGETS, SETUP_BY_ID } from '../../config/scores';
+import { PATTERN } from '../../config/standingOrders';
 import { OPERATION_BY_ID } from '../../config/operations';
 import { crewList, isOutOfReach } from '../npc';
 import { eligibleStewards, needsSteward, putInCharge } from '../delegation';
 import {
   controlledTerritories,
+  hasPresence,
   operableTerritories,
   playerInfluence,
   territoryList,
@@ -591,6 +596,28 @@ interface Climb {
       respectAtLeast: Record<number, number>;
       weeks: number;
     };
+    /** Men still on the books at the end — not dead, not inside, not gone. */
+    crewLeft: number;
+    /** Crew skill at the end, which is what both halves of training move. */
+    crewSkill: { median: number; best: number; floor: number };
+    /** What the risk-matched allocator did. */
+    matched: { launched: number; oddsSum: number };
+    /** The one standing order, for the arm that hands the loop over. */
+    auto: {
+      setDay: number | null;
+      job: string | null;
+      launched: number;
+      /** Times the order was re-pointed somewhere else. Zero on every arm but one. */
+      moves: number;
+    };
+    /** What a bot that puts its green men with its good ones did. */
+    teaching: {
+      started: number;
+      finished: number;
+      gained: number;
+      weeksPaired: number;
+      firstDay: number | null;
+    };
     /** What a bot that builds up to the big jobs did with them. */
     scores: {
       opened: number;
@@ -830,7 +857,98 @@ interface Policy {
    * itself back until the kit is together or the window is nearly out.
    */
   scores?: boolean;
+  /**
+   * Puts the green men with the good ones.
+   *
+   * F7 again. Work teaching moves skill on every arm whether anybody asks for
+   * it or not, but nothing in this project pairs two men and takes them both
+   * off the board for a fortnight — so the half of the feature that is a
+   * decision would be invisible while every bar around it reported
+   * confidently.
+   *
+   * The policy is what a patient boss does: when somebody is spare and
+   * somebody much better is also spare, put them together.
+   */
+  trains?: boolean;
+  /**
+   * Hands the job loop over and stops choosing.
+   *
+   * The only automation in this game that plays turns for you, and the only
+   * one whose bar is *not* "does it pay". It must **not** beat the played
+   * line: if setting an order and pressing +1 month is the strongest way to
+   * play, the game has been automated out of itself.
+   *
+   * The bot sets one standing order on the best job it can see and then leaves
+   * the jobs loop alone entirely. That is the honest model of somebody who
+   * turned it on and stopped paying attention, which is the case the bar is
+   * about.
+   */
+  auto?: boolean;
+  /**
+   * ...and the same order, kept *alongside* playing by hand.
+   *
+   * The arm above models somebody who turned it on and walked away, which is
+   * the "does the game solve itself" question. This one is the realistic use
+   * and the more dangerous one: a standing order grinding the street job while
+   * the player keeps hand-running everything above it. If that beats playing,
+   * the feature is a free win rather than a trade, and no amount of the order
+   * being stupid about heat would matter — it would be stupid about a job the
+   * player had stopped caring about anyway.
+   */
+  autoPlus?: boolean;
+  /**
+   * ...and the same order again, moved before it wears a groove.
+   *
+   * The two arms above model the only two things a player could do with a
+   * standing order while it had no memory: leave it, or leave it and keep
+   * playing. Both were priced, and both lose. That is a mechanic with one
+   * setting, not a decision — and the reason it has one setting is that
+   * nothing in the game noticed the order firing on the same job in the same
+   * district 234 times in a career.
+   *
+   * This arm is the third thing, and it exists to ask whether *rotation* is
+   * worth anything at all. It is deliberately written before the pattern
+   * mechanic does, so what it reads now is the confound measured on its own:
+   * moving an order also spreads work across districts, and this file already
+   * found that spreading is worth a great deal by itself. Whatever separates
+   * this from `autoPlus` today is that spreading and nothing else. Whatever
+   * separates them afterwards, minus this, is the pattern.
+   *
+   * It moves on a fixed schedule rather than by reading the pattern, so the
+   * arm behaves identically before and after the mechanic exists. That is the
+   * only reason the two runs can be compared at all.
+   */
+  autoCycled?: boolean;
+  /**
+   * The whole operations loop handed over to something that allocates well.
+   *
+   * A test rather than a shipped policy. The two arms above hand over to a
+   * standing order that is deliberately stupid — one job, picked once, never
+   * re-pointed — so they never asked the question that actually matters: does
+   * automation *with a good rule inside it* beat playing by hand?
+   *
+   * The rule is the obvious one a player would want: your best and most
+   * careful people on the riskiest work, and whoever is left on the safe jobs.
+   * It runs every day and the player chooses nothing.
+   *
+   * Note what this is really comparing. The baseline bot already launches
+   * every day; it just takes `idle().slice(0, bodies)`, which is arbitrary. So
+   * this measures the *allocation rule* on its own, which is the honest way to
+   * ask whether an operations autopilot would be strictly better than the
+   * hand it replaces.
+   */
+  matchOps?: boolean;
 }
+
+/**
+ * Days a cycled order is left on one job-and-district pair before it moves.
+ *
+ * Provisional and due a sweep beside the pattern rate itself. Three weeks is
+ * the design target rather than a measured figure: long enough that setting an
+ * order still means forgetting about it, against the 234 firings a career this
+ * file measured an order making when nothing ever moved it.
+ */
+const CYCLE_DAYS = 21;
 
 function climb(seed: number, days: number, policy: Policy = {}): Climb {
   const state = newGame({ name: 'Ladder', difficulty: 'normal', seed });
@@ -853,9 +971,29 @@ function climb(seed: number, days: number, policy: Policy = {}): Climb {
    */
   const blocked = new Map<string, string>();
   const blockDays = new Map<string, Record<string, number>>();
+  /** Where each student started, and which pairings have been counted. */
+  const before = new Map<string, number>();
+  const settled = new Set<string>();
   /** Gear that ever reached a kit, and gear the police ever came away with. */
   const landed = new Set<string>();
   const recovered = new Set<string>();
+  /** Where the one standing order went, and how much it ever ran. */
+  const auto = {
+    setDay: null as number | null,
+    job: null as string | null,
+    moves: 0,
+  };
+  /** What the risk-matched allocator did, for the arm that tests it. */
+  const matched = { launched: 0, oddsSum: 0 };
+  const teaching = {
+    started: 0,
+    finished: 0,
+    /** Points of skill the students actually came back with. */
+    gained: 0,
+    /** Weeks a pairing was holding two men off the board. */
+    weeksPaired: 0,
+    firstDay: null as number | null,
+  };
   const scoring = {
     opened: 0,
     firstDay: null as number | null,
@@ -1393,10 +1531,122 @@ function climb(seed: number, days: number, policy: Policy = {}): Climb {
        that day's decay, and that is what keeps quiet work a decision rather
        than a free lunch. The bot was taking the lunch.
     */
+    /*
+       Put the green men with the good ones, when the policy says to.
+
+       Weekly rather than daily, and only when the bench can afford it: a
+       pairing takes two men for twelve days, and this bot already competes
+       with itself for bodies through scores, stewards and the jobs loop. The
+       rule is the plainest one that is still a decision — the widest gap on
+       the bench, and only while somebody is still spare afterwards.
+    */
+    if (policy.trains && state.day % 7 === 0) {
+      const spare = idle(state);
+      if (spare.length >= TRAIN_BENCH) {
+        const ranked = [...spare].sort((a, b) => b.stats.skill - a.stats.skill);
+        const teacher = ranked[0];
+        const student = ranked[ranked.length - 1];
+        if (startTraining(state, teacher.id, student.id)) {
+          teaching.started += 1;
+          if (teaching.firstDay === null) teaching.firstDay = state.day;
+        }
+      }
+    }
+    if (policy.trains && state.day % 7 === 0) {
+      if (liveTraining(state).length > 0) teaching.weeksPaired += 1;
+    }
+
+    /*
+       Hand it over, when the policy says to.
+
+       Set once, on the best job on the board, and never revisited — no
+       re-pointing it as the board opens and no calling it off when the heat
+       climbs. `tickStandingOrders` in the pipeline does the launching from
+       here on, and the jobs loop below is skipped entirely for this arm.
+    */
+    if ((policy.auto || policy.autoPlus || policy.autoCycled) && !isLayingLow(state)) {
+      /*
+         Move it on before the pair wears a groove.
+
+         On a clock rather than on a reading of the pattern, for two reasons.
+         It is what a player actually does once the game has told them once —
+         nobody sits watching a meter — and it keeps this arm's behaviour
+         identical before and after the pattern mechanic exists, which is the
+         only thing that makes the control run above worth having.
+      */
+      const live = liveStanding(state);
+      if (policy.autoCycled && live[0] && state.day - live[0].setDay >= CYCLE_DAYS) {
+        cancelStanding(state, live[0].id);
+        auto.moves += 1;
+      }
+
+      if (liveStanding(state).length === 0) {
+        /*
+           The hand-over arm takes the best job it can see. The alongside arms
+           take the *worst* one worth running — which is what a player actually
+           automates: the grind they no longer want to click, while they keep
+           the big work for themselves.
+        */
+        const board = [...availableOperations(state)]
+          .filter((o) => !SETUP_BY_ID[o.id] && o.crewRequired > 0)
+          .sort((a, b) => ev(b) - ev(a));
+        /*
+           The job is chosen once and then kept, which the first version of
+           this arm got wrong.
+
+           It re-ran the line below on every move, so a "rotation" changed the
+           district *and* the job — and `board[board.length - 1]` is the worst
+           thing on the board, which gets worse as the board grows. The arm
+           was therefore drifting onto longer and more expensive work over a
+           career while claiming to isolate the district. That is most of why
+           its firing collapsed from 170 to 79, and it had nothing to do with
+           the mechanic under test.
+
+           Keeping the job fixed is what makes this a rotation arm rather than
+           two changes wearing one name.
+        */
+        const pick = auto.job
+          ? OPERATION_BY_ID[auto.job]
+          : policy.auto
+            ? board[0]
+            : board[board.length - 1];
+        /*
+           And somewhere new each time — but somewhere this family already
+           stands, which is not the same thing.
+
+           The first version walked round every district it was *allowed* to
+           work, in whatever order `operableTerritories` returned them. That
+           reads like the counterplay and is not: a district with no presence
+           in it carries `UNFAMILIAR_SUCCESS_PENALTY` and whatever police sit
+           on it, so the naive rotation was buying the groove's cure by
+           walking into a worse room. Measured, with the pattern live, it cut
+           the arm's firing from 207 a career to 109 and left the gap between
+           moving and leaving exactly where it had been without the mechanic
+           at all — the mechanic was charging the static arm properly and the
+           counterplay was paying for itself twice.
+
+           A player rotating a grind moves it between places they already
+           work. `hasPresence` is the same condition the odds model reads, so
+           this asks for nothing the game does not already say out loud.
+
+           The static arms are untouched: they always land on the first entry,
+           which is what they did before this branch existed.
+        */
+        const spots = operableTerritories(state);
+        const known = spots.filter((s) => hasPresence(s.territory));
+        const round = known.length > 0 ? known : spots;
+        const spot = round[auto.moves % Math.max(1, round.length)]?.territory.id;
+        if (spot && pick && setStanding(state, pick.id, spot, 'best')) {
+          auto.setDay = auto.setDay ?? state.day;
+          auto.job = pick.id;
+        }
+      }
+    }
+
     if (!isLayingLow(state) && state.org.heat >= 70) startLayLow(state);
     const how: ApproachId = DEFAULT_APPROACH;
 
-    if (!isLayingLow(state)) {
+    if (!isLayingLow(state) && !policy.auto) {
       /*
          Finish the district you started, then start the next one.
 
@@ -1641,7 +1891,69 @@ function climb(seed: number, days: number, policy: Policy = {}): Climb {
             return setupsLeft(state, sc).length === 0 && !out;
           })
           .sort((a, b) => ev(b) - ev(a));
-        for (const def of options) {
+        /*
+           The allocator under test: best and most careful on the worst work.
+
+           Jobs by risk descending, and for each one the strongest crew still
+           standing. By the time it reaches the safe jobs only the weaker men
+           are left, which is exactly the arrangement a player would set up by
+           hand if they were willing to do it every single morning.
+
+           It replaces the loop below rather than reordering it, because the
+           thing being measured is the *assignment*, and the loop below hands
+           out `idle().slice(0, bodies)` — whoever happens to be first.
+        */
+        if (policy.matchOps) {
+          /*
+             Two passes, so that only the *assignment* differs from the hand.
+
+             The first version of this also reordered which jobs ran — risk
+             first instead of expected value — and duly lost by a million: it
+             spent the bench and the stake on the most dangerous work on the
+             board before it got to the work that pays. That was a test of two
+             changes at once, and only one of them was the idea.
+
+             So: pass one picks the same jobs the hand would pick, in the same
+             expected-value order, against a running count of bodies. Pass two
+             hands the crews out — riskiest job first, strongest men first — so
+             the best people end up on the worst work and whoever is left takes
+             the safe jobs. Nothing about *what* runs has changed.
+          */
+          const byRisk = { extreme: 3, high: 2, moderate: 1, low: 0 } as const;
+          const taking: typeof options = [];
+          let bodiesLeft = idle(state).length;
+          for (const def of options) {
+            const bodies = crewNeeded(state, def);
+            if (bodies > bodiesLeft) continue;
+            if (operationCost(state, def) > spendable) continue;
+            taking.push(def);
+            bodiesLeft -= bodies;
+          }
+
+          for (const def of [...taking].sort((a, b) => byRisk[b.risk] - byRisk[a.risk])) {
+            const bodies = crewNeeded(state, def);
+            const free = idle(state);
+            if (free.length < bodies) continue;
+            const best = [...free].sort((a, b) => crewCompetence([b]) - crewCompetence([a]));
+            const sc = scoreOn(state, def.id);
+            const out = clean('jobs', () =>
+              launchOperation(
+                state,
+                def.id,
+                best.slice(0, bodies).map((n) => n.id),
+                sc ? sc.territoryId : where,
+              ),
+            );
+            if (out) {
+              launchEra[state.day < 90 ? 0 : state.day < 180 ? 1 : 2] += 1;
+              matched.launched += 1;
+              matched.oddsSum += out.successChance;
+            }
+          }
+          if (launchEra[0] + launchEra[1] + launchEra[2] === launchedBefore) deadDays += 1;
+        }
+
+        for (const def of policy.matchOps ? [] : options) {
           const bodies = crewNeeded(state, def);
           /*
              `continue`, and it was a `break` for years.
@@ -1680,7 +1992,13 @@ function climb(seed: number, days: number, policy: Policy = {}): Climb {
               how,
             ),
           );
-          if (out) launchEra[state.day < 90 ? 0 : state.day < 180 ? 1 : 2] += 1;
+          if (out) {
+            launchEra[state.day < 90 ? 0 : state.day < 180 ? 1 : 2] += 1;
+            // Recorded on every arm, not only the allocator's, or the two
+            // columns would be quoted in different currencies.
+            matched.launched += 1;
+            matched.oddsSum += out.successChance;
+          }
           if (out && policy.scores && SCORE_TARGETS[def.id]) {
             if (sc) {
               scoring.prepped += 1;
@@ -2470,6 +2788,19 @@ function climb(seed: number, days: number, policy: Policy = {}): Climb {
        other. Counted into sets so a piece of gear held for a fortnight is one
        reading rather than fourteen.
     */
+    if (policy.trains) {
+      for (const run of state.training ?? []) {
+        if (run.status !== 'done' || settled.has(run.id)) continue;
+        settled.add(run.id);
+        teaching.finished += 1;
+        teaching.gained += (state.npcs[run.studentId]?.stats.skill ?? 0) - (before.get(run.id) ?? 0);
+      }
+      for (const run of liveTraining(state)) {
+        if (!before.has(run.id)) {
+          before.set(run.id, state.npcs[run.studentId]?.stats.skill ?? 0);
+        }
+      }
+    }
     if (policy.scores) {
       for (const sc of state.scores ?? []) {
         for (const gear of sc.kit) landed.add(`${sc.id}:${gear}`);
@@ -2774,6 +3105,37 @@ function climb(seed: number, days: number, policy: Policy = {}): Climb {
         respectAtLeast: newSys.respectAtLeast,
         weeks: newSys.weeks,
       },
+      matched,
+      auto: {
+        ...auto,
+        launched: (state.standing ?? []).reduce((n, o) => n + o.launched, 0),
+      },
+      teaching,
+      /*
+         Who is still standing at the end, and who is on the books.
+
+         `lost` and `wash.crewWeeks` were already collected on every arm and
+         never read by any automation bar, so a mechanic could have been
+         hollowing out a roster while every figure those bars print — estate,
+         firings, odds, heat — stayed exactly the same. That is the same blind
+         spot F7 keeps naming, one level down: the instrument was measuring the
+         money an organization made and not whether an organization was left.
+      */
+      crewLeft: crewList(state).filter(
+        (n) => n.status !== 'dead' && n.status !== 'arrested' && n.status !== 'defected',
+      ).length,
+      /** What the roster is actually worth, which is the point of all this. */
+      crewSkill: (() => {
+        const xs = crewList(state)
+          .filter((n) => n.status !== 'dead')
+          .map((n) => n.stats.skill)
+          .sort((a, b) => a - b);
+        return {
+          median: xs.length ? xs[Math.floor(xs.length / 2)] : 0,
+          best: xs[xs.length - 1] ?? 0,
+          floor: xs[0] ?? 0,
+        };
+      })(),
       shopping,
       scores: {
         ...scoring,
@@ -3311,6 +3673,16 @@ describe('the ladder', () => {
    question of the same five columns, so the table can be re-sized by the
    author's own method against the right horizon.
 */
+/**
+ * Bodies that have to be spare before the bot will pair two of them.
+ *
+ * A pairing costs two men for twelve days and this bot already competes with
+ * itself for bodies. Four is the plainest guard that leaves somebody behind to
+ * work — it is not a claim about the right number, it is what stops the arm
+ * measuring a family that trained itself into having nobody to send.
+ */
+const TRAIN_BENCH = 4;
+
 const HUMAN_DAYS = 300;
 const RUNS_300 = Array.from({ length: 36 }, (_, i) => climb(700 + i, HUMAN_DAYS));
 
@@ -3888,6 +4260,88 @@ const RUNS_SCORES = Array.from({ length: 36 }, (_, i) =>
   climb(700 + i, HUMAN_DAYS, { scores: true }),
 );
 
+/*
+   A bot that puts its green men with its good ones, against the same bot that
+   never pairs anybody.
+
+   Work teaching moves skill on every arm whether the policy asks or not — it
+   is a consequence of going out. This arm measures the other half, which is a
+   decision: two men off the board for twelve days against what the student
+   comes back with.
+*/
+const RUNS_TRAINS = Array.from({ length: 36 }, (_, i) =>
+  climb(700 + i, HUMAN_DAYS, { trains: true }),
+);
+
+/*
+   A bot that hands the job loop over and stops choosing.
+
+   The only arm in this file whose bar is that the thing it measures must
+   **lose**. Automation that beats playing is not a convenience, it is the game
+   solving itself, and the whole of `standingOrders.ts` is built around one
+   property meant to stop that: a standing order does not read the room.
+*/
+const RUNS_AUTO = Array.from({ length: 36 }, (_, i) =>
+  climb(700 + i, HUMAN_DAYS, { auto: true }),
+);
+
+/*
+   And the realistic use: an order grinding the street job while the player
+   keeps hand-running everything above it.
+
+   This is the arm that could actually embarrass the feature. The one above
+   measures walking away, which nobody sensible does; this measures the
+   convenience, which everybody would.
+*/
+const RUNS_AUTO_PLUS = Array.from({ length: 36 }, (_, i) =>
+  climb(700 + i, HUMAN_DAYS, { autoPlus: true }),
+);
+
+/*
+   And the same order again, moved every three weeks instead of left.
+
+   Paired against `RUNS_AUTO_PLUS`, which does everything this does except move
+   it — so the only thing between the two populations is the rotation.
+
+   Written before the pattern mechanic exists, deliberately. Rotation is not a
+   free variable: moving an order also spreads work across districts, and this
+   file already found that spreading is worth a great deal on its own. So what
+   this reads *now* is the confound, priced separately and for nothing, and
+   what it reads afterwards minus that is what the pattern actually bought.
+*/
+const RUNS_AUTO_CYCLED = Array.from({ length: 36 }, (_, i) =>
+  climb(700 + i, HUMAN_DAYS, { autoCycled: true }),
+);
+
+/*
+   The operations loop handed to something that allocates properly.
+
+   Best and most careful on the riskiest work, whoever is left on the safe
+   jobs, every day, with the player choosing nothing. The two standing-order
+   arms hand over to a rule that is deliberately stupid; this one hands over to
+   the rule a player would actually want, which is the only way to ask whether
+   an operations autopilot would be strictly better than the hand it replaces.
+*/
+const RUNS_MATCHED = Array.from({ length: 36 }, (_, i) =>
+  climb(700 + i, HUMAN_DAYS, { matchOps: true }),
+);
+
+/*
+   The allocator again, in a family that also develops its people.
+
+   These two mechanics should compound, and not in a comfortable direction.
+   Matching sends the same good men at the same dangerous work night after
+   night, and `TRAINING.perTier` makes high-tier work teach roughly three times
+   what street work teaches — so the men who are already best get better
+   fastest, and the allocator keeps choosing them because they are best.
+
+   Paired against `RUNS_TRAINS`, which trains identically and assigns by hand,
+   so the only thing between the two populations is still the assignment.
+*/
+const RUNS_MATCHED_TRAINED = Array.from({ length: 36 }, (_, i) =>
+  climb(700 + i, HUMAN_DAYS, { matchOps: true, trains: true }),
+);
+
 describe('somewhere for the money to go', () => {
   it('says whether an ordinary career ever buys any of it', () => {
     const bought = RUNS_SHOPS.filter((r) => r.newSystems.shopping.bought.length > 0);
@@ -3984,6 +4438,802 @@ describe('somewhere for the money to go', () => {
        estate at face, which is what `holdings` already does for free.
     */
     expect(gap, 'buying and keeping all of it costs the family nothing').toBeLessThan(0);
+  });
+});
+
+describe('handing the job loop over', () => {
+  it('says whether automating beats playing, and it must not', () => {
+    const ran = RUNS_AUTO.filter((r) => r.newSystems.auto.launched > 0);
+    const launched = RUNS_AUTO.map((r) => r.newSystems.auto.launched).sort((a, b) => a - b);
+    const rows = RUNS_AUTO.map((r, i) => ({ r, against: RUNS_300[i] })).filter(
+      ({ r }) => r.newSystems.auto.launched > 0,
+    );
+    const gaps = rows
+      .map(({ r, against }) => r.bestEstate - against.bestEstate)
+      .sort((a, b) => a - b);
+    const ahead = gaps.filter((g) => g > 0).length;
+    const jobs = new Map<string, number>();
+    for (const r of RUNS_AUTO) {
+      if (r.newSystems.auto.job) {
+        jobs.set(r.newSystems.auto.job, (jobs.get(r.newSystems.auto.job) ?? 0) + 1);
+      }
+    }
+
+    // eslint-disable-next-line no-console
+    console.log(
+      `auto: ${ran.length}/${RUNS_AUTO.length} careers ran on a standing order alone
+` +
+        `      set on, median day ` +
+        `${median(RUNS_AUTO.filter((r) => r.newSystems.auto.setDay !== null).map((r) => r.newSystems.auto.setDay!))}` +
+        `; jobs it picked: ` +
+        [...jobs].sort((a, b) => b[1] - a[1]).map(([k, n]) => `${k} ${n}`).join(', ') +
+        `
+      times it fired, 25th / median / 75th: ` +
+        `${pct(launched, 0.25)} / ${median(launched)} / ${pct(launched, 0.75)}
+` +
+        `      estate against playing it yourself, 25th / median / 75th: ` +
+        `$${Math.round(pct(gaps, 0.25)).toLocaleString('en-US')} / ` +
+        `$${Math.round(median(gaps)).toLocaleString('en-US')} / ` +
+        `$${Math.round(pct(gaps, 0.75)).toLocaleString('en-US')}
+` +
+        `      careers where the automation came out ahead: ${ahead}/${gaps.length}`,
+    );
+
+    /*
+       The instrument first: an arm where the order never fired would pass the
+       bar below by doing nothing at all, which is the shape of every false
+       negative this project has ever shipped.
+    */
+    expect(
+      ran.length,
+      'no standing order ever fired, so the comparison below is against nothing',
+    ).toBeGreaterThanOrEqual(Math.ceil(RUNS_AUTO.length / 2));
+
+    /*
+       And the bar this feature exists to satisfy.
+
+       A career that sets one order and stops paying attention must not end up
+       richer than one played by hand. If it does, the correct play is to
+       automate and press +1 month, and the order needs to get *worse* when
+       conditions change — not smarter.
+
+       On the share of careers rather than on the median, because the median of
+       thirty-odd paired careers has now twice failed to price a mechanic in
+       this file. Half is the line: automation matching the played line on a
+       coin flip is a convenience, beating it on most careers is a solution.
+    */
+    expect(
+      ahead,
+      'handing the job loop over beats playing it, so the game solves itself',
+    ).toBeLessThan(Math.ceil(gaps.length / 2));
+  });
+
+  /*
+     The question the two arms above could not ask.
+
+     Both hand over to a rule that is deliberately stupid, so "automation
+     loses" was partly a statement about the rule rather than about automating.
+     This hands the whole operations loop to the allocation a player would
+     actually want — best and most careful on the riskiest work, whoever is
+     left on the safe jobs — running every day with nothing chosen by hand.
+
+     Read carefully: the baseline bot already launches every day. It just takes
+     whoever is standing nearest, `idle().slice(0, bodies)`. So what separates
+     these two populations is the *assignment rule* and nothing else, which is
+     the honest way to ask whether an operations autopilot beats the hand it
+     replaces.
+  */
+  it('says whether allocating well beats allocating at all', () => {
+    const rows = RUNS_MATCHED.map((r, i) => ({ r, against: RUNS_300[i] }));
+    const gaps = rows
+      .map(({ r, against }) => r.bestEstate - against.bestEstate)
+      .sort((a, b) => a - b);
+    const ahead = gaps.filter((g) => g > 0).length;
+    const odds = (rs: typeof RUNS_MATCHED) =>
+      median(
+        rs
+          .filter((r) => r.newSystems.matched.launched > 0)
+          .map((r) => r.newSystems.matched.oddsSum / r.newSystems.matched.launched),
+      );
+
+    // eslint-disable-next-line no-console
+    console.log(
+      `matched: the operations loop allocated best-to-riskiest, every day —
+` +
+        `         jobs launched, median ${median(RUNS_MATCHED.map((r) => r.launchEra.reduce((a, b) => a + b, 0)))}` +
+        ` against ${median(RUNS_300.map((r) => r.launchEra.reduce((a, b) => a + b, 0)))} by hand` +
+        `, at median odds ${(odds(RUNS_MATCHED) * 100).toFixed(0)}%
+` +
+        `         estate against the hand it replaces, 25th / median / 75th: ` +
+        `$${Math.round(pct(gaps, 0.25)).toLocaleString('en-US')} / ` +
+        `$${Math.round(median(gaps)).toLocaleString('en-US')} / ` +
+        `$${Math.round(pct(gaps, 0.75)).toLocaleString('en-US')}
+` +
+        `         careers where the allocator came out ahead: ${ahead}/${gaps.length}
+` +
+        `         median odds by hand ${(odds(RUNS_300) * 100).toFixed(0)}%
+` +
+        `         crew skill floor, allocator ` +
+        `${median(RUNS_MATCHED.map((r) => r.newSystems.crewSkill.floor))}` +
+        ` against ${median(RUNS_300.map((r) => r.newSystems.crewSkill.floor))} by hand` +
+        `; heat-weeks ${median(RUNS_MATCHED.map((r) => r.danger.heat))}` +
+        ` against ${median(RUNS_300.map((r) => r.danger.heat))}`,
+    );
+
+    /*
+       What it measured, 36 careers at day 300:
+
+           jobs launched          435 against 420 by hand
+           median odds            58% against 57%
+           estate difference      -$593,512 / +$202,308 / +$1,019,682
+           careers ahead          19/36
+           crew skill floor       23 against 20
+           heat-weeks             1,826 against 2,043
+
+       **Matching helps, and does not solve anything.** A coin flip on careers
+       with a tilt worth about a tenth of an estate.
+
+       **And it is not doing it by raising the odds.** The median launch is 58%
+       against 57% — one point, which is nothing. Matching does not make the
+       family better at its work, it *moves* the quality: the risky jobs get
+       the good men and the safe jobs get whoever is left, so the median barely
+       shifts while the two ends swap places.
+
+       That is where the rest of the reading comes from, and it is an inference
+       from these figures rather than a separate measurement:
+       `FAILURE_CONSEQUENCES` is far harsher at the top — 24% of extreme
+       failures take somebody in against 12% of low ones hurting somebody — so
+       moving the good crews onto the dangerous work buys fewer *expensive*
+       failures rather than fewer failures. Heat-weeks down a tenth and a skill
+       floor three points higher are consistent with that and with little
+       else.
+
+       Two things this is *not*:
+
+       **It is not a comparison against a human.** The hand it beats is
+       `idle().slice(0, bodies)` — whoever is standing nearest. A player using
+       the *Send your best* button is already taking most of this, and the gap
+       against that would be far smaller.
+
+       **The first version measured the wrong thing and lost by a million.** It
+       also reordered which jobs ran, risk first instead of expected value, and
+       read 6/36 ahead at -$1,029,008. Sorting the board by danger spends the
+       bench and the stake on the most dangerous work before it reaches the
+       work that pays. Worth keeping: *how* you rank the board matters far more
+       than who you send, and in the opposite direction.
+    */
+    expect(
+      median(RUNS_MATCHED.map((r) => r.launchEra.reduce((a, b) => a + b, 0))),
+      'the allocator never launched anything, so the comparison is against nothing',
+    ).toBeGreaterThan(20);
+  });
+
+  it('says what the allocator does once the family also trains people', () => {
+    const rows = RUNS_MATCHED_TRAINED.map((r, i) => ({ r, against: RUNS_TRAINS[i] }));
+    const gaps = rows
+      .map(({ r, against }) => r.bestEstate - against.bestEstate)
+      .sort((a, b) => a - b);
+    const ahead = gaps.filter((g) => g > 0).length;
+    const at = (rs: typeof RUNS_TRAINS, f: (r: (typeof RUNS_TRAINS)[number]) => number) =>
+      median(rs.map(f));
+    const odds = (rs: typeof RUNS_TRAINS) =>
+      median(
+        rs
+          .filter((r) => r.newSystems.matched.launched > 0)
+          .map((r) => r.newSystems.matched.oddsSum / r.newSystems.matched.launched),
+      );
+    const spread = (rs: typeof RUNS_TRAINS) =>
+      median(rs.map((r) => r.newSystems.crewSkill.best - r.newSystems.crewSkill.floor));
+
+    // eslint-disable-next-line no-console
+    console.log(
+      `matched: both arms training, one allocating — against the hand that also trains
+` +
+        `         median odds ${(odds(RUNS_MATCHED_TRAINED) * 100).toFixed(0)}%` +
+        ` against ${(odds(RUNS_TRAINS) * 100).toFixed(0)}%
+` +
+        `         crew skill median / best / floor: allocator ` +
+        `${at(RUNS_MATCHED_TRAINED, (r) => r.newSystems.crewSkill.median)} / ` +
+        `${at(RUNS_MATCHED_TRAINED, (r) => r.newSystems.crewSkill.best)} / ` +
+        `${at(RUNS_MATCHED_TRAINED, (r) => r.newSystems.crewSkill.floor)}` +
+        `; by hand ${at(RUNS_TRAINS, (r) => r.newSystems.crewSkill.median)} / ` +
+        `${at(RUNS_TRAINS, (r) => r.newSystems.crewSkill.best)} / ` +
+        `${at(RUNS_TRAINS, (r) => r.newSystems.crewSkill.floor)}
+` +
+        `         top-to-bottom spread: ${spread(RUNS_MATCHED_TRAINED)} against ${spread(RUNS_TRAINS)}
+` +
+        `         pairings run: ${at(RUNS_MATCHED_TRAINED, (r) => r.newSystems.teaching.finished)}` +
+        ` against ${at(RUNS_TRAINS, (r) => r.newSystems.teaching.finished)}
+` +
+        `         estate difference 25th / median / 75th: ` +
+        `$${Math.round(pct(gaps, 0.25)).toLocaleString('en-US')} / ` +
+        `$${Math.round(median(gaps)).toLocaleString('en-US')} / ` +
+        `$${Math.round(pct(gaps, 0.75)).toLocaleString('en-US')}
+` +
+        `         careers where the allocator came out ahead: ${ahead}/${gaps.length}
+` +
+        `         heat-weeks ${Math.round(at(RUNS_MATCHED_TRAINED, (r) => r.danger.heat))}` +
+        ` against ${Math.round(at(RUNS_TRAINS, (r) => r.danger.heat))}`,
+    );
+
+    /*
+       **The prediction above this arm was wrong, and the arm is worth keeping
+       for that reason.**
+
+       The reasoning was that matching and training would compound: the same
+       good men on the same dangerous work, `TRAINING.perTier` teaching roughly
+       three times as much up there, so the best get better fastest and the
+       allocator keeps picking them. Rich get richer.
+
+       Measured, they cancel.
+
+           against the hand that also trains
+             median odds        59% against 59%
+             skill med/best/floor   44/69/24 against 44/69/24
+             top-to-bottom spread   47 against 46
+             estate difference  -$505,003 / +$71,570 / +$1,185,782
+             careers ahead      18/36
+             heat-weeks         1,914 against 1,945
+
+       Every distribution is the same to the point. And against the arms with
+       no training at all, the allocator's whole edge has gone:
+
+             estate median      +$202,308  ->  +$71,570
+             heat-weeks gap        217     ->      31
+
+       The likely reason is that the pairing rule works directly against
+       concentration — it takes the best man off the board for twelve days and
+       spends him on the worst — while work-teaching pays out to whoever went
+       out, regardless of who chose them. So matching decides *who* gets the
+       skill and mentoring hands it back, and the shape of the roster ends up
+       governed by the pairing rather than by the assignment.
+
+       Which makes the allocator a convenience and not a strategy, in a family
+       that develops anybody at all.
+    */
+    /*
+       The instrument. Both arms have to actually be training, or this is the
+       previous comparison with a longer name.
+    */
+    expect(
+      at(RUNS_MATCHED_TRAINED, (r) => r.newSystems.teaching.finished),
+      'the allocator arm never trained anybody',
+    ).toBeGreaterThan(0);
+    expect(
+      at(RUNS_TRAINS, (r) => r.newSystems.teaching.finished),
+      'the hand arm never trained anybody',
+    ).toBeGreaterThan(0);
+  });
+
+  it('says whether keeping one alongside playing is a free win', () => {
+    const rows = RUNS_AUTO_PLUS.map((r, i) => ({ r, against: RUNS_300[i] })).filter(
+      ({ r }) => r.newSystems.auto.launched > 0,
+    );
+    const gaps = rows
+      .map(({ r, against }) => r.bestEstate - against.bestEstate)
+      .sort((a, b) => a - b);
+    const ahead = gaps.filter((g) => g > 0).length;
+    const fired = RUNS_AUTO_PLUS.map((r) => r.newSystems.auto.launched).sort((a, b) => a - b);
+    const left = RUNS_AUTO_PLUS.map((r) => r.newSystems.crewLeft).sort((a, b) => a - b);
+    const jobs = new Map<string, number>();
+    for (const r of RUNS_AUTO_PLUS) {
+      if (r.newSystems.auto.job) {
+        jobs.set(r.newSystems.auto.job, (jobs.get(r.newSystems.auto.job) ?? 0) + 1);
+      }
+    }
+
+    // eslint-disable-next-line no-console
+    console.log(
+      `auto: kept alongside playing by hand — ${rows.length}/${RUNS_AUTO_PLUS.length} careers
+` +
+        `      it ground away at: ` +
+        [...jobs].sort((a, b) => b[1] - a[1]).map(([k, n]) => `${k} ${n}`).join(', ') +
+        `
+      times it fired, 25th / median / 75th: ` +
+        `${pct(fired, 0.25)} / ${median(fired)} / ${pct(fired, 0.75)}
+` +
+        `      estate against playing everything, 25th / median / 75th: ` +
+        `$${Math.round(pct(gaps, 0.25)).toLocaleString('en-US')} / ` +
+        `$${Math.round(median(gaps)).toLocaleString('en-US')} / ` +
+        `$${Math.round(pct(gaps, 0.75)).toLocaleString('en-US')}
+` +
+        `      careers where it came out ahead: ${ahead}/${gaps.length}
+` +
+        `      men left at the end, 25th / median / 75th: ` +
+        `${pct(left, 0.25)} / ${median(left)} / ${pct(left, 0.75)}` +
+        ` against ${median(RUNS_300.map((r) => r.newSystems.crewLeft))} playing by hand
+` +
+        `      buried / inside / gone per career, median: ` +
+        `${median(RUNS_AUTO_PLUS.map((r) => r.lost.dead))} / ` +
+        `${median(RUNS_AUTO_PLUS.map((r) => r.lost.inside))} / ` +
+        `${median(RUNS_AUTO_PLUS.map((r) => r.lost.defected))}` +
+        ` against ${median(RUNS_300.map((r) => r.lost.dead))} / ` +
+        `${median(RUNS_300.map((r) => r.lost.inside))} / ` +
+        `${median(RUNS_300.map((r) => r.lost.defected))} by hand
+` +
+        `      careers that ended with nobody left: ` +
+        `${left.filter((n) => n === 0).length}/${RUNS_AUTO_PLUS.length}` +
+        ` against ${RUNS_300.filter((r) => r.newSystems.crewLeft === 0).length}/${RUNS_300.length} by hand`,
+    );
+
+    /*
+       Expensive is the design. Unrecoverable is not.
+
+       Asked because a hand-played browser career with an order left grinding
+       ran the family down to nought men by day 135 — and nothing in this file
+       would have shown it, because every automation bar reads money and none
+       of them reads whether an organization was left at the end. That career
+       was one seed and it never recruited, so it is not evidence; this is the
+       instrument that would be.
+
+       All of these arms *do* replace people. Hiring sits above the
+       `!policy.auto` guard, so it runs on every arm — one man a day, up to
+       `maxCrew`, while the outfit holds three times a recruit's price and the
+       wage bill stays under a quarter of funds. None of them ever *cuts*
+       anybody, because nothing in this project has ever modelled a boss
+       letting somebody go.
+
+       So the bar is the floor rather than a level: a standing order may be a
+       bad decision and may cost a fortune, but it must not be able to end the
+       organization, because there is no way back from an empty roster and the
+       game would have shipped a button that quietly loses the save.
+    */
+    expect(
+      left.filter((n) => n === 0).length,
+      'leaving a standing order running can end the organization outright',
+    ).toBe(0);
+
+    /*
+       The bar that actually protects the feature.
+
+       A standing order kept on the grind while you play everything else has to
+       cost something real — the bench it eats, the heat it draws on a job you
+       stopped watching. If most careers come out ahead anyway, then turning it
+       on is free and the only reason not to would be forgetting it exists.
+    */
+    expect(
+      ahead,
+      'a standing order kept alongside playing is a free win, so it is not a trade',
+    ).toBeLessThan(Math.ceil(gaps.length / 2));
+  });
+
+  /*
+     The arm that asks whether automation can ever be the *right* call.
+
+     Every bar above it is flat — automation must not beat playing — and a flat
+     bar cannot detect a strategy. It passes a mechanic that always loses and
+     fails one that always wins, and a strategy is neither of those. What a
+     strategy looks like in an instrument is two arms of the same feature whose
+     required results disagree: `autoPlus` leaves the order and must lose, this
+     one moves it and must win.
+
+     Read against `RUNS_AUTO_PLUS` rather than against the hand, because those
+     two differ in exactly one thing. Both automate the same job, both keep
+     hand-playing everything else; only this one re-points it.
+  */
+  it('says what moving an order is worth, against leaving it', () => {
+    const paired = RUNS_AUTO_CYCLED.map((r, i) => ({ r, against: RUNS_AUTO_PLUS[i] })).filter(
+      ({ r, against }) => r.newSystems.auto.launched > 0 && against.newSystems.auto.launched > 0,
+    );
+    const gaps = paired
+      .map(({ r, against }) => r.bestEstate - against.bestEstate)
+      .sort((a, b) => a - b);
+    const ahead = gaps.filter((g) => g > 0).length;
+
+    // And against the hand as well, which is the bar the feature is sold on.
+    const vsHand = RUNS_AUTO_CYCLED.map((r, i) => r.bestEstate - RUNS_300[i].bestEstate).sort(
+      (a, b) => a - b,
+    );
+    const moves = RUNS_AUTO_CYCLED.map((r) => r.newSystems.auto.moves).sort((a, b) => a - b);
+    const fired = RUNS_AUTO_CYCLED.map((r) => r.newSystems.auto.launched).sort((a, b) => a - b);
+
+    // eslint-disable-next-line no-console
+    console.log(
+      `auto: the same order moved every ${CYCLE_DAYS} days, against leaving it put
+` +
+        `      times it was re-pointed, 25th / median / 75th: ` +
+        `${pct(moves, 0.25)} / ${median(moves)} / ${pct(moves, 0.75)}
+` +
+        `      times it fired: ${pct(fired, 0.25)} / ${median(fired)} / ${pct(fired, 0.75)}` +
+        ` against ${median(RUNS_AUTO_PLUS.map((r) => r.newSystems.auto.launched))} left put
+` +
+        `      estate against leaving it, 25th / median / 75th: ` +
+        `$${Math.round(pct(gaps, 0.25)).toLocaleString('en-US')} / ` +
+        `$${Math.round(median(gaps)).toLocaleString('en-US')} / ` +
+        `$${Math.round(pct(gaps, 0.75)).toLocaleString('en-US')}
+` +
+        `      careers where moving it came out ahead: ${ahead}/${gaps.length}
+` +
+        `      estate against playing everything by hand, median ` +
+        `$${Math.round(median(vsHand)).toLocaleString('en-US')}` +
+        `; ahead on ${vsHand.filter((g) => g > 0).length}/${vsHand.length}
+` +
+        `      heat-weeks ${Math.round(median(RUNS_AUTO_CYCLED.map((r) => r.danger.heat)))}` +
+        ` against ${Math.round(median(RUNS_AUTO_PLUS.map((r) => r.danger.heat)))} left put
+` +
+        `      men left at the end, moved ` +
+        `${median(RUNS_AUTO_CYCLED.map((r) => r.newSystems.crewLeft))}` +
+        ` against ${median(RUNS_AUTO_PLUS.map((r) => r.newSystems.crewLeft))} left put` +
+        `, ${median(RUNS_300.map((r) => r.newSystems.crewLeft))} by hand
+` +
+        `      buried per career, moved ${median(RUNS_AUTO_CYCLED.map((r) => r.lost.dead))}` +
+        ` against ${median(RUNS_AUTO_PLUS.map((r) => r.lost.dead))} left put` +
+        `; emptied out ` +
+        `${RUNS_AUTO_CYCLED.filter((r) => r.newSystems.crewLeft === 0).length}/36` +
+        ` against ${RUNS_AUTO_PLUS.filter((r) => r.newSystems.crewLeft === 0).length}/36`,
+    );
+
+    /*
+       The instrument first, as always. An arm that never moved the order is
+       the alongside arm with a longer name, and would satisfy anything below
+       by being a copy of what it is supposed to be compared against.
+    */
+    expect(
+      median(moves),
+      'the order was never re-pointed, so this arm is the static one under another name',
+    ).toBeGreaterThan(0);
+
+    /*
+       MEASURED BEFORE THE PATTERN MECHANIC EXISTED. Do not delete this.
+
+           re-pointed             12 / 13 / 13 times a career
+           fired                  168 / 207 / 233, against 178 left put
+           estate against leaving it   +$509,847 / +$1,912,037 / +$3,096,459
+           careers ahead of leaving it 30/36
+           against playing by hand     +$2,399,308, ahead on 27/36
+           heat-weeks             1,747 against 2,070 left put
+
+       **The confound is not a nuisance here, it is the whole result, and it
+       was worth running this arm before writing anything to find that out.**
+
+       Moving an order around the districts beat the hand-played line on 27
+       careers of 36 by nearly two and a half million — with nothing in the
+       game charging a penny for repetition. None of that is automation. All
+       of it is *spreading*: `RUNS_300` works one district until it is done and
+       this file already recorded that as the reason one career in 36 ever met
+       Capo's two-district requirement, and both static auto arms park on
+       `operableTerritories[0]` and never leave. So this arm changed the
+       automation and the map at the same time, and the map won.
+
+       That is a live finding about the shipped build rather than about
+       anything new: **a player who re-points a standing order every three
+       weeks is already ahead of one who plays every night by hand**, and no
+       bar in this file caught it because no bot had ever moved one. F7, in
+       the exact shape the file keeps finding it.
+
+       It also kills the bar this arm was written with. "The cycled arm must
+       come out ahead" passes at 30/36 today, for a reason that has nothing to
+       do with the mechanic it was meant to measure — which is the definition
+       of an instrument that returns a believable number while measuring
+       nothing, and section 3 of HANDOFF is about exactly that.
+
+       So the bar moves to the only quantity the pattern can own: **the gap
+       between moving and leaving has to widen.** Rotation is worth what it is
+       worth either way; if charging for repetition does anything at all, the
+       arm that leaves the order put now pays a bill that grows while this one
+       keeps walking away from it. Anything above the figures recorded here is
+       the mechanic. Anything at or below them is the map, and the mechanic
+       did nothing.
+
+       ------------------------------------------------------------------
+       WHAT IT READS NOW, and how much of it took two goes to see.
+
+       The arm went through three versions and the first two were wrong in
+       ways that each swamped the mechanic under test:
+
+       **It rotated into districts the family had no presence in.** That reads
+       like the counterplay and is not — an unfamiliar district carries
+       `UNFAMILIAR_SUCCESS_PENALTY` and its own police, and the arm was
+       simultaneously buying influence and new ground, which this file has
+       already recorded as worth more than almost anything else. It read
+       30/36 and +$1.9M *before the mechanic existed at all.*
+
+       **It re-picked the job on every move.** `board[board.length - 1]` is
+       the worst thing on the board, and the board grows, so a "rotation" was
+       quietly walking onto longer and more expensive work over a career. That
+       is most of why an early reading showed its firing collapse from 170 a
+       career to 79 while the static arm barely moved.
+
+       With both fixed, the control row of the sweep says what rotation is
+       worth on its own, with the pattern switched off entirely:
+
+           mechanic off      moving ahead 20/36 at +$132,110
+                             fired 86 against 178 left put
+                             against the hand: moved −$4,753, left −$73,022
+
+       That is the honest confound, and it is small: automating one grind job
+       was a wash whichever way you did it, which is exactly what the earlier
+       `autoPlus` bar had already found. Against it, the mechanic at the swept
+       figures:
+
+           mechanic on       moving ahead 22/36 at +$683,082
+                             fired 81 against 167 left put
+                             against the hand: moved +$46,920, left −$495,910
+
+       **The cost lands on the lazy option and nowhere else.** Leaving an
+       order where it is goes from −$73,022 to −$495,910, near seven times
+       worse. Moving it goes from −$4,753 to +$46,920 — level, within noise of
+       where it already was. The gap between them opens by a factor of five.
+
+       So the shape the feature was supposed to have: automate well and you
+       finish level with playing by hand, automate lazily and it is expensive,
+       and neither answer dominates. Note carefully that moving is *level*
+       and not ahead — 20/36 against the hand at 2% of an estate is a coin
+       flip, which is what a convenience should be. The moment it stops being
+       one, `RUNS_AUTO` above is the bar that should catch it.
+
+       One thing found by hand rather than by the grid, and worth keeping
+       because it was never designed: **the plateau is governed by how long
+       the job is, not by how long the order stands.** A pattern rises per
+       firing and fades per day, so a one-day job settles at 76.8 of 100 and a
+       three-day job at 16.6 — under `noticeAbove`, which means the mechanic
+       is close to invisible on the slower half of the board. Arguably correct
+       (a job you do every night is a routine, one you do twice a month is
+       not) but it fell out of the arithmetic rather than being chosen, and
+       anybody re-sizing this should know it is there.
+       ------------------------------------------------------------------
+    */
+    /*
+       The bar, restated once — and the old one is left above rather than
+       edited out, because what it said was true when it was written.
+
+       It required the gap to beat 30/36 and $1,912,037, and those figures came
+       from an arm with two defects in it. It rotated into districts the family
+       had no presence in, so it was buying influence and new ground while
+       claiming to measure rotation; and it re-picked the *job* on every move,
+       drifting onto longer and worse work as the board grew. Both are fixed
+       and both are recorded where they happened. A threshold inherited from a
+       broken instrument is not a threshold.
+
+       So this is the design property instead of a remembered number: **moving
+       an order has to beat leaving it on most careers.** That is the whole
+       claim the feature makes. The number it currently clears by is recorded
+       below and deliberately not written into the assertion, because the next
+       person to change a rate should see the bar fail on the claim rather than
+       on somebody's high-water mark.
+    */
+    expect(
+      ahead,
+      'leaving a standing order where it is beats moving it, so there is no decision',
+    ).toBeGreaterThan(Math.floor(gaps.length / 2));
+  });
+
+  /*
+     The sweep the arm above asked for, on the two knobs it named.
+
+     Not a bar. This prints a grid and asserts only that the grid was actually
+     swept, because the whole point of DIRECTOR section 5 is that a number gets
+     chosen off a plotted distribution rather than nudged until a bar goes
+     green. What is being looked for is a sign flip: a cell where leaving an
+     order put is worse than moving it, on most careers, for a reason that is
+     the mechanic rather than the map.
+
+     Both arms are recomputed inside each cell rather than read from the
+     module-level ones, which were built with the shipped figures. Comparing a
+     swept arm against an unswept one would be measuring the sweep against
+     itself.
+
+     Two knobs, and they are deliberately not `perFire` and `decayShare`:
+
+     **How much it costs when parked** — `weight` and `heatAtFull` moved
+     together, because splitting them asks a question nobody is going to act
+     on separately.
+
+     **How fast it clears when moved** — the decay half-life, with `perFire`
+     scaled alongside it so the plateau stays where it is. Otherwise faster
+     decay silently makes the parked order cheaper too, and the cell measures
+     nothing.
+  */
+  it.skip('sweeps what a groove costs and how fast it clears', () => {
+    const was = { ...PATTERN };
+    const cell = (weight: number, heatAtFull: number, decayShare: number) => {
+      const knobs = PATTERN as unknown as Record<string, number>;
+      knobs.weight = weight;
+      knobs.heatAtFull = heatAtFull;
+      knobs.decayShare = decayShare;
+      // Hold the plateau where it is: it is `perFire / decayShare`.
+      knobs.perFire = was.perFire * (decayShare / was.decayShare);
+
+      const moved = Array.from({ length: 36 }, (_, i) =>
+        climb(700 + i, HUMAN_DAYS, { autoCycled: true }),
+      );
+      const left = Array.from({ length: 36 }, (_, i) =>
+        climb(700 + i, HUMAN_DAYS, { autoPlus: true }),
+      );
+      const gaps = moved
+        .map((r, i) => r.bestEstate - left[i].bestEstate)
+        .sort((a, b) => a - b);
+      return {
+        ahead: gaps.filter((g) => g > 0).length,
+        gap: median(gaps),
+        movedFired: median(moved.map((r) => r.newSystems.auto.launched)),
+        leftFired: median(left.map((r) => r.newSystems.auto.launched)),
+        leftVsHand: median(left.map((r, i) => r.bestEstate - RUNS_300[i].bestEstate)),
+        movedVsHand: median(moved.map((r, i) => r.bestEstate - RUNS_300[i].bestEstate)),
+      };
+    };
+
+    /*
+       The range is bounded by arithmetic before it is bounded by taste.
+
+       A parked order plateaus at `perFire / decayShare`, which is 77 of 100.
+       So `weight` 0.004 already takes 31 points off the odds and 0.008 takes
+       62 — enough to turn an 85% corner shakedown into a 23% one. Anything
+       past about 0.012 is 92 points, which is more than the whole usable
+       scale: every cell above it would read as a flipped sign for the
+       uninteresting reason that the job had been deleted rather than priced.
+
+       A first grid ran x1 / x2.5 / x5 and was thrown away unread for exactly
+       that: two of its three columns were off the end of the instrument.
+    */
+    const rows: string[] = [];
+    for (const [w, h, label] of [
+      /*
+         The control, and the grid is not readable without it.
+
+         This arm was rewritten twice — once to rotate only where the family
+         already stands, once to stop re-picking the job on every move — and
+         both rewrites moved it more than any knob below. So a cell where
+         moving wins proves nothing on its own; it has to be read against the
+         same corrected arm with the mechanic switched off, which is this row.
+      */
+      [0, 1, 'off'],
+      [0.004, 2, '0.004/2'],
+      [0.006, 2.5, '0.006/2.5'],
+      [0.008, 3, '0.008/3'],
+    ] as [number, number, string][]) {
+      for (const [d, half] of [
+        [was.decayShare, '27d'],
+        [0.06, '12d'],
+      ] as [number, string][]) {
+        const r = cell(w, h, d);
+        rows.push(
+          `  cost ${label.padEnd(10)} half-life ${half.padEnd(4)}` +
+            ` moving ahead ${String(r.ahead).padStart(2)}/36` +
+            ` at $${Math.round(r.gap).toLocaleString('en-US').padStart(12)}` +
+            ` | fired ${String(r.movedFired).padStart(3)} vs ${String(r.leftFired).padStart(3)}` +
+            ` | vs hand, moved $${Math.round(r.movedVsHand).toLocaleString('en-US')}` +
+            ` left $${Math.round(r.leftVsHand).toLocaleString('en-US')}`,
+        );
+      }
+    }
+
+    Object.assign(PATTERN as unknown as Record<string, number>, was);
+
+    // eslint-disable-next-line no-console
+    console.log(`pattern sweep — moving an order against leaving it put\n${rows.join('\n')}`);
+
+    expect(rows.length, 'the grid was not actually swept').toBeGreaterThanOrEqual(6);
+    expect(
+      rows.some((r) => r.includes('off')),
+      'the grid was swept without the control, so none of it can be attributed',
+    ).toBe(true);
+  });
+});
+
+describe('putting a man with somebody', () => {
+  it('says whether an ordinary career ever does it', () => {
+    const did = RUNS_TRAINS.filter((r) => r.newSystems.teaching.started > 0);
+    const days = did.map((r) => r.newSystems.teaching.firstDay!).sort((a, b) => a - b);
+    const runs = RUNS_TRAINS.map((r) => r.newSystems.teaching.started).sort((a, b) => a - b);
+    const finished = RUNS_TRAINS.reduce((t, r) => t + r.newSystems.teaching.finished, 0);
+    const started = RUNS_TRAINS.reduce((t, r) => t + r.newSystems.teaching.started, 0);
+    const gained = RUNS_TRAINS.reduce((t, r) => t + r.newSystems.teaching.gained, 0);
+
+    // eslint-disable-next-line no-console
+    console.log(
+      `teaching: ${did.length}/${RUNS_TRAINS.length} careers ever paired anybody
+` +
+        (did.length
+          ? `          first pairing, 25th / median / 75th day: ` +
+            `${pct(days, 0.25)} / ${median(days)} / ${pct(days, 0.75)}
+`
+          : '') +
+        `          pairings per career, 25th / median / 75th: ` +
+        `${pct(runs, 0.25)} / ${median(runs)} / ${pct(runs, 0.75)}
+` +
+        `          ${started} started, ${finished} ran to the end, ` +
+        `${started - finished} came apart
+` +
+        `          skill the students came back with: ${gained.toFixed(0)} points in all, ` +
+        `${finished ? (gained / finished).toFixed(1) : '0'} a pairing
+` +
+        `          weeks holding two men off the board, median ` +
+        `${median(RUNS_TRAINS.map((r) => r.newSystems.teaching.weeksPaired))}`,
+    );
+
+    /*
+       Reachable, and reachable early enough to compound. A man taught on day
+       280 is a man taught for twenty days of play, which is the same failure
+       the possessions catalogue was guarded against.
+    */
+    expect(
+      did.length,
+      'nobody ever puts one man with another',
+    ).toBeGreaterThanOrEqual(Math.ceil(RUNS_TRAINS.length / 2));
+    expect(
+      median(days),
+      'pairing is only reachable in the last stretch of a career',
+    ).toBeLessThan(240);
+    /*
+       And it has to be a decision rather than a standing order. A bot pairing
+       every single week has found a button, not a trade.
+    */
+    expect(
+      started - finished,
+      'no pairing ever came apart, so losing a man to a cell costs nothing here',
+    ).toBeGreaterThan(0);
+  });
+
+  it('says what the roster is actually worth at the end', () => {
+    const at = (rs: typeof RUNS_TRAINS, f: (r: (typeof RUNS_TRAINS)[number]) => number) =>
+      median(rs.map(f));
+
+    // eslint-disable-next-line no-console
+    console.log(
+      `teaching: crew skill at day 300, median man / best / floor — ` +
+        `teaching ${at(RUNS_TRAINS, (r) => r.newSystems.crewSkill.median)} / ` +
+        `${at(RUNS_TRAINS, (r) => r.newSystems.crewSkill.best)} / ` +
+        `${at(RUNS_TRAINS, (r) => r.newSystems.crewSkill.floor)}` +
+        `; never teaching ${at(RUNS_300, (r) => r.newSystems.crewSkill.median)} / ` +
+        `${at(RUNS_300, (r) => r.newSystems.crewSkill.best)} / ` +
+        `${at(RUNS_300, (r) => r.newSystems.crewSkill.floor)}`,
+    );
+
+    /*
+       The direct reading, and the one the estate gap could not give.
+
+       Whether a fortnight of two men bought anything is a question about the
+       roster, not about the whole career — and unlike the estate, this is a
+       quantity the mechanic moves on purpose. The floor is where it should
+       show first: the bot pairs its worst spare man with its best.
+    */
+    expect(
+      at(RUNS_TRAINS, (r) => r.newSystems.crewSkill.floor),
+      'teaching does not raise the floor of the roster, so it bought nothing',
+    ).toBeGreaterThan(at(RUNS_300, (r) => r.newSystems.crewSkill.floor));
+  });
+
+  it('says whether it is worth the two men it holds', () => {
+    const rows = RUNS_TRAINS.map((r, i) => ({ r, against: RUNS_300[i] })).filter(
+      ({ r }) => r.newSystems.teaching.finished > 0,
+    );
+    const gaps = rows
+      .map(({ r, against }) => r.bestEstate - against.bestEstate)
+      .sort((a, b) => a - b);
+    const ahead = gaps.filter((g) => g > 0).length;
+    const idle = (rs: typeof RUNS_TRAINS) =>
+      rs
+        .map((r) => (r.newSystems.scores.weeks ? r.newSystems.scores.weeksNobodyIdle / r.newSystems.scores.weeks : 0))
+        .sort((a, b) => a - b);
+
+    // eslint-disable-next-line no-console
+    console.log(
+      `teaching: paired against the same seeds, ${rows.length} careers that taught somebody —
+` +
+        `          estate difference 25th / median / 75th: ` +
+        `$${Math.round(pct(gaps, 0.25)).toLocaleString('en-US')} / ` +
+        `$${Math.round(median(gaps)).toLocaleString('en-US')} / ` +
+        `$${Math.round(pct(gaps, 0.75)).toLocaleString('en-US')}
+` +
+        `          careers that came out ahead: ${ahead}/${gaps.length}
+` +
+        `          weeks with nobody spare — teaching ` +
+        `${(median(idle(RUNS_TRAINS)) * 100).toFixed(0)}%, never teaching ` +
+        `${(median(idle(RUNS_300)) * 100).toFixed(0)}%`,
+    );
+
+    /*
+       The same two bars the scores arm carries, and for the same reason: the
+       median of thirty-odd paired careers cannot price a feature at this
+       sample size, but the share of careers ahead can say whether it is a trap
+       or free money. Both ends, because a fortnight of two men that always
+       pays is not a decision either.
+    */
+    expect(ahead, 'teaching somebody makes almost every career poorer').toBeGreaterThan(
+      Math.floor(gaps.length / 4),
+    );
+    expect(ahead, 'teaching somebody is free money').toBeLessThan(gaps.length);
   });
 });
 

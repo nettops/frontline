@@ -10,6 +10,9 @@ import {
   visibleTraits,
 } from '../../sim/npc';
 import { readTies } from '../../sim/ties';
+import { canSilence, silence } from '../../sim/silence';
+import { callOffMark, liveMarks } from '../../sim/marks';
+import { Rng } from '../../sim/rng';
 import { canSitDownWith, openSitdown } from '../../sim/sitdown';
 import { REASONS, SITDOWN } from '../../config/sitdown';
 import { readMemories } from '../../sim/memory';
@@ -27,6 +30,8 @@ import {
 } from '../../sim/crew';
 import { payrollForecast, recentWeeklyTake, wageBillWith } from '../../sim/economy';
 import { nightsWorked } from '../../sim/standing';
+import { canTeach, startTraining, stopTraining, trainingFor } from '../../sim/training';
+import { TRAINING } from '../../config/training';
 import { totalWeeklyRevenue } from '../../sim/business';
 import { maxCrew } from '../../sim/player';
 import { formatMoney, formatShortDay } from '../../sim/util';
@@ -60,6 +65,7 @@ export default function CrewPanel() {
   const selected = selectedId ? state.npcs[selectedId] : null;
   const cost = recruitCost(state);
   const payroll = payrollForecast(state);
+  const marks = liveMarks(state);
   // What the place actually earns in a week: finished jobs plus the fronts.
   const income = recentWeeklyTake(state) + totalWeeklyRevenue(state);
 
@@ -168,6 +174,45 @@ export default function CrewPanel() {
       </Panel>
 
       {selected && <CrewDetail npc={selected} onClose={() => setSelectedId(null)} />}
+
+      {/*
+         People who got away, and are still out there talking.
+
+         Listed rather than left on the man's own sheet, because a defected NPC
+         drops off the roster entirely and the whole risk of this feature is
+         forgetting it is running. It is the same reasoning the standing-order
+         panel carries: an automation you cannot see is not a decision you are
+         still making.
+      */}
+      {marks.length > 0 && (
+        <Panel title="Still looking">
+          {marks.map((m) => {
+            const who = state.npcs[m.npcId];
+            return (
+              <div key={m.id} className="kv">
+                <span className="kv-key">
+                  <span className="name-main">{who?.name ?? 'Somebody'}</span>{' '}
+                  <span className="faint tiny">
+                    gone {state.day - m.setDay} days · {m.tries}{' '}
+                    {m.tries === 1 ? 'attempt' : 'attempts'} ·{' '}
+                    {Math.round(m.chance * 100)}% the next one finds them
+                  </span>
+                </span>
+                <button
+                  className="btn small"
+                  onClick={() => mutate((s) => callOffMark(s, m.id), true)}
+                >
+                  Leave it
+                </button>
+              </div>
+            );
+          })}
+          <p className="faint tiny" style={{ margin: '8px 0 0' }}>
+            Every week they are out there is another week of somebody asking them
+            questions. Calling it off does not change that.
+          </p>
+        </Panel>
+      )}
 
       <Panel
         title="Available to bring in"
@@ -313,6 +358,16 @@ function CrewDetail({ npc, onClose }: { npc: Npc; onClose: () => void }) {
   const beyondReach = loyaltyRead.known && loyaltyRead.bandIndex === 0;
   const sitCheck = canSitDownWith(state, npc.id);
   const raiseCheck = canRaise(state, npc.id);
+  const silenceCheck = canSilence(state, npc.id);
+  /*
+     Two clicks, and the second one prints the odds.
+
+     Not a modal, because this screen already opens one to show a man and a
+     dialogue on top of a dialogue is where playtesters stop reading. The
+     button becoming a question is enough to stop a misclick, and it is the
+     only place in this panel that shows a number instead of a phrase.
+  */
+  const [confirmSilence, setConfirmSilence] = useState(false);
 
   return (
     <Panel
@@ -517,6 +572,8 @@ function CrewDetail({ npc, onClose }: { npc: Npc; onClose: () => void }) {
             </div>
           </div>
 
+          <Teaching npc={npc} />
+
           <div className="btn-row" style={{ marginTop: 14 }}>
             <button
               className="btn small"
@@ -549,13 +606,53 @@ function CrewDetail({ npc, onClose }: { npc: Npc; onClose: () => void }) {
             <button
               className="btn small danger"
               disabled={npc.status === 'busy'}
-              title={npc.status === 'busy' ? 'They are in the middle of a job' : undefined}
+              title={
+                npc.status === 'busy'
+                  ? 'They are in the middle of a job'
+                  : 'They walk away knowing how you work'
+              }
               onClick={() => {
                 mutate((s) => dismiss(s, npc.id), true);
                 onClose();
               }}
             >
               Cut loose
+            </button>
+            {/*
+               The other answer, and the reason there are two buttons here.
+
+               Cutting somebody loose is cheap and certain and leaves a man on
+               the street who can be asked questions. This is expensive and
+               uncertain and leaves nobody. Neither is the right one — that is
+               the decision, and `sim/silence.ts` exists to keep it a decision.
+
+               The odds are printed rather than hidden behind a phrase, unlike
+               everything else about a man on this screen. Perception fog is
+               about what you can tell about somebody; this is a statement
+               about what you are ordering, and a boss knows what he is asking
+               for even when he does not know who he is asking it about.
+            */}
+            <button
+              className="btn small danger"
+              disabled={!silenceCheck.ok}
+              title={
+                silenceCheck.ok
+                  ? 'No informant ever walks away from this. It can also go wrong.'
+                  : silenceCheck.message
+              }
+              onClick={() => {
+                if (!confirmSilence) {
+                  setConfirmSilence(true);
+                  return;
+                }
+                const result = mutate((s) => silence(s, new Rng(s.rng), npc.id), true);
+                setConfirmSilence(false);
+                if (result) setMessage(result.message);
+              }}
+            >
+              {confirmSilence
+                ? `Certain? ${Math.round((silenceCheck.chance ?? 0) * 100)}% it goes quietly`
+                : 'Make sure they stay quiet'}
             </button>
           </div>
           {message && (
@@ -585,5 +682,90 @@ function CrewDetail({ npc, onClose }: { npc: Npc; onClose: () => void }) {
         </>
       )}
     </Panel>
+  );
+}
+
+/**
+ * Putting one man with another.
+ *
+ * The teacher list shows what you *think* each man is worth, not what he is —
+ * `perceive` is the only way anything in this game reads somebody else's
+ * stats, and choosing a teacher under that fog is most of the decision. A man
+ * you barely know may be the best in the room or may be the reason your junior
+ * comes back sloppy.
+ *
+ * `canTeach` is asked per candidate rather than filtered on silently, so the
+ * row that cannot teach says why instead of not being there.
+ */
+function Teaching({ npc }: { npc: Npc }) {
+  const state = useGame();
+  const running = trainingFor(state, npc.id);
+
+  if (running) {
+    const other =
+      state.npcs[running.teacherId === npc.id ? running.studentId : running.teacherId];
+    const left = Math.max(0, running.endDay - state.day);
+    const isTeacher = running.teacherId === npc.id;
+    return (
+      <div style={{ marginTop: 14 }}>
+        <div className="tiny" style={{ marginBottom: 6 }}>
+          Learning
+        </div>
+        <p className="dim" style={{ margin: '0 0 6px' }}>
+          {isTeacher
+            ? `Showing ${other?.name ?? 'somebody'} how it is done.`
+            : `Out with ${other?.name ?? 'somebody'}, learning the work.`}{' '}
+          {left} {left === 1 ? 'day' : 'days'} left. Neither of them is available.
+        </p>
+        <Bar value={TRAINING.days - left} max={TRAINING.days} />
+        <div className="btn-row" style={{ marginTop: 8 }}>
+          <button
+            className="btn small danger"
+            title="Call it off. They both come back today and nobody learned anything."
+            onClick={() => mutate((s) => stopTraining(s, running.id), true)}
+          >
+            Call it off
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (npc.status !== 'active') return null;
+
+  const teachers = crewList(state)
+    .filter((n) => n.status === 'active' && n.id !== npc.id && !trainingFor(state, n.id))
+    .map((n) => ({ man: n, check: canTeach(state, n.id, npc.id) }))
+    .filter((t) => t.check.ok)
+    .sort((a, b) => b.man.stats.skill - a.man.stats.skill);
+
+  return (
+    <div style={{ marginTop: 14 }}>
+      <div className="tiny" style={{ marginBottom: 6 }}>
+        Put them with somebody
+      </div>
+      <p className="faint tiny" style={{ margin: '0 0 6px' }}>
+        {TRAINING.days} days. Both of them are off the board for all of it, and what
+        comes across is not only how good somebody is — it is how careful they are too.
+      </p>
+      {teachers.length === 0 ? (
+        <Empty>Nobody free has anything to show them.</Empty>
+      ) : (
+        <div className="btn-row">
+          {teachers.slice(0, 6).map(({ man }) => (
+            <button
+              key={man.id}
+              className="btn small"
+              title={`${man.name} — you read them as ${perceive(man, 'skill').band}, ${
+                perceive(man, 'discipline').band
+              }`}
+              onClick={() => mutate((s) => startTraining(s, man.id, npc.id), true)}
+            >
+              {man.name} · {perceive(man, 'skill').band}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }

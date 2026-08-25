@@ -18,11 +18,20 @@ import {
   kitOf,
   liveScores,
   openScore,
+  readyEverything,
   scoreCost,
   scoreOn,
   setupsLeft,
 } from '../../sim/scores';
 import { SCORE, SETUP_BY_ID } from '../../config/scores';
+import { PATTERN } from '../../config/standingOrders';
+import {
+  cancelStanding,
+  liveStanding,
+  patternOn,
+  setStanding,
+  standingFor,
+} from '../../sim/standingOrders';
 import { availableCrew } from '../../sim/npc';
 import { nightsWorked } from '../../sim/standing';
 import {
@@ -84,6 +93,7 @@ export default function OperationsPanel() {
      offered the button.
   */
   const scores = liveScores(state);
+  const standing = liveStanding(state);
   const setupFor = selected
     ? (scores.find((sc) => setupsLeft(state, sc).some((x) => x.id === selected)) ?? null)
     : null;
@@ -98,6 +108,30 @@ export default function OperationsPanel() {
     // same job, and making the player re-pick it every time would be four
     // clicks to say something the score already said.
     setTerritoryPicked(at ?? null);
+  };
+
+  /*
+     Two ways to fill a crew, and deliberately not one.
+
+     Ticking men one at a time was the single largest cost of playing this
+     game — roughly twelve hundred clicks across a three-hundred-day career,
+     more than everything else on every screen combined.
+
+     It is filled by *policy* rather than by a button called "auto", because
+     who you send is the one decision `spread.probe` exists to measure and the
+     training work made it matter more: concentrate the work and your best man
+     sharpens while the floor rots. A single fill would have had a silent
+     default, and that default would quietly have become the strategy. Two
+     buttons make the trade the thing you are choosing, and neither is
+     pre-selected.
+  */
+  const fill = (how: 'best' | 'rested') => {
+    if (!def) return;
+    const order =
+      how === 'best'
+        ? ranked
+        : [...free].sort((a, b) => nightsWorked(state, a.id) - nightsWorked(state, b.id));
+    setCrewPicked(order.slice(0, crewNeeded(state, def)).map((n) => n.id));
   };
 
   const toggleCrew = (id: string) => {
@@ -251,6 +285,45 @@ export default function OperationsPanel() {
       )}
 
       {/*
+         What you have handed over.
+
+         Listed rather than buried on the job it belongs to, because the whole
+         risk of this feature is forgetting it is on. An order that keeps
+         sending men at a job whose odds have collapsed is the cost it is sold
+         on — but only if you can see it happening.
+      */}
+      {standing.length > 0 && (
+        <Panel title="Runs itself">
+          {standing.map((o) => {
+            const d = OPERATION_BY_ID[o.defId];
+            return (
+              <div key={o.id} className="kv">
+                <span className="kv-key">
+                  <span className="name-main">{d?.name ?? 'A job'}</span>{' '}
+                  <span className="faint tiny">
+                    in {territoryDef(o.territoryId)?.name} · {o.how === 'best' ? 'best people' : 'whoever is rested'} ·
+                    fired {o.launched} {o.launched === 1 ? 'time' : 'times'} ·{' '}
+                    {groove(patternOn(state, o.defId, o.territoryId))}
+                  </span>
+                </span>
+                <button
+                  className="btn small danger"
+                  onClick={() => mutate((st) => cancelStanding(st, o.id), true)}
+                >
+                  Take it back
+                </button>
+              </div>
+            );
+          })}
+          <p className="faint tiny" style={{ margin: '8px 0 0' }}>
+            It does not read the room. It will keep sending them out when the odds have
+            gone, because that is what you told it to do — and the same job on the same
+            street gets easier to predict every night. Move it before it wears a groove.
+          </p>
+        </Panel>
+      )}
+
+      {/*
          The month in front of the job.
 
          Placed above the board rather than inside it because a score is not a
@@ -300,6 +373,30 @@ export default function OperationsPanel() {
                     </span>
                   )}
                 </p>
+                {sc.status === 'open' && left.length > 0 && (
+                  <div className="btn-row" style={{ marginBottom: 6 }}>
+                    {/*
+                       The whole month of groundwork in one move, filled by the
+                       same two policies the crew picker offers. Named for what
+                       it does rather than "auto", because it is still your
+                       call who goes.
+                    */}
+                    <button
+                      className="btn small primary"
+                      title="Send everybody you can spare on all of it at once, best people first."
+                      onClick={() => mutate((st) => readyEverything(st, sc, 'best'), true)}
+                    >
+                      Get it all ready — best
+                    </button>
+                    <button
+                      className="btn small"
+                      title="The same, sending whoever has been out least."
+                      onClick={() => mutate((st) => readyEverything(st, sc, 'rested'), true)}
+                    >
+                      …or whoever is rested
+                    </button>
+                  </div>
+                )}
                 {sc.status === 'open' && left.length > 0 && (
                   <div className="btn-row">
                     {left.map((setup) => (
@@ -556,6 +653,29 @@ export default function OperationsPanel() {
               <div className="tiny" style={{ marginBottom: 6 }}>
                 Pick {needed} · {crewPicked.length} chosen
               </div>
+              {free.length > 0 && needed > 0 && (
+                <div className="btn-row" style={{ marginBottom: 8 }}>
+                  <button
+                    className="btn small"
+                    title="Your most capable people. They get better at it, and nobody else does."
+                    onClick={() => fill('best')}
+                  >
+                    Send your best
+                  </button>
+                  <button
+                    className="btn small"
+                    title="Whoever has been out least. Slower tonight, and it brings the whole crew on."
+                    onClick={() => fill('rested')}
+                  >
+                    Send whoever is rested
+                  </button>
+                  {crewPicked.length > 0 && (
+                    <button className="btn small" onClick={() => setCrewPicked([])}>
+                      Clear
+                    </button>
+                  )}
+                </div>
+              )}
               {free.length === 0 ? (
                 <Empty>Nobody is available.</Empty>
               ) : (
@@ -642,6 +762,15 @@ export default function OperationsPanel() {
                   {breakdown.prep !== 0 && (
                     <Term label="A month of planning" value={breakdown.prep} signed />
                   )}
+                  {/*
+                     The other direction, and the reason it is here rather than
+                     in a log somewhere: a cost you only find out about
+                     afterwards is an ambush. This is the row that makes
+                     charging for repetition a decision the player gets to make.
+                  */}
+                  {breakdown.pattern !== 0 && (
+                    <Term label="They know the routine" value={breakdown.pattern} signed />
+                  )}
                   {breakdown.world !== 0 && (
                     <Term label="The city right now" value={breakdown.world} signed />
                   )}
@@ -678,6 +807,51 @@ export default function OperationsPanel() {
                   Cancel
                 </button>
               </div>
+              {/*
+                 Handing this one over for good.
+
+                 Two buttons rather than one for the same reason the crew fills
+                 are two: the policy is the decision, and a single control
+                 would have a silent default that quietly became the strategy.
+              */}
+              {!SETUP_BY_ID[def.id] && needed > 0 && (
+                <div className="btn-row" style={{ marginTop: 10 }}>
+                  {standingFor(state, def.id) ? (
+                    <button
+                      className="btn small danger"
+                      onClick={() =>
+                        mutate((st) => cancelStanding(st, standingFor(st, def.id)!.id), true)
+                      }
+                    >
+                      Stop running this by itself
+                    </button>
+                  ) : (
+                    <>
+                      <button
+                        className="btn small"
+                        title="It runs on its own from now on, sending your best. It will not stop when the odds turn."
+                        onClick={() =>
+                          mutate((st) => setStanding(st, def.id, territoryId, 'best', approach), true)
+                        }
+                      >
+                        Keep doing this — best
+                      </button>
+                      <button
+                        className="btn small"
+                        title="The same, sending whoever has been out least."
+                        onClick={() =>
+                          mutate(
+                            (st) => setStanding(st, def.id, territoryId, 'rested', approach),
+                            true,
+                          )
+                        }
+                      >
+                        …or whoever is rested
+                      </button>
+                    </>
+                  )}
+                </div>
+              )}
               {check && !check.ok && (
                 <p className="hot tiny" style={{ marginTop: 8, marginBottom: 0 }}>
                   {check.reason}
@@ -851,6 +1025,22 @@ function OperationRow({
       </td>
     </tr>
   );
+}
+
+/**
+ * How well-read a pair has got, in words rather than in a number.
+ *
+ * A display string with no rule in it, so it stays here rather than in sim.
+ * Worded from the street's side — what somebody watching would say — because
+ * the player is not supposed to be reading a meter, they are supposed to be
+ * deciding whether it is time to move.
+ */
+function groove(pattern: number): string {
+  if (pattern < 10) return 'nobody has noticed';
+  if (pattern < PATTERN.noticeAbove) return 'starting to look like a routine';
+  if (pattern < 50) return 'they know the routine';
+  if (pattern < 75) return 'they could set a watch by it';
+  return 'they are waiting for them';
 }
 
 function Term({

@@ -14,6 +14,9 @@ import { tickBusinesses } from './business';
 import { tickContraband } from './contraband';
 import { tickOrders } from './orders';
 import { tickScores } from './scores';
+import { tickTraining } from './training';
+import { tickStandingOrders } from './standingOrders';
+import { tickMarks } from './marks';
 import { closeWeek } from './ledger';
 import { tickPossessions } from './possessions';
 import { tickLaunderer } from './launderers';
@@ -76,6 +79,18 @@ export function advanceDay(state: GameState): void {
   //      window shuts still gets to finish — the window is about when you had
   //      to move, not about how long the night takes.
   tickScores(state);
+  // 1b3. And anybody being shown how. Beside the scores and for the same
+  //      reason — a deadline is a day — and after them, so a man freed by a
+  //      score that has just shut is free this morning rather than tomorrow.
+  tickTraining(state);
+  // 1b4. And anything you told to keep running itself. Last of the three, so
+  //      it draws on a bench that scores and pairings have already taken from
+  //      — the automation gets what is left rather than the first pick.
+  tickStandingOrders(state);
+  // 1b5. And anybody still being looked for. After the bench work, because a
+  //      mark takes nobody off the board — it is other people's problem, and
+  //      the only thing it competes for is the attention it draws.
+  tickMarks(state, rng);
   // 1c. Whoever keeps the books takes their fee and forms an opinion. Before
   //     the fronts, because `launderCut` reads the opinion and the fronts
   //     apply it the same morning — a week where somebody walks has to be a
