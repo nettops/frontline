@@ -2237,3 +2237,98 @@ th.sortable:hover {
   padding-top: 12px;
   border-top: 1px solid var(--line-soft);
 }
+
+/*
+   The player: the customiser, and the portrait beside the name.
+
+   Both use `.crew-portrait` for the canvas itself — it is the same sprite at
+   the same grid, and giving it a second class here would mean two places to
+   change the one rule that matters (never resample it).
+*/
+.customiser {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+}
+
+.customiser-preview {
+  margin: 0;
+  width: 128px;
+  flex: none;
+  text-align: center;
+}
+
+.customiser-preview figcaption {
+  margin-top: 6px;
+  line-height: 1.5;
+}
+
+.customiser-fields {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/*
+   A grid rather than space-between.
+
+   The first pass was flex with a 13ch minimum on the value, and on the title
+   card — which is narrower than a panel — the right-hand arrow of every row
+   was pushed off the edge and clipped. Fixed columns for the label and the two
+   arrows, and the value takes whatever is left, so "Clean" and "Full
+   moustache" are the same control and nothing overflows.
+*/
+.customiser-row {
+  display: grid;
+  grid-template-columns: 5.5em 1fr;
+  align-items: center;
+  gap: 10px;
+}
+
+.cycler {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.cycler-value {
+  text-align: center;
+  font-size: 11px;
+  color: var(--text);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.btn.tiny {
+  padding: 2px 8px;
+  font-size: 13px;
+  line-height: 1.2;
+}
+
+.player-head {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+  margin-bottom: 14px;
+}
+
+.player-head > div {
+  min-width: 0;
+  flex: 1;
+}
+
+@media (max-width: 560px) {
+  .customiser {
+    flex-direction: column;
+    align-items: center;
+  }
+  .customiser-fields {
+    width: 100%;
+  }
+}

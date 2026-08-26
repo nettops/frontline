@@ -17,6 +17,8 @@ import {
   attributeProgressNeeded,
 } from '../../config/economy';
 import { DIFFICULTY_BY_ID } from '../../config/difficulty';
+import { PlayerPortrait } from '../PlayerPortrait';
+import { KIT_NOTE } from '../art/playerLook';
 
 /**
  * The four things a family is worth, side by side.
@@ -86,13 +88,24 @@ export default function PlayerPanel() {
 
   return (
     <>
-      <div className="page-head">
-        <h1 className="page-title">{player.name}</h1>
-        <span className="tiny">
-          {rank.name} · {difficulty.name}
-        </span>
+      {/*
+        The portrait beside the name, and it is dressed by the rank rather
+        than by anything you chose — see ui/art/playerLook.ts. So the page
+        about how far you have climbed shows it rather than only counting it.
+      */}
+      <div className="player-head">
+        <PlayerPortrait player={player} scale={3} />
+        <div>
+          <div className="page-head" style={{ marginBottom: 2 }}>
+            <h1 className="page-title">{player.name}</h1>
+            <span className="tiny">
+              {rank.name} · {difficulty.name}
+            </span>
+          </div>
+          <p className="page-sub" style={{ marginBottom: 0 }}>{rank.blurb}</p>
+          <p className="tiny faint" style={{ marginTop: 6 }}>{KIT_NOTE[player.rank]}</p>
+        </div>
       </div>
-      <p className="page-sub">{rank.blurb}</p>
 
       <div className="grid-2">
         <Panel title="Advancement">
