@@ -10,6 +10,7 @@ import type { GameState, Npc, RoleId } from './types';
 import { addEvidence, addLog, withArticle } from './util';
 import {
   addNote,
+  somethingGood,
   crewList,
   generateNpc,
   isOutOfReach,
@@ -18,6 +19,7 @@ import {
 import { passedOver } from './ties';
 import { remember } from './memory';
 import { spend, totalFunds } from './economy';
+import { holdingShare } from './holdings';
 import { reduceHeat } from './heat';
 import { fearLevel, maxCrew } from './player';
 import { controlledTerritories } from './territory';
@@ -42,7 +44,12 @@ import { priced } from './market';
 export function recruitCost(state: GameState): number {
   const discount = state.player.attributes.negotiation * 0.02;
   const frightening = 1 + fearLevel(state) * (FEAR.recruitCostAtMax - 1);
-  return Math.round(priced(state, RECRUIT_COST) * (1 - clamp(discount, 0, 0.35)) * frightening);
+  // Union halls and the street you come from: people are cheaper to bring in
+  // where people already know you. See `config/holdings.ts`.
+  const known = 1 - holdingShare(state, 'labour');
+  return Math.round(
+    priced(state, RECRUIT_COST) * (1 - clamp(discount, 0, 0.35)) * frightening * known,
+  );
 }
 
 export function refreshRecruits(state: GameState, rng: Rng, force = false): void {
@@ -209,6 +216,8 @@ export function promote(state: GameState, npcId: string): ActionResult {
 
   passedOver(state, npc, watching);
   remember(npc, state.day, 'promoted');
+  // He has gone somewhere, which is the thing stagnation measures.
+  somethingGood(state, npc);
   for (const other of watching) remember(other, state.day, 'passed_over', npc.id);
 
   addNote(npc, state.day, `Made ${ROLE_LABEL[next]}.`, 'good');
@@ -329,6 +338,8 @@ export function setWage(state: GameState, npcId: string, wage: number): ActionRe
 
   const raised = capped > before;
   addNote(npc, state.day, raised ? 'Given a raise.' : 'Had their pay cut.', raised ? 'good' : 'bad');
+  // More money counts as going somewhere. A cut plainly does not.
+  if (raised) somethingGood(state, npc);
   if (!raised) npc.stats.grievance = clamp(npc.stats.grievance + 8, 0, 100);
 
   return { ok: true, message: `${npc.name} now earns ${money(capped)} a week.` };

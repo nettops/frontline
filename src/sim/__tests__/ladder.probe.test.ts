@@ -43,6 +43,9 @@ import { SILENCE, MARK } from '../../config/silence';
 import { liveMarks } from '../marks';
 import { SCORE_TARGETS, SETUP_BY_ID } from '../../config/scores';
 import { PATTERN } from '../../config/standingOrders';
+import { workingHoldings, yieldOf, yieldsHeld } from '../holdings';
+import { HOLDING, YIELDS, type YieldKind } from '../../config/holdings';
+import { setAutopilot } from '../autopilot';
 import { OPERATION_BY_ID } from '../../config/operations';
 import { crewList, isOutOfReach } from '../npc';
 import { eligibleStewards, needsSteward, putInCharge } from '../delegation';
@@ -633,6 +636,24 @@ interface Climb {
       talked: number;
       firstDay: number | null;
     };
+    /**
+     * What a bot that takes ground for what it gives ended up with.
+     *
+     * Counted at the end rather than accumulated, because a yield is a fact
+     * about the map this morning and not a thing that banks. `working` is the
+     * number that matters — ground held *and* staffed, which is the only kind
+     * that pays.
+     */
+    ground: {
+      /** Districts held at `control` with somebody standing in them. */
+      working: number;
+      /** ...and how many distinct kinds that adds up to, out of six. */
+      kinds: number;
+      /** Districts held at control, staffed or not. The gap is the waste. */
+      controlled: number;
+      /** Men tied up running ground, which is the price of all of it. */
+      stewards: number;
+    };
     /** What a bot that puts its green men with its good ones did. */
     teaching: {
       started: number;
@@ -967,6 +988,22 @@ interface Policy {
    */
   matchOps?: boolean;
   /**
+   * ...and the same allocator, given the judgement call it deliberately lacks.
+   *
+   * The shipped autopilot does not read heat, and that omission is the same
+   * one `standingOrders.ts` is built around: reading the room is what a player
+   * does, and an automation that does it too is the game solving itself.
+   *
+   * The counter-argument is that it is silly — a real outfit does not grind on
+   * while a task force forms. This arm exists to settle that with a number
+   * rather than an opinion. It throttles as attention climbs and stops
+   * entirely when it is bad, on top of the lay-low every arm already does.
+   *
+   * The bar is `RUNS_AUTO`'s: if it stays level with playing by hand it should
+   * ship, and if it starts beating it then the omission was load-bearing.
+   */
+  matchOpsSmart?: boolean;
+  /**
    * Deals with the people who keep costing it money.
    *
    * F7, and the plainest case of it this file has had. Nothing in this project
@@ -996,6 +1033,63 @@ interface Policy {
    * wearing a different hat.
    */
   cutsRarely?: boolean;
+  /**
+   * Takes ground for what it gives, and puts somebody in it.
+   *
+   * F7 again, and this time the blindness was measured before the arm existed.
+   * `holdings.ts` gave each of the twelve districts a thing it yields — cheaper
+   * hiring, cheaper washing, better prices, faster favours, quieter streets,
+   * fatter takings — wired into six systems, and the whole rework moved the
+   * probe by nothing at all. Stagnation read -0.60 before it and -0.60 after,
+   * districts held stayed at six, and the only figure that moved was peak clean
+   * by five percent, which is district income arriving passively.
+   *
+   * That is not evidence the yields are worthless. It is evidence the
+   * instrument cannot see them. The baseline bot takes ground to whatever the
+   * job gates demand and then stops, and it hands a district over only when it
+   * happens to have a spare senior man on a Sunday. **Making ground more
+   * valuable cannot change a bot that never asked what ground was worth.**
+   *
+   * So this arm plays the map the way the rework assumes a player would:
+   *
+   * - it expands toward a yield it does not already have, rather than toward
+   *   the district it is nearest to finishing;
+   * - it staffs every district it controls, because an unstaffed holding is a
+   *   line on a map and yields nothing;
+   * - and it keeps going after the gates are satisfied, because the gates stop
+   *   asking at five and there are six kinds.
+   *
+   * Paired against `RUNS_300`, which plays identically in every other respect.
+   * The difference between them is what the map is worth to somebody who wants
+   * what is on it — and if that difference is nothing, the rework is nothing
+   * and should be said so rather than shipped on faith.
+   */
+  chasesGround?: boolean;
+  /**
+   * ...and the same boss, with the work handed to the shipped autopilot.
+   *
+   * F7, and a bad one: `setAutopilot` has never been called by anything in
+   * this project outside its own unit tests. The probe's `matchOps` arm
+   * measured the *rule* that went into `autopilot.ts` and then the feature
+   * shipped and no instrument has touched it since. Every reading this file
+   * has about automation is a reading of a policy written inside the probe.
+   *
+   * The question the arm asks is the one that follows from the run above.
+   * Taking the whole map turned out to be free, and it was free because the
+   * bot spends its own jobs opening ground. So: does a boss who hands the
+   * work over still get the map?
+   *
+   * There is a specific reason to think not, and it is visible in the source
+   * rather than guessed. `tickAutopilot` works `operableTerritories(state)[0]`
+   * — the first entry, every night, for the whole career. That is the exact
+   * defect this file found in its own bot years ago and fixed, and the
+   * shipped feature has it. Influence is built by working a district, so an
+   * autopilot that only ever works one district cannot open a second.
+   *
+   * If that is what happens, the finding is not about territory. It is that
+   * handing over the operations loop quietly hands over the map with it.
+   */
+  handsOver?: boolean;
 }
 
 /**
@@ -1016,6 +1110,16 @@ const CYCLE_DAYS = 21;
  * exists to find out what happens next rather than to find the best moment to
  * pull the trigger.
  */
+/**
+ * Where the heat-managing allocator gets quiet, and where it stops.
+ *
+ * Crude on purpose. The question this arm asks is whether *any* heat sense
+ * pushes automation past playing by hand, not whether a well-tuned one does —
+ * so a clever policy here would be answering a different question.
+ */
+const SMART_QUIET_ABOVE = 40;
+const SMART_STOP_ABOVE = 65;
+
 const CUT_FAILURES_BEFORE = 3;
 
 /**
@@ -1030,6 +1134,8 @@ const CUT_MOST_SPARING = 3;
 function climb(seed: number, days: number, policy: Policy = {}): Climb {
   const state = newGame({ name: 'Ladder', difficulty: 'normal', seed });
   const rng = new Rng(state.rng);
+  // The shipped switch, thrown on the first morning and never touched again.
+  if (policy.handsOver) setAutopilot(state, true);
   const reachedOn = new Map<string, number>();
   const shopping = {
     bought: [] as string[],
@@ -1554,6 +1660,30 @@ function climb(seed: number, days: number, policy: Policy = {}): Climb {
     }
 
     /*
+       And the arm that actually wants what the ground gives fills every one.
+
+       The block above hands over one district a week and only while
+       `needsSteward` says so, which is a bot tidying up rather than a bot
+       collecting yields. A holding with nobody in it is worth nothing at all —
+       that is the whole condition `workingHoldings` enforces — so a player
+       chasing yields staffs everything he holds, every time, and the arm has
+       to do the same or it is measuring the rework with the rework switched
+       off.
+
+       Controlled ground only, because that is the bar a yield is paid at.
+    */
+    if (policy.chasesGround && state.day % 7 === 0) {
+      for (const t of controlledTerritories(state)) {
+        if (t.stewardId) continue;
+        const man = [...eligibleStewards(state)].sort(
+          (a, b) => ROLE_ORDER.indexOf(b.role) - ROLE_ORDER.indexOf(a.role),
+        )[0];
+        if (!man) break;
+        putInCharge(state, man.id, t.id);
+      }
+    }
+
+    /*
        The earner comes before the gamble.
        
        This block sat below the jobs loop, which spends the dirty pile down
@@ -1788,7 +1918,7 @@ function climb(seed: number, days: number, policy: Policy = {}): Climb {
     if (!isLayingLow(state) && state.org.heat >= 70) startLayLow(state);
     const how: ApproachId = DEFAULT_APPROACH;
 
-    if (!isLayingLow(state) && !policy.auto) {
+    if (!isLayingLow(state) && !policy.auto && !policy.handsOver) {
       /*
          Finish the district you started, then start the next one.
 
@@ -1887,11 +2017,46 @@ function climb(seed: number, days: number, policy: Policy = {}): Climb {
          three short of five who spends two weeks in three consolidating what
          he already holds is not expanding, he is idling with a plan.
       */
-      const short = wanted - controlledTerritories(state).length;
+      /*
+         ...or, for the arm that wants what the ground gives, how many kinds
+         it is still missing.
+
+         The gates ask for five districts and stop asking. There are six
+         yields, and a career that satisfies the gates has no reason under the
+         baseline rule to take a sixth — so the rework's central claim, that
+         the map is a set of competing reasons, has never once been tested by
+         anything in this file. This substitutes the yield count for the gate
+         count and leaves the effort rule below exactly as it is, so the two
+         arms differ in *where* they push and *how long*, and in nothing else.
+      */
+      const missing = policy.chasesGround
+        ? (Object.keys(YIELDS) as YieldKind[]).filter((k) => !yieldsHeld(state).includes(k)).length
+        : 0;
+      const short = policy.chasesGround
+        ? missing
+        : wanted - controlledTerritories(state).length;
+      /*
+         And it goes where the thing it does not have is.
+
+         `unfinished[0]` is the district nearest to being held, which is the
+         right rule for a bot that only wants ground. A bot that wants a
+         *reason* takes the nearest district carrying a yield it is missing,
+         and falls back to the nearest district when every kind is already in
+         hand. Same ordering underneath — only the first key is new.
+      */
+      const queue = policy.chasesGround
+        ? [...unfinished].sort((a, b) => {
+            const held = yieldsHeld(state);
+            const wantA = held.includes(yieldOf(a.territory.id)!) ? 1 : 0;
+            const wantB = held.includes(yieldOf(b.territory.id)!) ? 1 : 0;
+            if (wantA !== wantB) return wantA - wantB;
+            return playerInfluence(b.territory) - playerInfluence(a.territory);
+          })
+        : unfinished;
       const expanding =
-        short > 0 && unfinished.length > 0 && state.day % 21 < (short === 1 ? 7 : short === 2 ? 14 : 21);
+        short > 0 && queue.length > 0 && state.day % 21 < (short === 1 ? 7 : short === 2 ? 14 : 21);
       const where =
-        (expanding ? unfinished[0] : (strongest[0] ?? unfinished[0]))?.territory.id ?? null;
+        (expanding ? queue[0] : (strongest[0] ?? queue[0]))?.territory.id ?? null;
       if (where) {
         /*
            Leave the washing machine something to wash.
@@ -2045,7 +2210,19 @@ function climb(seed: number, days: number, policy: Policy = {}): Climb {
            thing being measured is the *assignment*, and the loop below hands
            out `idle().slice(0, bodies)` — whoever happens to be first.
         */
-        if (policy.matchOps) {
+        if (policy.matchOps || policy.matchOpsSmart) {
+          /*
+             Managing the attention, for the arm that is allowed to.
+
+             Two levers and both are the obvious ones: get quieter as it
+             climbs, and stop when it is bad. Deliberately crude — the question
+             is whether *any* heat sense crosses the line, not whether a clever
+             one does.
+          */
+          const smartHeat = policy.matchOpsSmart ? state.org.heat : 0;
+          if (smartHeat >= SMART_STOP_ABOVE) {
+            if (launchEra[0] + launchEra[1] + launchEra[2] === launchedBefore) deadDays += 1;
+          } else {
           /*
              Two passes, so that only the *assignment* differs from the hand.
 
@@ -2065,6 +2242,8 @@ function climb(seed: number, days: number, policy: Policy = {}): Climb {
           const taking: typeof options = [];
           let bodiesLeft = idle(state).length;
           for (const def of options) {
+            // Quieter work only, once they are already looking at you.
+            if (smartHeat >= SMART_QUIET_ABOVE && byRisk[def.risk] > 1) continue;
             const bodies = crewNeeded(state, def);
             if (bodies > bodiesLeft) continue;
             if (operationCost(state, def) > spendable) continue;
@@ -2093,6 +2272,7 @@ function climb(seed: number, days: number, policy: Policy = {}): Climb {
             }
           }
           if (launchEra[0] + launchEra[1] + launchEra[2] === launchedBefore) deadDays += 1;
+          }
         }
 
         for (const def of policy.matchOps ? [] : options) {
@@ -3264,6 +3444,12 @@ function climb(seed: number, days: number, policy: Policy = {}): Climb {
         talked: Object.values(state.evidence)
           .filter((e) => e.detail.includes('has been talking to somebody again'))
           .reduce((sum, e) => sum + e.strength, 0),
+      },
+      ground: {
+        working: workingHoldings(state).length,
+        kinds: yieldsHeld(state).length,
+        controlled: controlledTerritories(state).length,
+        stewards: territoryList(state).filter((t) => t.stewardId).length,
       },
       teaching,
       /*
@@ -4506,6 +4692,17 @@ const RUNS_CUTS_RARE = Array.from({ length: 36 }, (_, i) =>
 );
 
 /*
+   The allocator with the judgement call it was deliberately denied.
+
+   Paired against `RUNS_MATCHED`, which allocates identically and ignores heat,
+   and against `RUNS_300`, which is the bar that actually matters: automation
+   must not beat playing.
+*/
+const RUNS_AUTO_SMART = Array.from({ length: 36 }, (_, i) =>
+  climb(700 + i, HUMAN_DAYS, { matchOpsSmart: true }),
+);
+
+/*
    The operations loop handed to something that allocates properly.
 
    Best and most careful on the riskiest work, whoever is left on the safe
@@ -4533,6 +4730,70 @@ const RUNS_MATCHED = Array.from({ length: 36 }, (_, i) =>
 const RUNS_MATCHED_TRAINED = Array.from({ length: 36 }, (_, i) =>
   climb(700 + i, HUMAN_DAYS, { matchOps: true, trains: true }),
 );
+
+/*
+   A boss who wants what the ground gives, against one who wants ground.
+
+   Paired seed-for-seed against `RUNS_300`, which is the hand this replaces:
+   same jobs, same fronts, same crew rules, same everything except where it
+   expands and whether it bothers to staff what it holds.
+
+   This arm exists because the territory rework measured as nothing and the
+   reason was the instrument, not the rework. Six yields were wired into six
+   systems and every bar in this file stayed where it was, because no bot in
+   this project has ever asked what a district was for. That is F7 in its
+   purest form: the mechanic was invisible to the measurement, and the honest
+   response is to build the eye rather than to argue about the number.
+*/
+const RUNS_GROUND = Array.from({ length: 36 }, (_, i) =>
+  climb(700 + i, HUMAN_DAYS, { chasesGround: true }),
+);
+
+/*
+   ...and the same boss, on a map where holding things gives nothing.
+
+   The control, and the arm above is worthless without it. Read against
+   `RUNS_300` the yield-chasing bot came out ahead on 36 careers of 36 at a
+   median of +$6,498,661, which is not a mechanic, it is a confound with a
+   dollar sign on it. It controlled twelve districts against the hand's four
+   and laundered $8.3M against $2.1M — this file established years ago that
+   spreading across the map is worth a great deal on its own, and that is what
+   that number is measuring. The yields were barely switched on: working
+   holdings moved 3 to 4.
+
+   So the honest control is not a differently-behaved bot at all. It is the
+   *same* bot, on the same seeds, taking the same ground and staffing the same
+   districts, with `HOLDING.share` set to zero so the six multipliers do
+   nothing. Everything the expansion is worth appears in both populations and
+   cancels. What is left between them is the rework and nothing else.
+
+   The config is restored immediately, in the idiom the pattern and silence
+   sweeps in this file already use.
+*/
+/*
+   The same boss again, with the nights handed to the shipped autopilot.
+
+   Paired against `RUNS_GROUND`, which wants exactly the same map and runs its
+   own jobs to get it. The only difference between the two populations is who
+   picks the crews and where they go, so whatever separates them is what
+   handing the operations loop over costs a boss who is trying to hold ground.
+
+   First time anything in this project has turned `setAutopilot` on outside its
+   own unit tests.
+*/
+const RUNS_GROUND_AUTO = Array.from({ length: 36 }, (_, i) =>
+  climb(700 + i, HUMAN_DAYS, { chasesGround: true, handsOver: true }),
+);
+
+const RUNS_GROUND_DEAD = (() => {
+  const was = HOLDING.share;
+  (HOLDING as unknown as Record<string, number>).share = 0;
+  const runs = Array.from({ length: 36 }, (_, i) =>
+    climb(700 + i, HUMAN_DAYS, { chasesGround: true }),
+  );
+  (HOLDING as unknown as Record<string, number>).share = was;
+  return runs;
+})();
 
 describe('somewhere for the money to go', () => {
   it('says whether an ordinary career ever buys any of it', () => {
@@ -4798,6 +5059,105 @@ describe('handing the job loop over', () => {
       median(RUNS_MATCHED.map((r) => r.launchEra.reduce((a, b) => a + b, 0))),
       'the allocator never launched anything, so the comparison is against nothing',
     ).toBeGreaterThan(20);
+  });
+
+  /*
+     Whether the omission was load-bearing.
+
+     The shipped autopilot does not read heat. That is the same omission every
+     automation in this game carries, and the argument for it is that reading
+     the room is what a player does. The argument against is that it is silly:
+     a real outfit does not grind on while a task force forms.
+
+     This settles it. Same allocator, plus two crude levers — quieter work
+     above `SMART_QUIET_ABOVE`, nothing at all above `SMART_STOP_ABOVE` — read
+     against the allocator that ignores heat and against the hand.
+
+     The bar is `RUNS_AUTO`'s and it is the only one that matters: **automation
+     must not beat playing.** If it stays level the omission was superstition
+     and heat management should ship. If it wins, the omission was the feature.
+  */
+  it.skip('says whether letting the autopilot watch the heat crosses the line', () => {
+    const at = (rs: typeof RUNS_AUTO_SMART, f: (r: (typeof RUNS_AUTO_SMART)[number]) => number) =>
+      median(rs.map(f));
+    const gapsVsHand = RUNS_AUTO_SMART.map((r, i) => r.bestEstate - RUNS_300[i].bestEstate).sort(
+      (a, b) => a - b,
+    );
+    const gapsVsPlain = RUNS_AUTO_SMART.map(
+      (r, i) => r.bestEstate - RUNS_MATCHED[i].bestEstate,
+    ).sort((a, b) => a - b);
+    const plainVsHand = RUNS_MATCHED.map((r, i) => r.bestEstate - RUNS_300[i].bestEstate).sort(
+      (a, b) => a - b,
+    );
+    const launched = (rs: typeof RUNS_AUTO_SMART) =>
+      median(rs.map((r) => r.launchEra.reduce((a, b) => a + b, 0)));
+
+    // eslint-disable-next-line no-console
+    console.log(
+      `smart: the allocator with a heat sense, quiet above ${SMART_QUIET_ABOVE}` +
+        `, stopped above ${SMART_STOP_ABOVE}
+` +
+        `       jobs launched ${launched(RUNS_AUTO_SMART)}` +
+        ` against ${launched(RUNS_MATCHED)} ignoring heat and ${launched(RUNS_300)} by hand
+` +
+        `       estate against the hand, 25th / median / 75th: ` +
+        `$${Math.round(pct(gapsVsHand, 0.25)).toLocaleString('en-US')} / ` +
+        `$${Math.round(median(gapsVsHand)).toLocaleString('en-US')} / ` +
+        `$${Math.round(pct(gapsVsHand, 0.75)).toLocaleString('en-US')}
+` +
+        `       careers ahead of the hand: ${gapsVsHand.filter((g) => g > 0).length}/36` +
+        ` against ${plainVsHand.filter((g) => g > 0).length}/36 ignoring heat
+` +
+        `       estate against the allocator that ignores heat, median ` +
+        `$${Math.round(median(gapsVsPlain)).toLocaleString('en-US')}` +
+        `; ahead on ${gapsVsPlain.filter((g) => g > 0).length}/36
+` +
+        `       heat-weeks ${Math.round(at(RUNS_AUTO_SMART, (r) => r.danger.heat))}` +
+        ` against ${Math.round(at(RUNS_MATCHED, (r) => r.danger.heat))} and ` +
+        `${Math.round(at(RUNS_300, (r) => r.danger.heat))} by hand` +
+        `; men left ${at(RUNS_AUTO_SMART, (r) => r.newSystems.crewLeft)}` +
+        ` against ${at(RUNS_300, (r) => r.newSystems.crewLeft)}`,
+    );
+
+    /*
+       Instrument first: an arm that never launched would satisfy anything
+       below by doing nothing, which is the shape of every false negative here.
+    */
+    expect(
+      launched(RUNS_AUTO_SMART),
+      'the heat-aware allocator never launched anything',
+    ).toBeGreaterThan(20);
+
+    /*
+       And the bar, which FAILED. Measured, 36 careers at day 300:
+
+           jobs launched     452, against 435 ignoring heat and 432 by hand
+           estate v hand     −$598,678 / +$347,540 / +$1,478,593
+           careers ahead     20/36, against 18/36 ignoring heat
+           v plain allocator +$210,165, ahead on 19/36
+           heat-weeks        2,006 against 1,937 and 1,994 by hand
+
+       **Letting the autopilot watch the heat beats playing by hand**, which is
+       the one thing this bar exists to forbid. So heat management does not
+       ship, and the reason is a number rather than a design slogan.
+
+       The mechanism is the reverse of what it looks like. It launches *more*
+       jobs than the version that ignores heat, and runs slightly *hotter* —
+       because throttling to quiet work above 40 stops it ever grinding into a
+       forced lay-low at 70. It trades a handful of dangerous nights for a
+       great many ordinary ones. Managing heat is not a realism nicety that
+       makes an autopilot behave sensibly; it is the strongest single lever in
+       the feature, because never being benched is worth more than any
+       allocation rule.
+
+       Skipped rather than left red: the shipped autopilot does not do this, so
+       the game passes. This is a concluded experiment kept for its finding, the
+       same way the two sweeps in this file are.
+    */
+    expect(
+      gapsVsHand.filter((g) => g > 0).length,
+      'an autopilot that watches the heat beats playing by hand, so the game solves itself',
+    ).toBeLessThan(Math.ceil(gapsVsHand.length / 2));
   });
 
   it('says what the allocator does once the family also trains people', () => {
@@ -7119,5 +7479,310 @@ describe('a career that uses what the cycle built', () => {
     );
 
     expect(RUNS_ACTIVE.length).toBe(36);
+  });
+});
+
+/*
+   What the map is worth to somebody who wants what is on it.
+
+   The territory rework gave each of the twelve districts a yield and wired six
+   of them into six systems — hiring, laundering, prices, favours, heat decay,
+   payouts. Then the probe ran and reported that nothing had happened:
+   stagnation -0.60 before and -0.60 after, six districts held both times, and
+   peak clean up five percent, which is district income arriving by itself.
+
+   That reading was worthless and it was worthless for a knowable reason. The
+   baseline bot expands until the job gates stop asking and then stops, and it
+   hands a district over only when a spare senior man happens to coincide with
+   a Sunday. It has never evaluated ground for what ground gives, because until
+   the rework ground did not give anything. **A mechanic that creates a
+   decision cannot be measured by a bot that does not take the decision.**
+
+   So the arm goes where the thing it does not have is, and puts somebody in
+   what it holds.
+
+   The first version of this block read that arm against `RUNS_300` and the
+   result was 36 careers of 36 ahead at a median of +$6,498,661. That is a
+   confound rather than a finding and it is recorded below rather than
+   quietly replaced, because the shape of the mistake is the useful part: the
+   arm took the whole map, and taking the whole map is worth a fortune for
+   reasons this file priced long ago. The yields hardly ran at all.
+
+   The bar therefore reads against `RUNS_GROUND_DEAD` — the same bot, same
+   seeds, same twelve districts, same four stewards, with the yields paying
+   nothing. Expansion appears in both and cancels.
+*/
+describe('what the ground is for', () => {
+  it('says whether what a district gives is worth anything', () => {
+    const at = (rs: typeof RUNS_GROUND, f: (r: (typeof RUNS_GROUND)[number]) => number) =>
+      median(rs.map(f));
+    const gaps = RUNS_GROUND.map((r, i) => r.bestEstate - RUNS_GROUND_DEAD[i].bestEstate).sort(
+      (a, b) => a - b,
+    );
+    const ahead = gaps.filter((g) => g > 0).length;
+    const sprawl = RUNS_GROUND.map((r, i) => r.bestEstate - RUNS_300[i].bestEstate).sort(
+      (a, b) => a - b,
+    );
+
+    // eslint-disable-next-line no-console
+    console.log(
+      `ground: ${RUNS_GROUND.length} careers, ${HUMAN_DAYS} days, same seeds throughout
+` +
+        `        what the bot did, chasing / yields dead / by hand:
+` +
+        `          districts controlled  ${at(RUNS_GROUND, (r) => r.newSystems.ground.controlled)}` +
+        ` / ${at(RUNS_GROUND_DEAD, (r) => r.newSystems.ground.controlled)}` +
+        ` / ${at(RUNS_300, (r) => r.newSystems.ground.controlled)}
+` +
+        `          of those, staffed    ${at(RUNS_GROUND, (r) => r.newSystems.ground.working)}` +
+        ` / ${at(RUNS_GROUND_DEAD, (r) => r.newSystems.ground.working)}` +
+        ` / ${at(RUNS_300, (r) => r.newSystems.ground.working)}
+` +
+        `          kinds held (of 6)    ${at(RUNS_GROUND, (r) => r.newSystems.ground.kinds)}` +
+        ` / ${at(RUNS_GROUND_DEAD, (r) => r.newSystems.ground.kinds)}` +
+        ` / ${at(RUNS_300, (r) => r.newSystems.ground.kinds)}
+` +
+        `          crew left            ${at(RUNS_GROUND, (r) => r.newSystems.crewLeft)}` +
+        ` / ${at(RUNS_GROUND_DEAD, (r) => r.newSystems.crewLeft)}` +
+        ` / ${at(RUNS_300, (r) => r.newSystems.crewLeft)}
+` +
+        `        the yields, against the same bot on a map that pays nothing:
+` +
+        `          estate 25th / median / 75th: ` +
+        `$${Math.round(pct(gaps, 0.25)).toLocaleString('en-US')} / ` +
+        `$${Math.round(median(gaps)).toLocaleString('en-US')} / ` +
+        `$${Math.round(pct(gaps, 0.75)).toLocaleString('en-US')}
+` +
+        `          careers ahead: ${ahead}/${gaps.length}
+` +
+        `          heat-weeks ${Math.round(at(RUNS_GROUND, (r) => r.danger.heat))}` +
+        ` against ${Math.round(at(RUNS_GROUND_DEAD, (r) => r.danger.heat))}` +
+        `; hires ${at(RUNS_GROUND, (r) => r.hires)}` +
+        ` against ${at(RUNS_GROUND_DEAD, (r) => r.hires)}
+` +
+        `        and the confound, kept because it is the reason for the control:
+` +
+        `          same bot against playing by hand, median ` +
+        `$${Math.round(median(sprawl)).toLocaleString('en-US')}` +
+        `, ahead on ${sprawl.filter((g) => g > 0).length}/${sprawl.length}`,
+    );
+
+    /*
+       Instrument first, and the first version of this got it wrong.
+
+       It asked whether the arm held more ground and more kinds than the hand,
+       which it did — and both passed while the thing under test was almost
+       switched off, because staffing is what turns a yield on and staffing
+       barely moved. The right question is whether the arm ran enough working
+       holdings for the six multipliers to be doing anything measurable at all.
+    */
+    expect(
+      at(RUNS_GROUND, (r) => r.newSystems.ground.working),
+      'the arm staffed almost no ground, so the yields were never switched on',
+    ).toBeGreaterThanOrEqual(3);
+    expect(
+      at(RUNS_GROUND, (r) => r.newSystems.ground.controlled),
+      'the two populations took different amounts of ground, so they are not a pair',
+    ).toBe(at(RUNS_GROUND_DEAD, (r) => r.newSystems.ground.controlled));
+
+    /*
+       And the claim. A sign flip between two populations rather than a
+       threshold on a median, because the median of thirty-six paired careers
+       has now failed to price a mechanic three separate times in this file.
+
+       If this loses, the six yields are a tax on attention dressed as a
+       decision, and the right response is to cut them rather than defend them.
+
+       Measured, 36 paired careers at day 300:
+
+           districts controlled  12 / 12 / 4     chasing / dead / by hand
+           of those, staffed      4 /  4 / 3
+           kinds held (of 6)      4 /  4 / 3
+           crew left             58 / 57 / 31
+           estate v dead map     -$1,898,146 / +$579,789 / +$3,390,204
+           careers ahead         23/36
+           heat-weeks            1,635 against 1,736
+           v playing by hand     +$6,498,661, ahead on 36/36  (the confound)
+
+       It passes, and it passes narrowly enough to be worth stating precisely.
+       Twenty-three careers of thirty-six is a sign flip rather than a
+       landslide, and the quartiles straddle zero by nearly two million in
+       either direction — so the yields are worth roughly half a million to a
+       family that has already taken the whole map, with enormous variance in
+       whether any individual career sees it.
+
+       Two things that number is not. It is not the +$6.5M above, which is
+       expansion. And it is not the rework at full strength: this bot holds
+       four kinds of six and staffs four districts of twelve, so a third of the
+       mechanic has still never been exercised by anything. The ceiling is
+       unmeasured and the bench is why.
+
+       The mechanism shows in the two rows underneath. Heat-weeks fall by 101
+       and hires rise by one on the same seeds — quieter streets and cheaper
+       men, which is `quiet` and `labour` doing exactly what they say. The
+       populations diverge in behaviour rather than only in money, which is the
+       right shape: a yield that only moved the estate would be a rebate.
+    */
+    expect(
+      ahead,
+      'holding ground paid the same whether or not the ground gave anything',
+    ).toBeGreaterThan(gaps.length / 2);
+  });
+
+  /*
+     And the thing the arm found on the way, which contradicts the design.
+
+     `config/holdings.ts` says in three places that you are not supposed to end
+     up holding everything, and that the reason is that every district you want
+     the use of costs you a man. The first half is wrong and the second half is
+     right about the wrong thing.
+
+     A bot that simply keeps expanding controls all twelve districts inside 300
+     days. Taking ground is not the constraint — nothing in the game stops it.
+     What it cannot do is *staff* them: it ran four stewards against twelve
+     districts held, with fifty-eight men on the books, because the bench is
+     full of people too junior to be given anything.
+
+     So the constraint the rework leans on is real, but it is not the one
+     written down. Holding the map is free; having the use of it is not.
+  */
+  it('says whether holding everything is actually out of reach', () => {
+    const held = median(RUNS_GROUND.map((r) => r.newSystems.ground.controlled));
+    const staffed = median(RUNS_GROUND.map((r) => r.newSystems.ground.working));
+
+    // eslint-disable-next-line no-console
+    console.log(
+      `ground: a boss who never stops expanding controlled ${held} districts of ` +
+        `${TERRITORIES.length} by day ${HUMAN_DAYS}
+` +
+        `        and had somebody standing in ${staffed} of them, out of ` +
+        `${median(RUNS_GROUND.map((r) => r.newSystems.crewLeft))} men`,
+    );
+
+    expect(
+      staffed,
+      'the map was fully staffed, so nothing at all limits how much ground pays',
+    ).toBeLessThan(held);
+  });
+
+  /*
+     And whether a boss who hands the nights over still gets the map.
+
+     Taking all twelve districts turned out to be free, and it was free for a
+     reason worth naming: the bot builds influence by working a district, so
+     expanding costs it nothing except which district tonight's job runs in.
+     That makes the map and the operations loop the same decision wearing two
+     hats — and this game now ships a switch that takes the operations loop
+     away from you.
+
+     `tickAutopilot` works `operableTerritories(state)[0]`. The first entry,
+     every night, for the whole career. This file found that exact defect in
+     its own bot and the note above the fix is still there: "the median career
+     took a single district to influence 100 and never took a second past 50".
+     The shipped feature has the same line in it.
+
+     So this is not really a test about territory. It asks whether turning the
+     autopilot on quietly hands over the map as well as the crews, and it is
+     read against a boss who wants the identical map and works for it himself.
+  */
+  it('says whether a boss who hands the work over still takes the ground', () => {
+    const at = (rs: typeof RUNS_GROUND, f: (r: (typeof RUNS_GROUND)[number]) => number) =>
+      median(rs.map(f));
+    const gaps = RUNS_GROUND_AUTO.map((r, i) => r.bestEstate - RUNS_GROUND[i].bestEstate).sort(
+      (a, b) => a - b,
+    );
+
+    // eslint-disable-next-line no-console
+    console.log(
+      `ground: the same boss, handing the nights to the shipped autopilot
+` +
+        `        handed over / running it himself:
+` +
+        `          districts controlled  ${at(RUNS_GROUND_AUTO, (r) => r.newSystems.ground.controlled)}` +
+        ` / ${at(RUNS_GROUND, (r) => r.newSystems.ground.controlled)} of ${TERRITORIES.length}
+` +
+        `          of those, staffed    ${at(RUNS_GROUND_AUTO, (r) => r.newSystems.ground.working)}` +
+        ` / ${at(RUNS_GROUND, (r) => r.newSystems.ground.working)}
+` +
+        `          kinds held (of 6)    ${at(RUNS_GROUND_AUTO, (r) => r.newSystems.ground.kinds)}` +
+        ` / ${at(RUNS_GROUND, (r) => r.newSystems.ground.kinds)}
+` +
+        `          peak influence       ${at(RUNS_GROUND_AUTO, (r) => r.influence.peak)}` +
+        ` / ${at(RUNS_GROUND, (r) => r.influence.peak)}` +
+        `; districts ever at control ${at(RUNS_GROUND_AUTO, (r) => r.influence.everControl)}` +
+        ` / ${at(RUNS_GROUND, (r) => r.influence.everControl)}
+` +
+        `          jobs finished       ${at(RUNS_GROUND_AUTO, (r) => r.bestOps)}` +
+        ` / ${at(RUNS_GROUND, (r) => r.bestOps)}
+` +
+        `          crew left            ${at(RUNS_GROUND_AUTO, (r) => r.newSystems.crewLeft)}` +
+        ` / ${at(RUNS_GROUND, (r) => r.newSystems.crewLeft)}
+` +
+        `          estate 25th / median / 75th: ` +
+        `$${Math.round(pct(gaps, 0.25)).toLocaleString('en-US')} / ` +
+        `$${Math.round(median(gaps)).toLocaleString('en-US')} / ` +
+        `$${Math.round(pct(gaps, 0.75)).toLocaleString('en-US')}` +
+        `; ahead on ${gaps.filter((g) => g > 0).length}/${gaps.length}`,
+    );
+
+    /*
+       Instrument first, and the first version of this bar was itself the bug.
+
+       It read `launchEra`, which is a counter the probe increments inside its
+       own job loop — the loop `handsOver` deliberately switches off. So it
+       reported "jobs launched 0" for a population that was launching jobs
+       every night, and failed the run for the wrong reason. Sixteenth time in
+       this project that an instrument has confidently measured itself.
+
+       `bestOps` is `state.org.record.ops`, kept by the game across every boss,
+       and it counts a job whoever ordered it.
+    */
+    expect(
+      at(RUNS_GROUND_AUTO, (r) => r.bestOps),
+      'the shipped autopilot finished nothing, so this measures an idle career',
+    ).toBeGreaterThan(20);
+
+    /*
+       And the claim, which is the bar every automation in this game is held
+       to, applied to the one thing nobody thought to apply it to: **handing
+       the work over must not hand the map over.** A convenience may cost you
+       clicking. It may not cost you a system you were playing.
+
+       Measured, 36 paired careers at day 300, handed over / by his own hand:
+
+                                  before the fix     after
+           districts controlled      1 / 12         12 / 12
+           of those, staffed         1 /  4          4 /  4
+           kinds held (of 6)         1 /  4          4 /  4
+           districts ever at control 1 / 12         12 / 12
+           crew left                 8 / 58         51 / 58
+           jobs finished             —              139 / 291
+           estate median         -$8,455,488        -$2,250
+           careers ahead              0/36            17/36
+
+       The before column is what the shipped switch did. One district, ever, on
+       all thirty-six careers, with peak influence at 100 — it worked a single
+       neighbourhood to saturation and never touched another. The crew fell
+       from fifty-eight men to eight and the family lost eight and a half
+       million. Throwing the switch did not cost clicking; it cost the map, the
+       crew and the career, and nothing in the game said a word about it.
+
+       The after column is the bar being met almost exactly. Same twelve
+       districts, same four staffed, same four kinds, and an estate gap of
+       -$2,250 on an eight-figure estate with seventeen careers of thirty-six
+       ahead. That is a coin flip, which is what a convenience is supposed to
+       read as: it must not beat playing, and it may not cost you anything
+       either.
+
+       One figure worth not over-reading. The autopilot finishes 139 jobs
+       against the hand's 291 and arrives at the same map with seven fewer men.
+       It is doing roughly half the work for roughly the same result, and this
+       instrument cannot say whether that is efficiency or the hand wasting
+       nights. It is not a claim, it is a thing to look at later.
+    */
+    expect(
+      at(RUNS_GROUND_AUTO, (r) => r.newSystems.ground.controlled),
+      'handing the nights to the autopilot cost the boss the map he was taking',
+    ).toBeGreaterThanOrEqual(at(RUNS_GROUND, (r) => r.newSystems.ground.controlled));
   });
 });

@@ -5,14 +5,15 @@ import { Rng } from '../sim/rng';
 import {
   chooseRegister,
   clearSitdown,
+  endSitdown,
   houseRead,
-  leaveSitdown,
+  patienceRead,
   sitdownOptions,
 } from '../sim/sitdown';
 import { perceive } from '../sim/npc';
 import { houseName } from '../sim/houses';
 import { formatShortDay } from '../sim/util';
-import { REASON_BY_ID, REGISTER_BY_ID, SITDOWN } from '../config/sitdown';
+import { QUESTION_BY_ID, REASON_BY_ID, REGISTER_BY_ID } from '../config/sitdown';
 import { ROLE_LABEL } from '../config/economy';
 import { READABLE_STATS } from '../config/npcs';
 import type { FactionId } from '../config/factions';
@@ -77,7 +78,7 @@ export default function SitdownModal({ onDone }: { onDone: (days: number) => voi
   const walkOut = () => {
     const finished = state.sitdown?.done ?? false;
     mutate((s) => {
-      if (s.sitdown && !s.sitdown.done) leaveSitdown(s);
+      if (s.sitdown && !s.sitdown.done) endSitdown(s);
       else clearSitdown(s);
     }, true);
     // Walking out of an unfinished room shows you the outcome first; closing
@@ -132,9 +133,18 @@ export default function SitdownModal({ onDone }: { onDone: (days: number) => voi
         <header className="room-head">
           <span>the back room · {formatShortDay(state.day)}</span>
           <span>
+            {/*
+                 What used to be "exchange 2 of 3" — a budget counting down on
+                 the game's schedule. It is his patience now, read the way
+                 every other hidden thing in this game is read: a phrase, never
+                 a number. This is the only thing the decision to stand up is
+                 made against.
+              */}
             {sit.done
-              ? 'the room is empty'
-              : `exchange ${sit.beats.length + 1} of ${SITDOWN.beats}`}
+              ? sit.walkedOut
+                ? 'they left'
+                : 'the room is empty'
+              : patienceRead(sit)}
           </span>
         </header>
 
@@ -175,14 +185,44 @@ export default function SitdownModal({ onDone }: { onDone: (days: number) => voi
           {sit.beats.length === 0 && !sit.done && (
             <p className="room-quiet">They wait for you to start.</p>
           )}
-          {sit.beats.map((beat, i) => (
-            <div key={i} className={beat.landed ? 'room-beat landed' : 'room-beat'}>
-              <div className="room-beat-label">
-                {REGISTER_BY_ID[beat.registerId]?.label ?? beat.registerId}
+          {/*
+             An exchange, not a result card.
+
+             This printed the register's *label* above the response prose, so
+             what a boss read down the page was a list of menu choices and
+             their outcomes. Your half of it was never on the screen at all.
+
+             Now each beat is two turns: what you said, then what came back.
+             `says` renders as speech and `does` as action, because some moves
+             are not words — `listen` is the whole point of the mechanic and
+             has no line to give.
+
+             The landed/missed distinction stays on the reply rather than on
+             the pair, since that is what it describes: how the room took it.
+          */}
+          {sit.beats.map((beat, i) => {
+            const reg = REGISTER_BY_ID[beat.registerId];
+            return (
+              <div key={i} className="room-exchange">
+                {reg?.says ? (
+                  <p className="room-said">{reg.says}</p>
+                ) : (
+                  <p className="room-did">{reg?.does ?? reg?.label ?? ''}</p>
+                )}
+                <p className={beat.landed ? 'room-reply landed' : 'room-reply'}>{beat.text}</p>
+                {/*
+                   And what he wants from you, if the beat ended with him
+                   wanting something. Shown on the beat that asked rather than
+                   floating above the buttons, so the transcript reads in the
+                   order the room happened — and so it is still legible after
+                   you have answered it.
+                */}
+                {reg?.asks && beat.landed && (
+                  <p className="room-asked">{QUESTION_BY_ID[reg.asks]?.text}</p>
+                )}
               </div>
-              <p className="room-beat-text">{beat.text}</p>
-            </div>
-          ))}
+            );
+          })}
           {sit.done && sit.outcome && <p className="room-outcome">{sit.outcome}</p>}
           {npc && (sit.done || sit.beats.length > 0) && (
             <p className="room-learned">
@@ -213,12 +253,25 @@ export default function SitdownModal({ onDone }: { onDone: (days: number) => voi
           </div>
         )}
 
+        {/*
+           You standing up, which is the decision the rework exists for.
+
+           This read "walk away" with the note "leaving now costs nothing but
+           the day" — the language of abandoning something, from when the
+           conversation ended on a three-exchange count and going early meant
+           forfeiting unspent beats.
+
+           It is the opposite now. Ending it is the move: everything won is
+           kept, and what you give up is only whatever the next question might
+           have been. The one way this goes badly is him standing up first, so
+           the words here have to read as a choice rather than an exit.
+        */}
         <footer className="room-foot">
           <button className="room-leave" onClick={walkOut}>
-            {sit.done ? 'close the door' : 'walk away'}
+            {sit.done ? 'close the door' : 'that is all'}
           </button>
           <span>
-            {sit.done ? 'esc' : 'leaving now costs nothing but the day — esc'}
+            {sit.done ? 'esc' : 'you keep what you have — esc'}
           </span>
         </footer>
       </article>

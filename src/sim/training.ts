@@ -18,7 +18,7 @@
 import { clamp } from './rng';
 import type { GameState, Id, Npc, Training } from './types';
 import { addLog, nextId } from './util';
-import { addNote, gainFamiliarity } from './npc';
+import { addNote, gainFamiliarity, somethingGood } from './npc';
 import { TRAINING, skillProgressNeeded } from '../config/training';
 import { STAT_BANDS } from '../config/npcs';
 
@@ -158,6 +158,8 @@ export function startTraining(
     status: 'running',
   };
   trainingList(state).push(run);
+  // Being shown how by the best man in the outfit is going somewhere.
+  somethingGood(state, student);
   addLog(
     state,
     `${student.name} is with ${teacher.name} for ${TRAINING.days} days. Neither is available.`,

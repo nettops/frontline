@@ -25,6 +25,7 @@ import {
 } from '../../sim/scores';
 import { SCORE, SETUP_BY_ID } from '../../config/scores';
 import { PATTERN } from '../../config/standingOrders';
+import { autopilotOn, setAutopilot } from '../../sim/autopilot';
 import {
   cancelStanding,
   liveStanding,
@@ -292,6 +293,43 @@ export default function OperationsPanel() {
          sending men at a job whose odds have collapsed is the cost it is sold
          on — but only if you can see it happening.
       */}
+      {/*
+         The whole loop, handed over.
+
+         Placed above the board rather than tucked in a settings menu for the
+         same reason the standing-order list is: an automation you cannot see
+         is not a decision you are still making. The line under it says what it
+         measured as rather than what it promises — it is a way to stop
+         clicking, not a way to win, and a player who turns it on expecting an
+         edge should be told otherwise here rather than find out in four years.
+      */}
+      <Panel title="The work">
+        <div className="kv">
+          <span className="kv-key">
+            <span className="name-main">
+              {autopilotOn(state) ? 'Your people go where it is worst' : 'You pick every crew'}
+            </span>{' '}
+            <span className="faint tiny">
+              {autopilotOn(state)
+                ? 'best and most careful on the riskiest work, every day'
+                : 'nothing goes out unless you send it'}
+            </span>
+          </span>
+          <button
+            className={autopilotOn(state) ? 'btn small danger' : 'btn small'}
+            onClick={() => mutate((st) => setAutopilot(st, !autopilotOn(st)), true)}
+          >
+            {autopilotOn(state) ? 'Take it back' : 'Let it run'}
+          </button>
+        </div>
+        <p className="faint tiny" style={{ margin: '8px 0 0' }}>
+          It changes who goes, never what runs — the jobs are the ones you would have
+          taken anyway. It does not read heat and it does not decide tonight is a bad
+          night. Measured, it comes out level with playing by hand: this saves you the
+          clicking, it does not win you anything.
+        </p>
+      </Panel>
+
       {standing.length > 0 && (
         <Panel title="Runs itself">
           {standing.map((o) => {

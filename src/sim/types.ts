@@ -311,6 +311,18 @@ export interface Npc {
   skimTotal: number;
   joinedDay: number;
   /**
+   * The last day anything good happened to him.
+   *
+   * Promoted, handed a district, given a raise, put on a score, taught by
+   * somebody better, or heard out in a room. What `stagnationLoyaltyPerTick`
+   * measures against — see `daysSinceGood`.
+   *
+   * Optional, defaulting to `joinedDay`, so a save written before this loads
+   * with every man's clock running from the day he arrived, which is exactly
+   * what the old code did.
+   */
+  lastGoodDay?: number;
+  /**
    * The day he started talking to somebody, if he has.
    *
    * The single most consequential hidden field in the game, and the one the
@@ -1478,8 +1490,27 @@ export interface Sitdown {
   beats: SitdownBeat[];
   /** Tags learned in this conversation. These are what unlock registers. */
   revealed: string[];
+  /**
+   * A question he has put to you and is waiting on.
+   *
+   * While this is set the table narrows to answers to it — that narrowing is
+   * the whole point, because a question you can ignore is not a question. You
+   * may still stand up with it hanging; leaving it unanswered is rude, not
+   * forbidden.
+   */
+  pending?: string | null;
   familiarityBefore: number;
+  /**
+   * How much longer he will sit there.
+   *
+   * Replaces the fixed exchange count. Spent by every beat, spent harder by a
+   * misread, partly bought back by landing something real. At zero he stands
+   * up on his own, which costs — see `SITDOWN.walkedGrievance`.
+   */
+  patience: number;
   done: boolean;
+  /** True when he ended it rather than you. The expensive way for a room to empty. */
+  walkedOut: boolean;
   /** Set when the room empties. What it was all worth, in a sentence. */
   outcome: string | null;
 }
@@ -1731,6 +1762,14 @@ export interface GameState {
    * silencing was possible loads with nobody being looked for.
    */
   marks?: Mark[];
+  /**
+   * The operations loop, handed over.
+   *
+   * Optional and absent by default, so a save written before this existed
+   * loads with the crews in the player's hands. See `sim/autopilot.ts` — it
+   * measured as a convenience rather than a strategy, and ships as one.
+   */
+  autopilot?: boolean;
 
   /** Counters and one-off markers. Cheaper than adding a field per flag. */
   flags: Record<string, number>;

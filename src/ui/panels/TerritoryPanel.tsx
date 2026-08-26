@@ -28,6 +28,7 @@ import {
   usedSlots,
   hasPresence,
 } from '../../sim/territory';
+import { yieldRead } from '../../sim/holdings';
 import { businessDef } from '../../sim/business';
 import { formatMoney, formatShortDay } from '../../sim/util';
 import {
@@ -560,8 +561,46 @@ function Steward({ territory }: { territory: Territory }) {
   const average = averageTake(territory);
   const candidates = eligibleStewards(state);
 
+  /*
+     What this place is actually for, and what stands between you and it.
+
+     The complaint this whole rework came from was that the territory screen
+     "just tells you what and who" — twelve districts that were mechanically
+     one object, some slots and a discount on heat, differing only in how much
+     a job pays. Every blurb in `config/territories.ts` had been saying what
+     its place was for since the day it was written and nothing read them.
+
+     So this says the thing, and then says which of the two conditions you are
+     failing. A refusal that does not name the number doing the refusing is the
+     F10 failure this project has already paid for once.
+  */
+  const gives = yieldRead(territory.id);
+  const level = controlLevel(territory);
+  const controlled = level === 'control' || level === 'dominance';
+
   return (
     <>
+      {gives && (
+        <>
+          <div className="tiny" style={{ margin: '16px 0 6px' }}>
+            What it is for
+          </div>
+          <div className="kv">
+            <span className="kv-key">
+              <span className="name-main">{gives.label}</span>{' '}
+              <span className="faint tiny">{gives.blurb}</span>
+            </span>
+            <span className={controlled && held ? 'kv-val ok' : 'kv-val faint'}>
+              {controlled && held
+                ? 'yours'
+                : !controlled
+                  ? `needs control — you have ${CONTROL_LABEL[level]}`
+                  : 'needs somebody running it'}
+            </span>
+          </div>
+        </>
+      )}
+
       <div className="tiny" style={{ margin: '16px 0 6px' }}>
         Who runs it
       </div>

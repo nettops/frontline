@@ -17,6 +17,7 @@ import { trainAttribute } from './player';
 import { addHeat } from './heat';
 import { launderRestriction } from './investigation';
 import { launderer, laundererRate } from './launderers';
+import { holdingShare } from './holdings';
 import { note } from './ledger';
 import { worldMod } from './world';
 import {
@@ -309,9 +310,17 @@ export function launderOutlook(state: GameState): LaunderOutlook {
  */
 export function launderCut(state: GameState): number {
   const skill = state.player.attributes.business * LAUNDER_CUT_PER_BUSINESS_POINT;
+  /*
+     Freight in, freight out, and nobody counting very carefully.
+
+     Ground where the paperwork is not examined takes a share off whatever the
+     washing costs you — the launderer's rate is unchanged, the district simply
+     means less of it sticks. See `config/holdings.ts`.
+  */
+  const cover = 1 - holdingShare(state, 'washing');
   const held = launderer(state);
-  if (!held) return Math.max(LAUNDER_CUT_MIN, LAUNDER_CUT_BASE - skill);
-  return Math.max(held.bestCut, laundererRate(state, held) - skill);
+  if (!held) return Math.max(LAUNDER_CUT_MIN, (LAUNDER_CUT_BASE - skill) * cover);
+  return Math.max(held.bestCut, (laundererRate(state, held) - skill) * cover);
 }
 
 // ----------------------------------------------------------- acquisition ---

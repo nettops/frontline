@@ -24,6 +24,7 @@ import { addHeat } from './heat';
 import { crewList } from './npc';
 import { controlLevel, people, prosperity, territoryDef, territoryList } from './territory';
 import { activity, priced } from './market';
+import { holdingShare } from './holdings';
 import {
   ARMS_SALE,
   CONTROL_THROUGHPUT,
@@ -254,7 +255,15 @@ export function portHolder(state: GameState): FactionId | null {
  * less at the bottom, which is the only reason to time one.
  */
 export function unitValue(state: GameState, trade: TradeId): number {
-  return Math.round(priced(state, TRADES[trade].unitValue) * activity(state));
+  /*
+     Whoever holds the water decides what the city pays for it.
+
+     The docks and the rail yards are where everything entering the city is
+     handled, so holding them moves both ends of the trade — you sell for more
+     here and buy for less in `unitCost`. See `config/holdings.ts`.
+  */
+  const grip = 1 + holdingShare(state, 'trade');
+  return Math.round(priced(state, TRADES[trade].unitValue) * activity(state) * grip);
 }
 
 /** What an arrangement thinks of you, 0..100. Zero for one you have not kept. */
@@ -316,6 +325,8 @@ export function armsSupplier(state: GameState): SupplierDef | null {
 
 export function unitCost(state: GameState, trade: TradeId): number {
   const def = TRADES[trade];
+  // And the other end of the same grip — see `unitValue`.
+  const grip = 1 - holdingShare(state, 'trade');
   if (trade === 'arms') {
     /*
        Bought crates cost more than made ones, always. `priceMultiplier` is
@@ -324,7 +335,7 @@ export function unitCost(state: GameState, trade: TradeId): number {
        capital half of this trade is where its drama lives.
     */
     const bought = armsSupplier(state);
-    return Math.round(priced(state, def.unitCost) * (bought ? bought.priceMultiplier : 1));
+    return Math.round(priced(state, def.unitCost) * (bought ? bought.priceMultiplier : 1) * grip);
   }
 
   /*
@@ -334,7 +345,7 @@ export function unitCost(state: GameState, trade: TradeId): number {
      in the same order, so the figure on the panel is the figure being paid.
   */
   const sources = productSources(state);
-  return sources[0]?.price ?? priced(state, def.unitCost);
+  return Math.round((sources[0]?.price ?? priced(state, def.unitCost)) * grip);
 }
 
 /** What the waterfront arrangement costs, before and after who holds the water. */
