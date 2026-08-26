@@ -14,6 +14,7 @@ import type {
   FactionBond,
   GameMode,
   GameState,
+  PlayerLook,
   Territory,
 } from './types';
 import { CHARACTER_JITTER } from '../config/houses';
@@ -87,6 +88,14 @@ export interface NewGameOptions {
   sandboxStart?: string;
   /** Omit for a random world. Pass one to reproduce a specific game. */
   seed?: number;
+  /**
+   * What the player chose to look like on the title screen.
+   *
+   * Omitted for Simulation, where there is no player, and for any caller that
+   * does not care — a game without one derives a look from the name instead of
+   * carrying nothing. See ui/art/playerLook.ts.
+   */
+  look?: PlayerLook;
 }
 
 /**
@@ -254,6 +263,7 @@ export function newGame(opts: NewGameOptions): GameState {
       opsCompleted: 0,
       opsFailed: 0,
       pendingRank: null,
+      look: opts.look,
     },
 
     org: {

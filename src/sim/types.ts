@@ -22,6 +22,24 @@ export type Id = string;
 
 // ---------------------------------------------------------------- player ---
 
+/**
+ * The half of the player's appearance that is the person rather than the rank.
+ *
+ * Lives here rather than beside the renderer because it is saved state, and
+ * sim/ must not import from ui/. ui/art/playerLook.ts owns everything else
+ * about it: the options, the labels, and how it is merged with the rank's kit
+ * to make a full CrewLook.
+ */
+export interface PlayerLook {
+  build: 'slim' | 'regular' | 'heavy';
+  skin: string;
+  hair: string;
+  hair_style: 'slick' | 'bald' | 'balding' | 'bun' | 'bob' | 'none';
+  facial: 'none' | 'tache' | 'walrus' | 'goatee' | 'beard' | 'stubble' | 'chops';
+  /** Whether you wear the hat your rank comes with. See ui/art/playerLook.ts. */
+  hat: boolean;
+}
+
 export type RankId =
   | 'street_criminal'
   | 'enforcer'
@@ -53,6 +71,20 @@ export interface Player {
   opsFailed: number;
   /** Rank the player has been offered but not yet accepted. */
   pendingRank: RankId | null;
+  /**
+   * What you chose to look like, if you chose.
+   *
+   * Optional on purpose: a save written before the customiser existed loads
+   * with nothing here and falls back to a look derived from the name, exactly
+   * as a crew member's is. That is why SAVE_VERSION does not move for this —
+   * save.ts has no migrations and rejects a mismatched version outright, so an
+   * additive optional field is the only kind that can be added without
+   * invalidating every save anybody has.
+   *
+   * Only the half of the look that is you. The clothes come off the rank at
+   * render time — see ui/art/playerLook.ts.
+   */
+  look?: PlayerLook;
 }
 
 // ---------------------------------------------------- organization state ---

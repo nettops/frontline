@@ -6,6 +6,8 @@ import { DIFFICULTIES } from '../config/difficulty';
 import { MODES, MODE_BY_ID, SANDBOX_STARTS } from '../config/modes';
 import type { DifficultyId, GameMode } from '../sim/types';
 import { SkinToggle } from './components';
+import { PlayerCustomiser } from './PlayerCustomiser';
+import { lookFromName, type PlayerLook } from './art/playerLook';
 
 export default function TitleScreen() {
   const [name, setName] = useState('');
@@ -13,11 +15,19 @@ export default function TitleScreen() {
   const [difficulty, setDifficulty] = useState<DifficultyId>('normal');
   const [sandboxStart, setSandboxStart] = useState(SANDBOX_STARTS[0].id);
   const [error, setError] = useState<string | null>(null);
+  /*
+     Null until touched, and that is the point: the face follows the name you
+     are typing until you take it over. Somebody who types a name and presses
+     start still gets a person rather than a default, and somebody who wants
+     to choose has not had a choice taken from them.
+  */
+  const [look, setLook] = useState<PlayerLook | null>(null);
+  const shownLook = look ?? lookFromName(name);
   const saves = allMeta();
   const hasSaves = Object.values(saves).some(Boolean);
 
   const start = () => {
-    setGame(newGame({ name, difficulty, mode, sandboxStart }));
+    setGame(newGame({ name, difficulty, mode, sandboxStart, look: shownLook }));
   };
 
   const resume = (slot: SlotId) => {
@@ -72,6 +82,17 @@ export default function TitleScreen() {
               onChange={(e) => setName(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && start()}
             />
+          </div>
+        )}
+
+        {/*
+          Only where there is somebody to be. Simulation has no player at all,
+          which is the same reason the name field above is hidden for it.
+        */}
+        {mode !== 'simulation' && (
+          <div className="field">
+            <span className="field-label">What you look like</span>
+            <PlayerCustomiser look={shownLook} onChange={setLook} />
           </div>
         )}
 
