@@ -11,6 +11,18 @@ and mood are not, and should not be.
 
 ## pixel-houses.html — the Beauvais and the Rowe, and what a house looks like
 
+> **Shipped.** The renderer is in the game as `src/ui/art/bossPortrait.ts`, the
+> derivation as `src/ui/art/bossLook.ts`, and the boss now has a face at the top
+> of the rival detail panel. This sheet stays as the argument that produced it.
+>
+> One thing changed on the way in. The sheet hand-authored a light and a
+> wardrobe per house, which does not survive contact with a pool of twelve. In
+> the game both are chosen from the family's **personality** — the same four
+> numbers `faction.ts` weights every decision by — so every house gets a room
+> without a lookup table, a thirteenth would get one for free, and the portrait
+> became a readout of how they play rather than decoration on top of it. The
+> Beauvais and the Rowe still land where this sheet drew them.
+
 The two families added to the draw in `config/houses.ts`. Six bosses each,
 because a boss is drawn per game and a house is not one face — and the names
 are the real pools out of that file, which is why half of each rack is women.
