@@ -9,6 +9,77 @@ pieces and what is deliberately allowed to differ. Short version: palette
 family, light logic and craft floor are fixed; pixel scale, fidelity, framing
 and mood are not, and should not be.
 
+## pixel-houses.html — the Beauvais and the Rowe, and what a house looks like
+
+The two families added to the draw in `config/houses.ts`. Six bosses each,
+because a boss is drawn per game and a house is not one face — and the names
+are the real pools out of that file, which is why half of each rack is women.
+
+```bash
+open prototypes/pixel-houses.html            # ?z=2 to inspect
+```
+
+64 × 80, shown at 3×, same method as `pixel-portrait.html`: one shaded solid
+for the head and then about thirty deliberate marks, dithered ramps, a rim
+taken against a snapshot of the backdrop so it clips the exact silhouette.
+
+### The design rule, and why it constrains the art
+
+`houses.ts` says a house is "written as a way of doing business, never as a
+nationality with a temperament attached." If the art answers that with two sets
+of features, the file is a liar. So both racks draw from the same four skin
+ramps, the same builds and the same ages, and what separates them is the
+business rendered as kit and as light:
+
+| | Beauvais | Rowe |
+|---|---|---|
+| business | eleven small businesses, money that never sits | boats, produce, a way out of the city |
+| kit | banded collars, waistcoats, watch chains, an overcoat worn indoors | open collars, no ties, a peaked cap, a zip windbreaker |
+| key | a desk lamp, high and steep, upper left | hard sun, low, upper right |
+| fill | the house blue through a window onto a wet street | cool open sky |
+| bounce | none — nobody is lighting this room properly | low magenta off the water, under the jaw |
+
+The light is the tell. You should know the family before you read the name.
+
+The last row on the sheet is the check on that rather than a promise about it:
+two faces, each rendered into both houses with everything about the person held
+fixed. If the pairs read as two organizations the claim holds; if they read as
+two people it does not, and that row is where it would show.
+
+### Four rebuilds worth recording
+
+**Fractional writes drew nothing.** `put()` did not floor its coordinates, and
+`SH_Y` — the shoulder line — is derived from the build, so for every boss whose
+build put it off-grid the collar was written to a fractional index of a typed
+array, which is a silent no-op. Exactly one portrait on the sheet had a visible
+collar and it looked like a shading problem for an hour. `put()` floors now.
+
+**Giraffe necks.** Shoulders too low and too narrow, and the neck drawn *over*
+the collar rather than under it, so every boss was a head on a pipe. A bust is
+shoulders cropped by the frame edge and a short neck that flares into the
+trapezius; the order has to be shoulders, neck, then collar closing around it.
+
+**The wrap took three passes.** Stacked horizontal bands built a fez. An
+ellipse cut at the hairline built a beret. The same ellipse with folds and a
+brow band built a slightly better beret. All three failed the same way: they
+drew something that follows the skull. A wrap does not follow the skull — it is
+cloth wound round it, so it is *taller* than the head, its widest point is above
+the brow rather than at the ears, and its front edge is close to straight.
+
+**Two hairlines that no human has.** The receding one was first drawn as a wedge
+of scalp down the centre — the inverse of a real recession — and then, once the
+shape was right, as a rectangle, which put a slab of forehead above the skull.
+It has to be the skull ellipse, shaded as a dome, cut by a hairline that peaks
+in the middle. The full beard had the same category of error: a flat-topped mass
+from ear to ear is not a beard, it is a plaster cast of the lower face.
+
+### One label that was wrong on principle
+
+The check row first called its two faces "the same man" and "the same woman."
+Nothing in the spec encodes a sex, and `src/ui/art/look.ts` already carries a
+comment about not letting the art assert something the simulation does not
+know. They are labelled by build, tone and age now.
+
 ## pixel-crew.html — rank you can see, familiarity you have to earn
 
 > **Shipped.** This one is in the game. The parts library, the derivation and
