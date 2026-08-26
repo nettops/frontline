@@ -208,6 +208,36 @@ export function crewTraitEffect(crew: Npc[], key: keyof TraitEffects): number {
   return total / crew.length;
 }
 
+// ------------------------------------------------------- going somewhere ---
+
+/**
+ * How long since anything good happened to him.
+ *
+ * Falls back to the day he arrived, which is what the broken version measured
+ * and what a save written before this field existed will produce.
+ */
+export function daysSinceGood(state: GameState, npc: Npc): number {
+  return state.day - (npc.lastGoodDay ?? npc.joinedDay);
+}
+
+/**
+ * Something good just happened to him.
+ *
+ * Called from every place a man goes somewhere: promoted, handed a district,
+ * given a real raise, put on a score, taught by somebody better, heard out in
+ * a room.
+ *
+ * **Deliberately broader than "advancement", and the breadth is a risk that was
+ * taken on purpose.** The narrower version would reset only on promotion and a
+ * district. This also counts being paid more and being listened to, which means
+ * a boss who never promotes anybody may be able to hold a crew together on
+ * conversation and money alone. That is the thing to watch if retention ever
+ * looks too easy — see `__tests__/stagnation.test.ts`.
+ */
+export function somethingGood(state: GameState, npc: Npc): void {
+  npc.lastGoodDay = state.day;
+}
+
 // ------------------------------------------------------------ perception ---
 
 export interface Perception {
@@ -459,8 +489,20 @@ export function driftNpcs(state: GameState, rng: Rng): void {
       loyaltyDelta += DRIFT.underpaidLoyalty * shortfall;
     }
 
-    // Ambition with nowhere to go.
-    const daysInRole = state.day - npc.joinedDay;
+    /*
+       Ambition with nowhere to go — and, at last, somewhere it can go.
+
+       This read `state.day - npc.joinedDay` while being called `daysInRole`.
+       There was no role stamp on `Npc` and `promote` never wrote one, so after
+       sixty days every ambitious man bled loyalty forever and nothing a boss
+       did ever stopped it. Promotion did not. A district of his own did not.
+
+       Measured, that made stagnation **40% of every point of loyalty lost
+       across 158,484 crew-weeks** — the largest single drain in the game and
+       the only one with no counterplay, and the reason 291 of 343 hires walk
+       out of a career.
+    */
+    const daysInRole = daysSinceGood(state, npc);
     if (
       daysInRole > DRIFT.daysInRoleBeforeStagnation &&
       npc.stats.ambition > 50

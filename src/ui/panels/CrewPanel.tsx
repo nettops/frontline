@@ -547,7 +547,8 @@ function CrewDetail({ npc, onClose }: { npc: Npc; onClose: () => void }) {
                promise about a mechanic has to move when the mechanic does.
             */}
             <p className="tiny faint" style={{ margin: '4px 0 0' }}>
-              A conversation in a back room, not an answer — {SITDOWN.beats} exchanges, and how
+              A conversation in a back room, not an answer — it runs as long as they will
+              sit there, and how
               you handle them decides what you come away knowing. Once every{' '}
               {SITDOWN.cooldownDays} days with the same person.
             </p>

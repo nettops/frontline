@@ -2159,34 +2159,62 @@ th.sortable:hover {
   color: var(--text-faint);
 }
 
-/* A miss is dim on a grey rule; a read that landed is bright on olive. The
-   player infers how it went from the prose — nothing here prints a number. */
-.room-beat {
-  border-left: 2px solid var(--line);
-  padding-left: 12px;
+/* An exchange: your half, then theirs.
+
+   This used to be one block per beat with the register's LABEL above the
+   response — so the page read as a list of menu choices and outcomes rather
+   than as a conversation. Your words were never on screen.
+
+   Your line sits flush and quoted; theirs is indented under it on a rule. A
+   miss is dim on grey, a read that landed is bright on olive. The player still
+   infers how it went from the prose — nothing here prints a number. */
+.room-exchange {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
   animation: bulletin-line-in var(--t-med) var(--ease-land) backwards;
 }
-.room-beat.landed {
-  border-left-color: var(--ok-dim);
-}
 
-.room-beat-label {
-  font-family: var(--font-mono);
-  font-size: 11px;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--text-faint);
-  margin-bottom: 4px;
-}
-
-.room-beat-text {
+.room-said {
   margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--text);
+}
+
+/* Not speech. A stage direction, so `listen` reads as the deliberate act it
+   is rather than as a line nobody spoke. */
+.room-did {
+  margin: 0;
+  font-size: 13px;
+  font-style: italic;
+  color: var(--text-faint);
+}
+
+.room-reply {
+  margin: 0 0 0 14px;
+  border-left: 2px solid var(--line);
+  padding-left: 12px;
   font-size: 14px;
   line-height: 1.55;
   color: var(--text-dim);
 }
-.room-beat.landed .room-beat-text {
+.room-reply.landed {
+  border-left-color: var(--ok-dim);
   color: var(--text);
+}
+
+/* Him wanting something back. Set in his voice rather than as narration,
+   because it is the one thing in the room addressed to you. It stays on the
+   beat that asked it after you have answered — the transcript is a record of
+   the conversation, not of the current turn. */
+.room-asked {
+  margin: 6px 0 0 14px;
+  padding-left: 12px;
+  border-left: 2px solid var(--brass);
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--brass);
 }
 
 .room-outcome {
@@ -2290,7 +2318,7 @@ th.sortable:hover {
 
 @media (prefers-reduced-motion: reduce) {
   .room,
-  .room-beat {
+  .room-exchange {
     animation: none;
   }
 }

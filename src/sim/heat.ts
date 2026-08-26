@@ -16,6 +16,7 @@
 
 import { clamp } from './rng';
 import type { GameState } from './types';
+import { holdingShare } from './holdings';
 import { addLog } from './util';
 import { worldMod } from './world';
 import {
@@ -178,7 +179,7 @@ export function tickHeat(state: GameState): void {
     */
     const decay =
       org.heat *
-      HEAT_DECAY_SHARE *
+      quietShare(state) *
       diff.heatDecay *
       DECAY_BY_CHANNEL[channel] *
       (laying ? LAY_LOW_BY_CHANNEL[channel] : 1);
@@ -229,6 +230,17 @@ export function startLayLow(state: GameState): void {
 }
 
 /** Success chance lost to current heat, as a fraction (0..0.3). */
+/**
+ * The share of the load that comes off on a quiet day.
+ *
+ * `HEAT_DECAY_SHARE` plus whatever ground you hold where nobody is looking.
+ * Exposed rather than inlined so the territory panel can say what Southport is
+ * actually doing for you, and so a test can read it without running a week.
+ */
+export function quietShare(state: GameState): number {
+  return HEAT_DECAY_SHARE * (1 + holdingShare(state, 'quiet'));
+}
+
 export function heatSuccessPenalty(state: GameState): number {
   return (state.org.heat / 100) * HEAT_SUCCESS_PENALTY_AT_MAX;
 }

@@ -45,6 +45,7 @@ import {
 import { SENTIMENT_HOSTILE_BELOW } from '../config/territories';
 import { PATRON } from '../config/perception';
 import type { CivicStanding, GameState } from './types';
+import { holdingShare } from './holdings';
 
 /** Lazily created, so a save written before this existed still loads. */
 function roster(state: GameState): CivicStanding[] {
@@ -214,7 +215,7 @@ export function tickCivic(state: GameState): void {
     // their target still slides when nothing is going their way.
     held.standing = clamp(moved - CIVIC.decayPerWeek, 0, 100);
 
-    const ready = state.day - held.lastFavourDay >= CIVIC.favourIntervalDays;
+    const ready = state.day - held.lastFavourDay >= favourInterval(state);
     if (held.standing >= def.owesAbove && ready && held.owed < CIVIC.maxOwed) {
       held.owed += 1;
       held.lastFavourDay = state.day;
@@ -273,6 +274,18 @@ export interface FavourCheck {
  * `refusals.test.ts` requires it and because F10 was four rounds of a player
  * being turned away by a number nobody would show them.
  */
+/**
+ * How long between favours, which the ground you hold shortens.
+ *
+ * Downtown is where the real money is and the Heights is where it arrived two
+ * generations ago; holding either means the people who run the city come round
+ * more often. Exposed rather than inlined so the panel can say so and a test
+ * can read it without ticking a year. See `config/holdings.ts`.
+ */
+export function favourInterval(state: GameState): number {
+  return CIVIC.favourIntervalDays * (1 - holdingShare(state, 'civic'));
+}
+
 export function canSpendFavour(state: GameState, id: string): FavourCheck {
   const def = CIVIC_BY_ID[id];
   if (!def) return { ok: false, reason: 'Nobody by that name.' };

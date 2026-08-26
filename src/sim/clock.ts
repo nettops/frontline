@@ -17,6 +17,7 @@ import { tickScores } from './scores';
 import { tickTraining } from './training';
 import { tickStandingOrders } from './standingOrders';
 import { tickMarks } from './marks';
+import { tickAutopilot } from './autopilot';
 import { closeWeek } from './ledger';
 import { tickPossessions } from './possessions';
 import { tickLaunderer } from './launderers';
@@ -91,6 +92,11 @@ export function advanceDay(state: GameState): void {
   //      mark takes nobody off the board — it is other people's problem, and
   //      the only thing it competes for is the attention it draws.
   tickMarks(state, rng);
+  // 1b6. And the whole operations loop, if it has been handed over. Last of
+  //      the lot, so it draws on a bench that scores, pairings and standing
+  //      orders have already taken from — the autopilot gets what is left
+  //      rather than the first pick, exactly as a standing order does.
+  tickAutopilot(state, rng);
   // 1c. Whoever keeps the books takes their fee and forms an opinion. Before
   //     the fronts, because `launderCut` reads the opinion and the fronts
   //     apply it the same morning — a week where somebody walks has to be a

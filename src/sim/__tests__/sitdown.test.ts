@@ -16,8 +16,10 @@ import {
   clearSitdown,
   houseRead,
   houseStats,
+  endSitdown,
   leaveSitdown,
   openSitdown,
+  patienceRead,
   sitdownOptions,
 } from '../sitdown';
 import { bond } from '../diplomacy';
@@ -30,6 +32,19 @@ function game(seed = 4): GameState {
 
 function first(state: GameState): Npc {
   return crewList(state)[0];
+}
+
+/** A man in the room, ready to be talked to. */
+function sitting(seed = 4, reason = 'settle'): { state: GameState; npc: Npc } {
+  const state = game(seed);
+  const npc = first(state);
+  npc.stats.grievance = 80;
+  openSitdown(state, 'crew', npc.id, reason);
+  return { state, npc };
+}
+
+function rng(state: GameState): Rng {
+  return new Rng(state.rng);
 }
 
 /** Puts a man in a state where `listen` is certain to land. */
@@ -58,21 +73,215 @@ describe('the sit-down', () => {
     expect(canSitDownWith(state, npc.id).ok).toBe(true);
   });
 
-  it('ends after three exchanges', () => {
+  /*
+     You decide when it is over, and that is the whole rework.
+
+     It used to end after a fixed three exchanges — the modal literally counted
+     "exchange 2 of 3" — so the room emptied on the game's schedule and the
+     only thing a boss chose was how to spend a budget. Walking out early
+     settled and paid, but gave up unspent beats for nothing, so it was weakly
+     dominated rather than a decision.
+
+     What replaces the cap is his patience. Every exchange spends some, a miss
+     spends more, and landing something real buys a little back. You may stand
+     up at any moment and keep what you have. Push past it and **he** ends it,
+     which is worse than never having sat down — a man who walks out on his
+     boss takes something with him.
+  */
+  it('does not end itself on a count any more', () => {
+    const { state } = sitting();
+    // Four exchanges, which the old three-beat cap would have made impossible.
+    for (let i = 0; i < 4 && !state.sitdown!.done; i++) {
+      const open = availableRegisters(state);
+      if (!open.length) break;
+      chooseRegister(state, rng(state), open[0].id);
+    }
+    expect(state.sitdown!.beats.length).toBeGreaterThan(3);
+  });
+
+  it('lets the boss end it and keeps what was won', () => {
+    const { state } = sitting();
+    const open = availableRegisters(state);
+    chooseRegister(state, rng(state), open[0].id);
+    expect(state.sitdown!.done).toBe(false);
+
+    endSitdown(state);
+    expect(state.sitdown!.done).toBe(true);
+    expect(state.sitdown!.outcome).toBeTruthy();
+    expect(state.sitdown!.walkedOut, 'the boss standing up read as him walking out').toBe(false);
+  });
+
+  it('spends his patience as the conversation runs', () => {
+    const { state } = sitting();
+    const before = state.sitdown!.patience;
+    chooseRegister(state, rng(state), availableRegisters(state)[0].id);
+    expect(state.sitdown!.patience).toBeLessThan(before);
+  });
+
+  it('costs more patience when you read him wrong', () => {
+    const cheap = sitting();
+    const dear = sitting();
+    // Same opener, one man reachable and one not.
+    const man = cheap.npc;
+    man.stats.grievance = 90;
+    dear.npc.stats.grievance = 0;
+
+    chooseRegister(cheap.state, rng(cheap.state), 'listen');
+    chooseRegister(dear.state, rng(dear.state), 'listen');
+
+    const landed = cheap.state.sitdown!.beats[0].landed;
+    const missed = dear.state.sitdown!.beats[0].landed;
+    expect(landed, 'the fixture did not produce a hit and a miss').toBe(true);
+    expect(missed).toBe(false);
+    expect(dear.state.sitdown!.patience).toBeLessThan(cheap.state.sitdown!.patience);
+  });
+
+  /*
+     The property that makes standing up a decision rather than a formality.
+  */
+  it('lets him walk out if you push past it, and it costs you', () => {
+    const { state, npc } = sitting();
+    const grievance = npc.stats.grievance;
+    const regard = npc.stats.respectForBoss;
+    state.sitdown!.patience = 1;
+
+    chooseRegister(state, rng(state), availableRegisters(state)[0].id);
+
+    expect(state.sitdown!.done).toBe(true);
+    expect(state.sitdown!.walkedOut).toBe(true);
+    expect(npc.stats.grievance).toBeGreaterThan(grievance);
+    expect(npc.stats.respectForBoss).toBeLessThan(regard);
+  });
+
+  it('says how close he is to standing up, in words and never a number', () => {
+    const { state } = sitting();
+    const read = patienceRead(state.sitdown!);
+    expect(read.length).toBeGreaterThan(0);
+    expect(read, 'the room put a number on the table').not.toMatch(/\d/);
+  });
+
+  /*
+     This used to read "ends after three exchanges" and assert the cap. The cap
+     is gone, so what it guards now is the thing the cap was standing in for:
+     a room that has emptied is closed, whoever emptied it, and there is
+     nothing further to say into it.
+  */
+  it('has nothing left to say once the room is empty', () => {
     const state = game();
-    const rng = new Rng(state.rng);
+    const r = new Rng(state.rng);
     state.org.dirtyCash = 200_000;
     openSitdown(state, 'crew', first(state).id, 'settle');
 
-    for (let i = 0; i < SITDOWN.beats; i++) {
+    for (let i = 0; i < 3 && !state.sitdown!.done; i++) {
       const options = availableRegisters(state);
       expect(options.length, `nothing to say at beat ${i + 1}`).toBeGreaterThan(0);
-      chooseRegister(state, rng, options[0].id);
+      chooseRegister(state, r, options[0].id);
     }
+    endSitdown(state);
+
     expect(state.sitdown?.done).toBe(true);
     expect(availableRegisters(state)).toHaveLength(0);
+    expect(
+      chooseRegister(state, r, 'listen').ok,
+      'the room was empty and still took another word',
+    ).toBe(false);
   });
 
+/*
+   The half that makes it an exchange rather than a menu.
+
+   Every beat used to be you acting on him — you chose, he reacted, you chose
+   again. Nothing he said ever asked anything of you, so there was never a
+   moment where the next move was a *reply* rather than a free pick from a
+   list.
+
+   Now a register that lands can end with him putting a question to you, and
+   while that question is on the table the only things you can say are answers
+   to it. That is the whole mechanism: the list narrows because the room
+   narrowed it.
+*/
+describe('when he asks you something', () => {
+  /*
+     Listen, then say it out loud. He asks after the second, not between them.
+
+     The first version hung the question on `listen`, which put a mandatory
+     exchange inside the shortest path the mechanic has and broke three tests
+     guarding it. Naming the thing is the beat he answers to.
+  */
+  function upToTheQuestion(): { state: GameState; npc: Npc } {
+    const seat = sitting();
+    chooseRegister(seat.state, rng(seat.state), 'listen');
+    chooseRegister(seat.state, rng(seat.state), 'name_it');
+    return seat;
+  }
+
+  it('puts a question on the table when the right thing lands', () => {
+    const { state } = upToTheQuestion();
+    expect(state.sitdown!.beats.at(-1)!.landed, 'the fixture did not land').toBe(true);
+    expect(state.sitdown!.pending).toBeTruthy();
+  });
+
+  it('asks nothing when the same move misses', () => {
+    const { state, npc } = sitting();
+    npc.stats.grievance = 0;
+    chooseRegister(state, rng(state), 'listen');
+    expect(state.sitdown!.beats[0].landed).toBe(false);
+    expect(state.sitdown!.pending ?? null).toBeNull();
+    // And with nothing surfaced, naming it is not even on the table to try.
+    expect(availableRegisters(state).some((r) => r.id === 'name_it')).toBe(false);
+  });
+
+  /* The property. A question you can ignore is not a question. */
+  it('narrows the table to answers while it stands', () => {
+    const { state } = upToTheQuestion();
+
+    // Assert the question exists first, or `every` below passes on an empty
+    // idea — undefined === undefined is how a test measures nothing.
+    const asked = state.sitdown!.pending;
+    expect(asked, 'nothing was asked, so the narrowing below proves nothing').toBeTruthy();
+
+    const open = availableRegisters(state);
+    expect(open.length).toBeGreaterThan(0);
+    expect(
+      open.every((r) => r.answers === asked),
+      'the room asked a question and left the whole menu up anyway',
+    ).toBe(true);
+  });
+
+  it('goes back to an open table once you have answered', () => {
+    const { state } = upToTheQuestion();
+    expect(state.sitdown!.pending, 'nothing was asked to answer').toBeTruthy();
+    const answer = availableRegisters(state)[0];
+    expect(answer?.answers, 'what was offered was not an answer to anything').toBeTruthy();
+    chooseRegister(state, rng(state), answer.id);
+
+    expect(state.sitdown!.pending ?? null).toBeNull();
+    const open = availableRegisters(state);
+    expect(open.some((r) => r.answers), 'an answer stayed on the table with nothing to answer').toBe(
+      false,
+    );
+  });
+
+  it('never offers an answer when nothing has been asked', () => {
+    const { state } = sitting();
+    expect(availableRegisters(state).some((r) => r.answers)).toBe(false);
+  });
+
+  /*
+     And you can still walk. The promise the rework is built on is that ending
+     it is always yours — leaving a question hanging is rude, not forbidden.
+  */
+  it('lets you stand up with his question still in the air', () => {
+    const { state } = upToTheQuestion();
+    expect(state.sitdown!.pending).toBeTruthy();
+
+    endSitdown(state);
+    expect(state.sitdown!.done).toBe(true);
+    expect(state.sitdown!.walkedOut).toBe(false);
+  });
+});
+
+describe('the sit-down, continued', () => {
   it('never offers the same register twice', () => {
     const state = game();
     const rng = new Rng(state.rng);
@@ -433,4 +642,5 @@ describe('a man who is frightened rather than owed', () => {
 
     expect(npc.stats.fear).toBe(before);
   });
+});
 });

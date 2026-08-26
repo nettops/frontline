@@ -25,7 +25,7 @@ import { addEvidence, addLog, nextId } from './util';
 import { spend } from './economy';
 import { priced } from './market';
 import { playerInfluence, territoryDef } from './territory';
-import { crewList } from './npc';
+import { crewList, somethingGood } from './npc';
 import { isLayingLow } from './heat';
 import { availableOperations, crewCompetence, launchOperation } from './operations';
 import { nightsWorked } from './standing';
@@ -188,6 +188,8 @@ export function openScore(
     status: 'open',
   };
   scoreList(state).push(score);
+  // Being the man on a score is a posting, and it counts as going somewhere.
+  somethingGood(state, man);
   addLog(
     state,
     `${man.name} is watching ${territoryDef(territoryId).name}. You have ${SCORE.windowDays} days.`,
