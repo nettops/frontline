@@ -22,6 +22,7 @@
  */
 
 import type { FactionPersonality } from './factions';
+import { f, m, type GivenName } from './names';
 
 export interface HouseDef {
   id: string;
@@ -38,8 +39,12 @@ export interface HouseDef {
    * factionLeaders.ts covers a family that has been in the city long enough
    * that nobody asks. A house set apart by having come from somewhere gets its
    * own list, so the succession log reads like the family it is about.
+   *
+   * Each name carries whether it reads as a man's or a woman's, which is the
+   * only thing the portraits are allowed to know about it — see config/names.ts
+   * for what that is and is not for.
    */
-  firstNames?: string[];
+  firstNames?: GivenName[];
   personality: FactionPersonality;
   /** Wealth and muscle at the founding, before the per-seed jitter. */
   wealth: number;
@@ -191,9 +196,9 @@ export const HOUSES: HouseDef[] = [
       'Arrived with capital, a family name and a long memory of losing both. The money moves through eleven small businesses and never sits anywhere long enough to be counted.',
     reputation: 'They have been on the wrong end of one bad year already. There will not be a second.',
     firstNames: [
-      'Fritznel', 'Marcelle', 'Dieudonné', 'Yolande', 'Renaud', 'Ghislaine',
-      'Josaphat', 'Carmelle', 'Wilner', 'Edwidge', 'Lucien', 'Micheline',
-      'Ossé', 'Roselene', 'Prosper', 'Antoinette',
+      ...m('Fritznel', 'Dieudonné', 'Renaud', 'Josaphat', 'Wilner', 'Lucien', 'Ossé', 'Prosper'),
+      ...f('Marcelle', 'Yolande', 'Ghislaine', 'Carmelle', 'Edwidge', 'Micheline',
+           'Roselene', 'Antoinette'),
     ],
     // Dispossessed once, and the lesson they took from it was not to be gentle.
     // The first pass had them at 0.45 aggression, which put a third quiet
@@ -213,9 +218,9 @@ export const HOUSES: HouseDef[] = [
       'Boats, produce, and a way out of the city for anything that fits in a crate. They care what moves and when, not who is standing on which corner.',
     reputation: 'They have never once argued about a street. They do not think in streets.',
     firstNames: [
-      'Winston', 'Icilda', 'Delroy', 'Enid', 'Everton', 'Merlene', 'Neville',
-      'Doreen', 'Lascelles', 'Pearline', 'Errol', 'Vashti', 'Byron', 'Ossie',
-      'Clovis', 'Ivorine',
+      ...m('Winston', 'Delroy', 'Everton', 'Neville', 'Lascelles', 'Errol',
+           'Byron', 'Ossie', 'Clovis'),
+      ...f('Icilda', 'Enid', 'Merlene', 'Doreen', 'Pearline', 'Vashti', 'Ivorine'),
     ],
     // Indifferent to turf, which is not the same as harmless: they move on a
     // route the moment it is worth more than the trouble, and the ambition is

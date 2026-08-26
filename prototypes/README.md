@@ -85,12 +85,22 @@ It has to be the skull ellipse, shaded as a dome, cut by a hairline that peaks
 in the middle. The full beard had the same category of error: a flat-topped mass
 from ear to ear is not a beard, it is a plaster cast of the lower face.
 
-### One label that was wrong on principle
+### One label that was wrong on principle, and what it turned out to be about
 
 The check row first called its two faces "the same man" and "the same woman."
-Nothing in the spec encodes a sex, and `src/ui/art/look.ts` already carries a
-comment about not letting the art assert something the simulation does not
-know. They are labelled by build, tone and age now.
+Nothing in the spec encoded a sex, and `src/ui/art/look.ts` carried a comment
+about not letting the art assert what the simulation does not know, so the
+labels came off and the faces are described by build, tone and age instead.
+
+That was the right call about the labels and the wrong conclusion about the
+faces. Refusing to decide is not neutral: it produced a boss named Antoinette
+with a full beard, which asserts a great deal more than deciding does. The
+answer was not for the art to guess but for the name pools to carry the fact,
+because it was always known — `config/npcs.ts` had thirty-two men's names
+followed by sixteen women's and the split lived only in the ordering, which is
+not somewhere a program can read. `config/names.ts` is that flag now, and both
+portrait systems read it. This sheet is unchanged; the labels stay off, because
+what they were labelling really is only a build, a tone and an age.
 
 ## pixel-crew.html — rank you can see, familiarity you have to earn
 

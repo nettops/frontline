@@ -39,6 +39,12 @@ import { houseDef, housePersonality } from './houses';
  */
 export interface HouseNaming {
   shortName: string;
+  /**
+   * Flat names, not the flagged pool. The draw only ever needed the strings,
+   * and whether a name reads as a man's or a woman's is resolved from the name
+   * itself when a portrait is drawn — see sim/names.ts for why it is not
+   * carried here or stored on the leader.
+   */
   firstNames?: string[];
 }
 

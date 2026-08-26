@@ -14,6 +14,8 @@
  * making it happen.
  */
 
+import { namesOf, type GivenName } from './names';
+
 /**
  * What a boss is called, when the house has no list of its own.
  *
@@ -23,11 +25,21 @@
  * arrived from somewhere else got a boss named Salvatore. Houses that need
  * their own list carry one on `HouseDef.firstNames` and fall back to this.
  */
-export const LEADER_FIRST_NAMES = [
-  'Salvatore', 'Emilio', 'Rosalia', 'Augusto', 'Cesare', 'Vittoria', 'Ignazio',
-  'Rafaele', 'Ottavia', 'Bartolo', 'Ludovico', 'Serafina', 'Guido', 'Massimo',
-  'Concetta', 'Ubaldo', 'Ilaria', 'Ferdinando', 'Marcello', 'Assunta',
+export const LEADER_GIVEN_NAMES: GivenName[] = [
+  { name: 'Salvatore', sex: 'm' }, { name: 'Emilio', sex: 'm' },
+  { name: 'Rosalia', sex: 'f' }, { name: 'Augusto', sex: 'm' },
+  { name: 'Cesare', sex: 'm' }, { name: 'Vittoria', sex: 'f' },
+  { name: 'Ignazio', sex: 'm' }, { name: 'Rafaele', sex: 'm' },
+  { name: 'Ottavia', sex: 'f' }, { name: 'Bartolo', sex: 'm' },
+  { name: 'Ludovico', sex: 'm' }, { name: 'Serafina', sex: 'f' },
+  { name: 'Guido', sex: 'm' }, { name: 'Massimo', sex: 'm' },
+  { name: 'Concetta', sex: 'f' }, { name: 'Ubaldo', sex: 'm' },
+  { name: 'Ilaria', sex: 'f' }, { name: 'Ferdinando', sex: 'm' },
+  { name: 'Marcello', sex: 'm' }, { name: 'Assunta', sex: 'f' },
 ];
+
+/* Derived, so the order and therefore every draw is unchanged. */
+export const LEADER_FIRST_NAMES = namesOf(LEADER_GIVEN_NAMES);
 
 /**
  * How a new boss is spoken about before you know anything concrete. Paired

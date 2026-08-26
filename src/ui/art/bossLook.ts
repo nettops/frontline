@@ -24,11 +24,19 @@
  * colour to decide what a person looks like. The house colour tints the fill
  * and the rim and stops there.
  *
+ * The one thing about the boss himself that is not hashed is whether his name
+ * reads as a man's or a woman's, which the name pools now carry — see
+ * config/names.ts. That is a fact about the name, looked up rather than
+ * guessed, and it decides facial hair and which silhouettes are on the table.
+ * It is still not a house trait: the same name in either family gets the same
+ * answer.
+ *
  * Nothing in this file touches sim/rng.ts. That is a seeded stream with
  * determinism tests over it, and taking a draw to decide a hat would shift
  * every subsequent roll in the game — the same rule art/look.ts follows.
  */
 
+import { sexOfName } from '../../sim/names';
 import type { Faction } from '../../sim/types';
 import type { FactionPersonality } from '../../config/factions';
 import type { BossLight, BossSpec } from './bossPortrait';
@@ -123,7 +131,14 @@ export const LIGHTS: Record<string, BossLight> = {
    that keeps its money where it can watch it, whoever they are.
    ====================================================================== */
 interface Wardrobe {
-  heads: BossSpec['head'][];
+  /*
+     Headwear splits the same way hair does, and for the same reason. Fixing
+     facial hair alone left the women of a house in homburgs and peaked caps,
+     which is the men's kit — so the beards came off and the portraits still
+     read as men. `any` is what a name from no pool gets: the pieces that do
+     not decide anything.
+  */
+  heads: { m: BossSpec['head'][]; f: BossSpec['head'][]; any: BossSpec['head'][] };
   necks: BossSpec['neck'][];
   overs: BossSpec['over'][];
   cloth: NonNullable<BossSpec['overCol']>[];
@@ -138,7 +153,11 @@ interface Wardrobe {
 export const WARDROBES: Record<string, Wardrobe> = {
   // Buttoned to the throat. Waistcoats, watch chains, no display.
   closed: {
-    heads: ['none', 'none', 'homburg', 'wrap'],
+    heads: {
+      m: ['none', 'none', 'homburg', 'homburg'],
+      f: ['none', 'none', 'wrap', 'none'],
+      any: ['none'],
+    },
     necks: ['banded', 'banded', 'tie'],
     overs: ['waistcoat', 'coat'],
     cloth: ['charcoal', 'navy', 'brown'],
@@ -149,7 +168,11 @@ export const WARDROBES: Record<string, Wardrobe> = {
   },
   // Open collars, a cap, something that has been rained on.
   working: {
-    heads: ['peaked', 'none', 'brim', 'wrap'],
+    heads: {
+      m: ['peaked', 'none', 'brim', 'peaked'],
+      f: ['none', 'wrap', 'brim', 'none'],
+      any: ['none', 'brim'],
+    },
     necks: ['open', 'open', 'kerchief'],
     overs: ['windbreaker', 'jacket'],
     cloth: ['slate', 'navy', 'tan', 'oxblood'],
@@ -160,7 +183,11 @@ export const WARDROBES: Record<string, Wardrobe> = {
   },
   // Nothing that would be missed if it had to be left somewhere.
   plain: {
-    heads: ['none', 'none', 'peaked'],
+    heads: {
+      m: ['none', 'none', 'peaked'],
+      f: ['none', 'none', 'wrap'],
+      any: ['none'],
+    },
     necks: ['open', 'banded'],
     overs: ['jacket', 'windbreaker'],
     cloth: ['charcoal', 'slate', 'brown'],
@@ -171,7 +198,11 @@ export const WARDROBES: Record<string, Wardrobe> = {
   },
   // Old money that still dresses for the room it used to own.
   formal: {
-    heads: ['homburg', 'none', 'none'],
+    heads: {
+      m: ['homburg', 'none', 'none'],
+      f: ['none', 'none', 'wrap'],
+      any: ['none'],
+    },
     necks: ['tie', 'tie', 'banded'],
     overs: ['coat', 'waistcoat'],
     cloth: ['charcoal', 'navy'],
@@ -225,7 +256,24 @@ export function styleFor(p: FactionPersonality): { light: BossLight; kit: Wardro
    ====================================================================== */
 const SKINS: BossSpec['skin'][] = ['deep', 'brown', 'tan', 'fair'];
 const FACIAL: BossSpec['facial'][] = ['none', 'none', 'tache', 'stubble', 'goatee', 'beard'];
-const BARE: BossSpec['hairStyle'][] = ['crop', 'waves', 'set', 'updo', 'afro', 'crop'];
+
+/*
+   Hair, by what the name says and nothing else.
+ *
+ * This used to be one list for everybody, on the principle that the art must
+ * not assert what the simulation does not know. The principle was right and
+ * the conclusion was wrong: refusing to decide produced a boss named
+ * Antoinette with a full beard, which asserts something considerably louder
+ * than choosing would have. The pools carry the fact now — see config/names.ts
+ * — so the art reads it instead of guessing.
+ *
+ * A name in no pool still resolves to nothing, and gets the neutral set: the
+ * silhouettes that read as anybody, and no facial hair, because a beard is the
+ * mark that does the asserting.
+ */
+const HAIR_M: BossSpec['hairStyle'][] = ['crop', 'waves', 'afro', 'crop', 'waves'];
+const HAIR_F: BossSpec['hairStyle'][] = ['set', 'updo', 'afro', 'waves', 'set'];
+const HAIR_ANY: BossSpec['hairStyle'][] = ['crop', 'waves', 'afro'];
 
 /** Age shows in the hair before it shows anywhere else. */
 function hairFor(id: string, age: number): BossSpec['hair'] {
@@ -249,26 +297,25 @@ export function bossSpecFor(faction: Faction): BossSpec | null {
 
   const kit = styleFor(faction.personality).kit;
   const id = `${faction.shortName}/${leader.name}`;
-  const head = pick(id, 'head', kit.heads);
+  const sex = sexOfName(leader.name);
+  const head = pick(id, 'head', sex === 'm' ? kit.heads.m
+    : sex === 'f' ? kit.heads.f : kit.heads.any);
 
-  /*
-     Hair, when there is nothing on the head, is drawn from one list for
-     everybody. Nothing on a FactionLeader records a sex — the name pools in
-     config/houses.ts and factionLeaders.ts are mixed and deliberately so —
-     and inferring one from a name would be the art asserting something the
-     simulation does not know. It draws from the hash instead. Same rule, and
-     the same reason, as art/look.ts.
-  */
+  const styles = sex === 'm' ? HAIR_M : sex === 'f' ? HAIR_F : HAIR_ANY;
+  /* Receding is drawn for men only. Women's hair thins too, but at this scale
+     the shape reads as a bald man rather than as an older woman, so it would
+     be the art getting it wrong in the other direction. */
   const hairStyle: BossSpec['hairStyle'] =
     head !== 'none' ? 'crop'
-      : leader.age >= 58 && chance(id, 'thin', 0.4) ? (chance(id, 'bald', 0.4) ? 'bald' : 'thin')
-        : pick(id, 'style', BARE);
+      : sex === 'm' && leader.age >= 58 && chance(id, 'thin', 0.4)
+        ? (chance(id, 'bald', 0.4) ? 'bald' : 'thin')
+        : pick(id, 'style', styles);
 
   return {
     skin: pick(id, 'skin', SKINS),
     hair: hairFor(id, leader.age),
     hairStyle,
-    facial: hairStyle === 'set' || hairStyle === 'updo' ? 'none' : pick(id, 'face', FACIAL),
+    facial: sex === 'm' ? pick(id, 'face', FACIAL) : 'none',
     head,
     headCol: pick(id, 'felt', kit.felt),
     neck: pick(id, 'neck', kit.necks),
