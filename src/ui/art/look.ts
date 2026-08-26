@@ -10,8 +10,15 @@
  * the suite has determinism tests over it; taking a draw to decide a hat would
  * shift every subsequent roll in the game and break all of them. Nothing in
  * this file touches state.
+ *
+ * One thing is read rather than hashed: whether the name reads as a man's or a
+ * woman's. That is carried by the name pools themselves (config/names.ts) and
+ * resolved by sim/names.ts, and it decides facial hair and which bare-headed
+ * silhouettes are available. A name in no pool resolves to nothing and is
+ * drawn the way everybody was drawn before the flag existed.
  */
 
+import { sexOfName } from '../../sim/names';
 import type { Npc, RoleId } from '../../sim/types';
 import type { CrewLook } from './parts';
 
@@ -71,25 +78,45 @@ function hairFor(npc: Npc): string {
 
 const SKINS = ['deep', 'brown', 'olive', 'tan', 'fair'] as const;
 const FACIAL: CrewLook['facial'][] = ['none', 'none', 'tache', 'stubble', 'goatee', 'walrus', 'chops', 'beard'];
-const BARE: CrewLook['hair_style'][] = ['slick', 'slick', 'bald', 'balding', 'bun', 'bob'];
+
+/*
+   Bare-headed silhouettes, by what the name says.
+
+   This was one list for everybody, and the comment below `lookFor` explained
+   why: the Npc has no field for sex, so choosing would have been the art
+   asserting something the simulation did not know. That was right about the
+   principle and wrong about where it led — refusing to decide put walrus
+   moustaches on women at the same rate as on men, which asserts a great deal
+   more than deciding would have.
+
+   The pools carry the fact now. config/npcs.ts was already thirty-two men's
+   names followed by sixteen women's; the split was real and only the ordering
+   recorded it. See config/names.ts for what that flag is and is not for.
+*/
+const BARE_M: CrewLook['hair_style'][] = ['slick', 'slick', 'bald', 'balding'];
+const BARE_F: CrewLook['hair_style'][] = ['bun', 'bob', 'slick', 'bun'];
+const BARE_ANY: CrewLook['hair_style'][] = ['slick', 'slick', 'bob'];
 
 export function lookFor(npc: Npc): CrewLook {
   const kit = BY_ROLE[npc.role];
   const hat = pick(npc.id, 'hat', kit.hats);
 
   /*
-     Hair style, when there is no hat, is drawn from one list for everybody.
-     The Npc has no field for sex and the name lists are mixed, so inferring
-     one from a name would be the art asserting something the simulation does
-     not know. It draws from the hash instead.
+     Read off the name, not guessed from it, and not stored on the person.
+     config/names.ts is the flag; sim/names.ts is the lookup, and a name in no
+     pool comes back null and gets the neutral treatment — which is exactly
+     what everybody got before the flag existed.
   */
+  const sex = sexOfName(npc.name);
+  const bare = sex === 'm' ? BARE_M : sex === 'f' ? BARE_F : BARE_ANY;
+
   const hair_style: CrewLook['hair_style'] =
     hat !== 'none' ? 'none'
-      : npc.age >= 55 && chance(npc.id, 'thin', 0.45) ? 'balding'
-      : pick(npc.id, 'style', BARE);
+      : sex === 'm' && npc.age >= 55 && chance(npc.id, 'thin', 0.45) ? 'balding'
+      : pick(npc.id, 'style', bare);
 
   const facial: CrewLook['facial'] =
-    hair_style === 'bun' || hair_style === 'bob' ? 'none' : pick(npc.id, 'face', FACIAL);
+    sex === 'm' ? pick(npc.id, 'face', FACIAL) : 'none';
 
   return {
     build: pick(npc.id, 'build', kit.builds),

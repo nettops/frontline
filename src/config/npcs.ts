@@ -7,17 +7,31 @@
  */
 
 import type { NpcStatId, NpcStats } from '../sim/types';
+import { f, m, namesOf, type GivenName } from './names';
 
 // ----------------------------------------------------------------- names ---
 
-export const FIRST_NAMES = [
-  'Sal', 'Vincent', 'Tommy', 'Gino', 'Marco', 'Dominic', 'Angelo', 'Rocco',
-  'Nico', 'Franco', 'Luca', 'Carmine', 'Enzo', 'Bruno', 'Matteo', 'Silvio',
-  'Duke', 'Ray', 'Eddie', 'Joey', 'Frankie', 'Mickey', 'Petey', 'Charlie',
-  'Aldo', 'Renzo', 'Gus', 'Milo', 'Vito', 'Paolo', 'Emilio', 'Rico',
-  'Maria', 'Gina', 'Rosa', 'Lucia', 'Bianca', 'Nadia', 'Carla', 'Sofia',
-  'Elena', 'Vera', 'Cate', 'Dana', 'Roxy', 'Nina', 'Toni', 'Jo',
+/**
+ * The pool was already thirty-two men followed by sixteen women and had been
+ * since it was written. The split was real and only the ordering recorded it,
+ * which is not somewhere a program can read — so the portraits could not tell,
+ * and drew beards on everybody at the same rate. Same names, same order, same
+ * indices: `FIRST_NAMES` below is derived, so no draw anywhere moved.
+ */
+export const GIVEN_NAMES: GivenName[] = [
+  ...m(
+    'Sal', 'Vincent', 'Tommy', 'Gino', 'Marco', 'Dominic', 'Angelo', 'Rocco',
+    'Nico', 'Franco', 'Luca', 'Carmine', 'Enzo', 'Bruno', 'Matteo', 'Silvio',
+    'Duke', 'Ray', 'Eddie', 'Joey', 'Frankie', 'Mickey', 'Petey', 'Charlie',
+    'Aldo', 'Renzo', 'Gus', 'Milo', 'Vito', 'Paolo', 'Emilio', 'Rico',
+  ),
+  ...f(
+    'Maria', 'Gina', 'Rosa', 'Lucia', 'Bianca', 'Nadia', 'Carla', 'Sofia',
+    'Elena', 'Vera', 'Cate', 'Dana', 'Roxy', 'Nina', 'Toni', 'Jo',
+  ),
 ];
+
+export const FIRST_NAMES = namesOf(GIVEN_NAMES);
 
 export const LAST_NAMES = [
   'Corveti', 'Marchetti', 'Bellandi', 'Falcone', 'Ricci', 'Adderly', 'Sabino',

@@ -17,6 +17,7 @@ import type {
   Territory,
 } from './types';
 import { CHARACTER_JITTER } from '../config/houses';
+import { namesOf } from '../config/names';
 import {
   HOME_TERRITORY,
   SENTIMENT_START,
@@ -166,7 +167,9 @@ function buildFactions(rng: Rng, day: number, draws: HouseDraw[]): Record<string
       colour: house.colour,
       blurb: house.blurb,
       reputation: house.reputation,
-      firstNames: house.firstNames,
+      // Flat, because the flag is looked up from the name rather than stored
+      // on the faction — see sim/names.ts.
+      firstNames: house.firstNames && namesOf(house.firstNames),
       personality: house.personality,
       wealth: foundingWealth(rng, house),
       strength: foundingStrength(rng, house),
@@ -177,7 +180,10 @@ function buildFactions(rng: Rng, day: number, draws: HouseDraw[]): Record<string
       // Somebody is already running it, and has been for a while. The bias is
       // rolled here rather than fixed in config so two games of the same
       // family are not the same organization.
-      leader: newLeader(rng, day, house),
+      leader: newLeader(rng, day, {
+        shortName: house.shortName,
+        firstNames: house.firstNames && namesOf(house.firstNames),
+      }),
       // The men under him, holding the districts the family actually stands
       // in, strongest first. A family with more capos than ground has men with
       // nothing of their own, which is a perfectly good reason to be unhappy.

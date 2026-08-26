@@ -102,6 +102,39 @@ describe('which man is drawn', () => {
     expect(faces.size, 'successions collapsed onto one look').toBeGreaterThanOrEqual(6);
   });
 
+  /*
+     The reason config/names.ts exists. Refusing to decide was not neutral: it
+     put a full beard on a boss named Antoinette at the same rate as on one
+     named Wilner, which asserts a great deal more than deciding does.
+  */
+  it('does not put a beard on a woman', () => {
+    const i = byId('beauvais');
+    for (const n of ['Yolande', 'Marcelle', 'Ghislaine', 'Carmelle', 'Edwidge',
+                     'Micheline', 'Roselene', 'Antoinette']) {
+      const spec = bossSpecFor(asFaction(i, `${n} Beauvais`))!;
+      expect(spec.facial, `${n} Beauvais`).toBe('none');
+      expect(['bald', 'thin']).not.toContain(spec.hairStyle);
+    }
+  });
+
+  it('still draws the men as men', () => {
+    const i = byId('beauvais');
+    const men = ['Fritznel', 'Dieudonné', 'Renaud', 'Josaphat', 'Wilner',
+                 'Lucien', 'Ossé', 'Prosper'];
+    const bearded = men.filter(
+      (n) => bossSpecFor(asFaction(i, `${n} Beauvais`, 60))!.facial !== 'none',
+    );
+    expect(bearded.length, 'nobody in the house has any facial hair').toBeGreaterThan(1);
+  });
+
+  /* A name from no pool is the state every save written before the flag is in,
+     and it has to keep working: nothing asserted, nothing crashed. */
+  it('asserts nothing about a name it has never seen', () => {
+    const spec = bossSpecFor(asFaction(byId('falcone'), 'Zephaniah Quill'))!;
+    expect(spec.facial).toBe('none');
+    expect(spec).toBeTruthy();
+  });
+
   it('has nobody to draw when the house is between bosses', () => {
     const f = asFaction(0, 'x');
     (f as { leader: unknown }).leader = null;
