@@ -23,6 +23,9 @@ import {
   houseName,
   houseReputation,
 } from '../../sim/houses';
+import { BossPortrait } from '../BossPortrait';
+import { styleFor } from '../art/bossLook';
+import { PERCEPTION_TIERS } from '../../config/npcs';
 import type { Faction } from '../../sim/types';
 
 /**
@@ -150,9 +153,48 @@ function RivalDetail({ faction, onClose }: { faction: Faction; onClose: () => vo
         </button>
       }
     >
-      <p className="dim" style={{ marginTop: 0 }}>
-        {read.intel >= 25 ? houseBlurb(state, faction.id) : houseReputation(state, faction.id)}
-      </p>
+      {/*
+        Who is actually running it.
+
+        The house had a name, a blurb and four hidden numbers, and the man in
+        charge of it existed only in the log line announcing that the last one
+        had died. He is the reason the family's temperament drifts over a long
+        game — leaders.ts is the only mechanism by which the city changes
+        character without the player doing it — so he belongs at the top of
+        the page about them rather than nowhere.
+
+        The portrait resolves with `read.intel`, like everything else here.
+      */}
+      <div className="boss-row">
+        <BossPortrait faction={faction} intel={read.intel} scale={2} />
+        <div>
+          <p className="dim" style={{ marginTop: 0 }}>
+            {read.intel >= 25 ? houseBlurb(state, faction.id) : houseReputation(state, faction.id)}
+          </p>
+          {faction.leader && (
+            <div className="tiny">
+              {read.intel >= PERCEPTION_TIERS[1].minFamiliarity ? (
+                <>
+                  <span className="name-main">{faction.leader.name}</span>
+                  <span className="faint">
+                    {' · '}{faction.leader.age}
+                    {' · '}{styleFor(faction.personality).light.where}
+                  </span>
+                  {read.intel >= 25 && (
+                    <div className="faint" style={{ marginTop: 4 }}>
+                      {faction.leader.reputation}
+                    </div>
+                  )}
+                </>
+              ) : (
+                <span className="faint">
+                  Somebody runs them. You have not been close enough to hear who.
+                </span>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
 
       <div className="grid-2">
         <div>

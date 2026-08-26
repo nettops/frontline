@@ -601,6 +601,40 @@ table.data tr.clickable {
   border: 1px solid var(--line-soft);
 }
 
+/*
+   The rival boss, which is a different kind of picture from a crew sprite.
+
+   A crew portrait is a row ornament and is held to the weight of the name
+   beside it. This one is the subject of the panel it opens, so it gets to be
+   the first thing you look at — but it still carries its own backdrop, so it
+   needs no plate behind it and no border fighting the one it draws itself.
+*/
+.boss-row {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+  margin-bottom: 16px;
+}
+
+.boss-row > div {
+  min-width: 0;
+  flex: 1;
+}
+
+.boss-portrait {
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  display: block;
+  flex: none;
+  border: 1px solid var(--line-soft);
+}
+
+@media (max-width: 620px) {
+  .boss-row {
+    flex-direction: column;
+  }
+}
+
 .name-cell.with-portrait {
   flex-direction: row;
   align-items: center;
