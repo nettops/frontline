@@ -83,14 +83,40 @@ body,
   height: 100%;
 }
 
+/*
+   The desk, not a backdrop.
+
+   Flat --ink-900 across a whole window is 900,000 pixels of one value, and at
+   this brightness that does not read as a dark room, it reads as a monitor
+   that is off. Two things fix it and neither adds a colour: a lamp somewhere
+   off the top left, and grain.
+
+   The grain is one inline SVG turbulence at 3.2% opacity. Named out loud it
+   sounds like decoration; switched off it is immediately obvious, because the
+   large flat areas go back to looking like an absence of signal rather than a
+   surface. `z-index: -1` puts it above the canvas background and below every
+   in-flow element, so nothing else in the file has to know it exists.
+*/
 body {
   margin: 0;
-  background: var(--ink-900);
+  background:
+    radial-gradient(1200px 700px at 12% -10%, #1a1512 0%, transparent 62%),
+    var(--ink-900);
   color: var(--text);
   font-family: var(--font-ui);
   font-size: 13px;
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
+}
+
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  opacity: 0.032;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='180' height='180'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3'/></filter><rect width='180' height='180' filter='url(%23n)'/></svg>");
 }
 
 /* Everything numeric lines up in columns. */
@@ -269,6 +295,23 @@ h4 {
   white-space: nowrap;
 }
 
+/*
+   The two money figures are set two steps larger than everything beside them.
+
+   This is a management game about money and money was set at body weight, the
+   same 15px as Crew. Colour already separated the two purses; size is what
+   says which row of the bar you are meant to read first.
+
+   The line-height is pinned so the bar does not grow. 15px at the inherited
+   1.5 is 22.5px; 21px at 1.05 is 22px, so the taller figure costs nothing.
+   Without the pin the whole header moves down seven pixels.
+*/
+.stat-value.brass,
+.stat-value.dirty {
+  font-size: 21px;
+  line-height: 1.05;
+}
+
 .stat-value.brass {
   color: var(--brass);
 }
@@ -402,10 +445,22 @@ h4 {
   background: var(--ink-800);
 }
 
+/*
+   The open page, not the highlighted menu row.
+
+   Carries the same surface as the top of a panel and bleeds one pixel over the
+   rail's right border, so the active item joins the content instead of sitting
+   in a list beside it. The label goes to full --text and the brass moves to
+   the rule: brass text on a lit row was two emphases doing one job, and the
+   brighter of them was the word rather than the marker.
+*/
 .rail-item.active {
-  color: var(--brass);
+  position: relative;
+  color: var(--text);
   border-left-color: var(--brass);
-  background: var(--ink-800);
+  background: var(--ink-700);
+  margin-right: -1px;
+  box-shadow: 1px 0 0 var(--ink-700);
 }
 
 .rail-item.locked {
@@ -480,9 +535,23 @@ h4 {
 
 /* ---------------------------------------------------------------- panels --- */
 
+/*
+   A document lying on the desk, rather than a darker rectangle drawn on it.
+
+   The whole difference is the first shadow: one inset hairline of light along
+   the top edge. Every panel was the same flat --ink-800 with a 1px border, so
+   nothing on the screen sat on top of anything and the eye had no order to
+   read them in. The gradient and the cast shadow are supporting; the highlight
+   is the part that does the work, and it costs one line.
+*/
 .panel {
-  background: var(--ink-800);
+  background: linear-gradient(180deg, var(--ink-700) 0%, var(--ink-800) 100%);
   border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow:
+    inset 0 1px 0 rgba(230, 221, 205, 0.055),
+    0 1px 0 rgba(0, 0, 0, 0.5),
+    0 10px 26px -18px #000;
   margin-bottom: 16px;
 }
 
@@ -493,7 +562,7 @@ h4 {
   gap: 12px;
   padding: 9px 14px;
   border-bottom: 1px solid var(--line);
-  background: var(--ink-700);
+  background: rgba(0, 0, 0, 0.16);
 }
 
 .panel-title {
@@ -1252,11 +1321,82 @@ th.sortable:hover {
   letter-spacing: 0.06em;
 }
 
+/* ------------------------------------------------------------------ gauge --- */
+
+/*
+   A scale with its bands drawn on it. See the `Gauge` component.
+
+   The unlit segments are the point, so they are dimmed and shortened rather
+   than emptied — a band you have not reached still has to show what colour it
+   is. Two thirds height and half opacity is enough to read as "not yet"
+   without losing the hue.
+*/
+.gauge {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 26px;
+}
+
+.gauge-seg {
+  flex: 1;
+  height: 62%;
+  opacity: 0.45;
+  border-radius: 1px;
+  background: var(--ink-600);
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.4);
+  transition: height var(--t-med) var(--ease-land), opacity var(--t-med);
+}
+
+.gauge-seg.lit {
+  height: 100%;
+  opacity: 1;
+}
+
+.gauge-seg.ok {
+  background: var(--ok-dim);
+}
+.gauge-seg.ok.lit {
+  background: var(--ok);
+}
+.gauge-seg.warn {
+  background: var(--brass-dim);
+}
+.gauge-seg.warn.lit {
+  background: var(--brass);
+}
+.gauge-seg.hot {
+  background: var(--stamp-deep);
+}
+.gauge-seg.hot.lit {
+  background: var(--stamp);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gauge-seg {
+    transition: none;
+  }
+}
+
 /* -------------------------------------------------------------------- log --- */
 
+/*
+   A ruled margin down the left, where a ledger puts one.
+
+   Sits in the gutter between the day column and the entry — 14px of padding
+   plus the 44px column, less a little. Drawn on the scroller rather than per
+   row so it runs unbroken through entries of different heights, which the
+   rows are: log text wraps.
+*/
 .log {
   max-height: 340px;
   overflow-y: auto;
+  background-image: linear-gradient(
+    90deg,
+    transparent 0 61px,
+    rgba(194, 53, 43, 0.26) 61px 62px,
+    transparent 62px
+  );
 }
 
 .log-entry {
@@ -2094,34 +2234,62 @@ th.sortable:hover {
   color: var(--text-faint);
 }
 
-/* A miss is dim on a grey rule; a read that landed is bright on olive. The
-   player infers how it went from the prose — nothing here prints a number. */
-.room-beat {
-  border-left: 2px solid var(--line);
-  padding-left: 12px;
+/* An exchange: your half, then theirs.
+
+   This used to be one block per beat with the register's LABEL above the
+   response — so the page read as a list of menu choices and outcomes rather
+   than as a conversation. Your words were never on screen.
+
+   Your line sits flush and quoted; theirs is indented under it on a rule. A
+   miss is dim on grey, a read that landed is bright on olive. The player still
+   infers how it went from the prose — nothing here prints a number. */
+.room-exchange {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
   animation: bulletin-line-in var(--t-med) var(--ease-land) backwards;
 }
-.room-beat.landed {
-  border-left-color: var(--ok-dim);
-}
 
-.room-beat-label {
-  font-family: var(--font-mono);
-  font-size: 11px;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--text-faint);
-  margin-bottom: 4px;
-}
-
-.room-beat-text {
+.room-said {
   margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--text);
+}
+
+/* Not speech. A stage direction, so `listen` reads as the deliberate act it
+   is rather than as a line nobody spoke. */
+.room-did {
+  margin: 0;
+  font-size: 13px;
+  font-style: italic;
+  color: var(--text-faint);
+}
+
+.room-reply {
+  margin: 0 0 0 14px;
+  border-left: 2px solid var(--line);
+  padding-left: 12px;
   font-size: 14px;
   line-height: 1.55;
   color: var(--text-dim);
 }
-.room-beat.landed .room-beat-text {
+.room-reply.landed {
+  border-left-color: var(--ok-dim);
   color: var(--text);
+}
+
+/* Him wanting something back. Set in his voice rather than as narration,
+   because it is the one thing in the room addressed to you. It stays on the
+   beat that asked it after you have answered — the transcript is a record of
+   the conversation, not of the current turn. */
+.room-asked {
+  margin: 6px 0 0 14px;
+  padding-left: 12px;
+  border-left: 2px solid var(--brass);
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--brass);
 }
 
 .room-outcome {
@@ -2208,6 +2376,61 @@ th.sortable:hover {
   color: var(--text-faint);
 }
 
+/*
+   The number on the table.
+
+   The one figure a sit-down is allowed to show. Every other reading in this
+   room is a phrase because what a boss has to go on is the way somebody is
+   sitting — but a price has been said out loud by the person asking for it,
+   and hiding it would be coy rather than uncertain. What stays hidden is
+   whether they would take less.
+*/
+.room-deal {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 10px 0 2px;
+  border-top: 1px solid var(--line);
+}
+.room-deal-now {
+  font-family: var(--font-mono);
+  font-size: 22px;
+  color: var(--brass);
+  font-variant-numeric: tabular-nums;
+}
+.room-deal-was {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-dim);
+}
+.room-deal-term {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  padding: 3px 8px;
+  border: 1px dashed var(--brass-dim);
+  border-radius: var(--radius);
+  color: var(--brass);
+  cursor: help;
+}
+
+/* Shaking on it. The only affirmative button the room has ever had. */
+.room-shake {
+  background: none;
+  border: 1px solid var(--brass-dim);
+  border-radius: var(--radius);
+  color: var(--brass);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  padding: 5px 10px;
+  cursor: pointer;
+  margin-right: auto;
+}
+.room-shake:hover {
+  border-color: var(--brass);
+  color: var(--text);
+}
+
 .room-leave {
   background: none;
   border: 1px solid var(--line);
@@ -2225,7 +2448,7 @@ th.sortable:hover {
 
 @media (prefers-reduced-motion: reduce) {
   .room,
-  .room-beat {
+  .room-exchange {
     animation: none;
   }
 }

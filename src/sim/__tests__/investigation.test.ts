@@ -10,6 +10,7 @@ import { describe, expect, it } from 'vitest';
 
 import { Rng } from '../rng';
 import { newGame } from '../state';
+import { grantPossession, heldPossessions } from '../possessions';
 import { runDaysSolvent } from './helpers';
 import { addEvidence } from '../util';
 import { crewList } from '../npc';
@@ -33,9 +34,17 @@ import {
   worstStage,
 } from '../investigation';
 import { footprint } from '../investigation';
-import { AGENCY_BY_ID, STAGES, stageIndex, type StageId } from '../../config/lawEnforcement';
+import {
+  AGENCY_BY_ID,
+  CASE_CLOSED_BELOW,
+  COLD_CASE_AFTER_DAYS,
+  EVIDENCE_DECAY_PER_WEEK,
+  STAGES,
+  stageIndex,
+  type StageId,
+} from '../../config/lawEnforcement';
 import { CHANNEL_OF_SOURCE, HEAT_CHANNELS, type HeatChannel } from '../../config/heat';
-import { setHeat } from '../heat';
+import { setHeat, tickHeat } from '../heat';
 import type { EvidenceTrace, GameState, Investigation } from '../types';
 
 function fresh(seed = 606): GameState {
@@ -260,17 +269,38 @@ describe('evidence', () => {
     expect(Object.keys(state.evidence)).toHaveLength(0);
   });
 
-  it('does not decay once a case is holding it', () => {
+  it('fades slower once a case is holding it, but it does fade', () => {
+    /*
+       This asserted the strength was unchanged, and that was the bug.
+
+       `decayEvidence` skipped any trace with `attachedTo.length > 0`, so a
+       trace a case had picked up was immortal — released only by `closeCase`,
+       which fired once in 795 cases. Measured, **98 of 98 surviving traces
+       were held**, which made the pile a permanent archive: an agency opening
+       a file in year four absorbed year-one evidence at its original strength.
+
+       The intent behind it is sound and lives in `closeCase` — the trail dies
+       with the case — but it only holds in a game where cases end. Held
+       evidence now fades at `EVIDENCE_HELD_DECAY_SCALE` of the loose rate,
+       because somebody is keeping it warm rather than because it is preserved.
+    */
     const state = fresh();
     heatAt(state, 40);
     drop(state, 'violence', 40);
     runLaw(state, 2);
-    const attached = Object.values(state.evidence).filter((e) => e.attachedTo !== null);
+    const attached = Object.values(state.evidence).filter((e) => e.attachedTo.length > 0);
     expect(attached.length).toBeGreaterThan(0);
     const strength = attached[0].strength;
 
     runLaw(state, 20);
-    expect(state.evidence[attached[0].id]?.strength ?? strength).toBe(strength);
+    const after = state.evidence[attached[0].id]?.strength ?? 0;
+    expect(after, 'a trace in an open file never weakens, however old it gets').toBeLessThan(
+      strength,
+    );
+
+    // ...and slower than one nobody is working. Twenty weeks at the loose rate
+    // would take eleven points off; somebody has this one on their desk.
+    expect(strength - after).toBeLessThan(EVIDENCE_DECAY_PER_WEEK * 20);
   });
 });
 
@@ -381,6 +411,39 @@ describe('what a case does to you', () => {
     }
     expect(stageIndex(investigation.stage)).toBeGreaterThanOrEqual(stageIndex('warrants'));
     expect(state.org.cash + state.org.dirtyCash).toBeLessThan(before);
+  });
+
+  /*
+     The wiring, not the unit.
+
+     `possessions.test.ts` proves `seizeOnePossession` takes the best thing in
+     the house, and that test stayed green when the call was cut out of the
+     warrants stage entirely — the unit worked and nothing reached it. That is
+     the project's recurring failure mode wearing its most ordinary costume, so
+     the claim is made here, where a case can actually be walked to a warrant.
+  */
+  it('takes the boss\'s own things when a warrant lands', () => {
+    const state = fresh();
+    state.org.cash = 500_000;
+    expect(grantPossession(state, new Rng(state.rng), 'roadster')).toBeTruthy();
+    expect(heldPossessions(state).length).toBe(1);
+
+    const investigation = openCaseFor(state, 'city_police', 70);
+    investigation.stage = 'witnesses';
+    investigation.stageSince = 0;
+    investigation.strength = 70;
+    state.day = 700;
+
+    const rng = new Rng(state.rng);
+    for (let i = 0; i < 40 && stageIndex(investigation.stage) < stageIndex('warrants'); i++) {
+      state.day += 7;
+      investigation.strength = 80;
+      tickInvestigations(state, rng);
+    }
+    expect(stageIndex(investigation.stage)).toBeGreaterThanOrEqual(stageIndex('warrants'));
+    expect(heldPossessions(state)).toEqual([]);
+    // And it is on the case record, not only in the log.
+    expect(investigation.history.some((h) => /italian car/i.test(h.text))).toBe(true);
   });
 
   it('reports the furthest any live case has got', () => {
@@ -645,5 +708,121 @@ describe('agencies', () => {
       'indictment',
       'trial',
     ]);
+  });
+});
+
+/**
+ * The heat an ordinary career sits at, measured — median 49 across 74,585
+ * career-days after the heat work. The tests below run here rather than at
+ * zero, because a starvation mechanic that only works for a family generating
+ * no attention whatsoever is not a counterplay, it is a technicality.
+ */
+const ORDINARY_HEAT = 50;
+
+/*
+   The file that never closed.
+
+   Measured over 17,051 case-weeks: mean open case strength 94.6 of 100, every
+   career peaking at 100, and **one case closed by decay against 795 opened**.
+   Inflow beat outflow 62 to 1.
+
+   The starvation mechanic was not missing. It fired on 13% of case-weeks and
+   the case got *stronger* in 90.4% of them:
+
+       their own work      +1.61
+       being visibly loud  +2.07   ungated by momentum
+       decay               -1.80
+                           ------
+       net                 +1.88
+
+   See `docs/superpowers/specs/2026-08-24-evidence-design.md`.
+*/
+describe('starving a case', () => {
+  it('gives them nothing from ambient attention once the trail is cold', () => {
+    /*
+       `work` was multiplied by `momentum` and `visibility` was not, so the one
+       term a player could not starve was the term standing for *why they are
+       looking* rather than anything they found. At 2.07 a week it beat the
+       cold-case decay on its own.
+    */
+    const state = fresh();
+    const c = openCaseFor(state, 'city_police', 50);
+    heatAt(state, ORDINARY_HEAT, 'street');
+    c.lastProgressDay = state.day - COLD_CASE_AFTER_DAYS - 1;
+    const before = c.strength;
+
+    runLaw(state, 1);
+
+    expect(
+      c.strength,
+      `a cold case at heat ${ORDINARY_HEAT} still gained on ambient attention alone`,
+    ).toBeLessThan(before);
+  });
+
+  it('takes more off a strong file than a weak one', () => {
+    /*
+       `COLD_CASE_DECAY_PER_WEEK` was a flat 1.80, so a file at 100 shed what a
+       file at 10 shed, and the cases a player most needs to starve were
+       proportionally the hardest to kill: 52 weeks of perfect silence from 100
+       down to `CASE_CLOSED_BELOW`. The same defect the heat meter had, and the
+       same repair.
+    */
+    const shed = (at: number): number => {
+      const state = fresh();
+      const c = openCaseFor(state, 'city_police', at);
+      heatAt(state, ORDINARY_HEAT, 'street');
+      c.lastProgressDay = state.day - COLD_CASE_AFTER_DAYS - 1;
+      const before = c.strength;
+      runLaw(state, 1);
+      return before - c.strength;
+    };
+
+    const strong = shed(90);
+    const weak = shed(20);
+    expect(
+      strong,
+      `a file at 90 shed ${strong.toFixed(2)}, one at 20 shed ${weak.toFixed(2)}`,
+    ).toBeGreaterThan(weak);
+  });
+
+  it('closes a file on a family that has gone quiet for a year', () => {
+    /*
+       The claim the whole system is built to make, and the one it could not
+       keep: nothing new, nothing loud, for long enough, and the file goes in a
+       drawer.
+
+       A year is the horizon, and it is not an arbitrary one — at
+       `COLD_CASE_DECAY_SHARE` a file at 60 reaches `CASE_CLOSED_BELOW` in
+       about forty-one weeks of total silence. Before this change the same
+       forty weeks took it from 60 to **89**.
+
+       Heat decays as the family stays quiet, because that is what going quiet
+       means — an earlier draft of this pinned heat at a constant and was
+       asking the case to die while the street was still talking about you.
+
+       Starved specifically, not resolved. A case that reaches indictment and
+       goes to trial also ends up `closed`, so asserting the status alone
+       passes on the opposite of what this is about — which it did, before this
+       comment was written.
+    */
+    const state = fresh();
+    const c = openCaseFor(state, 'city_police', 60);
+    heatAt(state, ORDINARY_HEAT, 'street');
+    c.lastProgressDay = state.day - COLD_CASE_AFTER_DAYS - 1;
+
+    const rng = new Rng(state.rng);
+    for (let week = 1; week <= 52 && c.strength >= CASE_CLOSED_BELOW; week++) {
+      for (let d = 0; d < 7; d++) {
+        state.day += 1;
+        state.org.quietDays += 1;
+        tickHeat(state);
+      }
+      tickInvestigations(state, rng);
+    }
+
+    expect(
+      c.strength,
+      `after a year of quiet the file still holds ${c.strength.toFixed(1)}`,
+    ).toBeLessThan(CASE_CLOSED_BELOW);
   });
 });

@@ -23,6 +23,7 @@ import {
   weightOf,
 } from '../memory';
 import { acquireBusiness, healthPressure, tickBusinesses, weeklyRevenue } from '../business';
+import { withFronts } from './helpers';
 import {
   buildWorkshop,
   canSellArms,
@@ -78,6 +79,7 @@ import { borrow, prices, tickMarket, totalOwed } from '../market';
 import { addHeat, channelHeat, setHeat, startLayLow, tickHeat } from '../heat';
 import { agencyHeat } from '../investigation';
 import { AGENCY_BY_ID } from '../../config/lawEnforcement';
+import { LAY_LOW_DURATION_DAYS } from '../../config/heat';
 import { HEALTH } from '../../config/businesses';
 import { CITY, PATRON } from '../../config/perception';
 import { AGING } from '../../config/succession';
@@ -1075,8 +1077,11 @@ describe('the two trades', () => {
   /** A seated sandbox with a district opened for a trade. */
   function running(seed: number, trade: 'product' | 'arms') {
     const state = seated(seed);
+    // The trades read fronts rather than a rank now — two for product, three
+    // for arms — and the seated start holds ground without owning premises on
+    // it. `minControl` on the route below is unchanged and still does its half.
+    withFronts(state, TRADES[trade].minFronts);
     const t = controlledTerritories(state)[0];
-    // Underboss holds home at 75, which clears control for both trades.
     openRoute(state, trade, t.id);
     return { state, t };
   }
@@ -1112,9 +1117,16 @@ describe('the two trades', () => {
     const state = game(160);
     const tooJunior = canOpenSupply(state, 'dockside');
     expect(tooJunior.ok).toBe(false);
-    expect(tooJunior.message).toMatch(/Nobody will deal/);
+    // Names the figure, the bar and the way back, which the old
+    // "Nobody will deal with a street criminal" did none of.
+    expect(tooJunior.message).toMatch(/nowhere to put it/);
+    expect(tooJunior.message).toMatch(/\d+ fronts?/);
+    expect(tooJunior.message).toMatch(/Take a district/);
 
     const seatedState = seated(162);
+    // Fronts first, so the refusal under test is the money one and not the
+    // premises one standing in front of it.
+    withFronts(seatedState, TRADES.product.minFronts);
     seatedState.org.cash = 0;
     seatedState.org.dirtyCash = 0;
     const tooPoor = canOpenSupply(seatedState, 'dockside');
@@ -1185,6 +1197,7 @@ describe('the two trades', () => {
 
   it('prices the water by who holds the docks', () => {
     const state = seated(165);
+    withFronts(state, TRADES.product.minFronts);
     openSupply(state, 'dockside');
     const docks = state.territories['the_docks'];
     for (const id of RIVAL_IDS) docks.influence[id] = 0;
@@ -1197,9 +1210,10 @@ describe('the two trades', () => {
 
   it('makes arms rather than buying them', () => {
     const state = seated(166);
+    withFronts(state, TRADES.arms.minFronts);
     const t = controlledTerritories(state)[0];
     state.org.cash = 500_000;
-    expect(buildWorkshop(state, t.id).ok).toBe(true);
+    expect(buildWorkshop(state, t.id).ok, buildWorkshop(state, t.id).message).toBe(true);
 
     state.day = 7;
     tickContraband(state, new Rng(state.rng));
@@ -1491,16 +1505,37 @@ describe('heat has channels', () => {
    * informant is not a problem you can solve by not doing anything.
    */
   it('cools the street when you go quiet and does nothing about an informant', () => {
+    /*
+       Run for exactly the window, not a day past it.
+
+       This looped 14 times against a `LAY_LOW_DURATION_DAYS` of 14, so the
+       last tick landed after the lay-low had already lapsed and measured one
+       day of ordinary decay as though it were part of going quiet. Under a
+       flat decay rate that day was worth 0.24 and hid inside a
+       `toBeCloseTo(60, 0)`; once decay became a share of the load it was worth
+       0.94 and the test failed — correctly, and for a reason that had nothing
+       to do with what it was testing.
+
+       `LAY_LOW_BY_CHANNEL.inside` is 0, so the honest assertion is exact.
+       Somebody already talking is not affected by the boss staying in.
+    */
     const state = game(192);
     setHeat(state, 'street', 60);
     setHeat(state, 'inside', 60);
     startLayLow(state);
-    for (let d = 0; d < 14; d++) {
+    for (let d = 0; d < LAY_LOW_DURATION_DAYS - 1; d++) {
       state.day += 1;
       tickHeat(state);
     }
     expect(channelHeat(state, 'street')).toBeLessThan(45);
-    expect(channelHeat(state, 'inside')).toBeCloseTo(60, 0);
+    expect(channelHeat(state, 'inside')).toBe(60);
+
+    // And the day after it lapses, the ordinary rate resumes — slowly, because
+    // paper and people do not forget at the speed the street does.
+    state.day += 1;
+    tickHeat(state);
+    expect(channelHeat(state, 'inside')).toBeLessThan(60);
+    expect(channelHeat(state, 'inside')).toBeGreaterThan(57);
   });
 
   it('shows Financial Crimes the books and nothing else', () => {

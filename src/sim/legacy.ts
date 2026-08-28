@@ -11,8 +11,11 @@
 
 import { clamp } from './rng';
 import { estate } from './estate';
-import { territoryList, playerInfluence } from './territory';
+import { territoryList, playerInfluence, controlLevel } from './territory';
 import { figure } from './civic';
+import { workingHoldings } from './holdings';
+import { possessions } from './possessions';
+import { POSSESSION_BY_ID } from '../config/possessions';
 import { CIVIC_FIGURES } from '../config/civic';
 import {
   CAREER_SHAPES,
@@ -35,8 +38,11 @@ export function legitimacy(state: GameState): number {
   const worth = estate(state);
   const total = Math.max(1, worth.total);
 
-  // What you visibly own, against what is in a drawer.
-  const visible = clamp((worth.fronts + worth.ground) / total, 0, 1);
+  // What you visibly own, against what is in a drawer. `estate` works the
+  // share out, because it is the module that knows what the family owns —
+  // and because a possessions field added here and not there would have
+  // grown the denominator without the numerator.
+  const visible = clamp(worth.visible / total, 0, 1);
   const quiet = clamp(1 - state.org.heat / 100, 0, 1);
   const unnamed = clamp(1 - (state.city?.notoriety ?? 0) / 100, 0, 1);
 
@@ -71,7 +77,37 @@ export interface CareerShape {
  */
 export function careerShape(state: GameState): CareerShape {
   const worth = estate(state);
-  const held = territoryList(state).filter((t) => playerInfluence(t) >= 25).length;
+  /*
+     Districts you dominate, not districts you have a foot in.
+
+     This counted influence at 25 — a foothold — and a family with three
+     districts under control has a toe in six or seven besides. Measured over
+     36 careers at day 300, the histogram of what it was reading was
+     `2:1 3:1 4:31 5:3`, and the Kingpin was the verdict on 35 of them: the
+     horoscope this file's header forbids, arriving at the population level
+     where no single-career test could see it. Control reads no better —
+     `2:1 3:4 4:30 5:1` — because the highest district gate anywhere in
+     `OPERATIONS` is three, so nothing asks for a fourth and a rational player
+     stops there.
+
+     Dominance is the only band that spreads: `1:4 2:6 3:15 4:11`. It is also
+     the honest reading of "the city moved around you" — a foot in the door is
+     not a map somebody else inherits.
+
+     The same defect the union boss had in `config/civic.ts`, twice over: a bar
+     re-placed against a quantity that had stopped varying, rather than the
+     quantity being questioned.
+  */
+  const held = territoryList(state).filter((t) => controlLevel(t) === 'dominance').length;
+  /*
+     And the half that stops a map being a line on a map.
+
+     See the note on `kingpinRunning`. Dominating four districts named 44% of
+     careers and no placement of that one number could do better, because
+     nothing in the game asks for a fifth district and every career ends with
+     four. Ground with nobody running it is not ground somebody inherits.
+  */
+  const running = workingHoldings(state).length;
   const owed = CIVIC_FIGURES.reduce((sum, def) => sum + figure(state, def.id).owed, 0);
   const peak = state.org.record?.estate ?? worth.total;
   const notoriety = state.city?.notoriety ?? 0;
@@ -112,8 +148,9 @@ export function careerShape(state: GameState): CareerShape {
   );
   claim(
     'kingpin',
-    held >= SHAPE_BARS.kingpinDistricts,
-    `${held} districts answering, of ${territoryList(state).length} in the city.`,
+    held >= SHAPE_BARS.kingpinDistricts && running >= SHAPE_BARS.kingpinRunning,
+    `${held} districts answering of ${territoryList(state).length} in the city, ` +
+      `${running} of them with your own people standing in them.`,
   );
   claim(
     'legitimate',
@@ -170,6 +207,9 @@ export function postMortem(state: GameState): LegacyLine[] {
   const record = state.org.record;
   const held = territoryList(state).filter((t) => playerInfluence(t) >= 25).length;
   const money = (n: number) => `$${Math.round(n).toLocaleString('en-US')}`;
+  // Everything ever owned, not only what survived — a career is partly a
+  // record of what was taken off it.
+  const everOwned = possessions(state);
 
   return [
     { label: 'Worth at the end', value: money(worth.total) },
@@ -180,6 +220,36 @@ export function postMortem(state: GameState): LegacyLine[] {
       value: `${Math.round(state.org.respect)} now, ${Math.round(record?.respect ?? state.org.respect)} at the most`,
     },
     { label: 'Operations run', value: `${state.player.opsCompleted} done, ${state.player.opsFailed} not` },
+    /*
+       What was yours, and what happened to it.
+
+       This row is the reason possessions exist. Round 15 was asked what would
+       have gone if it had all gone and answered *"honestly: not much, and that
+       is the damning part"* — $673 and a laundromat. A career that ends with a
+       house on the hill and a Lincoln the Bureau took in a raid has an answer
+       to that question, and this is where it gets given.
+
+       Silent for a career that never bought anything, rather than a row
+       reading "nothing" for the two thirds of players who never open the
+       catalogue.
+    */
+    ...(everOwned.length
+      ? [
+          {
+            label: 'Yours, not the family\'s',
+            value: everOwned
+              .map((p) => {
+                const def = POSSESSION_BY_ID[p.defId];
+                const name = def ? def.name.toLowerCase() : 'something';
+                if (p.status === 'seized') return `${name} (taken on day ${p.goneDay})`;
+                if (p.status === 'lost') return `${name} (lost at cards on day ${p.goneDay})`;
+                if (p.status === 'sold') return `${name} (sold on day ${p.goneDay})`;
+                return name;
+              })
+              .join('; '),
+          },
+        ]
+      : []),
     { label: 'How legitimate it looked', value: `${legitimacy(state)} out of 100` },
     { label: 'Heat at the end', value: `${Math.round(state.org.heat)} out of 100` },
   ];

@@ -22,7 +22,6 @@ const player = (over: Partial<Player> = {}): Player => ({
   attributeProgress: {} as Player['attributes'],
   opsCompleted: 0,
   opsFailed: 0,
-  pendingRank: null,
   ...over,
 });
 

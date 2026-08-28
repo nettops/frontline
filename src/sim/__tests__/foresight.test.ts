@@ -22,8 +22,6 @@ import { payrollForecast, totalFunds, wageBillWith, weeklyWageBill } from '../ec
 import { arrestRisk, retainLawyer, weeklyLegalCost } from '../investigation';
 import { quoteLoan, borrow, loans, weeklyRepayment } from '../market';
 import { launderOutlook, ownedBusinesses } from '../business';
-import { BUSINESSES } from '../../config/businesses';
-import { RANK_BY_ID, RANKS } from '../../config/economy';
 import { PAYDAY_INTERVAL } from '../../config/economy';
 import type { GameState } from '../types';
 
@@ -285,48 +283,26 @@ describe('the laundering outlook explains which ceiling is biting', () => {
   });
 });
 
-describe('the first money gate is reachable', () => {
-  /*
-     Rewritten because the quantity changed, not because the number was
-     inconvenient.
+/*
+   A suite named 'the first money gate is reachable' stood here with two tests
+   in it, and both asserted the shape of `RankDef.requires` — that the first
+   paying rung cost no more than the cheapest front, and that the paying rungs
+   kept a fourfold step between them.
 
-     The original asserted `cleanCash <= 10_000` and explained itself as "the
-     gate must stay inside what one or two fronts can produce in a few months"
-     — a statement about *laundering throughput*, because the requirement used
-     to read clean cash held. It now reads the estate: the wallet, what has
-     been put away, what the fronts would fetch and what the ground is worth.
+   They passed, and they described nothing. `requires` gated promotion,
+   promotion has not existed since the ladder came out, and `player.rank` is
+   pinned at the first rung for every career. A test asserting a relationship
+   between two numbers nobody reads is the standing failure mode with a green
+   tick on it.
 
-     Under that measure a family does not wait a season for the gate. It buys a
-     laundromat and the gate is most of the way met, because the building is
-     the thing being counted. Nudging 10,000 up to 12,500 and leaving the
-     comment would have kept a passing test that no longer described anything.
+   The intent behind them — the next thing worth reaching should step up
+   smoothly in price, and the first one should be payable early — belongs to
+   whatever actually gates progress now: `opens` on the job table, and the
+   front catalogue's own prices. If that wants a shape test it goes there.
 
-     The intent that survives, stated against the new measure: the first gate
-     must be payable by the cheapest thing on the shelf. A boss who can afford
-     one front can reach Crew Leader.
-  */
-  it('asks for no more than the cheapest front on the shelf', () => {
-    const cheapest = Math.min(...BUSINESSES.map((b) => b.cost));
-    expect(RANK_BY_ID.crew_leader.requires.cleanCash).toBeLessThanOrEqual(cheapest * 1.1);
-    expect(RANK_BY_ID.crew_leader.requires.cleanCash).toBeGreaterThan(cheapest * 0.5);
-  });
-
-  /*
-     And the rungs above it keep their shape.
-
-     Each is roughly four times the one below — the same ratio the front
-     catalogue's own prices climb at — so the ladder cannot quietly become
-     flat at the top or vertical in the middle.
-  */
-  it('keeps roughly a fourfold step between the paying rungs', () => {
-    const paying = RANKS.filter((r) => r.requires.cleanCash > 0);
-    for (let i = 1; i < paying.length; i++) {
-      const ratio = paying[i].requires.cleanCash / paying[i - 1].requires.cleanCash;
-      expect(ratio, `${paying[i].id} against ${paying[i - 1].id}`).toBeGreaterThanOrEqual(3);
-      expect(ratio, `${paying[i].id} against ${paying[i - 1].id}`).toBeLessThanOrEqual(6);
-    }
-  });
-});
+   The `describe` was left behind empty on the first pass, and vitest fails an
+   empty suite rather than skipping it. Removed entirely.
+*/
 
 /*
    The forecast against the payday, over a spread of states rather than three.

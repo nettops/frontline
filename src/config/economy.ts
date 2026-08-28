@@ -20,8 +20,26 @@ import type { AttributeId, Attributes, RankId, RoleId } from '../sim/types';
  * with the neighbourhood, and with anybody who had a choice.
  */
 export const FEAR = {
-  /** Fear bleeds off if you stop reminding people. Faster than standing does. */
-  decayPerWeek: 1.4,
+  /**
+   * Fear bleeds off if you stop reminding people, as a share of what is there.
+   *
+   * **Was 1.4 a week, flat, and flat was the defect.** A constant drain has no
+   * settling point: any sustained positive income climbs to the ceiling and
+   * any deficit falls to zero, so the level a family lives at is decided by
+   * the sign of a subtraction rather than by how hard it is working. A share
+   * settles where the weekly income matches it, which is what makes "how
+   * frightening are you" a readable consequence of how you play.
+   *
+   * The same repair `config/heat.ts` made for heat decay, and the note there
+   * about why a flat rate is wrong applies here word for word.
+   *
+   *     settled level = weekly income / decayShare
+   *
+   * At 0.08 a family running every job loud settles near 75, and one picking
+   * its moments settles near 8. That gap is the design: being feared is a way
+   * of running a family, not a garnish.
+   */
+  decayShare: 0.08,
   /** Ceiling, on the same scale as heat. */
   max: 100,
 
@@ -29,8 +47,34 @@ export const FEAR = {
   fromViolence: 6,
   fromWarClash: 4,
   fromIntimidation: 4,
-  /** What a public failure costs. Being feared is a claim; failing tests it. */
-  onFailure: -3,
+  /**
+   * What a public failure costs. Being feared is a claim; failing tests it.
+   *
+   * **Was -3 and charged on every failed job, and both halves were wrong.**
+   *
+   * Measured, the first time this project ever looked: fear is granted +2 only
+   * when a *loud* job succeeds and taken away 3 whenever *any* job fails, so
+   * the break-even success rate was
+   *
+   *     loss / (gain + loss) = 3 / (2 + 3) = 60%
+   *
+   * and the work actually runs at **52% heavy, 58% straight**. Every career in
+   * this game was below the line. Fear did not accumulate slowly; it drained,
+   * always, for everybody, which is why 36 careers of 36 peaked at 11 and
+   * ended at 2 and why an arm that ran every job heavy for 300 days still only
+   * reached 34 of 100.
+   *
+   * Worse, the asymmetry made selective use impossible in principle: the gain
+   * counted loud jobs and the loss counted all of them, so a family running
+   * one loud job a week paid the penalty on the nine quiet failures beside it.
+   *
+   * So: -2, and only on jobs actually run loud. Break-even falls to
+   * 2 / (3 + 2) = 40%, comfortably under where the work runs. The idea in the
+   * sentence above is kept and is the reason this is not simply deleted — a
+   * loud job that goes wrong in front of everybody really is the claim being
+   * tested. A quiet burglary going wrong is not.
+   */
+  onFailure: -2,
 
   /** Fear suppresses defection: multiplier on the weekly chance, at maximum. */
   defectionAtMax: 0.45,
@@ -203,158 +247,87 @@ export const ARREARS_CLEARED_LOYALTY = 5;
 
 // ----------------------------------------------------------------- ranks ---
 
+/**
+ * What a rung of the old ladder was called.
+ *
+ * Everything that made this a ladder is gone. `requires` gated promotion,
+ * `maxCrew` gated the payroll and `maxRole` gated who you could name — all
+ * three were replaced (by `opens` on the job table, by `CREW_BASE` and the
+ * per-district and per-front terms above, and by the board respectively), and
+ * `player.rank` has been pinned at the first rung ever since.
+ *
+ * The three fields survived the deletion of `nextRank` and `rankRequirements`
+ * because an audit that greps for references finds them: four probes and a
+ * `foresight` assertion were still reading a table that gated nothing, and
+ * reporting distances to it. That is what is being removed here.
+ *
+ * What is left is a name. Saves record it, the succession line records what a
+ * predecessor was called, and the title bar prints it. Nothing reads it as a
+ * gate, and there is no code path that changes it.
+ */
 export interface RankDef {
   id: RankId;
   name: string;
-  /**
-   * Everything must be met before the promotion is offered.
-   *
-   * `cleanCash` is deliberately clean, not total — laundering is load-bearing
-   * for progression rather than an optional convenience. The first rung is set
-   * below the starting balance so the early game is not gated on a system the
-   * player has not unlocked yet.
-   */
-  requires: {
-    respect: number;
-    crew: number;
-    cleanCash: number;
-    opsCompleted: number;
-    /** Districts held at control level or better. */
-    territories: number;
-  };
-  /** You cannot command more people than your standing supports. */
-  maxCrew: number;
-  /** Highest role you may promote someone to. */
-  maxRole: RoleId;
   blurb: string;
 }
 
-/*
-   The top four rungs, set against the window a person actually plays.
+/**
+ * How many people the outfit can hold: a base, plus this for every district.
+ *
+ * Replaces `RankDef.maxCrew`. See `maxCrew` in `sim/player.ts` for the arrival
+ * curves these were sized against — the point was to land on the old ladder's
+ * shape at the same days rather than to change what a career can afford.
+ */
+export const CREW_BASE = 3;
+export const CREW_PER_DISTRICT = 4;
+/**
+ * Premises feed people too, and leaving them out starved a whole play style.
+ *
+ * The first version of this counted ground alone at 5 a district. Measured on
+ * `ladder.probe`, whose bot works one neighbourhood hard rather than spreading
+ * — which is a perfectly ordinary way to play, and the way the fiction points
+ * — that bot holds one district and two fronts at day 300, so its ceiling fell
+ * from 36 people to 8 and everything downstream of a crew starved with it.
+ *
+ * A front is a payroll a man can plausibly be on, so it counts. Ground counts
+ * for more because it is harder to get and it is what a crew is *for*.
+ */
+export const CREW_PER_FRONT = 2;
 
-   Everything above Crew Leader was previously calibrated against the best each
-   of 35 *four-year* careers ever reached, taken between the median and the
-   75th percentile. The method is right. The window was wrong, and wrong in the
-   exact way HANDOFF §5 exists to stop: the instruments measure 1,460-day
-   careers and every blind round this project has ever run is one year.
-
-   What that cost, measured over 36 careers at 300 days under the old table:
-
-     Street Criminal  36/36  day 0        Capo         11/36  day 212
-     Enforcer         34/36  day 21       Underboss     3/36  day 221
-     Crew Leader      29/36  day 60       Boss          0/36  never
-                                          Crime Lord    0/36  never
-
-   Three rungs inside the first ten weeks, then nothing for the next thirty-
-   three. Two of the seven ranks were never reached by any career inside the
-   span of a human game. Round 12's *informed* run — a tester who already knew
-   what he was doing — reached Capo on day 324, past the end of the round.
-
-   That gap is almost certainly what F1 has been reporting as "decisions stop
-   changing around day 90-119". The loop did not close. The ladder stopped
-   answering and nothing else was scheduled to.
-
-   Re-sized by the original method against the day each rung should land — 130,
-   220, 285 — with the same division of labour the old comment described: the
-   three columns that say what a family *built* carry the rank, and the two
-   that say how it got there sit low enough to be implied. Five requirements
-   joined by AND is a product, not a ladder.
-
-   The money column is the exception and could not be sized freely. Two
-   pre-existing invariants own it: `foresight.test.ts` requires each paying
-   rung to be three to six times the one below, and `balance.test.ts` requires
-   that nobody coast to the top rung in two years. Both are older than this
-   change and both are right, so the money ladder is set at the bottom of the
-   band they allow — 12,500, 40,000, 130,000, 420,000, 1,400,000 — rather than
-   at what a 300-day career can actually hold.
-
-   What that leaves, over the same 36 careers at 300 days:
-
-     Capo   11/36 day 86    Underboss 9/36 day 211    Boss 7/36 day 260
-
-   The rungs arrive far earlier and Boss becomes reachable at all. The *share*
-   of careers reaching them barely moves, and the probe says why in one line:
-   `furthest requirement at the end: clean money 34, respect 2`. Thirty-four of
-   thirty-six careers are held by the money line at whatever rung they are
-   pushing at.
-
-   So the table was a symptom, and the first reading of why it was one was
-   wrong. "A career earns $5.4M and peaks at a balance of $45,470" compares a
-   mean against a median on a distribution whose mean is nearly ten times its
-   median, which is not a ratio at all. There is no leak.
-
-   What is actually there, sorted across 36 careers at day 300: twenty-five
-   careers end between $8,677 and $47,667, and eleven end between $133,975 and
-   $2,827,037. The population splits, and it splits on fronts — the flat
-   twenty-five hold a median of one, the compounding eleven hold a median of
-   seven. Front income is paid into holdings, which compound; a family that
-   never gets a second front never starts.
-
-   Which puts the money rung, and so the whole top of this table, downstream of
-   the front gate — the system F10 was about and F12 still is. The honest
-   record is that this change improved the pacing, did not reach the
-   pre-committed target, and located what does.
-   `ladder.probe.test.ts` fails on that target on purpose.
-*/
 export const RANKS: RankDef[] = [
   {
     id: 'street_criminal',
     name: 'Street Criminal',
-    requires: { respect: 0, crew: 0, cleanCash: 0, opsCompleted: 0, territories: 0 },
-    maxCrew: 3,
-    maxRole: 'soldier',
     blurb: 'Nobody knows your name. Nobody is looking for you either.',
   },
   {
     id: 'enforcer',
     name: 'Enforcer',
-    // No clean-money requirement at all: wages erode the starting balance, so
-    // any figure here gates the first promotion on laundering, which the
-    // player cannot have unlocked yet. The clean economy starts mattering at
-    // Crew Leader, by which point a foothold and a front are reachable.
-    requires: { respect: 20, crew: 2, cleanCash: 0, opsCompleted: 5, territories: 0 },
-    maxCrew: 6,
-    maxRole: 'enforcer',
     blurb: 'People on the block know what happens when you show up.',
   },
   {
     id: 'crew_leader',
     name: 'Crew Leader',
-    requires: { respect: 60, crew: 5, cleanCash: 12_500, opsCompleted: 15, territories: 1 },
-    maxCrew: 12,
-    maxRole: 'lieutenant',
     blurb: 'You give the orders now. The mistakes are yours too.',
   },
   {
     id: 'capo',
     name: 'Capo',
-    requires: { respect: 120, crew: 8, cleanCash: 40_000, opsCompleted: 24, territories: 1 },
-    maxCrew: 22,
-    maxRole: 'capo',
     blurb: 'A seat at the table, and everyone at it counting your earnings.',
   },
   {
     id: 'underboss',
     name: 'Underboss',
-    requires: { respect: 180, crew: 11, cleanCash: 130_000, opsCompleted: 34, territories: 2 },
-    maxCrew: 36,
-    maxRole: 'consigliere',
     blurb: 'Second in the room. First in the indictment.',
   },
   {
     id: 'boss',
     name: 'Boss',
-    requires: { respect: 260, crew: 14, cleanCash: 420_000, opsCompleted: 46, territories: 3 },
-    maxCrew: 55,
-    maxRole: 'underboss',
     blurb: 'Your family. Your rules. Your problem when it goes wrong.',
   },
   {
     id: 'crime_lord',
     name: 'Crime Lord',
-    requires: { respect: 600, crew: 26, cleanCash: 1_400_000, opsCompleted: 120, territories: 5 },
-    maxCrew: 120,
-    maxRole: 'underboss',
     blurb: 'Cities move around you. So do task forces.',
   },
 ];
@@ -475,6 +448,29 @@ export const INFLUENCE_FROM = {
          1.2    2 / 3 / 6
          2.4    4 / 5 / 9        the door opens for the median career
 
+     **Re-plotted after the heat work, and 2.4 no longer means what it meant.**
+     Making decay a share of the load tripled what a family holds, so it keeps
+     counsel for far more of the career, and the same rate paid out far more
+     often. Counsel is 84% of all influence earned — measured by counting the
+     calls, after two guesses at the source that were both wrong. At 2.4 the
+     median reached 10 against a patron who wants 9, so the political vertical
+     went from walled to free:
+
+         2.4    8 / 10 / 14      city hall for nearly everybody
+         1.4    8 /  9 / 11
+         0.9    6 /  8 /  9      the shape above, restored
+         0.7    6 /  7 /  8      median safer, but nobody reaches the patron
+         0.5    6 /  6 /  8
+
+     0.9 is the one that keeps both halves of the intent: the median career
+     opens a door and still has to work for city hall, and the top quartile
+     gets there. It sits exactly on the pre-committed ceiling of 8 with no
+     margin, which is worth knowing the next time anything moves the economy.
+
+     The response is shallow because `attributeProgressNeeded` is a rising
+     curve — `3 + current * 1.6` — so raw training compresses hard at the top.
+     Two and a half times the rate is two points of influence.
+
      All three re-measured under the final probe. An earlier version of this
      table was taken while the bot was also paying $25,000 courtesies, which
      moved the economy underneath it — the numbers here are the ones the
@@ -496,7 +492,7 @@ export const INFLUENCE_FROM = {
      lawyer and earns no pull at all. That is backwards and it is the next
      finding, not this one.
   */
-  counselPerWeek: 2.4,
+  counselPerWeek: 0.9,
   /** Per diplomatic approach that is made and paid for, refused or not. */
   approach: 0.6,
   /*

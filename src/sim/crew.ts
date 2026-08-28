@@ -7,9 +7,10 @@
 
 import { Rng, clamp } from './rng';
 import type { GameState, Npc, RoleId } from './types';
-import { addEvidence, addLog, withArticle } from './util';
+import { addEvidence, addLog, say, withArticle } from './util';
 import {
   addNote,
+  somethingGood,
   crewList,
   generateNpc,
   isOutOfReach,
@@ -18,8 +19,10 @@ import {
 import { passedOver } from './ties';
 import { remember } from './memory';
 import { spend, totalFunds } from './economy';
+import { holdingShare } from './holdings';
 import { reduceHeat } from './heat';
-import { fearLevel, maxCrew, rankDef } from './player';
+import { fearLevel, maxCrew } from './player';
+import { controlledTerritories } from './territory';
 import {
   FEAR,
   ROLE_LABEL,
@@ -41,7 +44,12 @@ import { priced } from './market';
 export function recruitCost(state: GameState): number {
   const discount = state.player.attributes.negotiation * 0.02;
   const frightening = 1 + fearLevel(state) * (FEAR.recruitCostAtMax - 1);
-  return Math.round(priced(state, RECRUIT_COST) * (1 - clamp(discount, 0, 0.35)) * frightening);
+  // Union halls and the street you come from: people are cheaper to bring in
+  // where people already know you. See `config/holdings.ts`.
+  const known = 1 - holdingShare(state, 'labour');
+  return Math.round(
+    priced(state, RECRUIT_COST) * (1 - clamp(discount, 0, 0.35)) * frightening * known,
+  );
 }
 
 export function refreshRecruits(state: GameState, rng: Rng, force = false): void {
@@ -62,10 +70,37 @@ export function refreshRecruits(state: GameState, rng: Rng, force = false): void
      men, and found both gone and four strangers in their place with no
      indication the list had ever been perishable.
   */
+  /*
+     ...and say it differently each time, with somebody in it.
+
+     One sentence, every RECRUIT_REFRESH_DAYS, for four years. `scorecard.probe`
+     measured it at 4% of everything a player reads across 48 careers — the
+     loudest whole line in the game, ahead of every job outcome and every
+     payday.
+
+     The variants name a face off the new list, which is the thing the line is
+     for: the point is not that a list refreshed, it is that there are people
+     on it and they will not be there next week either.
+  */
   if (had > 0) {
+    const fresh = Object.values(state.recruits);
+    const face = fresh.length ? fresh[0] : null;
     addLog(
       state,
-      'The people asking around are not the same people as last week.',
+      say(
+        `recruits_${state.day}`,
+        state.day,
+        [
+          'The people asking around are not the same people as last week.',
+          'The list turned over. None of last week is on it.',
+          'Word went round that you were hiring. Different word, different people.',
+          face ? `${face.name} has been asking after you. So have ${fresh.length - 1} others.` : null,
+          face
+            ? `${face.name} is new on the list, and the ones you were looking at are not.`
+            : null,
+          face ? `Somebody sent ${face.name} your way. The old names have moved on.` : null,
+        ].filter((x): x is string => x !== null),
+      ),
       'crew',
     );
   }
@@ -89,9 +124,20 @@ export function canRecruit(state: GameState, recruitId: string): ActionResult {
   if (!npc) return { ok: false, message: 'That person is no longer around.' };
 
   if (crewList(state).length >= maxCrew(state)) {
+    /*
+       Names the figure, the bar and the way back.
+
+       It used to say "A Street Criminal cannot hold more than 3 people. Move
+       up first." — a title the game no longer shows anywhere, and a remedy
+       ("move up") that pointed at a ladder that has been taken out. Ground is
+       both the real constraint now and something the player can go and get.
+    */
+    const held = controlledTerritories(state).length;
     return {
       ok: false,
-      message: `A ${rankDef(state).name} cannot hold more than ${maxCrew(state)} people. Move up first.`,
+      message:
+        `You hold ${held} ${held === 1 ? 'district' : 'districts'}, which feeds ` +
+        `${maxCrew(state)} people. Take more ground before you take on anybody else.`,
     };
   }
 
@@ -113,7 +159,7 @@ export function recruit(state: GameState, recruitId: string): ActionResult {
   const npc = state.recruits[recruitId]!;
 
   const cost = recruitCost(state);
-  if (!spend(state, cost)) {
+  if (!spend(state, cost, 'crew')) {
     return { ok: false, message: 'You cannot cover what it takes to bring them in.' };
   }
 
@@ -134,17 +180,19 @@ function nextRole(role: RoleId): RoleId | null {
   return idx >= 0 && idx < ROLE_ORDER.length - 1 ? ROLE_ORDER[idx + 1] : null;
 }
 
-export function canPromote(state: GameState, npc: Npc): ActionResult {
+export function canPromote(_state: GameState, npc: Npc): ActionResult {
   const next = nextRole(npc.role);
   if (!next) return { ok: false, message: 'There is nowhere higher to put them.' };
 
-  const ceiling = rankDef(state).maxRole;
-  if (ROLE_ORDER.indexOf(next) > ROLE_ORDER.indexOf(ceiling)) {
-    return {
-      ok: false,
-      message: `${withArticle(rankDef(state).name).replace(/^./, (c) => c.toUpperCase())} cannot appoint ${withArticle(ROLE_LABEL[next])}.`,
-    };
-  }
+  /*
+     No ceiling on who you can promote.
+
+     `rankDef(state).maxRole` used to stop a player naming a capo before the
+     ladder said they were senior enough to have one. You are the boss of this
+     outfit from the first morning, so there is nobody above you to withhold
+     permission — and the appointment already carries its own costs, in wages
+     and in what a disappointed man remembers.
+  */
   if (isOutOfReach(npc)) {
     return {
       ok: false,
@@ -195,6 +243,8 @@ export function promote(state: GameState, npcId: string): ActionResult {
 
   passedOver(state, npc, watching);
   remember(npc, state.day, 'promoted');
+  // He has gone somewhere, which is the thing stagnation measures.
+  somethingGood(state, npc);
   for (const other of watching) remember(other, state.day, 'passed_over', npc.id);
 
   addNote(npc, state.day, `Made ${ROLE_LABEL[next]}.`, 'good');
@@ -315,6 +365,8 @@ export function setWage(state: GameState, npcId: string, wage: number): ActionRe
 
   const raised = capped > before;
   addNote(npc, state.day, raised ? 'Given a raise.' : 'Had their pay cut.', raised ? 'good' : 'bad');
+  // More money counts as going somewhere. A cut plainly does not.
+  if (raised) somethingGood(state, npc);
   if (!raised) npc.stats.grievance = clamp(npc.stats.grievance + 8, 0, 100);
 
   return { ok: true, message: `${npc.name} now earns ${money(capped)} a week.` };

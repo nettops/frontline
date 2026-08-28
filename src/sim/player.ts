@@ -1,37 +1,57 @@
 /**
- * The player character: standing, attributes, and advancement.
+ * The player character: standing and attributes.
  *
- * Ranks are gated on the state of the organization, not on experience points.
- * You become a Capo because you have the money, the people and the reputation
- * a Capo has — not because a bar filled up.
+ * There is no advancement here any more. Ranks were gated on the state of the
+ * organization — money, people, reputation — and every one of those gates now
+ * lives on the thing it was gating: `opens` decides the job table, ground and
+ * premises decide the payroll, the board decides who you can name. `player.rank`
+ * survives as a name on the save and nothing reads it as a gate.
+ *
+ * What is left is the record the organization keeps of its own high-water
+ * marks, which the front-health floor and `legacy.ts` read, and the attribute
+ * training that was never part of the ladder.
  */
 
 import { clamp } from './rng';
-import type { AttributeId, GameState, RankId } from './types';
-import { addLog, pushEvent } from './util';
+import type { AttributeId, GameState } from './types';
+import { addLog } from './util';
 import { crewList } from './npc';
 import { controlledTerritories } from './territory';
-import { priced } from './market';
 import { estate } from './estate';
 import { ownedBusinesses } from './business';
 import {
   ATTRIBUTE_LABEL,
   ATTRIBUTE_MAX,
+  CREW_BASE,
+  CREW_PER_DISTRICT,
+  CREW_PER_FRONT,
   FEAR,
   PAYDAY_INTERVAL,
   STANDING_HELD,
-  RANKS,
-  RANK_BY_ID,
   attributeProgressNeeded,
-  rankIndex,
 } from '../config/economy';
 
-export function rankDef(state: GameState) {
-  return RANK_BY_ID[state.player.rank];
-}
-
+/**
+ * How many people you can keep, which is now a question about ground.
+ *
+ * This read `rankDef(state).maxCrew` — 3 people as a Street Criminal rising to
+ * 55 as a Boss — and the rank ladder is gone. Ground is the honest constraint
+ * and the better story: you can feed as many people as you have streets to
+ * feed them from.
+ *
+ * Ground and premises both count — see `CREW_PER_FRONT` for what happened when
+ * only ground did. Sized to land on the old curve rather than by eye: a career
+ * spreading across the map reaches 8 districts and 12 fronts by day 230, which
+ * is 59 people against the old Boss ceiling of 55; one working a single
+ * neighbourhood holds 1 district and 2 fronts, which is 11 against the 12 the
+ * old ladder gave a Crew Leader at day 65.
+ */
 export function maxCrew(state: GameState): number {
-  return rankDef(state).maxCrew;
+  return (
+    CREW_BASE +
+    controlledTerritories(state).length * CREW_PER_DISTRICT +
+    ownedBusinesses(state).length * CREW_PER_FRONT
+  );
 }
 
 export function gainRespect(state: GameState, amount: number): void {
@@ -64,7 +84,14 @@ export function tickFear(state: GameState): void {
   if (state.day % PAYDAY_INTERVAL !== 0) return;
   const level = fearLevel(state);
 
-  state.org.fear = Math.max(0, state.org.fear - FEAR.decayPerWeek);
+  /*
+     A share of what is there, not a flat weekly bill.
+
+     See the note on `FEAR.decayShare`. A constant drain has no settling point,
+     so the level a family lived at was decided by the sign of a subtraction
+     rather than by how it played. This is the repair `heat.ts` already made.
+  */
+  state.org.fear = Math.max(0, state.org.fear - state.org.fear * FEAR.decayShare);
   if (level <= 0) return;
 
   // A neighbourhood that is frightened of you is not a neighbourhood that
@@ -138,39 +165,6 @@ export function trainAttribute(
   }
 }
 
-export function nextRank(state: GameState): RankId | null {
-  const idx = rankIndex(state.player.rank);
-  return idx >= 0 && idx < RANKS.length - 1 ? RANKS[idx + 1].id : null;
-}
-
-export interface RankRequirement {
-  /**
-   * Render this as money rather than as a count.
-   *
-   * The panel used to decide by testing whether the label contained "Cash",
-   * and the label has been `Clean money` for as long as anybody can remember —
-   * so the one row that is money has been rendering as `45000 / 45000` since
-   * it was written. A flag set where the row is built cannot drift from the
-   * label the way a string test does.
-   */
-  money?: boolean;
-  label: string;
-  current: number;
-  needed: number;
-  met: boolean;  /**
-   * The same measure as it stands today, where `current` is the best the
-   * family has ever managed.
-   *
-   * Both, because the table gates on the high-water mark and the rest of the
-   * game shows the live figure — so "Crew 13 / 16" sat beside "Crew 8 of 22"
-   * and round 11 twice misjudged the distance to a promotion. The rule is
-   * right; it was only ever stated once, in small text, and never at the point
-   * of use.
-   */
-  now: number;
-}
-
-/** Drives the progression panel — the player can always see what is missing. */
 /**
  * Keep the family's high-water marks up to date.
  *
@@ -211,134 +205,34 @@ export function tickRecord(state: GameState): void {
   state.org.record = now;
 }
 
-export function rankRequirements(state: GameState): RankRequirement[] {
-  const next = nextRank(state);
-  if (!next) return [];
-  const req = RANK_BY_ID[next].requires;
-  const crew = crewList(state).length;
+/*
+   `nextRank` and `rankRequirements` were here, and they are gone.
 
-  /*
-     Measured against the best the family has ever done, not today's figure.
+   They computed the distance to the next rung of a table nothing reads. Rank
+   gated the job table, the trades, the crew cap and who you could promote;
+   all four read the board now, and `player.rank` is pinned at the first rung
+   for every career that will ever be played. So the Advancement panel counted
+   toward a promotion that could not arrive, and the Overview told a boss
+   holding three districts and twelve people that they were "12 of 3".
 
-     A rung once earned stays earned, through a handover and through a bad
-     year. The organization is the thing climbing; the boss is whoever is
-     holding it at the time.
-  */
-  const best = state.org.record;
-  const ever = (nowValue: number, recorded: number | undefined) =>
-    Math.max(nowValue, recorded ?? 0);
+   `tickRecord` above stays. The high-water marks it keeps are read by the
+   front-health floor in `business.ts` and by `legacy.ts` — the table was never
+   their only customer, only their loudest one.
 
-  const rows: RankRequirement[] = [
-    {
-      label: 'Respect',
-      current: ever(Math.floor(state.org.respect), best?.respect),
-      now: Math.floor(state.org.respect),
-      needed: req.respect,
-      met: false,
-    },
-    { label: 'Crew', current: ever(crew, best?.crew), now: crew, needed: req.crew, met: false },
-    {
-      // The estate, not the wallet. A family builds a restaurant on one street
-      // and an auto shop on another, and none of that used to count — so
-      // buying a front moved a boss *backwards* on the only money requirement
-      // rank read, in a game about building something.
-      //
-      // Dirty money in a room is still not standing, and `estate` leaves it
-      // out.
-      //
-      // Indexed, so a decade of inflation cannot promote you by standing
-      // still. It is also the one requirement that can move away from a player
-      // who stops earning, which is the point: the table's opinion of what a
-      // Boss is worth was never a fixed number of dollars.
-      label: 'What the family is worth',
-      money: true,
-      // Wallet plus holdings. What is put away is still yours and still
-      // visible to the people whose opinion this table represents; it simply
-      // is not available to be spent on the next job, which is the trade.
-      current: ever(Math.floor(estate(state).total), best?.estate),
-      now: Math.floor(estate(state).total),
-      needed: priced(state, req.cleanCash),
-      met: false,
-    },
-    {
-      label: 'Operations completed',
-      current: ever(state.player.opsCompleted, best?.ops),
-      now: state.player.opsCompleted,
-      needed: req.opsCompleted,
-      met: false,
-    },
-    {
-      label: 'Districts held',
-      current: ever(controlledTerritories(state).length, best?.districts),
-      now: controlledTerritories(state).length,
-      needed: req.territories,
-      met: false,
-    },
-  ];
-  // A requirement of zero is not shown — it is not something to work toward.
-  /*
-     A requirement of zero is not shown — it is not something to work toward.
+   What is *left* of the rank type is `player.rank` itself, which stays on the
+   save so that a game written before the ladder came out still loads, and the
+   succession line, which records what a predecessor was called. Neither is
+   read as a gate.
+*/
 
-     The money row is the exception, because a boss with no money requirement
-     still wants to see what the family is worth. Matched on the flag rather
-     than on the label: this read `r.label === 'Clean money'` and survived the
-     row being renamed, which would have silently hidden the one line the whole
-     financial rework is about.
-  */
-  return rows.filter((r) => r.needed > 0 || r.money).map((r) => ({
-    ...r,
-    met: r.current >= r.needed,
-  }));
-}
+/*
+   `acceptPromotion` and `declinePromotion` were here, with the `rank_offer`
+   event that called them. All three are gone.
 
-/**
- * Offers the next rank once every requirement is met. It is offered rather
- * than granted — stepping up is a decision with consequences (more crew to
- * pay, more attention) and the player should make it deliberately.
- */
-export function tickPlayer(state: GameState): void {
-  if (state.player.pendingRank) return;
-  const next = nextRank(state);
-  if (!next) return;
+   Nothing ever raised `rank_offer`: `nextRank` was what decided a promotion
+   was due and it was deleted with the rest of the ladder, so `pendingRank`
+   could only ever be written `null` and the switch case in `events.ts` was
+   unreachable. The functions were still *referenced* from that case, which is
+   why a reference-counting sweep left them alone.
+*/
 
-  const reqs = rankRequirements(state);
-  if (!reqs.every((r) => r.met)) return;
-
-  const def = RANK_BY_ID[next];
-  state.player.pendingRank = next;
-  pushEvent(state, {
-    defId: 'rank_offer',
-    title: `You are being recognised as ${def.name}`,
-    body:
-      `Word has gone around. What you have built is being acknowledged, and the ` +
-      `title comes with it.\n\n${def.blurb}\n\n` +
-      `Taking it raises what you can command — up to ${def.maxCrew} people — and ` +
-      `opens work that pays accordingly. It also means more names attached to yours.`,
-    severity: 'opportunity',
-    npcId: null,
-    data: { rank: next },
-    choices: [
-      { id: 'accept', label: `Accept — ${def.name}`, hint: 'Take the title and everything with it' },
-      { id: 'decline', label: 'Stay where you are', hint: 'Keep a lower profile a while longer' },
-    ],
-  });
-}
-
-export function acceptPromotion(state: GameState, rank: RankId): void {
-  state.player.rank = rank;
-  state.player.pendingRank = null;
-  const def = RANK_BY_ID[rank];
-  addLog(state, `You are ${def.name} now.`, 'success');
-  // Standing rises with the title, and the organization feels it.
-  gainRespect(state, 10);
-  for (const npc of crewList(state)) {
-    npc.stats.respectForBoss = clamp(npc.stats.respectForBoss + 6, 0, 100);
-  }
-}
-
-export function declinePromotion(state: GameState): void {
-  state.player.pendingRank = null;
-  addLog(state, 'You let it pass. Quieter is not always worse.', 'neutral');
-  // Refusing keeps you out of the light.
-  state.org.heat = Math.max(0, state.org.heat - 3);
-}

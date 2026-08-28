@@ -1,20 +1,26 @@
 import { useState } from 'react';
 import { useGame, mutate } from '../../store';
-import { Panel, Empty, KeyValue, Bar } from '../components';
+import { Panel, Empty, KeyValue, Bar, Gauge } from '../components';
 import type { PanelId } from '../Rail';
 import { crewList, availableCrew } from '../../sim/npc';
+import { attention } from '../../sim/attention';
 import { payrollForecast, weeklyWageBill } from '../../sim/economy';
 import { isLayingLow, startLayLow } from '../../sim/heat';
 import { arrestRisk, weeklyLegalCost } from '../../sim/investigation';
-import { rankRequirements, nextRank } from '../../sim/player';
+import { maxCrew } from '../../sim/player';
 import { formatMoney, formatShortDay } from '../../sim/util';
 import { activeCondition, conditionDaysLeft } from '../../sim/world';
 import { activeWars, factionStrength } from '../../sim/diplomacy';
 import { rivals } from '../../sim/faction';
 import { districtOwner, territoryList } from '../../sim/territory';
 import { OPERATION_BY_ID } from '../../config/operations';
-import { PAYDAY_INTERVAL, RANK_BY_ID } from '../../config/economy';
-import { heatTier, LAY_LOW_DURATION_DAYS, LAY_LOW_RESPECT_COST } from '../../config/heat';
+import { PAYDAY_INTERVAL } from '../../config/economy';
+import {
+  heatSeverity,
+  heatTier,
+  LAY_LOW_DURATION_DAYS,
+  LAY_LOW_RESPECT_COST,
+} from '../../config/heat';
 import { houseShort } from '../../sim/houses';
 
 /**
@@ -185,8 +191,7 @@ export default function Dashboard({ onNavigate }: { onNavigate: (id: PanelId) =>
   const crew = crewList(state);
   const free = availableCrew(state);
   const ops = Object.values(state.activeOperations);
-  const next = nextRank(state);
-  const reqs = rankRequirements(state);
+  const wanting = attention(state);
   const laying = isLayingLow(state);
   const payroll = payrollForecast(state);
   const risk = arrestRisk(state);
@@ -214,7 +219,34 @@ export default function Dashboard({ onNavigate }: { onNavigate: (id: PanelId) =>
 
       {state.mode !== 'simulation' && (
       <div className="grid-2">
-        <Panel
+        {/*
+        What is waiting, and the one click that answers it.
+
+        The recurring loop touches three screens and nothing said which of them
+        had something on it. Every line names what would satisfy it, which is
+        the Rail's own rule about its badges — a demand for attention with no
+        statement of what it wants is what left a playtester carrying the
+        succession "!" for a hundred days.
+
+        The list is derived on read and is often empty. That is the point: one
+        that is always full is wallpaper.
+      */}
+      {wanting.length > 0 && (
+        <Panel title="Wanting you">
+          <div className="btn-row" style={{ flexWrap: 'wrap' }}>
+            {wanting.map((w) => (
+              <button
+                key={w.id}
+                className="btn small"
+                onClick={() => onNavigate(w.panel as PanelId)}
+              >
+                {w.text}
+              </button>
+            ))}
+          </div>
+        </Panel>
+      )}
+      <Panel
           title="Attention"
           action={!laying && <LayLow />}
         >
@@ -227,7 +259,15 @@ export default function Dashboard({ onNavigate }: { onNavigate: (id: PanelId) =>
               </span>
             </span>
           </div>
-          <Bar value={org.heat} tone={org.heat > 40 ? 'hot' : 'cold'} />
+          {/*
+            A banded gauge rather than a bar, because the bands are the thing
+            the player is actually reading. The old bar was one colour that
+            flipped at forty, which said "bad now" and nothing about what was
+            coming; the segments carry their tier's colour unlit, so the red
+            stretch is visible from Quiet. Edges come from HEAT_TIERS, so this
+            cannot drift away from the name printed beside it.
+          */}
+          <Gauge value={org.heat} severityAt={heatSeverity} />
           <p className="dim" style={{ marginTop: 10, marginBottom: 0 }}>
             {tier.description}
           </p>
@@ -294,7 +334,17 @@ export default function Dashboard({ onNavigate }: { onNavigate: (id: PanelId) =>
             </button>
           }
         >
-          <KeyValue label="Rank" value={RANK_BY_ID[state.player.rank].name} tone="brass" />
+          {/*
+             Rank is not named here any more, and the crew cap no longer comes
+             from it either.
+
+             This read `RANK_BY_ID[state.player.rank].maxCrew` for a while after
+             the ladder came out, and `player.rank` is pinned at the first rung
+             for every career that will ever be played — so the main screen of
+             the game told a boss holding three districts and twelve people that
+             they were "12 of 3". The cap is `maxCrew`: three, plus four a
+             district, plus two a front.
+          */}
           <KeyValue label="Respect" value={Math.floor(org.respect)} />
           <KeyValue
             label="Operations"
@@ -302,7 +352,7 @@ export default function Dashboard({ onNavigate }: { onNavigate: (id: PanelId) =>
           />
           <KeyValue
             label="Crew"
-            value={`${crew.length} of ${RANK_BY_ID[state.player.rank].maxCrew} · ${free.length} free`}
+            value={`${crew.length} of ${maxCrew(state)} · ${free.length} free`}
           />
           <KeyValue
             label="Weekly wages"
@@ -345,12 +395,6 @@ export default function Dashboard({ onNavigate }: { onNavigate: (id: PanelId) =>
                 : payroll.onHand < payroll.due * 1.5
                   ? `Payroll in ${payroll.daysAway} ${payroll.daysAway === 1 ? 'day' : 'days'}: ${formatMoney(payroll.due)} due, ${formatMoney(payroll.onHand)} on hand. Covered, barely.`
                   : `Payroll in ${payroll.daysAway} ${payroll.daysAway === 1 ? 'day' : 'days'}: ${formatMoney(payroll.due)}, covered.`}
-            </p>
-          )}
-          {next && (
-            <p className="faint tiny" style={{ marginTop: 10, marginBottom: 0 }}>
-              Toward {RANK_BY_ID[next].name}:{' '}
-              {reqs.filter((r) => r.met).length}/{reqs.length} met
             </p>
           )}
         </Panel>

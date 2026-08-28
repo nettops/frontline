@@ -14,6 +14,7 @@ import { newGame } from '../state';
 import { advanceDay, advanceDays } from '../clock';
 import { runDays, runDaysSolvent } from './helpers';
 import { crewList } from '../npc';
+import { maxCrew } from '../player';
 import { controlledTerritories, territoryList } from '../territory';
 import {
   activeWars,
@@ -43,12 +44,21 @@ describe('sandbox is the same game with the ending switched off', () => {
       sandboxStart: 'seated',
       seed: 5,
     });
-    expect(state.player.rank).toBe(seated.rank);
     expect(state.org.cash).toBe(seated.cash);
     expect(crewList(state)).toHaveLength(
       seated.crew.reduce((sum, c) => sum + c.count, 0),
     );
-    expect(controlledTerritories(state).length).toBeGreaterThan(0);
+    /*
+       Ground, not a rank. A start says how far along it is by what it holds
+       now, and the crew it hands over has to fit under the ceiling that ground
+       buys — a start already over its own cap cannot hire, which is a strange
+       thing for "At the table" to mean.
+    */
+    expect(controlledTerritories(state).length).toBe(seated.districts);
+    expect(
+      crewList(state).length,
+      'the seated start is handed more people than its districts can feed',
+    ).toBeLessThanOrEqual(maxCrew(state));
   });
 
   /*

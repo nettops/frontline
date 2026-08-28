@@ -38,6 +38,38 @@
 import type { NpcStatId } from '../sim/types';
 import type { PromiseKind } from './promises';
 
+// ------------------------------------------------------------- questions ---
+
+/**
+ * Something he wants from you, put as a question.
+ *
+ * Deliberately thin: an id and the line he says. The weight is in the answers,
+ * which are ordinary registers and are read against his true stats exactly
+ * like anything else you could say. A question is not a puzzle with a correct
+ * solution — it is the same inference under uncertainty, with the list of
+ * things you may say narrowed by what he just asked.
+ */
+export interface QuestionDef {
+  id: string;
+  /** What he says, after the reply prose. */
+  text: string;
+}
+
+export const QUESTIONS: QuestionDef[] = [
+  {
+    id: 'q_about_it',
+    text: 'So what are you going to do about it?',
+  },
+  {
+    id: 'q_still_want',
+    text: 'And do you still want me here? Say it either way.',
+  },
+];
+
+export const QUESTION_BY_ID: Record<string, QuestionDef> = Object.fromEntries(
+  QUESTIONS.map((q) => [q.id, q]),
+);
+
 // ------------------------------------------------------------- registers ---
 
 /**
@@ -66,6 +98,42 @@ export interface RegisterDef {
   needs?: string;
   /** Revealed when it lands, unlocking whatever needs it. */
   reveals?: string;
+  /**
+   * What you actually say, so the room reads as talk rather than as a list of
+   * moves and results.
+   *
+   * The `landed`/`missed` prose below is *his* half — narration of what came
+   * back. Before this there was no player half at all: the modal printed the
+   * register's label above the response, so what a boss read was a menu
+   * choice and its outcome, never an exchange.
+   *
+   * Exactly one of `says` and `does` on every register. Some moves are words
+   * and some are not — `listen` is the whole point of the mechanic and has no
+   * line, so it gets a stage direction instead.
+   */
+  says?: string;
+  /** For the moves that are not speech. Rendered as action, not dialogue. */
+  does?: string;
+  /**
+   * A question he puts to you when this lands.
+   *
+   * The other half of making this an exchange. Every beat used to be you
+   * acting on him — you chose, he reacted, you chose again — so there was
+   * never a moment where your next move was a *reply* rather than a free pick
+   * from a list. While a question stands, the only things on the table are
+   * answers to it.
+   *
+   * Only on a landing. A move that missed did not get far enough for him to
+   * want anything from you.
+   */
+  asks?: string;
+  /**
+   * Marks this register as an answer to that question, and nothing else.
+   *
+   * Answers are never offered on an open table — see `availableRegisters`.
+   * They exist only for as long as the question does.
+   */
+  answers?: string;
   /** Prose for the two outcomes. */
   landed: string;
   missed: string;
@@ -107,6 +175,8 @@ export interface RegisterDef {
 export const CREW_REGISTERS: RegisterDef[] = [
   {
     id: 'press',
+    says:
+      '“I have been patient about this. I would rather not stop being patient.”',
     label: 'Press them',
     hint: 'Lean on it. Works on a man who is already worried',
     against: 'fear',
@@ -121,6 +191,8 @@ export const CREW_REGISTERS: RegisterDef[] = [
   },
   {
     id: 'offer',
+    says:
+      '“There is money in this for you. Tell me what it would take.”',
     label: 'Offer them something',
     hint: 'Money answers some men and insults others',
     against: 'greed',
@@ -136,6 +208,8 @@ export const CREW_REGISTERS: RegisterDef[] = [
   },
   {
     id: 'listen',
+    does:
+      'You let the silence sit, and do not fill it.',
     label: 'Just listen',
     hint: 'Slow. They may say nothing at all',
     against: 'grievance',
@@ -150,6 +224,9 @@ export const CREW_REGISTERS: RegisterDef[] = [
   },
   {
     id: 'level',
+    asks: 'q_still_want',
+    says:
+      '“I am going to tell you how it actually is, and you are not going to enjoy it.”',
     label: 'Level with them',
     hint: 'The truth. They may not like it',
     against: 'respectForBoss',
@@ -166,6 +243,19 @@ export const CREW_REGISTERS: RegisterDef[] = [
   // -- unlocked ----------------------------------------------------------
   {
     id: 'name_it',
+    /*
+       He asks here rather than after `listen`, and the difference is both
+       dramatic and mechanical.
+
+       Listening is him telling you what is wrong. Naming it is you saying it
+       out loud. "So what are you going to do about it?" belongs after the
+       second, not between them — asked earlier it interrupts the beat that
+       matters, and it also inserts a mandatory exchange into the shortest path
+       this whole mechanic has, which the first attempt at this did.
+    */
+    asks: 'q_about_it',
+    says:
+      '“This is about the job. About who I sent instead of you.”',
     label: 'Name what they are carrying',
     hint: 'Say the thing out loud. Only works once you know what it is',
     against: 'grievance',
@@ -181,6 +271,8 @@ export const CREW_REGISTERS: RegisterDef[] = [
   },
   {
     id: 'promise',
+    says:
+      '“The next one is yours. You have my word on it, in this room.”',
     label: 'Give them the next one',
     hint: 'Name them on the next job. You would have to mean it',
     against: 'ambition',
@@ -197,6 +289,8 @@ export const CREW_REGISTERS: RegisterDef[] = [
   },
   {
     id: 'reassure',
+    says:
+      '“Nothing is coming for you. Not while you are mine.”',
     label: 'Tell them they are covered',
     hint: 'For a man who is frightened rather than owed',
     against: 'fear',
@@ -214,6 +308,8 @@ export const CREW_REGISTERS: RegisterDef[] = [
   },
   {
     id: 'ask_about',
+    says:
+      '“And the others. What do you make of them, honestly?”',
     label: 'Ask what they make of the others',
     hint: 'They will only talk about people if they trust you in the room',
     against: 'loyalty',
@@ -229,6 +325,8 @@ export const CREW_REGISTERS: RegisterDef[] = [
   },
   {
     id: 'test_him',
+    says:
+      '“I hear you have been asked to sit down with somebody else.”',
     label: 'Put a lie in front of them',
     hint: 'Say something untrue and watch. Costs nothing but trust',
     against: 'discipline',
@@ -250,9 +348,85 @@ export const CREW_REGISTERS: RegisterDef[] = [
  * The stat names are reused because a rival boss is an NPC — the leader of the
  * family — so this reads their leader exactly as it reads your own people.
  */
+/**
+ * The things you can say when he has asked you something.
+ *
+ * Ordinary registers in every respect — read against his true stats, train an
+ * attribute, land or miss — except that they are gated to one question and
+ * never appear on an open table. Two apiece, and neither is the right one:
+ * the honest answer and the useful answer are different answers, which is the
+ * same trade the rest of this mechanic is built on.
+ */
+export const ANSWER_REGISTERS: RegisterDef[] = [
+  {
+    id: 'a_fix_it',
+    answers: 'q_about_it',
+    label: 'Tell them you will fix it',
+    hint: 'A commitment, out loud, in front of them',
+    says:
+      '“I am going to put it right. Not today, but I am going to put it right.”',
+    against: 'respectForBoss',
+    wants: 'high',
+    threshold: 40,
+    calms: 'grievance',
+    landed:
+      'They take a breath they had been holding for a while. It is not gratitude — it is somebody deciding to believe you one more time.',
+    missed:
+      'They have heard this before, from you or from somebody who sounded like you. Nothing in their face moves.',
+    trains: 'leadership',
+  },
+  {
+    id: 'a_thats_the_job',
+    answers: 'q_about_it',
+    label: 'Tell them that is the job',
+    hint: 'No comfort. Some men would rather have the truth',
+    says: '“Nothing. That is the work. You knew that when you took it.”',
+    against: 'courage',
+    wants: 'high',
+    threshold: 45,
+    landed:
+      'They almost laugh. Whatever else they wanted, they did not want to be handled, and you did not handle them.',
+    missed:
+      'Something closes. They wanted one sentence that was not about the work, and that was not it.',
+    trains: 'intimidation',
+  },
+  {
+    id: 'a_you_stay',
+    answers: 'q_still_want',
+    label: 'Say it plainly',
+    hint: 'Yes, and no hedging on it',
+    says: '“Yes. You are mine and you stay mine. That is the end of it.”',
+    against: 'loyalty',
+    wants: 'high',
+    threshold: 35,
+    landed:
+      'They nod once, and sit differently afterwards. It was a real question and it got a real answer.',
+    missed:
+      'They accept it the way somebody accepts a thing they intend to test later.',
+    trains: 'leadership',
+  },
+  {
+    id: 'a_depends',
+    answers: 'q_still_want',
+    label: 'Tell them it depends on them',
+    hint: 'Honest. Also a warning, and they will hear both',
+    says: '“That is going to depend on you. I think you know how.”',
+    against: 'ambition',
+    wants: 'high',
+    threshold: 45,
+    landed:
+      'They hear the condition and take it as an opening rather than a threat. Somebody who wants something can be given something to want.',
+    missed:
+      'They wanted an answer and got terms. Whatever they came in carrying, they are still carrying it.',
+    trains: 'negotiation',
+  },
+];
+
 export const RIVAL_REGISTERS: RegisterDef[] = [
   {
     id: 'sound_out',
+    says:
+      '“It has been a quiet season. Long may it hold.”',
     label: 'Sound them out',
     hint: 'Say nothing worth repeating and see what comes back',
     against: 'discipline',
@@ -267,6 +441,8 @@ export const RIVAL_REGISTERS: RegisterDef[] = [
   },
   {
     id: 'complain',
+    says:
+      '“Your people came through my streets. You know they did.”',
     label: 'Put your grievance on the table',
     hint: 'Say what they did. It may be news to them',
     against: 'respectForBoss',
@@ -281,6 +457,8 @@ export const RIVAL_REGISTERS: RegisterDef[] = [
   },
   {
     id: 'threaten',
+    says:
+      '“Think about what you have that I could reach, and then think again.”',
     label: 'Tell them what happens otherwise',
     hint: 'Only lands on a man with something to lose',
     against: 'fear',
@@ -295,6 +473,8 @@ export const RIVAL_REGISTERS: RegisterDef[] = [
   },
   {
     id: 'terms',
+    says:
+      '“Here is what I am proposing, and I am proposing it once.”',
     label: 'Put terms in front of them',
     hint: 'A real offer, once they are actually listening',
     against: 'greed',
@@ -311,6 +491,8 @@ export const RIVAL_REGISTERS: RegisterDef[] = [
   },
   {
     id: 'ask_intent',
+    says:
+      '“Say what you want. Plainly, and we can both go home.”',
     label: 'Ask them straight what they want',
     hint: 'Blunt. They will either answer or they will not',
     against: 'ambition',
@@ -400,14 +582,59 @@ export const REASON_BY_ID: Record<string, ReasonDef> = Object.fromEntries(
 );
 
 export const REGISTER_BY_ID: Record<string, RegisterDef> = Object.fromEntries(
-  [...CREW_REGISTERS, ...RIVAL_REGISTERS].map((r) => [r.id, r]),
+  [...CREW_REGISTERS, ...RIVAL_REGISTERS, ...ANSWER_REGISTERS].map((r) => [r.id, r]),
 );
 
 // --------------------------------------------------------------- tuning ---
 
 export const SITDOWN = {
-  /** Exchanges before the room empties. */
-  beats: 3,
+  /**
+   * How long he will sit there before he has had enough.
+   *
+   * **This replaces a fixed three-exchange cap**, and the difference is the
+   * whole rework. The cap ended the conversation on the game's schedule, so a
+   * boss chose how to spend a budget rather than when to stand up. Walking out
+   * early settled and paid, but gave up unspent exchanges for nothing, so it
+   * was weakly dominated — not a decision, just quitting early.
+   *
+   * Patience is a cost you can read and manage instead. Every exchange spends
+   * some, a misread spends more, and landing something real buys a little
+   * back. You may end it whenever you like and keep everything you have won.
+   * Push past this and *he* ends it, which is worse than never having sat
+   * down.
+   *
+   * Sized so a well-read conversation runs longer than the old three and a
+   * badly-read one runs shorter. Nothing here is shown as a number — see
+   * `patienceRead`.
+   */
+  patience: 10,
+
+  /** What one exchange costs him, however it goes. */
+  patiencePerBeat: 2,
+
+  /**
+   * And the extra when you read him wrong.
+   *
+   * A miss is not merely a wasted turn — it is a man being asked the wrong
+   * question by somebody who is supposed to know him, and that is what wears
+   * out a room.
+   */
+  patienceOnMiss: 2,
+
+  /**
+   * What landing something real buys back.
+   *
+   * Deliberately less than `patiencePerBeat`, so even a perfectly read
+   * conversation runs down. A boss who never misses gets a longer talk, not an
+   * unlimited one, and the decision stays "is there another question worth
+   * asking" rather than "have I run out".
+   */
+  patienceBackOnLanded: 1,
+
+  /** Grievance a man carries out of a room he left on his own. */
+  walkedGrievance: 14,
+  /** And what it does to how he regards you, which is the durable half. */
+  walkedRegard: 10,
 
   /** Days before you can sit down with the same person again. */
   cooldownDays: 21,

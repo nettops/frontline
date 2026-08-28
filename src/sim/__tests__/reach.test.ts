@@ -68,7 +68,7 @@ describe('a job that needs nobody', () => {
   const where = operableTerritories(state)[0].territory.id;
     launchOperation(state, SOLO.id, [], where);
     const crewed = OPERATIONS.find(
-      (o) => o.crewRequired === 1 && o.minRank === 'street_criminal' && o.investment === 0,
+      (o) => o.crewRequired === 1 && o.tier === 0 && o.investment === 0,
     );
     if (!crewed) return;
     const man = crewList(state).find((n) => n.status === 'active');

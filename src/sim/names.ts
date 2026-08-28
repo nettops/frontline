@@ -23,6 +23,7 @@
 import { GIVEN_NAMES } from '../config/npcs';
 import { LEADER_GIVEN_NAMES } from '../config/factionLeaders';
 import { HOUSES } from '../config/houses';
+import { NATIONALITIES } from '../config/nationalities';
 import type { GivenName } from '../config/names';
 
 /**
@@ -39,6 +40,7 @@ const BY_NAME: Map<string, 'm' | 'f'> = (() => {
   };
   add(GIVEN_NAMES);
   add(LEADER_GIVEN_NAMES);
+  for (const n of NATIONALITIES) add(n.first);
   for (const house of HOUSES) if (house.firstNames) add(house.firstNames);
   return map;
 })();
@@ -47,6 +49,7 @@ const BY_NAME: Map<string, 'm' | 'f'> = (() => {
 export const NAME_POOLS: { where: string; pool: readonly GivenName[] }[] = [
   { where: 'config/npcs.ts GIVEN_NAMES', pool: GIVEN_NAMES },
   { where: 'config/factionLeaders.ts LEADER_GIVEN_NAMES', pool: LEADER_GIVEN_NAMES },
+  ...NATIONALITIES.map((n) => ({ where: `config/nationalities.ts ${n.id}.first`, pool: n.first })),
   ...HOUSES.filter((h) => h.firstNames).map((h) => ({
     where: `config/houses.ts ${h.id}.firstNames`,
     pool: h.firstNames!,
