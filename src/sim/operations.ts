@@ -17,7 +17,7 @@ import type {
   OperationResult,
   OpsBoard,
 } from './types';
-import { addEvidence, addLog, nextId, weightedPick } from './util';
+import { addEvidence, addLog, nextId, say, weightedPick } from './util';
 import { addHeat, heatSuccessPenalty, isLayingLow } from './heat';
 import { earnDirty, refundDirty, spend, totalFunds } from './economy';
 import { ownedBusinesses } from './business';
@@ -1085,7 +1085,13 @@ function applyFailureConsequence(
       const share = rng.float(EXTRA_LOSS_SHARE[0], EXTRA_LOSS_SHARE[1]);
       const loss = Math.round(operationCost(state, def) * share);
       spend(state, loss);
-      return `Another $${loss.toLocaleString('en-US')} went with it.`;
+      const money = `$${loss.toLocaleString('en-US')}`;
+      return say(`loss_${def.id}`, state.day, [
+        `Another ${money} went with it.`,
+        `${money} of yours is gone as well, and nobody can say where.`,
+        `It cost you ${money} on top of the night itself.`,
+        `Somebody has to be paid for the mess. ${money}.`,
+      ]);
     }
 
     case 'crew_injured': {
@@ -1155,13 +1161,23 @@ function applyFailureConsequence(
       remember(victim, state.day, 'took_a_charge');
       adjustSentiment(state, territoryId, SENTIMENT_ON_VIOLENCE / 2);
       cover(state, rng, 'arrest', { territoryId, who: victim.name });
-      return `${victim.name} was taken. Nobody knows what they are saying.`;
+      return say(`taken_${victim.id}`, state.day, [
+        `${victim.name} was taken. Nobody knows what they are saying.`,
+        `They have ${victim.name}. That is all anybody will tell you.`,
+        `${victim.name} did not come home. The rest did.`,
+        `${victim.name} is in a room somewhere being asked about you.`,
+      ]);
     }
 
     case 'heat_spike': {
       const spike = rng.int(HEAT_SPIKE_RANGE[0], HEAT_SPIKE_RANGE[1]);
       addHeat(state, spike, 'street', 'the job drew attention');
-      return 'It drew far more attention than it should have.';
+      return say(`spike_${def.id}`, state.day, [
+        'It drew far more attention than it should have.',
+        'Half the street was watching by the end of it.',
+        'Somebody made a noise, and then everybody did.',
+        'It was loud. It did not need to be loud.',
+      ]);
     }
 
     case 'evidence_left': {
@@ -1175,11 +1191,48 @@ function applyFailureConsequence(
         npcIds: crew.map((n) => n.id),
         detail: `Something was left behind at the ${def.name}.`,
       });
-      return 'Something was left behind.';
+      return say(`left_${def.id}`, state.day, [
+        'Something was left behind.',
+        'Something of yours is in a box with a number on it now.',
+        'Nobody swept up afterwards. Somebody else did.',
+        'There is a bag somewhere that should not exist.',
+      ]);
     }
 
+    /*
+       The commonest way a job goes wrong, and it had one sentence.
+
+       Measured at 7.2% of everything a player reads in a career — the loudest
+       line in the game by some distance, and loud in a way the whole-line
+       count could not see, because `${def.name} in ${district} failed.` files
+       every one of them under a different heading. `scorecard.probe` prints
+       both counts now.
+
+       The variants take a subject out of the state the way `eventgen.ts`
+       does: the man who was on it, the street it happened on, the job itself.
+       A night that went nowhere is not the same night twice, and the writing
+       should not be either.
+    */
     case 'clean_break':
-    default:
-      return 'It came apart, but everyone walked away.';
+    default: {
+      const street = territoryDef(territoryId)?.name ?? null;
+      const who = victim?.name ?? null;
+      return say(
+        `clean_${def.id}_${territoryId}`,
+        state.day,
+        [
+          'It came apart, but everyone walked away.',
+          'Nothing to show for it, and nothing left behind either.',
+          'It was over before it started. Everybody got home.',
+          who ? `${who} called it off early. Nobody argued.` : null,
+          who ? `${who} said afterwards it was never going to work.` : null,
+          street ? `Whatever was supposed to happen in ${street} did not.` : null,
+          street ? `${street} was quiet, and stayed quiet. That was the problem.` : null,
+          crew.length > 1
+            ? `${crew.length} of yours stood about for an hour and came back.`
+            : null,
+        ].filter((x): x is string => x !== null),
+      );
+    }
   }
 }
