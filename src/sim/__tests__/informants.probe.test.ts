@@ -156,8 +156,22 @@ function watch(seed: number, plant: boolean): Run | null {
 
    Raised rather than the bar lowered. The claim below is unchanged; there are
    simply more worlds for it to be true in.
+
+   Raised again, forty to a hundred and twenty, for the same reason and with
+   the same rule. Two houses were added to the pool in config/houses.ts and the
+   control went from 3 usable worlds in 20 to 7 in 22, which fails
+   `framed < caught / 2`. Nothing about the read changed: measured over two
+   hundred seeds it is 12/94 framed against 47/94 caught on the larger pool and
+   11/91 against 48/91 on the smaller — 13% versus 50%, either way. What the
+   houses moved is which cities the fixed seeds draw, and twenty-odd worlds
+   cannot separate 13% from 50% reliably enough to assert it. At a hundred and
+   twenty the control reads 9 against a bar of 16.
+
+   The bar has not moved and must not. If this ever goes red again the first
+   question is whether the read has actually stopped working, and the answer is
+   a bigger sample, not a smaller number.
 */
-const SEEDS = 40;
+const SEEDS = 120;
 const talking = Array.from({ length: SEEDS }, (_, i) => watch(300 + i, true)).filter(
   (r): r is Run => r !== null,
 );
