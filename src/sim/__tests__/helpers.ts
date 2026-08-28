@@ -275,3 +275,146 @@ export function withFronts(state: GameState, count: number): Business[] {
   }
   return made;
 }
+
+// ------------------------------------------------- can this sample say it ---
+
+/**
+ * Whether a share of a sample can be told apart from the bar it is asserted
+ * against.
+ *
+ * **Rule 4, and it is the one that has cost the most.** The handoff's other
+ * three are about pointing a statistic at the right population. This one is
+ * about whether the population is big enough to carry the sentence, which is a
+ * different mistake and a quieter one: the bar is correct, the reading is
+ * correct, and the comparison between them is a coin.
+ *
+ * Five instances in two days, all the same shape and all found by accident —
+ * something unrelated moved the population and a bar flipped, so somebody went
+ * looking for a regression that was never there:
+ *
+ * - `ladder.probe`'s witness bar compared two counts while its own comment
+ *   claimed a rate. The arms leaned different numbers of times, so the feared
+ *   family "landed fewer" at 14 against 17 while landing *more often*, 79%
+ *   against 77%.
+ * - The score-expiry bar read `laying low / expired` with ten expiries. A 5%
+ *   bar on a denominator of ten is a bar of exactly zero wearing a percentage;
+ *   it had been passing at 0 of N by luck.
+ * - The back-half memo bar sat at 34% against a third. Two houses added to the
+ *   pool in `config/houses.ts` moved it to 32.3% with no behaviour change at
+ *   all, because the same fixed seeds draw different cities out of a larger
+ *   pool.
+ * - `informants.probe` went from 3 framed in 20 usable worlds to 7 in 22, on
+ *   the same change. Both readings are the same 13% population rate.
+ * - And two in `ladder.probe` — the shape verdicts and the prepared-job arm —
+ *   flipped on a baseline build that was numerically inert.
+ *
+ * Every one was repaired well, locally, with a good comment, in its own file.
+ * Five good comments in five files do not stop the sixth.
+ *
+ * ## What it checks
+ *
+ * Two things, and they fail for different reasons.
+ *
+ * **Resolution.** One observation is worth `1/of` of the share. If the bar sits
+ * closer than that to zero or to one, no integer reading can satisfy it except
+ * the extreme — which is a bar that says something other than what it appears
+ * to say.
+ *
+ * **Noise.** The standard error of a share at the bar is
+ * `sqrt(bar * (1 - bar) / of)`. A margin narrower than two of those is a margin
+ * the sample cannot see, so the assertion under it will report whichever way
+ * the seeds happened to fall.
+ *
+ * ## What to do when it says no
+ *
+ * **Widen the sample. Never move the bar.** That is the rule this project has
+ * had since DIRECTOR section 5 and it is the rule both repairs above followed
+ * — `SEEDS` 40 to 120 in `informants.probe`, and a separate 120-career
+ * population for the memo bar in `ladder.probe`. The required size is in the
+ * message, so the answer is a number rather than a judgement call.
+ *
+ * The other honest answer is that the claim is too fine for a simulation this
+ * expensive to run, and belongs as a printed reading rather than a bar. Say so
+ * in the file if you take it.
+ */
+export function resolves(
+  hits: number,
+  of: number,
+  bar: number,
+): { ok: boolean; why: string } {
+  const share = of > 0 ? hits / of : 0;
+  const step = of > 0 ? 1 / of : 1;
+  const pct = (x: number) => `${(x * 100).toFixed(1)}%`;
+
+  if (of <= 0) return { ok: false, why: 'the sample is empty, so the share below is not a reading' };
+
+  /*
+     The bar has to be at least one observation clear of both ends, or the
+     assertion is about zero rather than about the bar.
+  */
+  if (bar < step || bar > 1 - step) {
+    return {
+      ok: false,
+      why:
+        `a bar of ${pct(bar)} on ${of} observations is a bar of ${bar < step ? 'zero' : 'everything'} ` +
+        `— one observation is worth ${pct(step)}, so no reading in between exists. ` +
+        `Widen the sample to at least ${Math.ceil(1 / Math.min(bar, 1 - bar))}, or count something there is more of.`,
+    };
+  }
+
+  const error = Math.sqrt((bar * (1 - bar)) / of);
+  const margin = Math.abs(share - bar);
+
+  /*
+     The reading sitting on the bar is its own answer, and it needs saying
+     separately.
+
+     The needed-size formula divides by the margin, so at a margin of nothing it
+     returns a number with eighteen digits in it and the message becomes advice
+     nobody can take. This case is not a sample problem at all: no population
+     ever separates a reading from a bar it is equal to, and a claim placed
+     exactly on its own measurement was never a claim.
+
+     Caught by this file's own test, which asked whether the size the message
+     names actually passes. It did not.
+  */
+  if (margin < step / 2) {
+    return {
+      ok: false,
+      why:
+        `${hits}/${of} is ${pct(share)} and the bar is ${pct(bar)}. They are the same number, ` +
+        `so no sample size separates them and widening will not help. ` +
+        `A bar placed on its own reading is not a claim about anything.`,
+    };
+  }
+
+  if (margin < 2 * error) {
+    /*
+       n for a two-standard-error margin at this bar. Reported rather than left
+       to the reader, because "widen it" without a number is how a sample gets
+       widened twice.
+    */
+    const needed = Math.ceil((4 * bar * (1 - bar)) / margin ** 2);
+    /*
+       Which side of the bar the reading falls on, said out loud.
+
+       Without it the message is the same sentence whether the claim is nearly
+       true or nearly false, and those want opposite responses: a reading under
+       a ceiling needs a bigger sample to certify, and a reading over one is
+       not a sampling problem at all — it is the claim failing, and widening
+       will only measure the failure more precisely.
+    */
+    const side = share > bar ? 'over' : share < bar ? 'under' : 'on';
+    return {
+      ok: false,
+      why:
+        `${hits}/${of} is ${pct(share)}, ${side} a bar of ${pct(bar)} by ${pct(margin)}, ` +
+        `against a sampling error of ${pct(error)}. This sample cannot tell them apart, so whichever ` +
+        `way the assertion below goes is the seeds rather than the game. ` +
+        `It needs about ${needed} observations to certify either. ` +
+        `If the claim is that the reading stays ${side === 'over' ? 'under' : 'over'} this bar, ` +
+        `note that it currently sits ${side} it: that is a finding about the game, not the sample.`,
+    };
+  }
+  return { ok: true, why: '' };
+}

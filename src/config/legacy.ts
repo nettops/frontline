@@ -269,12 +269,47 @@ export const SHAPE_BARS = {
    * horoscope bar of 40% — one career from the failure this comment records
    * happening twice before.
    *
-   * 2,350,000 is the 60th percentile, which is inside the median-to-75th band
+   * 2,350,000 was the 60th percentile, which is inside the median-to-75th band
    * and at the median end of it. That end rather than the middle for the
    * reason recorded above: the heavier shapes take most of what clears this,
    * so the top of the band puts the shape near extinction.
+   *
+   * ## And every sweep above was run on thirty-six careers
+   *
+   * That is the defect, and it took a guard to see it. `helpers.resolves` says
+   * thirty-six cannot tell a 40% horoscope bar from anything within eight
+   * points of it, and the sweep above was placing a value on differences of
+   * six. Run on two hundred and eighty-eight careers the same bar reads:
+   *
+   *     estate now   25th $1,919,766 · median $2,799,773
+   *                  60th $3,150,761 · 75th $3,697,180
+   *     the shape verdicts   financier 120 (42%), kingpin 73 (25%),
+   *                          unremarkable 41 (14%), don 27 (9%),
+   *                          diplomat 26 (9%), ghost 1 (0%)
+   *
+   * 2,350,000 is not the 60th percentile of that. It is under the 25th-to-median
+   * span, near the 33rd, and the Financial Boss is the verdict on 42% of the
+   * game — the horoscope this file's header forbids, past the bar, invisible at
+   * thirty-six because the same seeds read it at 31%.
+   *
+   * Nothing about the shape is wrong and the 40% bar has not moved. The number
+   * below is re-plotted against a sample that can carry it, by the same rule as
+   * before: the median end of the median-to-75th band, because tragic, kingpin
+   * and legitimate all outrank the financier and take most of what clears it.
+   * 2,900,000 is just above the median of 2,799,773. It reads
+   * `financier 82 (28%), kingpin 73 (25%), unremarkable 48 (17%), don 44
+   * (15%), diplomat 40 (14%), ghost 1` — five named shapes with a real spread
+   * and the top of them twelve points under the bar, where before the change
+   * one shape held 42% on its own.
+   *
+   * The Don's 820 respect reading is worth keeping beside this: on the wide
+   * sample respect reads 432 / 608 / 680 / 820, so `donRespect` at 600 sits a
+   * shade under the median rather than a shade over it. It is left alone — the
+   * shape is on 9% of careers and there is no defect to repair — but the next
+   * person to touch it should plot it wide rather than trusting the figures
+   * recorded from thirty-six.
    */
-  financierEstate: 2_350_000,
+  financierEstate: 2_900_000,
   /**
    * Legitimacy for the Legitimate Boss, 0..100.
    *
