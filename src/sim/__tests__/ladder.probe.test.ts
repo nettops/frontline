@@ -131,7 +131,7 @@ const WASH_RESERVE = 1;
 import { DRIFT, DRIFT_INTERVAL_DAYS } from '../../config/npcs';
 import { wageExpectation } from '../npc';
 import type { RankId } from '../types';
-import { answerCheaply, ev, idle, mean as meanOf, median, pairedGap } from './helpers';
+import { answerCheaply, ev, idle, mean as meanOf, median, pairedGap, resolves } from './helpers';
 import { borrow, canBorrow, priced } from '../market';
 import { readWhispers } from '../whispers';
 import { isGenerated } from '../eventgen';
@@ -4440,8 +4440,40 @@ const RUNS_300 = Array.from({ length: 36 }, (_, i) => climb(700 + i, HUMAN_DAYS)
    windows, which is enough resolution to answer a question posed at a third.
    It costs about eight seconds. The threshold below has not moved and must
    not: the point of the number is that it was pre-committed.
+
+   **A hundred and twenty was not quite enough, and the arithmetic says so.**
+   `helpers.resolves` puts the reading at 35.2% on 2,562 late situations
+   against a bar of 33.3% — a margin of 1.8 points against a sampling error of
+   0.9 — and asks for about 2,642. Eighty short. The note above is its own
+   evidence for this without meaning to be: two disjoint seed windows read
+   35.7% and 36.1% against 34.5% here, a spread across windows as wide as the
+   margin over the bar.
+
+   And the binomial error there is the generous reading. Late situations
+   cluster inside careers rather than arriving independently, so the effective
+   sample is nearer the number of careers than the number of memos, and the
+   real error is larger than 0.9.
+
+   ## And it is not the only bar that needs it, so it is not named for one
+
+   `helpers.resolves` was pointed at the three share bars in this file that
+   have flipped on somebody else's change, and it refused all three:
+
+       bar                     reading            error   needs
+       the generated supply    35.2% vs 33.3%      0.9%   2,642 situations
+       the shape verdicts      30.6% vs 40.0%      8.2%     108 careers
+       the prepared job        38.9% vs 33.3%      7.9%     288 careers
+
+   This population is `climb(700 + i, HUMAN_DAYS)`, which is exactly what
+   `RUNS_300` is — the same call on the same seeds, thirty-six of them. So it
+   is a strict superset, the other two bars can read it instead of their own
+   thirty-six, and the widest of the three requirements costs nothing that was
+   not already being paid.
+
+   288, which is the largest of the three. Renamed off `WIDE` because a
+   name that says "memo" would be wrong for a population three bars read.
 */
-const MEMO_RUNS = Array.from({ length: 120 }, (_, i) => climb(700 + i, HUMAN_DAYS));
+const WIDE = Array.from({ length: 288 }, (_, i) => climb(700 + i, HUMAN_DAYS));
 
 /** Nearest-rank percentile. Small samples, so no interpolation to argue about. */
 function pct(xs: number[], p: number): number {
@@ -4576,7 +4608,7 @@ describe('the ladder, over the 300 days a person plays', () => {
      happens to be.
   */
   it('keeps finding something to say in the back half of a career', () => {
-    const lived = MEMO_RUNS.filter((r) => r.days >= 240);
+    const lived = WIDE.filter((r) => r.days >= 240);
     const late = lived.map((r) => r.memos.lateAndNew);
     const mid = median(late);
 
@@ -4585,7 +4617,7 @@ describe('the ladder, over the 300 days a person plays', () => {
 
     // eslint-disable-next-line no-console
     console.log(
-      `memos: ${lived.length}/${MEMO_RUNS.length} careers reached day 240\n` +
+      `memos: ${lived.length}/${WIDE.length} careers reached day 240\n` +
         `       distinct situations before day 180, 40th / median / 75th: ` +
         `${pct(lived.map((r) => r.memos.early), 0.4)} / ${median(lived.map((r) => r.memos.early))} / ` +
         `${pct(lived.map((r) => r.memos.early), 0.75)}\n` +
@@ -4647,13 +4679,22 @@ describe('the ladder, over the 300 days a person plays', () => {
 
        One thing about how it is read, not about the number: the margin over
        the bar is small enough that thirty-six careers cannot resolve it, so
-       this test alone runs a wider sample — see `MEMO_RUNS`. Adding two houses
+       this test alone runs a wider sample — see `WIDE`. Adding two houses
        to the pool in config/houses.ts once moved this reading 2.4 points
        without changing any behaviour at all, because the same thirty-six seeds
        draw different cities out of a larger pool.
     */
     expect(lived.length, 'nothing lived long enough to have a back half').toBeGreaterThan(8);
     expect(allLate, 'no late situations at all, so the share below is meaningless').toBeGreaterThan(20);
+    /*
+       Rule 4. This bar is the reason the helper exists: it read 34% against a
+       third on thirty-six careers, and two houses added to `config/houses.ts`
+       moved it to 32.3% with no behaviour change at all. The sample was
+       widened to a hundred and twenty for exactly this, and the guard is what
+       stops the next person having to find that out the way the last two did.
+    */
+    const supply = resolves(fromGenerator, allLate, 1 / 3);
+    expect(supply.ok, supply.why).toBe(true);
     expect(
       fromGenerator / allLate,
       'the generated half is not carrying the back end of a career',
@@ -4989,11 +5030,61 @@ describe('the systems nobody had measured', () => {
         `${Math.round(pct(rs, 0.75))} (the don bar is ${SHAPE_BARS.donRespect})`,
     );
 
-    const named = [...shapes].filter(([k]) => k !== 'unremarkable').sort((a, b) => b[1] - a[1]);
+    /*
+       The horoscope condition, counted on the wide population.
+
+       `resolves` asks for 108 careers to tell 30.6% from a bar of 40%, and
+       thirty-six is where three re-plots of this bar were argued from. The
+       context above stays on `RUNS_300` because `config/legacy.ts` records its
+       figures, and the wide histogram is printed beside it — the first version
+       widened only the assertion and left the reader looking at thirty-six
+       careers while a bar failed on two hundred and eighty-eight, which makes
+       a real finding unreadable.
+    */
+    const wideShapes = new Map<string, number>();
+    for (const r of WIDE) wideShapes.set(r.newSystems.shape, (wideShapes.get(r.newSystems.shape) ?? 0) + 1);
+    // eslint-disable-next-line no-console
+    console.log(
+      `         career shapes across ${WIDE.length} careers — ` +
+        [...wideShapes]
+          .sort((a, b) => b[1] - a[1])
+          .map(([k, n]) => `${k} ${n} (${Math.round((100 * n) / WIDE.length)}%)`)
+          .join(', '),
+    );
+    /*
+       And the two quantities the top two shapes read, on the same wide
+       population the bar is now asserted against.
+
+       Plotting a `SHAPE_BARS` value off thirty-six careers is what put the
+       Financial Boss on 42% of the game: `financierEstate` was placed at "the
+       60th percentile" and the wide reading has it under the median.
+    */
+    const wideEstate = WIDE.map((r) => r.newSystems.finalEstate).sort((a, b) => a - b);
+    const wideRespect = WIDE.map((r) => r.newSystems.finalRespect).sort((a, b) => a - b);
+    // eslint-disable-next-line no-console
+    console.log(
+      `         across ${WIDE.length}, estate now 25th / median / 60th / 75th: ` +
+        `${money(pct(wideEstate, 0.25))} / ${money(median(wideEstate))} / ` +
+        `${money(pct(wideEstate, 0.6))} / ${money(pct(wideEstate, 0.75))} ` +
+        `(financier bar ${money(SHAPE_BARS.financierEstate)})` +
+        String.fromCharCode(10) +
+        `         across ${WIDE.length}, respect now 25th / median / 60th / 75th: ` +
+        `${Math.round(pct(wideRespect, 0.25))} / ${Math.round(median(wideRespect))} / ` +
+        `${Math.round(pct(wideRespect, 0.6))} / ${Math.round(pct(wideRespect, 0.75))} ` +
+        `(don bar ${SHAPE_BARS.donRespect})`,
+    );
+    const named = [...wideShapes].filter(([k]) => k !== 'unremarkable').sort((a, b) => b[1] - a[1]);
     if (named.length) {
+      /*
+         Rule 4, on the bar that has been re-plotted three times this cycle —
+         the union boss, the alderman and the Don — every time because the
+         reading moved rather than because the shape was wrong.
+      */
+      const spread = resolves(named[0][1], WIDE.length, 0.4);
+      expect(spread.ok, spread.why).toBe(true);
       expect(
-        named[0][1] / RUNS_300.length,
-        `"${named[0][0]}" is the verdict on ${named[0][1]} of ${RUNS_300.length} careers`,
+        named[0][1] / WIDE.length,
+        `"${named[0][0]}" is the verdict on ${named[0][1]} of ${WIDE.length} careers`,
       ).toBeLessThanOrEqual(0.4);
     }
 
@@ -5091,6 +5182,21 @@ const RUNS_BOOKS = Array.from({ length: 36 }, (_, i) =>
    pricing was wrong in a way only its own arm could show.
 */
 const RUNS_SCORES = Array.from({ length: 36 }, (_, i) =>
+  climb(700 + i, HUMAN_DAYS, { scores: true }),
+);
+
+/*
+   And the same population wide, for the one bar that pairs.
+
+   `resolves` asks for 288 careers to tell 38.9% from a third — the share of
+   careers that come out ahead for having built up to a job. That bar was one
+   of the two a numerically inert baseline build flipped, at 11 of 36 against a
+   floor of 12, and the fix was never the baseline.
+
+   Paired against `WIDE`, which is the same seeds in the same order with the
+   policy off, so the rule about arms being separate worlds still holds.
+*/
+const WIDE_SCORES = Array.from({ length: 288 }, (_, i) =>
   climb(700 + i, HUMAN_DAYS, { scores: true }),
 );
 
@@ -6978,16 +7084,18 @@ describe('the month in front of the job', () => {
        distribution and the share of careers ahead are what the arm can carry;
        the median is printed as context and asserted on by nothing.
     */
-    const rows = RUNS_SCORES.map((r, i) => ({ r, against: RUNS_300[i] })).filter(
+    const rows = WIDE_SCORES.map((r, i) => ({ r, against: WIDE[i] })).filter(
       ({ r }) => r.newSystems.scores.prepped > 0,
     );
     const gaps = rows.map(({ r, against }) => r.bestEstate - against.bestEstate).sort((a, b) => a - b);
     const ahead = gaps.filter((g) => g > 0).length;
+    // Same populations as the gap above it, or the two lines in one readout
+    // are about different worlds.
     const heat = pairedGap(
-      RUNS_SCORES,
-      RUNS_300,
+      WIDE_SCORES,
+      WIDE,
       (r) => r.danger.heat,
-      (r) => (r as (typeof RUNS_SCORES)[number]).newSystems.scores.prepped > 0,
+      (r) => (r as (typeof WIDE_SCORES)[number]).newSystems.scores.prepped > 0,
     );
 
     // eslint-disable-next-line no-console
@@ -7016,6 +7124,12 @@ describe('the month in front of the job', () => {
        prep has stopped being a decision and become a tax on not reading the
        manual — the same failure the possessions catalogue is guarded against.
     */
+    /*
+       Rule 4. This is one of the two bars a numerically inert baseline build
+       flipped, at 11 of 36 against a floor of 12.
+    */
+    const worth = resolves(ahead, gaps.length, 1 / 3);
+    expect(worth.ok, worth.why).toBe(true);
     expect(ahead, 'building up to a job makes almost every career poorer').toBeGreaterThan(
       Math.floor(gaps.length / 3),
     );
