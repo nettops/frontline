@@ -5,6 +5,50 @@
  * moves a little money and looks like nothing, a casino moves enormous amounts
  * and is a permanent address for anyone building a case. Legitimacy and
  * launder capacity pull against each other on purpose.
+ *
+ * **That paragraph was written first and was not true for a long time.**
+ * Measured off the catalogue as it stood:
+ *
+ *     strictly dominated entries, price included     0
+ *     beaten on every quality axis by something      7 of 10
+ *     revenue per $1,000 of cost                     37.8 to 51.1, most at 50.0
+ *     capacity against legitimacy                    r = -0.41
+ *
+ * Nothing was dead, because every dominated entry was cheaper than the thing
+ * beating it — which is exactly the excuse that let it rot. `real_estate` had
+ * the second-highest capacity in the game *and* the highest legitimacy, and
+ * beat six other entries outright on revenue, capacity, exposure and
+ * discretion at once. Seven of ten existed only because they cost less, and
+ * revenue per dollar was flat, so the sole input to which front you bought was
+ * how much money you had. That is not a decision, and F15 says the same thing
+ * from the other end: money blocks 97% of the weeks a career owns no front.
+ *
+ * A file describing a tension its own numbers do not have is the config-shaped
+ * version of this project's standing failure — an instrument returning
+ * believable readings while measuring nothing. Fourth one caught.
+ *
+ * **The law the catalogue now runs on.** What a front can move, how ordinary
+ * it looks, and how fast it draws attention are one axis, and the ten entries
+ * are spread along it:
+ *
+ *     laundromat    quietest thing you can own, and it barely moves anything
+ *     real_estate   earns more than anything but the casino, and cannot wash
+ *     casino        moves everything, explains nothing
+ *
+ * Earners buy revenue and discretion by giving up capacity; washers do the
+ * reverse. So a laundromat is never obsolete — at exposure 0.7 and legitimacy
+ * 90 it stays the quietest thing in the game no matter how rich the family
+ * gets, which is what stops the catalogue being a ladder you climb and leave.
+ *
+ * After the re-cost: **zero dominated entries**, r = -0.85, and each of the
+ * three control bands holds two fronts of opposite character so the choice
+ * exists in the middle of a career and not only at the end of one.
+ *
+ * The totals were held deliberately — revenue +1.3%, capacity +1.9%,
+ * legitimacy -1.2%. Every number here feeds laundering, the estate, legitimacy
+ * and four bars in `ladder.probe`, and a re-cost that also made fronts richer
+ * would move all of them with no way afterwards to say which change did it.
+ * `catalogue.test.ts` holds all four properties, the totals included.
  */
 
 import type { ControlLevel } from './territories';
@@ -32,10 +76,10 @@ export const BUSINESSES: BusinessDef[] = [
     description:
       'Coin-operated, cash-only, open at hours nobody questions. Small, dull and almost invisible.',
     cost: 12_000,
-    revenue: 560,
-    launderCapacity: 3_000,
-    exposureRate: 1.2,
-    legitimacy: 60,
+    revenue: 460,
+    launderCapacity: 4_000,
+    exposureRate: 0.7,
+    legitimacy: 90,
     minControl: 'foothold',
   },
   {
@@ -44,10 +88,10 @@ export const BUSINESSES: BusinessDef[] = [
     description:
       'A room with a card table and a coffee machine. Nobody can say exactly what it earns, including you.',
     cost: 18_000,
-    revenue: 700,
-    launderCapacity: 4_500,
-    exposureRate: 1.4,
-    legitimacy: 45,
+    revenue: 820,
+    launderCapacity: 8_500,
+    exposureRate: 1.6,
+    legitimacy: 60,
     minControl: 'foothold',
   },
   {
@@ -55,10 +99,10 @@ export const BUSINESSES: BusinessDef[] = [
     name: 'Restaurant',
     description: 'Real food, real customers, and a great many covers that were never served.',
     cost: 25_000,
-    revenue: 1_250,
-    launderCapacity: 5_000,
-    exposureRate: 1.0,
-    legitimacy: 75,
+    revenue: 1_900,
+    launderCapacity: 3_400,
+    exposureRate: 0.9,
+    legitimacy: 84,
     minControl: 'foothold',
   },
   {
@@ -66,10 +110,10 @@ export const BUSINESSES: BusinessDef[] = [
     name: 'Auto Shop',
     description: 'Parts in, parts out, invoices for work that happened in a manner of speaking.',
     cost: 30_000,
-    revenue: 1_500,
-    launderCapacity: 6_000,
+    revenue: 1_550,
+    launderCapacity: 7_000,
     exposureRate: 1.3,
-    legitimacy: 65,
+    legitimacy: 70,
     minControl: 'foothold',
   },
   {
@@ -77,10 +121,10 @@ export const BUSINESSES: BusinessDef[] = [
     name: 'Trucking Company',
     description: 'Freight, routes and a fleet that explains a lot of movement.',
     cost: 60_000,
-    revenue: 3_000,
-    launderCapacity: 14_000,
+    revenue: 2_700,
+    launderCapacity: 18_000,
     exposureRate: 1.5,
-    legitimacy: 60,
+    legitimacy: 56,
     minControl: 'control',
   },
   {
@@ -89,10 +133,10 @@ export const BUSINESSES: BusinessDef[] = [
     description:
       'Enormous cash volume and a door everybody in the city walks through, including people you would rather not meet.',
     cost: 75_000,
-    revenue: 3_800,
-    launderCapacity: 20_000,
-    exposureRate: 2.0,
-    legitimacy: 40,
+    revenue: 4_000,
+    launderCapacity: 36_000,
+    exposureRate: 2.4,
+    legitimacy: 28,
     minControl: 'control',
   },
   {
@@ -101,10 +145,10 @@ export const BUSINESSES: BusinessDef[] = [
     description:
       'Contracts, materials, overruns. The most forgiving paperwork in the legitimate world.',
     cost: 90_000,
-    revenue: 4_600,
-    launderCapacity: 22_000,
-    exposureRate: 1.6,
-    legitimacy: 55,
+    revenue: 4_700,
+    launderCapacity: 26_000,
+    exposureRate: 1.8,
+    legitimacy: 48,
     minControl: 'control',
   },
   {
@@ -112,10 +156,10 @@ export const BUSINESSES: BusinessDef[] = [
     name: 'Hotel',
     description: 'Rooms nobody stayed in, paid for in cash by guests who left no name.',
     cost: 140_000,
-    revenue: 6_000,
+    revenue: 5_800,
     launderCapacity: 30_000,
-    exposureRate: 1.5,
-    legitimacy: 70,
+    exposureRate: 1.8,
+    legitimacy: 40,
     minControl: 'control',
   },
   {
@@ -124,10 +168,10 @@ export const BUSINESSES: BusinessDef[] = [
     description:
       'Property moving between people who are all, in the end, the same person.',
     cost: 180_000,
-    revenue: 6_800,
-    launderCapacity: 45_000,
-    exposureRate: 1.3,
-    legitimacy: 80,
+    revenue: 9_600,
+    launderCapacity: 6_000,
+    exposureRate: 1.2,
+    legitimacy: 86,
     minControl: 'dominance',
   },
   {
@@ -136,10 +180,10 @@ export const BUSINESSES: BusinessDef[] = [
     description:
       'The most efficient way ever devised to explain where money came from, and the least discreet.',
     cost: 260_000,
-    revenue: 12_000,
-    launderCapacity: 80_000,
-    exposureRate: 2.6,
-    legitimacy: 25,
+    revenue: 10_200,
+    launderCapacity: 95_000,
+    exposureRate: 3.0,
+    legitimacy: 16,
     minControl: 'dominance',
   },
 ];
@@ -286,3 +330,41 @@ export const SHUTTER_REFUND_SHARE = 0.35;
 
 /** Buying costs more where you are weaker — you are paying somebody off. */
 export const ACQUISITION_PREMIUM_CONTESTED = 1.35;
+
+/**
+ * What a small organization can actually get in at.
+ *
+ * F15, and the one number in the game that decides the middle of it.
+ *
+ * Front income is paid into holdings, where it compounds. So the *second*
+ * front is the step that decides a career, and `ladder.probe` measures 30
+ * careers in 36 finishing under $100,000 holding exactly one, against six that
+ * hold five. Across every week a career owns no front the blocker is **money
+ * in 97% of them** — not control, not slots, not public feeling. Round 15 said
+ * the same thing in prose after 245 days: *"the two things that would have
+ * opened new decisions were both gated behind capital I could no longer
+ * accumulate."*
+ *
+ * The catalogue price is what a going concern is worth to a real buyer. It is
+ * not what a man with two soldiers and a laundromat is being sold. He is being
+ * sold a share of something struggling, by somebody who wants out, and the
+ * price reflects who is standing in the room — which is exactly what
+ * `wealthScale` already does for the district and `haggle` already does for
+ * negotiation.
+ *
+ * So the discount is largest for a family that has never been worth anything
+ * and gone by the time one is. It reads the **high-water mark** rather than
+ * today's balance, for the same reason the rank table does: a family that has
+ * been somebody does not get to be sold to as though it has not.
+ *
+ * Deliberately not a discount on the first front. That one already arrives on
+ * day 42 in 35 careers of 36 and needs no help; this is priced on what the
+ * family has *ever* been worth, so it fades exactly as the organization stops
+ * being small.
+ */
+export const ACQUISITION_SCALE = {
+  /** High-water estate at which a family pays the catalogue price. */
+  fullPriceAt: 150_000,
+  /** The most that can come off, for a family that has never held anything. */
+  maxDiscount: 0.45,
+} as const;

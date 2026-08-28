@@ -14,7 +14,7 @@
  * it has begun, and that is deliberate.
  */
 
-import type { GameMode, RankId } from '../sim/types';
+import type { GameMode } from '../sim/types';
 
 export interface ModeDef {
   id: GameMode;
@@ -58,7 +58,18 @@ export interface SandboxStart {
   id: string;
   name: string;
   blurb: string;
-  rank: RankId;
+  /**
+   * Districts this outfit already holds, home included.
+   *
+   * Replaces `rank`, which used to carry the whole idea of "how far along is
+   * this start" and now carries none of it: the job table, the trades and the
+   * crew cap all read the board. Ground is what those read, and the crew cap
+   * in particular is `CREW_BASE + CREW_PER_DISTRICT * districts` — so a start
+   * that hands out twelve people and one district hands out an outfit already
+   * over its own ceiling, which is what happened the first time this was
+   * changed and what `deep.test.ts` caught.
+   */
+  districts: number;
   cash: number;
   dirtyCash: number;
   respect: number;
@@ -75,7 +86,7 @@ export const SANDBOX_STARTS: SandboxStart[] = [
     id: 'nobody',
     name: 'Nobody',
     blurb: 'The career opening, with the ending switched off.',
-    rank: 'street_criminal',
+    districts: 1,
     cash: 2_500,
     dirtyCash: 0,
     respect: 0,
@@ -88,7 +99,7 @@ export const SANDBOX_STARTS: SandboxStart[] = [
     name: 'Established',
     blurb:
       'A few good years behind you: a crew that works, a district that answers, and enough money to buy a front.',
-    rank: 'crew_leader',
+    districts: 2,
     cash: 60_000,
     dirtyCash: 40_000,
     respect: 220,
@@ -105,7 +116,7 @@ export const SANDBOX_STARTS: SandboxStart[] = [
     name: 'At the table',
     blurb:
       'Everything the late systems need at once — the money to launder, the people to lose, and three families who already have opinions about you.',
-    rank: 'underboss',
+    districts: 3,
     cash: 900_000,
     dirtyCash: 400_000,
     respect: 900,

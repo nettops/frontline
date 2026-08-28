@@ -1,30 +1,34 @@
 /**
  * The two halves of the answer: a boss rises and falls, a family goes on.
  *
- * The seven ranks are a personal ladder and the organization outlives the
+ * The seven ranks were a personal ladder and the organization outlives the
  * person climbing it. Those two facts used to cancel each other — a successor
  * inherited the crew and the districts, and then the rank table asked him what
  * *he* held, so three years of work stopped counting the day somebody shot the
  * boss. Measured: Capo arrived on day 673 without succession and day 1,177
  * with it, which is a treadmill rather than a dynasty.
+ *
+ * The table is gone and `org.record` — the family's high-water marks — is what
+ * survived it. It is still read, by the front-health floor in `business.ts`
+ * and by `legacy.ts`, so the claims below moved off the deleted
+ * `rankRequirements` rows and onto the record itself. That is the more direct
+ * assertion anyway: the rows were a proxy one step removed from the quantity
+ * they reported.
  */
 import { describe, expect, it } from 'vitest';
 import { newGame } from '../state';
-import { tickRecord, rankRequirements } from '../player';
+import { tickRecord } from '../player';
 import { inheritRank } from '../succession';
 import { putAway } from '../economy';
-import { HANDOVER } from '../../config/succession';
-import { RANKS, rankIndex } from '../../config/economy';
+import { RANKS } from '../../config/economy';
 import type { GameState } from '../types';
 
 function world(): GameState {
-  const state = newGame({ name: 'Dynasty', difficulty: 'normal', seed: 21 });
-  state.player.rank = 'crew_leader';
-  return state;
+  return newGame({ name: 'Dynasty', difficulty: 'normal', seed: 21 });
 }
 
-const worthRow = (state: GameState) =>
-  rankRequirements(state).find((r) => r.label === 'What the family is worth');
+/** The best the family has ever been worth, which is the thing that persists. */
+const everWorth = (state: GameState) => state.org.record?.estate;
 
 describe('what the family has ever managed', () => {
   it('remembers a peak the organization no longer holds', () => {
@@ -36,7 +40,7 @@ describe('what the family has ever managed', () => {
     // Spent it all on a bad week.
     state.org.cash = 0;
     tickRecord(state);
-    expect(worthRow(state)?.current).toBe(40_000);
+    expect(everWorth(state)).toBe(40_000);
   });
 
   /*
@@ -51,10 +55,10 @@ describe('what the family has ever managed', () => {
     const state = world();
     state.org.cash = 40_000;
     tickRecord(state);
-    const before = worthRow(state)?.current;
+    const before = everWorth(state);
     state.org.cash = 12;
     tickRecord(state);
-    expect(worthRow(state)?.current).toBe(before);
+    expect(everWorth(state)).toBe(before);
   });
 
   it('counts money put away as well as money in the wallet', () => {
@@ -104,13 +108,22 @@ describe('what the family has ever managed', () => {
 });
 
 describe('a rung is lost only by a boss who left no plan', () => {
-  it('still costs a rung when nobody was named', () => {
-    expect(rankIndex(inheritRank('capo'))).toBe(
-      rankIndex('capo') - HANDOVER.ranksLost,
-    );
-  });
+  /*
+     The rung is not what a bad handover costs any more. The ground is.
 
-  it('never falls off the bottom of the ladder', () => {
+     `HANDOVER.ranksLost` docked the successor a rung back when a rung decided
+     what work they could take, what they could trade in and how many people
+     they could hold. All of that reads the board now, so docking a title would
+     be a cosmetic punishment for the one event in the game that most needs a
+     real one — and the real one was already there: `influenceKept` takes
+     districts off them, and the job table, the trades and the crew cap all
+     narrow the moment those fall. Losing ground *is* losing rank.
+
+     So the claim moves to where it now lives, and is checked end to end in
+     `succession.test.ts` rather than on a pure function of a title.
+  */
+  it('leaves the title alone, because the title no longer costs anything', () => {
+    expect(inheritRank('capo')).toBe('capo');
     expect(inheritRank(RANKS[0].id)).toBe(RANKS[0].id);
   });
 });

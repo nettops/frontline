@@ -35,6 +35,9 @@ import { canBorrow, totalOwed } from '../sim/market';
 import { canAcquire } from '../sim/business';
 
 import { BUSINESSES } from '../config/businesses';
+import { cards, tableRead } from '../sim/cards';
+import { heldPossessions } from '../sim/possessions';
+import { liveScores } from '../sim/scores';
 import { isLayingLow } from '../sim/heat';
 import { eligibleStewards } from '../sim/delegation';
 import { playerInfluence, territoryList } from '../sim/territory';
@@ -272,14 +275,73 @@ export const TIPS: Tip[] = [
       ),
   },
   {
-    id: 'step_up',
+    /*
+       The one thing in the game that is yours rather than the organization's.
+
+       It lives on the Yourself page, which is the page a player visits to read
+       their attributes and then does not visit again — so this fires the first
+       time there is clean money sitting there with nothing claiming it, rather
+       than on the first morning when it would be noise.
+
+       `clean` rather than total funds on purpose, and the tip says so, because
+       the whole rule of the catalogue is that dirty money does not buy things
+       in your own name and a player who does not know that will read the
+       refusal as a bug.
+    */
+    id: 'something_of_your_own',
     only: ['career', 'sandbox'],
-    label: 'Yourself',
+    label: 'Yours',
     text:
-      'You have been offered a step up. Rank is not experience — it is held money, standing, people and ground, all at once. Yourself shows what the next one is still waiting on.',
+      'The fronts belong to the organization. Nothing belongs to you. Things that are yours turn up when a score comes home — a car, a watch, three rooms with your own name on the door. They count toward what the family is worth exactly as money put away does, and what people can see makes you look more legitimate and puts your name in the paper, which are not the same thing. The law can take one off you when a case lands.',
     panel: 'player',
-    when: (s) => s.player.pendingRank !== null,
+    /*
+       Fires on the first thing that ever arrives, not on the first thing the
+       player could afford.
+
+       This used to read "Yourself has a catalogue now" and wait for something
+       in that catalogue to come within reach. There is no catalogue — 0 of 36
+       careers ever bought from it and the shop is gone. A tip explaining how
+       to shop would have outlived the shop by exactly as long as nobody read
+       this line.
+    */
+    when: (s) => heldPossessions(s).length > 0 || liveScores(s).length > 0,
   },
+  {
+    /*
+       The card game, and it is a tip rather than a memo for one reason: it is
+       already on a page, and a memo would be the fourth thing competing for
+       the one daily slot the pacing work spent a day protecting.
+
+       Fires when a room is actually open *and* somebody worth an evening is
+       sitting in it — a standing advertisement for a weekly game would be
+       noise 51 weeks a year. The favour half is what the tip is really for:
+       losing on purpose is the one route to a favour that does not involve
+       waiting thirteen weeks for standing to drift, and nobody works that out
+       from a button labelled "Lose to them".
+    */
+    id: 'the_game',
+    only: ['career', 'sandbox'],
+    label: 'The game',
+    text:
+      'There is a card game every week, and the cards are the least of it. Who is sitting opposite is on The City page before you commit — and losing to a man who decides things is how money reaches him without either of you having said anything. It is the fast road to a favour. The slow one is thirteen quiet weeks.',
+    panel: 'city',
+    when: (s) =>
+      cards(s).hands === 0 &&
+      tableRead(s).some((room) => room.ok && room.seat.kind !== 'nobody'),
+  },
+  /*
+     `step_up` was here, and there is no step up any more.
+
+     It fired on `player.pendingRank !== null` and pointed at the Advancement
+     panel: "Rank is not experience — it is held money, standing, people and
+     ground, all at once." Ground and people are still what open the game up;
+     the title in the middle is gone, and with it the offer, so the tip could
+     never fire again. `tips.reach.test.ts` caught it as an unreachable tip.
+
+     What it was really teaching — that the game opens on what you hold rather
+     than on how long you have played — the Needs column on the job table now
+     says on every locked row, at the moment the player is looking at the job.
+  */
 
   // ------------------------------------------------------- the second verb ---
   /*
@@ -425,7 +487,7 @@ export const TIPS: Tip[] = [
     only: ['career', 'sandbox'],
     label: 'The trade',
     text:
-      'People will deal with you now. The Trade runs on a standing arrangement and districts to move through — steady money, and the one thing on your books a warrant can physically take.',
+      'You have premises now, so people will deal with you. The Trade runs on a standing arrangement and districts to move through — steady money, and the one thing on your books a warrant can physically take.',
     panel: 'contraband',
     when: (s) => tradeUnlocked(s, 'product') && !s.contraband.supplierId,
   },

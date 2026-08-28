@@ -29,12 +29,19 @@ import {
 } from '../config/delegation';
 import { ROLE_ORDER } from '../config/economy';
 import { addLog } from './util';
-import { addNote, crewList, wageExpectation } from './npc';
+import { addNote, crewList, somethingGood, wageExpectation } from './npc';
 import { authority } from './authority';
 import { AUTHORITY } from '../config/authority';
 import { remember } from './memory';
 import { earnDirty } from './economy';
-import { addInfluence, adjustSentiment, playerInfluence, territoryDef, territoryList } from './territory';
+import {
+  addInfluence,
+  adjustSentiment,
+  controlLevel,
+  playerInfluence,
+  territoryDef,
+  territoryList,
+} from './territory';
 import { addHeat } from './heat';
 
 export interface Check {
@@ -99,6 +106,8 @@ export function putInCharge(state: GameState, npcId: Id, territoryId: string): C
     100,
   );
   remember(npc, state.day, 'promoted');
+  // A district of his own is the clearest "going somewhere" the game has.
+  somethingGood(state, npc);
   addNote(npc, state.day, `Was given ${territoryDef(t.id).name} to run.`, 'good');
   addLog(state, `${npc.name} has ${territoryDef(t.id).name} now. It is theirs to answer for.`, 'crew');
   return { ok: true, message: '' };
@@ -236,7 +245,56 @@ function weeklyWorth(t: Territory, rng: Rng): number {
  */
 export function districtWorth(t: Territory): number {
   const standing = playerInfluence(t) / 100;
-  return Math.round(DELEGATION.worthPerWeek * standing * (t.prosperity / 100 + 0.5));
+  /*
+     What the word on the screen is worth.
+
+     This read influence alone, on a straight line, so crossing from a foothold
+     into control moved the money by two per cent and `controlLevel` appeared
+     nowhere in this file. The thing the entire territory system is about was
+     doing no mechanical work at all.
+
+     Kept as a multiplier on top of the slope rather than replacing it, so
+     grinding influence inside a tier still pays — and so that arriving at the
+     tier is a step you can feel on the ledger.
+  */
+  const tier = DELEGATION.worthByControl[controlLevel(t)] ?? 0;
+  return Math.round(
+    DELEGATION.worthPerWeek * standing * tier * (t.prosperity / 100 + 0.5),
+  );
+}
+
+/**
+ * How well the man running it does the job, as a multiplier around 1.
+ *
+ * Leadership and discipline — can he hold a room, does he keep things in
+ * order. **Not loyalty**: that decides whether he steals, which `takes`
+ * already models, and paying for it here would charge the player twice for
+ * the same quality.
+ *
+ * Returns 1 for a district nobody is running, so callers that do not care
+ * about the steward get the plain worth.
+ */
+export function stewardQuality(state: GameState, t: Territory): number {
+  const npc = stewardOf(state, t);
+  if (!npc) return 1;
+  const able = (npc.stats.leadership + npc.stats.discipline) / 200;
+  return 1 + (able - 0.5) * 2 * DELEGATION.stewardSwing;
+}
+
+/**
+ * What actually reaches you from a district this week, before his own hands.
+ *
+ * The answer to "I control this place and I put a trustworthy man on it, why
+ * am I getting so little": before this, neither of those two facts appeared in
+ * the arithmetic anywhere.
+ */
+export function stewardReturn(
+  state: GameState,
+  t: Territory,
+  action: { earn: number; takes: number },
+): number {
+  const gross = districtWorth(t) * stewardQuality(state, t) * action.earn;
+  return Math.round(gross * (1 - action.takes));
 }
 
 export function tickDelegation(state: GameState, rng: Rng): void {
@@ -252,7 +310,8 @@ export function tickDelegation(state: GameState, rng: Rng): void {
     }
 
     const action = decide(state, npc, t, rng);
-    const worth = weeklyWorth(t, rng);
+    // The man and the tier both count now — see `stewardReturn`.
+    const worth = Math.round(weeklyWorth(t, rng) * stewardQuality(state, t));
     const gross = Math.round(worth * action.earn);
     const kept = Math.round(gross * action.takes);
     const reached = gross - kept;

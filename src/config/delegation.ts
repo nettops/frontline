@@ -80,7 +80,15 @@ export const STEWARD_ACTIONS: StewardActionDef[] = [
     influence: 1.6,
     sentiment: 0,
     heat: 1.2,
-    earn: 0.9,
+    /*
+       Everything reaches you, because nobody is taking anything.
+
+       This was 0.9 — a tenth of the money gone every week with no character
+       responsible. The ledger is the one instrument a player has for catching
+       a thief, and a permanent unexplained shrinkage on every honest week is
+       the noise that makes it useless.
+    */
+    earn: 1,
     takes: 0,
   },
   {
@@ -132,7 +140,8 @@ export const STEWARD_ACTIONS: StewardActionDef[] = [
     influence: 1.2,
     sentiment: 0,
     heat: 1,
-    earn: 0.9,
+    // Same work, same take. Theft is the only reason anything goes missing.
+    earn: 1,
     /*
        The share he keeps, and the number this whole pattern turns on.
 
@@ -211,8 +220,42 @@ export const DELEGATION = {
    */
   promptAboveInfluence: 20,
 
-  /** How much of a district's weekly worth passes through a steward's hands. */
-  worthPerWeek: 420,
+  /**
+   * How much of a district's weekly worth passes through a steward's hands.
+   *
+   * Was 420, which is why holding ground never felt worth doing. At good
+   * influence that returned about **$370 a week** against a soldier's $300
+   * wage — so handing a man a district netted you seventy dollars and cost you
+   * a body off the board, in a game where one job pays $4,000 to $9,000. It
+   * was a donation with a ledger attached.
+   */
+  worthPerWeek: 950,
+
+  /**
+   * What the word on the screen is worth.
+   *
+   * `districtWorth` read raw influence on a straight line, so crossing from a
+   * foothold into control — the thing the whole territory system is about —
+   * moved the money by two per cent. `controlLevel` did not appear anywhere in
+   * `sim/delegation.ts`. Steps rather than a slope, so the threshold is felt.
+   */
+  worthByControl: {
+    none: 0,
+    presence: 0.45,
+    foothold: 0.7,
+    control: 1,
+    dominance: 1.35,
+  } as Record<string, number>,
+
+  /**
+   * And what the man is worth.
+   *
+   * Nothing in the payout read leadership or discipline: a capable steward and
+   * a useless one returned the identical multiplier for the identical action.
+   * Loyalty is deliberately absent — that decides whether he steals, which is
+   * already modelled and must not be paid for twice.
+   */
+  stewardSwing: 0.3,
 
   /**
    * How much a week's takings swing on their own, honest steward or not.

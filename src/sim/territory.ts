@@ -9,6 +9,7 @@
 import { clamp } from './rng';
 import type { GameState, Territory } from './types';
 import { addLog } from './util';
+import { holdingShare, yieldOf } from './holdings';
 import { houseColour, houseShort } from './houses';
 import {
   CONTESTED_MARGIN,
@@ -188,7 +189,16 @@ export function canOperateIn(state: GameState, territoryId: string): boolean {
  * number on the Operations panel is simply smaller.
  */
 export function payoutMultiplier(state: GameState, territoryId: string): number {
-  return WEALTH_PAYOUT_BASE + (prosperity(state, territoryId) / 100) * WEALTH_PAYOUT_RANGE;
+  const base = WEALTH_PAYOUT_BASE + (prosperity(state, territoryId) / 100) * WEALTH_PAYOUT_RANGE;
+  /*
+     Somewhere to put it.
+
+     Only in the district that gives it — a warehouse in one place does not make
+     a shakedown in another pay more. That is why this reads the pair rather
+     than the family's holdings as a whole, unlike the other five.
+  */
+  if (yieldOf(territoryId) !== 'takings') return base;
+  return base * (1 + holdingShare(state, 'takings'));
 }
 
 export function heatMultiplier(t: Territory, def: TerritoryDef, unfamiliar: boolean): number {

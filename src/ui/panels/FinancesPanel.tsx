@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import { useGame, mutate } from '../../store';
+import { readLedger, ledgerWeeks, unexplained } from '../../sim/ledger';
+import { LEDGER, LEDGER_LABEL } from '../../config/ledger';
 import { Panel, Empty, KeyValue, Bar } from '../components';
 import {
   payrollForecast,
@@ -33,6 +35,15 @@ import {
 import { formatMoney, formatShortDay } from '../../sim/util';
 import { OPERATION_BY_ID } from '../../config/operations';
 import { LENDERS, LENDER_BY_ID } from '../../config/market';
+import { PARTNER } from '../../config/partner';
+import {
+  buyOutPartner,
+  buyOutPrice,
+  partnerHouse,
+  partnerOffer,
+  partnerOutstanding,
+  takePartner,
+} from '../../sim/partner';
 import { houseName } from '../../sim/houses';
 
 /**
@@ -183,6 +194,10 @@ export default function FinancesPanel() {
         <h1 className="page-title">Finances</h1>
         <span className="tiny">{formatMoney(totalFunds(state))} on hand</span>
       </div>
+
+      <SilentPartner />
+
+      <Ledger />
 
       <div className="grid-2">
         <Panel title="Money">
@@ -349,6 +364,86 @@ function TheCycle() {
   );
 }
 
+/**
+ * The other kind of money, and why it is a panel rather than a memo.
+ *
+ * This was an event first, and the event is what killed it: `dailyMemo` fills
+ * one slot a day, the authored memos are what carry the pacing "firsts", and
+ * a new definition costs one of them. `scorecard.probe` put Pacing at 2.5
+ * against a bar of 3 with the mean longest quiet stretch out from 413 days to
+ * 535. Four attempts to tune around it read 2.5, 2.6, 2.7, 2.8 — the shape of
+ * noise, not of an effect.
+ *
+ * As a standing option beside the lenders it costs the memo table nothing. It
+ * is also the discovery model this game already uses for credit, which round
+ * 15 found on day 139 without any help from an interruption.
+ *
+ * Why it is not simply a fourth lender: a loan has to be **serviced**.
+ * `REPAYMENT_SHARE` comes off every payday whether the week earned anything or
+ * not, so borrowing while genuinely stalled buys three weeks and a collections
+ * problem. Measured at day 300 across 24 careers that actually play, the
+ * median holds $1,610 — that is who this is for, and a share of nothing is
+ * nothing.
+ */
+function SilentPartner() {
+  const state = useGame();
+  const [note, setNote] = useState<string | null>(null);
+  const held = state.org.partner;
+  const offer = partnerOffer(state);
+
+  if (!held && !offer) return null;
+
+  if (held) {
+    const price = buyOutPrice(state);
+    const house = partnerHouse(state) ?? 'They';
+    const affordable = totalFunds(state) >= price;
+    return (
+      <Panel title="The silent partner">
+        <KeyValue label="Who" value={house} />
+        <KeyValue label="Their share" value={`${Math.round(held.share * 100)}% of what comes in`} />
+        <KeyValue label="Taken so far" value={formatMoney(Math.round(held.taken))} />
+        <KeyValue label="Before it closes itself" value={formatMoney(Math.round(partnerOutstanding(state)))} />
+        <p className="dim" style={{ marginBottom: 8 }}>
+          Nothing is taken from a job under {formatMoney(PARTNER.takesNothingBelow)}. Buying them
+          out ends it today for {formatMoney(price)}; waiting ends it at{' '}
+          {formatMoney(Math.round(held.stake * PARTNER.endsAtMultiple))} taken.
+        </p>
+        <button
+          className="btn"
+          disabled={!affordable}
+          onClick={() => mutate((s) => setNote(buyOutPartner(s) ? 'Bought out.' : 'Not enough.'))}
+        >
+          Buy them out — {formatMoney(price)}
+        </button>
+        {!affordable && (
+          <div className="tiny memo-choice-blocked">
+            You have {formatMoney(totalFunds(state))} and it costs {formatMoney(price)}.
+          </div>
+        )}
+        {note && <p className="tiny">{note}</p>}
+      </Panel>
+    );
+  }
+
+  return (
+    <Panel title="An offer">
+      <p style={{ marginTop: 0 }}>
+        {offer!.house} will put {formatMoney(offer!.stake)} into the organization today. They
+        take {Math.round(offer!.share * 100)} cents in every dollar from then on — no schedule,
+        no collection, nobody sent round. They simply own a piece.
+      </p>
+      <p className="dim">
+        Nothing comes off a job under {formatMoney(PARTNER.takesNothingBelow)}. They stop at{' '}
+        {formatMoney(Math.round(offer!.stake * PARTNER.endsAtMultiple))} taken, and you can buy
+        them out earlier for {formatMoney(Math.round(offer!.stake * PARTNER.buyoutMultiple))}.
+      </p>
+      <button className="btn primary" onClick={() => mutate((s) => takePartner(s, offer!))}>
+        Take the {formatMoney(offer!.stake)}
+      </button>
+    </Panel>
+  );
+}
+
 /** Who will lend to you, and what they do about it when you cannot pay. */
 function Credit() {
   const state = useGame();
@@ -493,5 +588,126 @@ function Lender({ id, facts }: { id: string; facts: BorrowerFacts }) {
         </p>
       )}
     </div>
+  );
+}
+
+/**
+ * The book. Where it came from, where it went, and what nothing could explain.
+ *
+ * Built because answering "the trade earns a fortune and I am not getting
+ * richer" took a probe and four attempts, and a player has neither. Two
+ * columns — the last twelve weeks, and the whole career — because a family
+ * that is bleeding this quarter and rich overall is a different problem from
+ * one that has never made anything.
+ *
+ * The last row is the one to read first. Categories are attached at call sites
+ * and money moves through more of them than any one pass labels, so whatever
+ * was not recognised is reconciled against the real balance every week and
+ * shown. A book that quietly omitted what it did not understand would be worse
+ * than no book at all.
+ */
+function Ledger() {
+  const state = useGame();
+  const rows = readLedger(state, 12);
+  const weeks = ledgerWeeks(state);
+  const odd = unexplained(state, 12);
+  const by = (key: string) => rows.find((r) => r.key === key)!;
+
+  const sum = (keys: readonly string[], pick: 'recent' | 'lifetime') =>
+    keys.reduce((total, k) => total + by(k)[pick], 0);
+  const inRecent = sum(LEDGER.income, 'recent');
+  const outRecent = sum(LEDGER.outgoings, 'recent');
+  const inLife = sum(LEDGER.income, 'lifetime');
+  const outLife = sum(LEDGER.outgoings, 'lifetime');
+
+  if (weeks.length === 0) {
+    return (
+      <Panel title="The book">
+        <Empty>
+          Nothing is written down yet. The first week closes on the next payday.
+        </Empty>
+      </Panel>
+    );
+  }
+
+  const money = (n: number) => (n < 0 ? `-${formatMoney(-n)}` : formatMoney(n));
+  const tone = (n: number) => (n > 0 ? 'good' : n < 0 ? 'hot' : 'faint');
+
+  return (
+    <Panel
+      title="The book"
+      action={<span className="tiny">{weeks.length} weeks kept</span>}
+    >
+      <table className="table">
+        <thead>
+          <tr>
+            <th>Where it moved</th>
+            <th className="num">Last 12 weeks</th>
+            <th className="num">The whole run</th>
+          </tr>
+        </thead>
+        <tbody>
+          {[...LEDGER.income, ...LEDGER.outgoings].map((key) => {
+            const row = by(key);
+            if (row.lifetime === 0 && row.recent === 0) return null;
+            return (
+              <tr key={key}>
+                <td>
+                  <div className="name-cell">
+                    <span className="name-main">{LEDGER_LABEL[key].name}</span>
+                    <span className="name-sub">{LEDGER_LABEL[key].blurb}</span>
+                  </div>
+                </td>
+                <td className={`num mono ${tone(row.recent)}`}>{money(row.recent)}</td>
+                <td className={`num mono ${tone(row.lifetime)}`}>{money(row.lifetime)}</td>
+              </tr>
+            );
+          })}
+          <tr>
+            <td>
+              <span className="name-main">Everything in</span>
+            </td>
+            <td className="num mono good">{money(inRecent)}</td>
+            <td className="num mono good">{money(inLife)}</td>
+          </tr>
+          <tr>
+            <td>
+              <span className="name-main">Everything out</span>
+            </td>
+            <td className="num mono hot">{money(outRecent)}</td>
+            <td className="num mono hot">{money(outLife)}</td>
+          </tr>
+          <tr>
+            <td>
+              <div className="name-cell">
+                <span className="name-main brass">What you kept</span>
+                <span className="name-sub">
+                  In, less out. Not the same as what the family is worth — see Put away.
+                </span>
+              </div>
+            </td>
+            <td className={`num mono ${tone(inRecent + outRecent)}`}>
+              {money(inRecent + outRecent)}
+            </td>
+            <td className={`num mono ${tone(inLife + outLife)}`}>{money(inLife + outLife)}</td>
+          </tr>
+          {(odd.recent !== 0 || odd.lifetime !== 0) && (
+            <tr>
+              <td>
+                <div className="name-cell">
+                  <span className="name-main faint">Nobody wrote it down</span>
+                  <span className="name-sub">
+                    Money that moved without a name on it. The book says so rather than
+                    quietly balancing itself.
+                  </span>
+                </div>
+              </td>
+              <td className="num mono faint">{money(odd.recent)}</td>
+              <td className="num mono faint">{money(odd.lifetime)}</td>
+            </tr>
+          )}
+        </tbody>
+      </table>
+    </Panel>
   );
 }

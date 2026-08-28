@@ -14,7 +14,7 @@ import type {
   NpcStats,
   RoleId,
 } from './types';
-import { addEvidence, addLog, nextId, pushEvent } from './util';
+import { addEvidence, addLog, nextId, pushEvent, say } from './util';
 import { applyGoalDrift, goalBoard, goalEffect, reviewGoal } from './goals';
 import { decayTies, followDeparture, tieDrift } from './ties';
 import {
@@ -23,8 +23,6 @@ import {
   DRIFT,
   FAMILIARITY_MAX,
   FAMILIARITY_PER_DAY,
-  FIRST_NAMES,
-  LAST_NAMES,
   NICKNAMES,
   NICKNAME_CHANCE,
   PERCEPTION_TIERS,
@@ -38,8 +36,17 @@ import {
   TRAIT_COUNT,
   type TraitEffects,
 } from '../config/npcs';
+import {
+  CREW_MIX,
+  NATIONALITIES,
+  firstNamesOf,
+  nationalityDef,
+  type NationalityDef,
+} from '../config/nationalities';
 import { GOAL_BY_ID, GOAL_CERTAIN_ABOVE, GOAL_VISIBLE_ABOVE } from '../config/goals';
-import { DAYS_PER_YEAR, FEAR, ROLE_WAGE, rankIndex } from '../config/economy';
+import { DAYS_PER_YEAR, FEAR, ROLE_LABEL, ROLE_WAGE } from '../config/economy';
+import { WORLD } from '../config/build';
+import { worldPull } from './build';
 import { priced, prices } from './market';
 import { DIFFICULTY_BY_ID } from '../config/difficulty';
 
@@ -47,9 +54,65 @@ const STAT_IDS = Object.keys(STAT_RANGE) as NpcStatId[];
 
 // ------------------------------------------------------------ generation ---
 
+/**
+ * Which community the next recruit comes out of.
+ *
+ * Mostly yours, because that is who is on your blocks and who your mother
+ * vouches for — and never only yours, because an outfit with nobody from
+ * anywhere else in it is a caricature rather than a family. `CREW_MIX` holds
+ * the range and the argument for it.
+ *
+ * The share is derived from the seed with `stableNoise` rather than rolled,
+ * so it is a fact about this city and not about how many people you happen to
+ * have hired. Rolling it would have made the eleventh recruit depend on
+ * whether you hired the previous ten, which is not a thing about the world.
+ *
+ * `crewShare` is exported and separately tested only because it could not be
+ * tested through this function. The first version of the "the mix varies by
+ * city" test inferred the share by counting a sampled crew, and a hardcoded
+ * 0.7 passed it — two hundred draws carry about a tenth of sampling spread on
+ * their own, which was the whole size of the effect being looked for. The
+ * test was reading its own noise. Measured directly there is no noise.
+ */
+export function crewShare(seed: number): number {
+  return CREW_MIX.min + Rng.stableNoise(`crewmix:${seed}`, 0) * (CREW_MIX.max - CREW_MIX.min);
+}
+
+function poolFor(state: GameState): NationalityDef {
+  const home = nationalityDef(state.player.nationality);
+
+  /*
+     Both draws below come off `stableNoise`, not off `rng`, and that is the
+     whole reason this function takes no Rng.
+
+     The first version rolled the pool with `rng.chance` and picked the
+     outsider's community with `rng.pick`, which added one or two draws to
+     every person the game creates. Names are generated during world setup, so
+     every later roll in the game shifted — and the probes moved with them:
+     careers reaching Capo in 300 days fell from 19 of 36 to 10, the floor
+     probe's stuck-career cash went from under 40k to 65k, and four other
+     population readings broke. None of that was a balance change. It was the
+     same simulation reading a different part of the stream.
+
+     Keyed on `rng.calls`, the position in the stream, so it still varies from
+     person to person without consuming any of it. Net draws per NPC: two,
+     exactly as before.
+  */
+  const at = state.rng.calls;
+  if (Rng.stableNoise(`crew:${state.rng.seed}:${at}`, 0) < crewShare(state.rng.seed)) return home;
+
+  const others = NATIONALITIES.filter((n) => n.id !== home.id);
+  if (!others.length) return home;
+  return others[Math.floor(Rng.stableNoise(`crewother:${state.rng.seed}:${at}`, 0) * others.length)];
+}
+
 export function generateNpc(state: GameState, rng: Rng, role: RoleId): Npc {
-  const first = rng.pick(FIRST_NAMES);
-  const last = rng.pick(LAST_NAMES);
+  // First name and surname come from the same pool: a Murphy is a Patrick far
+  // more often than a Stanislaw, and splitting them produced people who read
+  // as a random-name-generator rather than as somebody's cousin.
+  const pool = poolFor(state);
+  const first = rng.pick(firstNamesOf(pool));
+  const last = rng.pick(pool.last);
   const name = rng.chance(NICKNAME_CHANCE)
     ? `${first} "${rng.pick(NICKNAMES)}" ${last}`
     : `${first} ${last}`;
@@ -146,6 +209,36 @@ export function crewTraitEffect(crew: Npc[], key: keyof TraitEffects): number {
   if (crew.length === 0) return ADDITIVE.includes(key) ? 0 : 1;
   const total = crew.reduce((sum, n) => sum + traitEffect(n, key), 0);
   return total / crew.length;
+}
+
+// ------------------------------------------------------- going somewhere ---
+
+/**
+ * How long since anything good happened to him.
+ *
+ * Falls back to the day he arrived, which is what the broken version measured
+ * and what a save written before this field existed will produce.
+ */
+export function daysSinceGood(state: GameState, npc: Npc): number {
+  return state.day - (npc.lastGoodDay ?? npc.joinedDay);
+}
+
+/**
+ * Something good just happened to him.
+ *
+ * Called from every place a man goes somewhere: promoted, handed a district,
+ * given a real raise, put on a score, taught by somebody better, heard out in
+ * a room.
+ *
+ * **Deliberately broader than "advancement", and the breadth is a risk that was
+ * taken on purpose.** The narrower version would reset only on promotion and a
+ * district. This also counts being paid more and being listened to, which means
+ * a boss who never promotes anybody may be able to hold a crew together on
+ * conversation and money alone. That is the thing to watch if retention ever
+ * looks too easy — see `__tests__/stagnation.test.ts`.
+ */
+export function somethingGood(state: GameState, npc: Npc): void {
+  npc.lastGoodDay = state.day;
 }
 
 // ------------------------------------------------------------ perception ---
@@ -338,7 +431,25 @@ export function tickNpcs(state: GameState): void {
         addLog(state, `${npc.name} has recovered and is available again.`, 'crew');
       } else if (was === 'arrested') {
         addNote(npc, state.day, 'Released. Did not say what they told them.', 'neutral');
-        addLog(state, `${npc.name} is out. Nobody has asked what they said.`, 'crew');
+        /*
+           Variants, because this is one of the eight lines that carried the
+           game's voice. `scorecard.probe` measured it at 2.1% of everything a
+           player reads across 48 careers.
+
+           What varies is what the family knows, which is the thing the line
+           is actually about — a man comes back and nobody wants to be the one
+           who asks.
+        */
+        addLog(
+          state,
+          say(`out_${npc.id}`, state.day, [
+            `${npc.name} is out. Nobody has asked what they said.`,
+            `${npc.name} is back on the street. Nobody has brought it up.`,
+            `They let ${npc.name} go. Nobody wants to be the one who asks why.`,
+            `${npc.name} walked out this morning and went straight home.`,
+          ]),
+          'crew',
+        );
       }
     }
   }
@@ -365,6 +476,16 @@ export function driftNpcs(state: GameState, rng: Rng): void {
    */
   const fear = clamp(state.org.fear / FEAR.max, 0, 1);
   const defectionChill = 1 - fear * (1 - FEAR.defectionAtMax);
+  /*
+     And how hard the boss holds his own people.
+
+     The Grip half of the build, and it lands on the deepest hole in this game:
+     343 hires a career and 291 of them walk. Fear already suppresses walking
+     out, and that is a different thing — a frightened man has not left *yet*.
+     Grip is the other reason somebody stays, and it works on the loyalty drift
+     rather than on the leaving, so it is the thing fear is not.
+  */
+  const held = worldPull(state, 'grip');
 
   for (const npc of Object.values(state.npcs)) {
     if (isFormerCrew(npc) || npc.status === 'arrested') continue;
@@ -374,7 +495,7 @@ export function driftNpcs(state: GameState, rng: Rng): void {
     applyGoalDrift(npc);
     decayTies(state, npc);
 
-    let loyaltyDelta = 0;
+    let loyaltyDelta = held * WORLD.gripLoyaltyPerWeek;
 
     /*
      * Who he is, who he has to work with, and what he is after.
@@ -399,8 +520,20 @@ export function driftNpcs(state: GameState, rng: Rng): void {
       loyaltyDelta += DRIFT.underpaidLoyalty * shortfall;
     }
 
-    // Ambition with nowhere to go.
-    const daysInRole = state.day - npc.joinedDay;
+    /*
+       Ambition with nowhere to go — and, at last, somewhere it can go.
+
+       This read `state.day - npc.joinedDay` while being called `daysInRole`.
+       There was no role stamp on `Npc` and `promote` never wrote one, so after
+       sixty days every ambitious man bled loyalty forever and nothing a boss
+       did ever stopped it. Promotion did not. A district of his own did not.
+
+       Measured, that made stagnation **40% of every point of loyalty lost
+       across 158,484 crew-weeks** — the largest single drain in the game and
+       the only one with no counterplay, and the reason 291 of 343 hires walk
+       out of a career.
+    */
+    const daysInRole = daysSinceGood(state, npc);
     if (
       daysInRole > DRIFT.daysInRoleBeforeStagnation &&
       npc.stats.ambition > 50
@@ -458,14 +591,21 @@ export function driftNpcs(state: GameState, rng: Rng): void {
 
     npc.stats.loyalty = clamp(npc.stats.loyalty + loyaltyDelta, 0, 100);
 
-    // Standing with you tracks your rank; success is contagious.
-    npc.stats.respectForBoss = clamp(
-      npc.stats.respectForBoss +
-        (rankIndex(state.player.rank) * DRIFT.respectDriftPerRank) / 4 -
-        1,
-      0,
-      100,
-    );
+    /*
+       Standing with you decays, and nothing here builds it back.
+
+       This read `(rankIndex(player.rank) * DRIFT.respectDriftPerRank) / 4 - 1`
+       and the comment said "standing with you tracks your rank". `player.rank`
+       is pinned at the first rung, so `rankIndex` is 0 for every career ever
+       played and the whole expression was `-1`. The rank half was removed when
+       the ladder went; this term kept referencing it and kept compiling.
+
+       Left as the plain decay it has always actually been, rather than
+       repointed at `standing()` — what should build respect for the boss back
+       up is a design question, not a cleanup, and inventing an answer inside a
+       dead-code sweep is how the last one got missed.
+    */
+    npc.stats.respectForBoss = clamp(npc.stats.respectForBoss - 1, 0, 100);
 
     // --- behaviour thresholds -------------------------------------------
 
@@ -499,9 +639,29 @@ export function driftNpcs(state: GameState, rng: Rng): void {
       npc.status = 'defected';
       npc.unavailableUntilDay = null;
       addNote(npc, state.day, 'Left the organization.', 'bad');
+      /*
+         The same repair. Measured at 2.8% of everything read, and it is a
+         sentence a player meets dozens of times in a career.
+
+         The variants take what the man was carrying out of the state — how
+         long he was here, what he did — so a soldier of three weeks and a capo
+         of three years do not leave in identical words.
+      */
       addLog(
         state,
-        `${npc.name} is gone. No message, no meeting, and they knew a great deal.`,
+        say(
+          `gone_${npc.id}`,
+          state.day,
+          [
+            `${npc.name} is gone. No message, no meeting, and they knew a great deal.`,
+            `${npc.name} did not come in. ${npc.name} is not coming in.`,
+            `Somebody saw ${npc.name} on a train platform with a case.`,
+            npc.daysInCrew > 365
+              ? `${npc.name} is gone, after ${Math.floor(npc.daysInCrew / 365)} years of it, without a word.`
+              : `${npc.name} is gone. ${npc.daysInCrew} days, and not one of them explained.`,
+            `${ROLE_LABEL[npc.role]}, and now an empty chair. ${npc.name} has left.`,
+          ],
+        ),
         'crew',
       );
 

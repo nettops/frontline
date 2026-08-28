@@ -20,10 +20,43 @@ import { figure } from '../civic';
 import { SHAPE_BARS } from '../../config/legacy';
 import { CIVIC_FIGURES } from '../../config/civic';
 import { territoryList } from '../territory';
+import { Rng } from '../rng';
+import { generateNpc } from '../npc';
+import { eligibleStewards, putInCharge } from '../delegation';
+import { CONTROL_THRESHOLDS } from '../../config/territories';
 import type { GameState } from '../types';
+
+/** The floor of the top control band, which is what the Kingpin reads. */
+const DOMINANCE_FROM =
+  CONTROL_THRESHOLDS.find((c) => c.level === 'dominance')?.min ?? 75;
 
 function game(seed = 7): GameState {
   return newGame({ name: 'Legacy', difficulty: 'normal', seed });
+}
+
+/*
+   A map you drew, with your own people standing on it.
+
+   The Kingpin needs both halves now — see the note on `kingpinRunning`. These
+   fixtures used to set influence alone, which the shape no longer accepts and
+   should not: a district nobody is running is a line on a map. The crew is
+   topped up with soldiers because `DELEGATION.minRoleIndex` refuses the
+   associates a new game hands you, and a helper that silently appointed
+   nobody would read as the shape being broken.
+*/
+function dominateAndStaff(state: GameState, howMany: number): void {
+  const rng = new Rng(state.rng);
+  while (eligibleStewards(state).length < howMany) {
+    const npc = generateNpc(state, rng, 'soldier');
+    state.npcs[npc.id] = npc;
+  }
+  const all = territoryList(state);
+  for (let i = 0; i < howMany; i++) {
+    all[i].influence.player = DOMINANCE_FROM;
+    const free = eligibleStewards(state)[0];
+    expect(free, `nobody senior enough was free for ${all[i].id}`).toBeTruthy();
+    expect(putInCharge(state, free.id, all[i].id).ok).toBe(true);
+  }
 }
 
 describe('how legitimate it looks', () => {
@@ -74,14 +107,63 @@ describe('what the career turns out to have been', () => {
 
   it('names the ground when there is ground', () => {
     const state = game();
-    const all = territoryList(state);
-    for (let i = 0; i < SHAPE_BARS.kingpinDistricts; i++) all[i].influence.player = 60;
+    dominateAndStaff(state, SHAPE_BARS.kingpinDistricts);
 
     const shape = careerShape(state);
     expect(shape.id).toBe('kingpin');
     expect(shape.because, 'the verdict did not say what earned it').toContain(
       String(SHAPE_BARS.kingpinDistricts),
     );
+  });
+
+  /*
+     The horoscope condition, at the one place a single-career test can see it.
+
+     This counted districts at influence 25 — a foothold — and a family with
+     three districts under control has a toe in six or seven besides. Measured
+     across 36 careers at day 300, the histogram of what it was reading was
+     `2:1 3:1 4:31 5:3`: a point mass, so the shape was the verdict on 35 of
+     them. Control is no better, `2:1 3:4 4:30 5:1`, because nothing in the
+     game asks for a fourth district and a rational player stops there.
+
+     Dominance is the only band that spreads — `1:4 2:6 3:15 4:11` — and it is
+     also the honest reading of "the city moved around you". A foot in the door
+     is not a map you drew.
+  */
+  /*
+     And the half the district count could not supply on its own.
+
+     Measured across 36 careers at day 300 the dominance histogram came out
+     `1:3 2:4 3:13 4:16` — it tops out at four and sixteen careers sit on the
+     ceiling, so the Kingpin was the verdict on 44% of them and no value
+     between the median and the 75th could fix it. That is the third time this
+     bar has been placed against a quantity that had stopped varying.
+
+     Nothing in `OPERATIONS` gates above three districts, so a rational player
+     stops there. The probe proved separately that a bot which simply keeps
+     going takes all twelve, which means the ceiling belongs to the player's
+     reasons rather than to the game.
+
+     So the shape gained the half its own verdict already claimed. "Whoever
+     comes next inherits a map you drew" is not a map with nobody on it — a
+     district you hold and have nobody running is a line on a map, which is
+     exactly the condition `holdings.ts` enforces for a yield. Same
+     construction as `legitimate`, which needs legitimacy *and* fronts, and
+     `ghost`, which needs obscurity *and* an estate.
+  */
+  it('does not name the ground for a map with nobody standing on it', () => {
+    const state = game();
+    for (const t of territoryList(state)) t.influence.player = DOMINANCE_FROM;
+    expect(
+      careerShape(state).id,
+      'a family that dominated the city with nobody running any of it was called a Kingpin',
+    ).not.toBe('kingpin');
+  });
+
+  it('does not name the ground for a foot in every door', () => {
+    const state = game();
+    for (const t of territoryList(state)) t.influence.player = 60;
+    expect(careerShape(state).id).not.toBe('kingpin');
   });
 
   it('names fear when the family ran on it', () => {
@@ -159,8 +241,10 @@ describe('what the career turns out to have been', () => {
   */
   it('takes the heavier shape when two of them fit', () => {
     const state = game();
-    const all = territoryList(state);
-    for (let i = 0; i < SHAPE_BARS.kingpinDistricts; i++) all[i].influence.player = 60;
+    // Dominance and stewards, not a foothold — the Kingpin stopped counting
+    // doors he has a toe in, and a fixture granting the old precondition
+    // grants nothing.
+    dominateAndStaff(state, SHAPE_BARS.kingpinDistricts);
     state.org.fear = SHAPE_BARS.streetKingFear + 20;
 
     expect(careerShape(state).id).toBe('kingpin');

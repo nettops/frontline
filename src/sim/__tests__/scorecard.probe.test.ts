@@ -61,14 +61,32 @@ import {
   availableOperations,
   launchOperation,
   operationCost,
+  opsBoard,
+  standing,
   successBreakdown,
 } from '../operations';
 import { controlledTerritories, operableTerritories, playerInfluence } from '../territory';
+import { OPERATIONS } from '../../config/operations';
+import { TERRITORIES } from '../../config/territories';
 import { availableCrew, crewList } from '../npc';
-import { RANKS, rankIndex } from '../../config/economy';
 import type { GameState } from '../types';
 
-const WORLDS = 12;
+/*
+   Twelve until an unrelated change moved Pacing from 3.8 to 2.6 and the axis
+   read as collapsed.
+
+   It had not collapsed. Re-run at 48 the same two builds read 3.4 against 3.4,
+   with the longest quiet stretch at 406 days against 403 — the entire apparent
+   drop was the random stream being reshuffled, which every change to this
+   project does. Pacing is the axis most exposed to it: `longestGap` is a mean
+   of *per-career maxima*, and a mean of maxima at twelve samples moves further
+   on noise than most real changes move it on purpose.
+
+   So the bar of 3 was being read off an instrument whose noise band is wider
+   than the bar. Raising the sample is not moving the threshold — it is making
+   the threshold mean something. Costs about twenty seconds.
+*/
+const WORLDS = 48;
 const DAYS = 1460;
 
 interface Run {
@@ -89,6 +107,18 @@ interface Run {
   firstRankBy: number | null;
   lines: number;
   repeats: number;
+  /**
+   * How often each exact sentence was written, and how many days said nothing
+   * new at all.
+   *
+   * `repeats` is a share and a share is the wrong shape for this. A payday
+   * line recurring every Friday is the game working; one sentence being a
+   * third of everything the player ever reads is not, and both land in the
+   * same percentage. These two separate them.
+   */
+  byText: Map<string, number>;
+  daysWithLines: number;
+  daysAllOld: number;
   endRank: number;
   endedEarly: boolean;
 }
@@ -156,6 +186,9 @@ function play(seed: number): Run {
     firstRankBy: null,
     lines: 0,
     repeats: 0,
+    byText: new Map(),
+    daysWithLines: 0,
+    daysAllOld: 0,
     endRank: 0,
     endedEarly: false,
   };
@@ -175,7 +208,20 @@ function play(seed: number): Run {
   */
   const promised = new Map<string, number>();
   let lastBest: string | null = null;
-  let lastRank = rankIndex(s.player.rank);
+  /*
+     How far up the board the career has got.
+
+     All three of these read `rankIndex(s.player.rank)`, and `player.rank` has
+     been pinned at the first rung since the ladder came out — so `lastRank`
+     never moved, the "first" below never fired once in any career, and
+     `endRank` was the same number in every world. That silently zeroed half of
+     the Difficulty axis (`distinctEnds` was always 1) and starved the Pacing
+     axis of the firsts it counts.
+
+     `standing()` is the live measure and is what `ladder.probe` switched to:
+     the highest tier of the job table the board actually opens.
+  */
+  let lastRank = standing(s);
   /*
      The log is read by date, not by length, because it is a ring buffer.
 
@@ -224,7 +270,33 @@ function play(seed: number): Run {
       (a, b) => playerInfluence(b.territory) - playerInfluence(a.territory),
     );
     const unfinished = ranked.filter((o) => playerInfluence(o.territory) < 50);
-    const wanted = RANKS[rankIndex(s.player.rank) + 1]?.requires.territories ?? 0;
+    /*
+       How much ground the next thing worth having asks for.
+
+       This read `RANKS[rankIndex(player.rank) + 1].requires.territories`, and
+       `player.rank` is pinned — so it was always Enforcer's requirement, which
+       is 0, so `expanding` was always false and this bot never expanded on
+       purpose in its entire run. `ladder.probe` hit the same bug and fixed it
+       by asking the job gates instead; this does the same, more cheaply.
+    */
+    const board = opsBoard(s);
+    const wanted = OPERATIONS.filter((o) => o.opens && !o.opens.met(board))
+      .sort((a, b) => a.tier - b.tier)
+      .reduce<number>((need, op) => {
+        if (need > 0) return need;
+        for (let n = board.districtsControlled + 1; n <= TERRITORIES.length; n++) {
+          if (
+            op.opens!.met({
+              ...board,
+              districtsControlled: n,
+              districtsHeld: Math.max(board.districtsHeld, n),
+            })
+          ) {
+            return n;
+          }
+        }
+        return 0;
+      }, 0);
     const expanding =
       controlledTerritories(s).length < wanted && unfinished.length > 0 && s.day % 21 < 7;
     const where = (expanding ? unfinished[0] : (ranked[0] ?? unfinished[0]))?.territory.id ?? null;
@@ -310,18 +382,28 @@ function play(seed: number): Run {
       r.landed.push(res.success);
     }
 
-    const rankNow = rankIndex(s.player.rank);
+    const rankNow = standing(s);
     if (rankNow > lastRank) {
       lastRank = rankNow;
       if (r.firstRankBy === null) r.firstRankBy = s.day;
       r.firstsByDay.push(s.day);
     }
 
-    for (const entry of s.log.filter((e) => e.day === s.day)) {
+    const today = s.log.filter((e) => e.day === s.day);
+    let somethingNew = false;
+    for (const entry of today) {
       r.lines += 1;
       explainedThisWeek = true;
+      r.byText.set(entry.text, (r.byText.get(entry.text) ?? 0) + 1);
       if (seenText.has(entry.text)) r.repeats += 1;
-      else seenText.add(entry.text);
+      else {
+        seenText.add(entry.text);
+        somethingNew = true;
+      }
+    }
+    if (today.length > 0) {
+      r.daysWithLines += 1;
+      if (!somethingNew) r.daysAllOld += 1;
     }
 
     if (s.day % 7 === 0) {
@@ -335,7 +417,7 @@ function play(seed: number): Run {
     }
   }
 
-  r.endRank = rankIndex(s.player.rank);
+  r.endRank = standing(s);
   return r;
 }
 
@@ -360,6 +442,19 @@ describe('the scorecard', () => {
   const runs = Array.from({ length: WORLDS }, (_, i) => play(i + 1));
   const flat = <T,>(pick: (r: Run) => T[]): T[] => runs.flatMap(pick);
   const mean = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : 0);
+  /*
+     The median lives beside the mean here rather than replacing it.
+
+     Rule 3 in the handoff forbids the two appearing in one expression, not in
+     one file. The axes above are means by design — they average scores across
+     careers — and the two readings below are shares with a tail, which is
+     what `median` is for.
+  */
+  const median = (xs: number[]) => {
+    if (!xs.length) return 0;
+    const sorted = [...xs].sort((a, b) => a - b);
+    return sorted[Math.floor(sorted.length / 2)];
+  };
 
   // Clarity — is the number on the screen the number you get?
   const predicted = mean(flat((r) => r.predicted));
@@ -415,6 +510,73 @@ describe('the scorecard', () => {
 
   const repetition = mean(runs.map((r) => (r.lines ? r.repeats / r.lines : 0)));
 
+  /*
+     The two readings that say what the repetition actually is.
+
+     `loudest` is the share of everything a player reads that one single
+     sentence accounts for. `deadDays` is the share of days on which the whole
+     screen was lines they had already met.
+
+     Neither is a judgement about prose — the axis above stays unscored and
+     still needs eyes. These are countable facts about supply, and they are
+     here because the axis was printing 43% with no way to tell a Friday
+     payday line from one sentence swallowing the log.
+  */
+  const loudestOf = (r: Run) => {
+    let top = 0;
+    let text = '';
+    for (const [t, n] of r.byText) if (n > top) [top, text] = [n, t];
+    return { share: r.lines ? top / r.lines : 0, text, count: top };
+  };
+  const loudest = runs.map(loudestOf).sort((a, b) => b.share - a.share);
+  const loudestShare = median(loudest.map((x) => x.share));
+  const deadDays = median(runs.map((r) => (r.daysWithLines ? r.daysAllOld / r.daysWithLines : 0)));
+
+  /*
+     And the sentences themselves, summed across the population, because a
+     line that is loud in one career is usually loud in all of them.
+  */
+  const across = new Map<string, number>();
+  let allLines = 0;
+  for (const r of runs) {
+    allLines += r.lines;
+    for (const [t, n] of r.byText) across.set(t, (across.get(t) ?? 0) + n);
+  }
+  const worst = [...across].sort((a, b) => b[1] - a[1]).slice(0, 8);
+
+  /*
+     The same count again, on the last sentence of each line.
+
+     The whole-line reading above says the loudest sentence is 4% and that is
+     true and it is not what a player feels, because the loud writing in this
+     game is templated: `${job} in ${district} failed. It came apart, but
+     everyone walked away.` is one sentence wearing a hundred different hats,
+     and the whole-line count files each hat separately. Taking the text after
+     the last full stop puts them back together. On lines with nothing to
+     strip it is the line, which is the honest no-op.
+
+     Plotted first, repaired, then barred — the order DIRECTOR section 5 asks
+     for. What the plot found and what the repair did:
+
+         reading                                before   after
+         lines that were ones you had read       43%      36%
+         loudest whole line                       4%       2%
+         days that said nothing new              24%      17%
+         loudest last sentence                  7.2%     1.1%
+         the top eight last sentences, summed  22.9%     7.9%
+
+     The repair is variants with a subject out of the state — the man who was
+     on it, the street it happened on, the face on the new list — in
+     `operations.ts`, `npc.ts` and `crew.ts`.
+  */
+  const tail = (t: string) => {
+    const parts = t.split('. ');
+    return parts.length > 1 ? parts[parts.length - 1] : t;
+  };
+  const byTail = new Map<string, number>();
+  for (const [t, n] of across) byTail.set(tail(t), (byTail.get(tail(t)) ?? 0) + n);
+  const worstTails = [...byTail].sort((a, b) => b[1] - a[1]).slice(0, 8);
+
   it('prints the scorecard', () => {
     console.log(
       [
@@ -428,6 +590,17 @@ describe('the scorecard', () => {
         `         Pacing ............................. ${one(pacing)}   ${Math.round(firsts)} firsts, longest quiet stretch ${Math.round(longestGap)} days`,
         `         Difficulty ......................... ${one(difficulty)}   ${pc(endedEarly)} ended early, ${distinctEnds} different ranks reached`,
         `         Writing and tone ................... not scored   ${pc(repetition)} of lines were ones you had read before`,
+        `                                                          the loudest single sentence is ${pc(loudestShare)} of everything read`,
+        `                                                          ${pc(deadDays)} of days said nothing that was not already said`,
+        ...worst.map(
+          ([t, n]) =>
+            `                                                          ${String(Math.round((1000 * n) / allLines) / 10).padStart(5)}%  ${t.slice(0, 74)}`,
+        ),
+        `                                                          and the same count on the last sentence of each line:`,
+        ...worstTails.map(
+          ([t, n]) =>
+            `                                                          ${String(Math.round((1000 * n) / allLines) / 10).padStart(5)}%  ${t.slice(0, 74)}`,
+        ),
         `         Interface and information design ... not scored   needs eyes`,
         `         Fun ................................ not scored   needs a person`,
         '',
@@ -444,6 +617,48 @@ describe('the scorecard', () => {
      worth stopping a commit for — and is exactly what happened twice in one
      afternoon when a heat change took Boss from seventeen careers to none.
   */
+  /*
+     One sentence must not be the game's voice.
+
+     Pre-committed before the first reading was taken, and stated about the
+     shape rather than fitted to a number: no single sentence may be more than
+     a tenth of everything a player reads in a career. Ten percent is already
+     generous — it is one line in ten, from a game with a hundred of them —
+     and the point of putting it here is that it is the kind of thing nobody
+     notices while writing and everybody notices while playing.
+
+     A target for the writing, not a threshold on this file. If it fails, the
+     repair is to give that sentence variants and a subject out of the
+     simulation, which is the trick `eventgen.ts` and `whispers.ts` already
+     use; it is not to move this.
+  */
+  it('does not let one sentence become the whole voice', () => {
+    expect(
+      loudestShare,
+      `"${loudest[Math.floor(loudest.length / 2)]?.text ?? ''}" is most of what the game says`,
+    ).toBeLessThanOrEqual(0.1);
+  });
+
+  /*
+     And the same rule for the sentence underneath the template.
+
+     Not a percentile placement — this is a share across a population rather
+     than a distribution of careers, and pretending otherwise would be the
+     dressing-up this file's own rules exist to stop. It is placed where the
+     defect was: `clean_break` sat at 7.2% with one sentence, the repair took
+     it to 1.1%, and 3% is comfortably above ordinary drift and comfortably
+     below a line becoming the voice again.
+
+     The whole-line bar above cannot catch this on its own. It read 4% while
+     one sentence was 7.2% of everything a player met, because
+     `${job} in ${district} failed.` files every instance under a different
+     heading. Both bars are needed and neither is redundant.
+  */
+  it('does not let one sentence hide inside a template', () => {
+    const [text, n] = worstTails[0] ?? ['', 0];
+    expect(n / allLines, `"${text}" is most of what the game says`).toBeLessThanOrEqual(0.03);
+  });
+
   it('does not let any measured axis collapse', () => {
     const scores = { firstHour, clarity, feedback, depth, pacing, difficulty };
     const collapsed = Object.entries(scores)

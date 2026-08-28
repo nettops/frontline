@@ -20,9 +20,14 @@
  */
 
 import { Rng, clamp } from './rng';
+import { SELLER_REGISTERS, SELLER_REGISTER_BY_ID } from '../config/frontDeal';
+import { dealBeat, sellerStats } from './frontDeal';
+import { BUSINESS_BY_ID } from '../config/businesses';
+import { territoryDef } from './territory';
 import type { FactionId } from '../config/factions';
 import type { GameState, Npc, NpcStatId, NpcStats, Sitdown } from './types';
 import {
+  ANSWER_REGISTERS,
   CREW_REGISTERS,
   REASON_BY_ID,
   REGISTER_BY_ID,
@@ -32,7 +37,7 @@ import {
 } from '../config/sitdown';
 import { STAT_BANDS } from '../config/npcs';
 import { addLog } from './util';
-import { addNote, isOutOfReach } from './npc';
+import { addNote, isOutOfReach, somethingGood } from './npc';
 import { remember } from './memory';
 import { spend } from './economy';
 import { makePromise } from './promises';
@@ -158,6 +163,8 @@ export function houseRead(state: GameState, factionId: FactionId): HouseRead[] {
 function statsOf(state: GameState, sit: Sitdown): NpcStats | null {
   if (sit.npcId) return state.npcs[sit.npcId]?.stats ?? null;
   if (sit.factionId) return houseStats(state, sit.factionId as FactionId);
+  // And the man selling you a shop, worked out from the district he is in.
+  if (sit.deal) return sellerStats(state, sit.deal.defId, sit.deal.territoryId);
   return null;
 }
 
@@ -187,7 +194,10 @@ export function openSitdown(
     beats: [],
     revealed: [],
     familiarityBefore: npc ? Math.round(npc.familiarity) : 0,
+    pending: null,
+    patience: SITDOWN.patience,
     done: false,
+    walkedOut: false,
     outcome: null,
   };
   return { ok: true, message: '' };
@@ -214,9 +224,25 @@ export interface Option {
 export function sitdownOptions(state: GameState): Option[] {
   const sit = state.sitdown;
   if (!sit || sit.done) return [];
-  const pool = sit.kind === 'crew' ? CREW_REGISTERS : RIVAL_REGISTERS;
   const used = new Set(sit.beats.map((b) => b.registerId));
   const funds = state.org.cash + state.org.dirtyCash;
+
+  /*
+     A question narrows the room, and that narrowing is the mechanism.
+
+     While he is waiting on an answer the table holds only answers to what he
+     asked — a question you can talk past is not a question, and the whole
+     point of him asking is that your next move becomes a reply rather than a
+     free pick. Answers never appear otherwise; they exist for as long as the
+     question does and no longer.
+  */
+  const pool = sit.pending
+    ? ANSWER_REGISTERS.filter((r) => r.answers === sit.pending)
+    : sit.kind === 'crew'
+      ? CREW_REGISTERS
+      : sit.kind === 'seller'
+        ? SELLER_REGISTERS
+        : RIVAL_REGISTERS;
 
   return pool
     .filter((r) => !used.has(r.id) && (!r.needs || sit.revealed.includes(r.needs)))
@@ -270,7 +296,7 @@ export function chooseRegister(state: GameState, _rng: Rng, registerId: string):
   const sit = state.sitdown;
   if (!sit || sit.done) return { ok: false, message: 'Nobody is in the room.' };
 
-  const reg = REGISTER_BY_ID[registerId];
+  const reg = REGISTER_BY_ID[registerId] ?? SELLER_REGISTER_BY_ID[registerId];
   if (!reg) return { ok: false, message: 'Not something you can say.' };
   if (!availableRegisters(state).some((r) => r.id === registerId)) {
     return { ok: false, message: 'Not on the table.' };
@@ -281,6 +307,19 @@ export function chooseRegister(state: GameState, _rng: Rng, registerId: string):
 
   const landed = lands(state, sit, reg);
   sit.beats.push({ registerId: reg.id, landed, text: landed ? reg.landed : reg.missed });
+
+  /*
+     Answering clears the question, whether or not the answer landed. He asked,
+     you said something; what he made of it is the beat's business and not a
+     reason to ask again.
+
+     Cleared before the `asks` below, so an answer that itself provokes a new
+     question would work rather than being wiped by its own resolution.
+  */
+  if (reg.answers) sit.pending = null;
+
+  // And a landing can end with him wanting something from you.
+  if (landed && reg.asks) sit.pending = reg.asks;
   if (landed && reg.reveals && !sit.revealed.includes(reg.reveals)) {
     sit.revealed.push(reg.reveals);
   }
@@ -311,6 +350,15 @@ export function chooseRegister(state: GameState, _rng: Rng, registerId: string):
     }
   }
 
+  /*
+     And what it did to the number on the table, when there is one.
+
+     Beside the promise and the calm rather than inside `paid` below, for the
+     same reason those are: this is a property of the words that were said, not
+     of what the conversation was for.
+  */
+  if (sit.deal) dealBeat(state, reg.id, landed);
+
   // Using it is how you get better at it, whether or not it worked.
   trainAttribute(state, reg.trains, landed ? 1 : 0.5);
 
@@ -330,15 +378,85 @@ export function chooseRegister(state: GameState, _rng: Rng, registerId: string):
     );
   }
 
-  if (sit.beats.length >= SITDOWN.beats) settle(state, sit);
+  /*
+     And what the exchange cost him.
+
+     Spent after the beat rather than before, so the thing you just said always
+     gets said — a man does not walk out in the middle of your sentence. A
+     misread costs extra because being asked the wrong question by somebody who
+     is supposed to know you is what wears out a room; landing something real
+     buys a little back, but never as much as the beat cost, so even a
+     perfectly read conversation runs down.
+  */
+  sit.patience -=
+    SITDOWN.patiencePerBeat +
+    (landed ? -SITDOWN.patienceBackOnLanded : SITDOWN.patienceOnMiss);
+
+  if (sit.patience <= 0) heWalks(state, sit);
   return { ok: true, message: '' };
 }
 
-/** Walking out early. Costs the day and the cooldown, nothing else. */
-export function leaveSitdown(state: GameState): void {
+/**
+ * How close he is to standing up, in the words somebody in the room would use.
+ *
+ * Never a number, for the same reason no stat on the crew sheet is one. What a
+ * boss has to go on is the way a man is sitting, and the whole decision this
+ * rework exists to create — is there another question worth asking? — is read
+ * off this and nothing else.
+ */
+export function patienceRead(sit: Sitdown): string {
+  const left = sit.patience / SITDOWN.patience;
+  if (left > 0.75) return 'settled, in no hurry';
+  if (left > 0.5) return 'still with you';
+  if (left > 0.25) return 'glancing at the door';
+  return 'already half standing';
+}
+
+/**
+ * You stand up.
+ *
+ * The decision the whole rework exists for. Everything won is kept — `settle`
+ * pays out on what was revealed, whenever it is called — and nothing is
+ * charged for going early. What you give up is whatever the next question
+ * might have been.
+ */
+export function endSitdown(state: GameState): void {
   const sit = state.sitdown;
   if (!sit || sit.done) return;
   settle(state, sit);
+}
+
+/**
+ * He stands up, which is the expensive way for a room to empty.
+ *
+ * A man who walks out on his boss takes something with him, and it is not the
+ * grudge that matters most — it is what he now thinks of you. `respectForBoss`
+ * feeds wages, defection and informing, so this is a bill that arrives later
+ * and somewhere else, which is the shape every cost in this game prefers.
+ */
+function heWalks(state: GameState, sit: Sitdown): void {
+  sit.walkedOut = true;
+  const npc = sit.npcId ? state.npcs[sit.npcId] : null;
+  if (npc) {
+    npc.stats.grievance = clamp(npc.stats.grievance + SITDOWN.walkedGrievance, 0, 100);
+    npc.stats.respectForBoss = clamp(
+      npc.stats.respectForBoss - SITDOWN.walkedRegard,
+      0,
+      100,
+    );
+    addNote(npc, state.day, 'Had enough, and said so by leaving.', 'bad');
+  }
+  settle(state, sit);
+  sit.outcome = sit.deal
+    ? dealOutcome(sit)
+    : npc
+      ? `${npc.name} had heard enough. They were not finished being asked, and they left anyway.`
+      : 'They had heard enough.';
+}
+
+/** Kept for the callers that mean "the room is over", whoever ended it. */
+export function leaveSitdown(state: GameState): void {
+  endSitdown(state);
 }
 
 export function clearSitdown(state: GameState): void {
@@ -353,8 +471,37 @@ function settle(state: GameState, sit: Sitdown): void {
   const target = sit.npcId ?? sit.factionId ?? '';
   state.flags[satKey(target)] = state.day;
 
+  /*
+     A room with a shop in it settles on the shop.
+
+     `REASON_BY_ID` has no entry for buying and should not — a reason is what
+     you wanted *from a person you already know*, and a man selling premises
+     wants one thing that is written on the deal. So the outcome is the number
+     you got to, which is the only thing that was ever at stake here.
+  */
+  if (sit.deal) {
+    sit.outcome = dealOutcome(sit);
+    return;
+  }
+
   const got = reason ? sit.revealed.includes(reason.wants) : false;
   sit.outcome = got ? paid(state, sit, reason!.wants) : missed(state, sit);
+}
+
+/** What the room came to, when what was in it was a shop. */
+function dealOutcome(sit: Sitdown): string {
+  const deal = sit.deal;
+  if (!deal) return 'Nothing came of it.';
+  const where = territoryDef(deal.territoryId).name;
+  const what = BUSINESS_BY_ID[deal.defId]?.name.toLowerCase() ?? 'the place';
+  if (sit.walkedOut) {
+    return `That is the end of it. The ${what} in ${where} is not for sale to you.`;
+  }
+  const moved = deal.listed - deal.ask;
+  const price = money(deal.ask);
+  if (moved > 0) return `${price} for the ${what} in ${where}, which is ${money(moved)} under the asking.`;
+  if (moved < 0) return `${price} for the ${what} in ${where}. You are paying over the odds for it.`;
+  return `${price} for the ${what} in ${where}, which is what it is worth.`;
 }
 
 function nameOf(state: GameState, sit: Sitdown): string {
@@ -383,6 +530,8 @@ function paid(state: GameState, sit: Sitdown, wants: string): string {
       npc.stats.grievance = clamp(npc.stats.grievance - SITDOWN.settledGrievance, 0, 100);
       npc.stats.loyalty = clamp(npc.stats.loyalty + SITDOWN.settledLoyalty, 0, 100);
       remember(npc, state.day, 'was_believed');
+      // Being heard is the quietest of the good things, and it still counts.
+      somethingGood(state, npc);
       addNote(npc, state.day, 'Told you what was wrong, and you heard it.', 'good');
       addLog(state, `Whatever ${name} was carrying, it is off the table.`, 'crew');
       return `${name} has put it down.`;

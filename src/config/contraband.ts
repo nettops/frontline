@@ -19,6 +19,14 @@
  * That makes the first a relationship you have to maintain and the second a
  * capital asset somebody can raid.
  *
+ * Both rows have since grown a second door, and neither door collapses that
+ * distinction. Arms can be *bought* in finished crates at a worse unit price
+ * (ARMS_SUPPLIERS), and product can be *made* in a plant that produces no
+ * units at all — it only changes what a unit costs and takes away the
+ * arrangement's ability to walk out (PLANT). A workshop makes things. A plant
+ * changes terms. That is deliberate: the day both trades are "spend capital,
+ * receive units" is the day there is only one trade here.
+ *
  * ---------------------------------------------------------------------------
  * As with laundering, this is deliberately an abstract economy and nothing
  * else. Units, routes, capacity, spoilage, exposure. Nothing here describes how
@@ -29,7 +37,6 @@
 
 import type { EvidenceSource } from './lawEnforcement';
 import type { ControlLevel } from './territories';
-import type { RankId } from '../sim/types';
 
 export type TradeId = 'product' | 'arms';
 
@@ -40,7 +47,8 @@ export interface TradeDef {
   unit: [one: string, many: string];
   blurb: string;
   /** Lowest rank that can run it at all. */
-  minRank: RankId;
+  /** Fronts you must be running before anyone will sell into this trade. */
+  minFronts: number;
   /** Control needed in a district before it will carry anything. */
   minControl: ControlLevel;
 
@@ -78,7 +86,17 @@ export const TRADES: Record<TradeId, TradeDef> = {
     unit: ['load', 'loads'],
     blurb:
       'Bought outside the city, carried in through the port, and moved on the same streets your people already stand on. It earns more than anything else you can do and the neighbourhood knows exactly what it is.',
-    minRank: 'crew_leader',
+    /*
+       Two fronts to move it through, rather than a rank.
+
+       This read `minRank: 'crew_leader'`, which was a clean-money threshold
+       wearing a title — and the title came off the screen the day the player
+       became the boss from the first morning. Fronts are the honest
+       requirement anyway: the product moves through premises, and a career
+       reaches two of them around day 90, which is where Crew Leader used to
+       land.
+    */
+    minFronts: 2,
     minControl: 'foothold',
 
     /*
@@ -114,8 +132,11 @@ export const TRADES: Record<TradeId, TradeDef> = {
     name: 'The arms trade',
     unit: ['crate', 'crates'],
     blurb:
-      'A machine shop that makes parts nobody asks about, and a way out of the city for what it produces. Lower volume, far higher value, and the only trade whose customers can point it back at you.',
-    minRank: 'capo',
+      'A machine shop that makes parts nobody asks about, or a freight agent who will sell you crates already full. Lower volume, far higher value, and the only trade whose customers can point it back at you.',
+    // A district actually under your control, plus somewhere to keep it. The
+    // old `minRank: 'capo'` is gone with the rest of the ladder; `minControl`
+    // below was always doing most of this gate's work.
+    minFronts: 3,
     minControl: 'control',
 
     // Manufacture rather than purchase — see WORKSHOP. The cost here is
@@ -202,8 +223,127 @@ export const SUPPLIERS: SupplierDef[] = [
   },
 ];
 
+/**
+ * What a supplier who has kept you thinks of you.
+ *
+ * `failureChancePerWeek` was a flat number and a flat number is not a
+ * relationship. Measured over 24 careers running each arrangement for a year:
+ * dockside lasted a mean of 18.4 weeks and was gone inside the year in 21 of
+ * 24 of them. Pay $40,000, buy for four months, and one morning a coin comes
+ * up. Nothing the player did caused it and nothing could have prevented it.
+ *
+ * ## Trust only ever helps, and that is a measurement rather than a mercy
+ *
+ * Three inputs were plotted and all three are degenerate under the probe's
+ * bot: volume runs 3% to 4% of the supplier's own ceiling, heat sits pegged at
+ * a median of 100, and time is the same for everybody. The bot cannot be told
+ * apart from any other career on any axis this reads.
+ *
+ * So trust reduces the chance they walk and can never raise it. A loud career
+ * earns none and behaves exactly as it does today — which is why no probe can
+ * move — and a careful one gets an arrangement that holds. The price of being
+ * loud is losing something good rather than being handed something worse, and
+ * once you have had it that is a real price.
+ *
+ * Accrual is time, because time is the one input the plot did not find
+ * degenerate, and heat is the gate on it. That makes the lever the thing a
+ * player controls and the bot never does: keeping your head down.
+ */
+export const SUPPLY_TRUST = {
+  /**
+   * Weeks of an unbroken, quiet arrangement to reach full trust.
+   *
+   * Sized against the measured lifetime, and the first attempt was not. At 26
+   * this sat *past* dockside's mean life of 18.4 weeks, so the reward was
+   * beyond the median arrangement and almost nobody would ever have collected
+   * it — a discount for surviving longer than most arrangements survive. The
+   * measured lives are 18.4, 26.9 and 28.8 weeks, so twelve puts full trust
+   * comfortably inside all three and lets it do the thing it is for, which is
+   * to extend them.
+   */
+  weeksToFull: 12,
+  /**
+   * The most trust can cut the weekly chance they walk.
+   *
+   * At 0.8 a maintained dockside arrangement runs at 1% a week rather than 5%,
+   * which turns a mean life of 18 weeks into something worth defending. Below
+   * about a half the discount is not worth protecting and the lever is
+   * decoration.
+   */
+  maxReduction: 0.8,
+  /** Heat at or above this holds trust at nothing, however long you have dealt. */
+  heatCeiling: 60,
+  /**
+   * Points trust moves toward its target each week.
+   *
+   * Ten rather than six because at six the drift, not the target, was the
+   * binding constraint — full trust took seventeen weeks however short
+   * `weeksToFull` was set, which quietly undid the retune above.
+   */
+  driftPerWeek: 10,
+  /** Trust lost outright when a raid takes stock off you. */
+  seizureCost: 35,
+} as const;
+
 export const SUPPLIER_BY_ID: Record<string, SupplierDef> = Object.fromEntries(
   SUPPLIERS.map((s) => [s.id, s]),
+);
+
+/**
+ * Somewhere to buy finished crates, instead of building somewhere to make them.
+ *
+ * Arms are still *made* in a workshop and that is still the good way to run the
+ * trade — the structural difference the header defends is intact. What this
+ * adds is a second door, because the first one is priced for a career that has
+ * already won. Measured peak funds over 24 careers that play: p75 $69,175,
+ * p90 $94,345. A workshop is $120,000, and the trade wants Capo before that.
+ * Under one career in ten can ever open it.
+ *
+ * The fork, and neither side dominates:
+ *
+ *     making   $120,000 up front, $5,200 a crate, and a building with an
+ *              address a warrant can name
+ *     buying   a small retainer, a much worse unit price, and nothing anybody
+ *              can raid
+ *
+ * Cheap in and thin margins against dear in and fat margins. A buyer gets into
+ * the trade in the middle of a career and never gets rich on it; a maker needs
+ * the fortune first and then owns the whole spread. The exposure numbers say
+ * the same thing from the other side — a workshop is a fixed address and this
+ * is not, which is the one respect in which buying is strictly better.
+ */
+export const ARMS_SUPPLIERS: SupplierDef[] = [
+  {
+    id: 'crated',
+    name: 'A freight agent with a loose manifest',
+    blurb:
+      'Sells finished crates by the pallet and asks nothing. Dear per unit, nothing to raid, and gone the moment it stops being worth their while.',
+    /*
+       Above 1 on purpose. `unitCost` multiplies the trade's own figure, so a
+       multiplier under one would make buying cheaper than making in every
+       respect and no career would ever build a workshop again.
+    */
+    priceMultiplier: 1.55,
+    ceiling: 14,
+    retainer: 26_000,
+    failureChancePerWeek: 0.045,
+    exposure: 0.9,
+  },
+  {
+    id: 'surplus',
+    name: 'A quartermaster with a paperwork problem',
+    blurb:
+      'Crates that were written off somewhere else. Steadier and dearer, and every one of them is on a list in a filing cabinet.',
+    priceMultiplier: 1.85,
+    ceiling: 22,
+    retainer: 48_000,
+    failureChancePerWeek: 0.02,
+    exposure: 1.6,
+  },
+];
+
+export const ARMS_SUPPLIER_BY_ID: Record<string, SupplierDef> = Object.fromEntries(
+  ARMS_SUPPLIERS.map((s) => [s.id, s]),
 );
 
 /**
@@ -258,6 +398,96 @@ export const WORKSHOP = {
   raidRefundShare: 0.1,
 };
 
+// ----------------------------------------------------------- own supply ---
+
+/**
+ * Making it yourself, instead of buying it from somebody.
+ *
+ * The obvious version of this is a second WORKSHOP — spend capital, receive
+ * units — and it is the wrong build. The header above states the asymmetry
+ * between the two trades as a design position: product is a *relationship* you
+ * have to maintain and arms are a *capital asset* somebody can raid. Give
+ * product a unit-producing facility and both rows collapse into the same
+ * thing, `supplierTrust` becomes flavour a player can buy their way out of,
+ * and the one structural difference between the trades is gone.
+ *
+ * So a plant does not produce units. It **changes the terms**:
+ *
+ *     keep buying   the supplier's price, moving with whoever holds the water,
+ *                   and a weekly chance they simply stop
+ *     build one     materially lower and fixed, nobody to walk out on you, and
+ *                   an address a warrant can point at
+ *
+ * Neither dominates, and the ceiling is what keeps that true. One plant covers
+ * `supplyPerWeek` and no more, which is well under what any of the three
+ * arrangements can deliver — so a plant is the cheap base load and a supplier
+ * is still how a large operation is fed. The arrangement survives the
+ * facility, which is the constraint this was designed against.
+ *
+ * ## Every number here off a plotted distribution
+ *
+ * Measured on `ladder.probe`'s bot — the project's standard career — over 144
+ * careers. Peak funds inside the first year *after* the trade opened, which is
+ * the state a player is actually in when this becomes a question:
+ *
+ *     reached the trade   131/144
+ *     peak funds          p10 $38,690   median $236,014   p75 $766,036
+ *
+ * `cost` sits just above the median, per DIRECTOR §5, which puts a plant
+ * inside reach of about half the careers that get as far as running the trade
+ * — measured directly, 84 of 131 ever hold $185,000 and 64 of 131 ever hold
+ * $260,000.
+ *
+ * The first pass priced this at $185,000 off a bot written for the feature,
+ * which reported a median peak of $176,843. That bot opened a supply in 14
+ * careers of 36 where the standard one reaches two fronts in 132 of 144: F7,
+ * and the third time in this cycle an instrument written alongside a feature
+ * has flattered it. The figure above is the standard bot's.
+ *
+ * Dearer than the arms workshop on purpose. The workshop was the PATRON shape
+ * at $120,000 against a p90 of $94,345; this is priced against the careers
+ * that can actually ask the question.
+ */
+export const PLANT = {
+  cost: 250_000,
+  /**
+   * What a unit costs here, as a share of the trade's own base figure.
+   *
+   * Against the three arrangements — 0.85, 1.15 and 1.40 — this is roughly
+   * half the cheapest of them and a third of the dearest. Large enough to be
+   * worth $185,000 and a weekly bill; small enough that it does not make the
+   * margin so fat that the district capacity stops being the thing that
+   * matters.
+   */
+  unitCostShare: 0.45,
+  /**
+   * Units a week one plant will cover, at the cheap price.
+   *
+   * The whole reason the supplier survives. Measured weekly throughput while a
+   * supply is open runs a median of 9 and a p90 of 27.8, so one plant carries
+   * a median operation and three of them still fall short of what the
+   * waterfront alone can deliver.
+   */
+  supplyPerWeek: 10,
+  /** Weekly running cost, whether or not a single unit moves. */
+  upkeep: 2_600,
+  /** Control needed in the district. A foothold is not somewhere to put this. */
+  minControl: 'control' as ControlLevel,
+  /** Most you can run, total. */
+  max: 3,
+  /**
+   * Evidence per week, each.
+   *
+   * Higher than any of the three arrangements — the dearest of those is the
+   * waterfront at 1.4 — because this is the one that cannot be walked away
+   * from. A delivery pattern stops when the deliveries stop. A building does
+   * not.
+   */
+  exposure: 1.6,
+  /** What survives a warrant. Same share a workshop gets. */
+  raidRefundShare: 0.1,
+};
+
 // -------------------------------------------------------- selling to them --
 
 /**
@@ -288,6 +518,41 @@ export const ARMS_SALE = {
   evidence: 12,
 };
 
+/**
+ * Crates you did not sell.
+ *
+ * `ARMS_SALE` above gives a buyer `strengthPerCrate` of strength and says, in
+ * as many words, that a player funding a war with arms sales is arming the
+ * people they will fight. That was only half a mechanic: keeping the crates
+ * did nothing. `playerStrength` counts bodies and their quality and reads no
+ * stock at all, so an armoury was inventory waiting for a buyer.
+ *
+ * The rate is deliberately the same number a buyer gets. A crate cannot be
+ * worth one thing in a rival's hands and another in yours, and pinning the two
+ * together is what makes the sale a genuine trade rather than free money —
+ * every crate sold moves the same quantity from your column to theirs.
+ *
+ * Capped, and the cap is the important part. A stockpile is meant to make a
+ * crew harder to beat, not to replace one; without a ceiling the answer to
+ * every war is a warehouse. `armsStrength` also returns nothing when there is
+ * nobody left to carry any of it, which is enforced where strength is summed
+ * rather than here.
+ */
+export const ARMED = {
+  /** Strength per crate on hand. Same rate a buyer gets — see above. */
+  strengthPerCrate: ARMS_SALE.strengthPerCrate,
+  /**
+   * The most an armoury can ever be worth.
+   *
+   * `playerStrength` is clamped to 100 and a serious crew sits well under it,
+   * so this is a meaningful supplement without being the whole answer. Forty
+   * crates reaches the ceiling; everything past that is stock for selling.
+   */
+  maxStrength: 22,
+  /** Crates burned per week, per war being fought. */
+  spentPerWarWeek: 3,
+} as const;
+
 // ------------------------------------------------------------- pressure ---
 
 /** What a search warrant does to stock, on top of everything else it does. */
@@ -298,6 +563,8 @@ export const SEIZURE = {
   evidence: 22,
   /** Chance a raid also takes a workshop. */
   workshopChance: 0.35,
+  /** ...and the same again for a plant, which is equally an address. */
+  plantChance: 0.35,
 };
 
 /** How much a district's control level lets through. */

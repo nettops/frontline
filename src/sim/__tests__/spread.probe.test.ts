@@ -84,6 +84,12 @@ function pickCrew(state: GameState, def: OperationDef, policy: Policy): Id[] {
 interface Run {
   days: number;
   launches: number;
+  /** Crew skill at the end: the median man, the best, and the floor. */
+  skillMedian: number;
+  skillBest: number;
+  skillFloor: number;
+  /** How far the median man moved from where the roster started. */
+  skillStart: number;
   /** Share of all crew-slots that went to the three most-used people. */
   topThreeShare: number;
   /** People ending with a grievance at or above the badge threshold. */
@@ -108,6 +114,12 @@ function play(seed: number, days: number, policy: Policy): Run {
   let launches = 0;
   let openedByBehaviour = 0;
 
+  const opening = crewList(state)
+    .filter((n) => n.status !== 'dead')
+    .map((n) => n.stats.skill)
+    .sort((a, b) => a - b);
+  const startingSkill = opening.length ? opening[Math.floor(opening.length / 2)] : 0;
+
   for (let d = 0; d < days; d++) {
     answerCheaply(state, rng);
 
@@ -128,7 +140,32 @@ function play(seed: number, days: number, policy: Policy): Run {
       );
       if (where) {
         for (const def of options) {
-          if (idle(state).length < def.crewRequired) break;
+          /*
+             `continue`, and it was a `break`.
+
+             The same defect repaired in `ladder.probe`: `options` is not
+             ordered by how many bodies a job needs, so one job the family
+             could not crew stopped every cheaper job below it from being
+             considered. There it cost 116 of 300 days standing still.
+
+             It matters more here than anywhere, because this file's whole
+             hypothesis is whether *who you send* changes a career. A bot that
+             stops sending anybody the moment its list runs past the bench is
+             not testing that — and the readings say so. The grievance line
+             came back the wrong way round:
+
+                 carrying a grievance      always-best / rotate
+                   with the break              0.10   /  0.17
+                   with continue               0.23   /  0.13
+
+             Concentrating the work is supposed to aggrieve the men left out.
+             It was reporting the opposite, and the reason was that the arm
+             which concentrates hardest also stalled hardest.
+
+                 three men's share of the work   54% / 51%  ->  51% / 47%
+                 kinds of job the bot ever ran   5 -> 6
+          */
+          if (idle(state).length < def.crewRequired) continue;
           // The game refuses a second solo job now, so the bot does not have
           // to. Kept as a comment because the line that used to be here was a
           // workaround for a real defect nobody had noticed.
@@ -141,7 +178,7 @@ function play(seed: number, days: number, policy: Policy): Run {
     // Counted while it is true rather than at the end: rank can arrive later
     // and would then take the credit for a job behaviour had already opened.
     if (state.day % 7 === 0 && rankIndex(state.player.rank) < rankIndex('crew_leader')) {
-      const open = availableOperations(state).filter((o) => o.minRank === 'crew_leader').length;
+      const open = availableOperations(state).filter((o) => o.tier === 2).length;
       openedByBehaviour = Math.max(openedByBehaviour, open);
     }
 
@@ -162,9 +199,26 @@ function play(seed: number, days: number, policy: Policy): Run {
   const marks = (kind: string) =>
     everybody.reduce((n, npc) => n + npc.memories.filter((m) => m.kind === kind).length, 0);
 
+  /*
+     What the roster is worth at the end, now that a man can get better.
+
+     Skill was fixed at hire for the whole of this file's history, so `best` —
+     which sorts on it — was sorting on a constant. It is the quantity this
+     probe's own hypothesis now runs through: concentrating the work should
+     concentrate the skill, and rotating should raise the floor.
+  */
+  const living = crewList(state).filter((n) => n.status !== 'dead');
+  const skills = living.map((n) => n.stats.skill).sort((a, b) => a - b);
+  const mid = (xs: number[]) =>
+    xs.length === 0 ? 0 : xs[Math.floor(xs.length / 2)];
+
   return {
     days: state.day,
     launches,
+    skillMedian: mid(skills),
+    skillBest: skills[skills.length - 1] ?? 0,
+    skillFloor: skills[0] ?? 0,
+    skillStart: startingSkill,
     topThreeShare: total > 0 ? topThree / total : 0,
     carrying: crewList(state).filter((n) => n.stats.grievance >= 55).length,
     walked: everybody.filter((n) => n.status === 'defected').length,
@@ -285,6 +339,55 @@ describe('who you send', () => {
     ).toBeGreaterThan(mean(rotate.map((r) => r.carriedMarks)));
   });
 
+  /*
+     The hypothesis this file was built for, now that it has a quantity to run
+     through.
+
+     Skill was fixed at hire for the whole of this file's history, so `best` —
+     which sorts on skill — was sorting on a constant, and the only difference
+     the two policies could ever produce was grievance. Work teaching makes the
+     choice compound: send the same three men and they get good while nobody
+     else does; rotate and the floor comes up.
+  */
+  it('says what who you send does to how good they get', () => {
+    const at = (rs: Run[], f: (r: Run) => number) => median(rs.map(f));
+
+    // eslint-disable-next-line no-console
+    console.log(
+      `spread: crew skill after ${DAYS} days, median man / best / floor — ` +
+        `always-best ${at(best, (r) => r.skillMedian)} / ${at(best, (r) => r.skillBest)} / ` +
+        `${at(best, (r) => r.skillFloor)}` +
+        `; rotate ${at(rotate, (r) => r.skillMedian)} / ${at(rotate, (r) => r.skillBest)} / ` +
+        `${at(rotate, (r) => r.skillFloor)}` +
+        ` (the roster opened at ${at(best, (r) => r.skillStart)})`,
+    );
+
+    /*
+       The instrument first. If skill has not moved at all then everything
+       below is a statement about two identical rosters, and this file has
+       been reporting on a constant again.
+    */
+    expect(
+      at(best, (r) => r.skillBest),
+      'nobody got any better at anything, so there is nothing here to compare',
+    ).toBeGreaterThan(at(best, (r) => r.skillStart));
+
+    /*
+       And the trade itself. Concentrating the work should buy a sharper point
+       and a softer floor than spreading it. A bar on the *direction* rather
+       than the size, because the size is a balance figure and the direction is
+       the claim.
+    */
+    expect(
+      at(best, (r) => r.skillBest),
+      'concentrating the work does not produce a better best man than rotating',
+    ).toBeGreaterThanOrEqual(at(rotate, (r) => r.skillBest));
+    expect(
+      at(rotate, (r) => r.skillFloor),
+      'rotating does not raise the floor against concentrating',
+    ).toBeGreaterThanOrEqual(at(best, (r) => r.skillFloor));
+  });
+
   it('cannot say anything about the behavioural routes, and says so', () => {
     /*
        A reading this file is not entitled to make.
@@ -306,7 +409,7 @@ describe('who you send', () => {
     */
     const byBehaviour = median(best.map((r) => r.openedByBehaviour));
     const kinds = median(best.map((r) => r.kindsRun));
-    const gated = OPERATIONS.filter((o) => o.minRank === 'crew_leader').length;
+    const gated = OPERATIONS.filter((o) => o.tier === 2).length;
 
     // eslint-disable-next-line no-console
     console.log(

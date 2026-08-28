@@ -14,14 +14,17 @@
  * and what you can do about it, and changes no balance figure at all.
  */
 
+import { WORLD } from '../config/build';
+import { worldPull } from './build';
 import { clamp } from './rng';
 import type { GameState } from './types';
+import { holdingShare } from './holdings';
 import { addLog } from './util';
 import { worldMod } from './world';
 import {
   DECAY_BY_CHANNEL,
   HEAT_CHANNELS,
-  HEAT_DECAY_PER_DAY,
+  HEAT_DECAY_SHARE,
   HEAT_SUCCESS_PENALTY_AT_MAX,
   LAY_LOW_BY_CHANNEL,
   LAY_LOW_DURATION_DAYS,
@@ -161,18 +164,24 @@ export function tickHeat(state: GameState): void {
 
   if (org.quietDays < QUIET_DAYS_BEFORE_DECAY) return;
 
-  // Read from the total, so a player at 80 bleeds off slowly whichever three
-  // ways they got there.
-  const tier = heatTier(org.heat);
-  const tierBefore = tier.name;
+  // Read from the total, so what comes off is decided by how much trouble the
+  // family is in altogether rather than by any one channel's share of it.
+  const tierBefore = heatTier(org.heat).name;
   const laying = isLayingLow(state);
 
   const by = channels(state);
   for (const channel of HEAT_CHANNELS) {
     if ((by[channel] ?? 0) <= 0) continue;
+    /*
+       A share of the load, not a flat figure. See `HEAT_DECAY_SHARE`.
+
+       The channel multipliers still do the work they always did: the street
+       forgets fastest, paper does not go away because you stopped, and a man
+       already sitting with a federal agent is not affected by any of this.
+    */
     const decay =
-      HEAT_DECAY_PER_DAY *
-      tier.decayMultiplier *
+      org.heat *
+      quietShare(state) *
       diff.heatDecay *
       DECAY_BY_CHANNEL[channel] *
       (laying ? LAY_LOW_BY_CHANNEL[channel] : 1);
@@ -223,6 +232,26 @@ export function startLayLow(state: GameState): void {
 }
 
 /** Success chance lost to current heat, as a fraction (0..0.3). */
+/**
+ * The share of the load that comes off on a quiet day.
+ *
+ * `HEAT_DECAY_SHARE` plus whatever ground you hold where nobody is looking.
+ * Exposed rather than inlined so the territory panel can say what Southport is
+ * actually doing for you, and so a test can read it without running a week.
+ */
+export function quietShare(state: GameState): number {
+  return HEAT_DECAY_SHARE * (1 + holdingShare(state, 'quiet'));
+}
+
 export function heatSuccessPenalty(state: GameState): number {
-  return (state.org.heat / 100) * HEAT_SUCCESS_PENALTY_AT_MAX;
+  /*
+     Less of it, for a boss whose people do not panic.
+
+     The Stomach half of the build. Heat is the second largest drain in the
+     game — -0.46 loyalty per crew-week against stagnation's -0.60 — and its
+     other cost is here, on the odds of every job run while the street is warm.
+     A family that can work through it is the whole of what Stomach means.
+  */
+  const carried = Math.max(0, state.org.heat - worldPull(state, 'stomach') * WORLD.stomachHeatRoom);
+  return (carried / 100) * HEAT_SUCCESS_PENALTY_AT_MAX;
 }

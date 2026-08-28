@@ -9,6 +9,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { Rng } from '../rng';
+import { maxCrew } from '../player';
 import { newGame } from '../state';
 import { runDaysSolvent } from './helpers';
 import { crewList } from '../npc';
@@ -16,16 +17,15 @@ import {
   claimStrength,
   eligibleHeirs,
   heirOf,
-  inheritRank,
   nameHeir,
   perceivedClaim,
   removePlayer,
   rollAssassination,
 } from '../succession';
 import { activeCondition, tickWorld, worldMod, worldSuccessDelta } from '../world';
-import { CLAIM, HANDOVER, REMOVAL } from '../../config/succession';
+import { CLAIM, REMOVAL } from '../../config/succession';
 import { WORLD_CONDITIONS, WORLD_CONDITION_BY_ID } from '../../config/world';
-import { ROLE_ORDER, rankIndex } from '../../config/economy';
+import { ROLE_ORDER } from '../../config/economy';
 import type { GameState, Npc, RoleId } from '../types';
 
 function fresh(seed = 909): GameState {
@@ -188,6 +188,7 @@ describe('being removed', () => {
     state.org.heat = 80;
     state.player.rank = 'capo';
     const homeInfluence = state.territories.riverside.influence.player;
+    const before = { cap: maxCrew(state) };
 
     removePlayer(state, new Rng(state.rng), 'convicted', 'They made it stick.');
 
@@ -211,11 +212,18 @@ describe('being removed', () => {
     */
     expect(state.org.heat).toBe(80);
     expect(state.territories.riverside.influence.player).toBeLessThanOrEqual(homeInfluence);
-    // A rung is lost, never more than the config says.
-    expect(rankIndex(state.player.rank)).toBe(
-      rankIndex('capo') - HANDOVER.ranksLost,
-    );
-    expect(inheritRank('capo')).toBe(state.player.rank);
+    /*
+       Ground, not a rung.
+
+       This asserted `rankIndex(player.rank) === rankIndex('capo') - ranksLost`.
+       Nothing reads rank any more — the job table, the trades and the crew cap
+       all read the board — so a docked title would have been a punishment the
+       successor never felt. What they actually inherit smaller is the ground,
+       and the ceiling on what they can hold falls with it, which is the line
+       below and the one that now carries this claim.
+    */
+    expect(maxCrew(state), 'the successor can hold as much as the boss could')
+      .toBeLessThanOrEqual(before.cap);
   });
 
   it('derives the new player from who the successor actually was', () => {

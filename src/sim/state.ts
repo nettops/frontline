@@ -17,6 +17,12 @@ import type {
   PlayerLook,
   Territory,
 } from './types';
+import {
+  DEFAULT_NATIONALITY,
+  firstNamesOf,
+  nationalityDef,
+  type NationalityId,
+} from '../config/nationalities';
 import { CHARACTER_JITTER } from '../config/houses';
 import { namesOf } from '../config/names';
 import {
@@ -88,6 +94,8 @@ export interface NewGameOptions {
   sandboxStart?: string;
   /** Omit for a random world. Pass one to reproduce a specific game. */
   seed?: number;
+  /** Which community you came up in. Defaults to Italian. Names only. */
+  nationality?: NationalityId;
   /**
    * What the player chose to look like on the title screen.
    *
@@ -106,7 +114,23 @@ function buildTerritories(
   rng: Rng,
   draws: HouseDraw[],
   homeInfluence = STARTING_HOME_INFLUENCE,
+  /*
+     How many districts this start already holds, home first.
+
+     A sandbox start used to say how far along it was by naming a rank. Nothing
+     reads rank now — the job table, the trades and the crew cap all read the
+     board — so the start has to hand over the ground itself, or "At the table"
+     seats a player with twelve people and one district, which is four over the
+     ceiling that same district buys them.
+  */
+  districts = 1,
 ): Record<string, Territory> {
+  const held = new Set(
+    [HOME_TERRITORY, ...TERRITORIES.map((d) => d.id).filter((id) => id !== HOME_TERRITORY)].slice(
+      0,
+      Math.max(1, districts),
+    ),
+  );
   const territories: Record<string, Territory> = {};
 
   for (const def of TERRITORIES) {
@@ -115,7 +139,7 @@ function buildTerritories(
     RIVAL_IDS.forEach((id, i) => {
       influence[id] = draws[i]?.seat.influence[def.id] ?? 0;
     });
-    influence.player = def.id === HOME_TERRITORY ? homeInfluence : 0;
+    influence.player = held.has(def.id) ? homeInfluence : 0;
 
     territories[def.id] = {
       id: def.id,
@@ -126,7 +150,7 @@ function buildTerritories(
       // In Simulation the player has never set foot anywhere, so the map is
       // fogged the same way it would be on day one of a career — you are
       // reading the city from outside it, which is the point.
-      visited: def.id === HOME_TERRITORY && homeInfluence > 0,
+      visited: held.has(def.id) && homeInfluence > 0,
       lastActionDay: 1,
     };
   }
@@ -231,6 +255,26 @@ export function newGame(opts: NewGameOptions): GameState {
       ? (SANDBOX_START_BY_ID[opts.sandboxStart ?? ''] ?? SANDBOX_STARTS[0])
       : null;
 
+  /*
+     Your own name, when you did not give one.
+
+     "Nobody" was a decent joke and a poor introduction: the first thing the
+     game says about you should be that you are from somewhere. Drawn from the
+     chosen community instead, so an Irish start opens on a Coughlin.
+
+     Built with `stableNoise` rather than off `rng`, so naming you does not
+     consume draws the city is about to be built from. Two calls into the same
+     stream would have quietly re-rolled every founding boss.
+  */
+  const nationality = opts.nationality ?? DEFAULT_NATIONALITY;
+  const pool = nationalityDef(nationality);
+  const pickStable = (list: string[], key: string) =>
+    list[Math.floor(Rng.stableNoise(`${key}:${seed}`, 0) * list.length)];
+  const defaultName =
+    mode === 'simulation'
+      ? 'Nobody at all'
+      : `${pickStable(firstNamesOf(pool), 'boss:first')} ${pickStable(pool.last, 'boss:last')}`;
+
   const attributes = { ...STARTING_ATTRIBUTES };
   if (start) {
     for (const key of Object.keys(attributes) as (keyof Attributes)[]) {
@@ -256,13 +300,13 @@ export function newGame(opts: NewGameOptions): GameState {
     gameOver: null,
 
     player: {
-      name: opts.name.trim() || (mode === 'simulation' ? 'Nobody at all' : 'Nobody'),
-      rank: start?.rank ?? 'street_criminal',
+      name: opts.name.trim() || defaultName,
+      nationality,
+      rank: 'street_criminal',
       attributes,
       attributeProgress: zeroAttributes(),
       opsCompleted: 0,
       opsFailed: 0,
-      pendingRank: null,
       look: opts.look,
     },
 
@@ -291,6 +335,7 @@ export function newGame(opts: NewGameOptions): GameState {
       rng,
       draws,
       mode === 'simulation' ? 0 : (start?.homeInfluence ?? undefined),
+      mode === 'simulation' ? 0 : (start?.districts ?? 1),
     ),
     businesses: {},
     factions: {},

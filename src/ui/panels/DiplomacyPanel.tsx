@@ -17,7 +17,7 @@ import { rivals } from '../../sim/faction';
 import { formatMoney } from '../../sim/util';
 import { type FactionId } from '../../config/factions';
 import { DIPLOMATIC_ACTIONS } from '../../config/diplomacy';
-import { REASONS } from '../../config/sitdown';
+import { REASONS, SITDOWN } from '../../config/sitdown';
 import { canSitDownWith, openSitdown } from '../../sim/sitdown';
 import { houseColour, houseShort } from '../../sim/houses';
 
@@ -239,6 +239,20 @@ function TalkTo({
           */}
           <div className="sit-row" style={{ marginTop: 14 }}>
             <span className="tiny">Ask for a meeting</span>
+            {/*
+               The line the crew sheet got and this door did not.
+
+               F14 is about an entry point that reads as a button producing a
+               line of text rather than as a door into a scene, and the repair
+               went onto `CrewPanel` only — where the comment above says the
+               same thing to whoever is reading the source and nothing at all
+               to whoever is playing. There are two doors into this system.
+            */}
+            <p className="tiny faint" style={{ margin: '4px 0 0' }}>
+              A conversation in a back room, not an answer — it runs as long as they will
+              sit there, and how you read them decides what you come away with. Once every{' '}
+              {SITDOWN.cooldownDays} days with the same house.
+            </p>
             <div className="stack" style={{ marginTop: 6 }}>
               {REASONS.filter((r) => r.kind === 'rival').map((reason) => (
                 <button

@@ -76,6 +76,22 @@ function world(seed = 88): GameState {
   }
 
   /*
+     And somebody running a street for you, a season into the job.
+
+     `gen_steward_asks` is the only shape whose subject is a delegation, and
+     this builder had no steward in it — so the shape read as dead against a
+     world that was supposed to have one of everything. Set directly rather
+     than through `putInCharge`, because the eligibility rules are a separate
+     thing being tested elsewhere and this fixture only needs the state.
+  */
+  const runner = Object.values(state.npcs).find((n) => n.status === 'active');
+  const street = state.territories[HOME_TERRITORY];
+  if (runner && street) {
+    street.stewardId = runner.id;
+    street.stewardSince = state.day - 120;
+  }
+
+  /*
      Nobody has been dealt with recently.
 
      The sixty days of warm-up above can raise and answer `gen_wants_a_word`
@@ -137,6 +153,23 @@ function world(seed = 88): GameState {
 
   // And a house that has noticed you are never in it.
   home(state).neglect = 60;
+
+  /*
+     And the three subjects the systems built after this file was written need.
+
+     Set directly, same as the steward above. A name arrives on a weekly roll
+     from day 120, a front bought on "they keep a piece" needs the acquisition
+     scene, and a frightened street needs a career that spent four years being
+     frightening — none of which a sixty-day warm-up produces, and waiting for
+     one would make this file's coverage depend on a seed.
+  */
+  state.player.nickname = { id: 'the_hammer', since: state.day - 20 };
+  const bought = ownedBusinesses(state)[0];
+  if (bought) {
+    bought.terms = ['he_stays'];
+    bought.purchasedDay = state.day - 30;
+  }
+  state.org.fear = 70;
 
   // And a file with something in it.
   state.law.investigations['case_test'] = {
@@ -206,6 +239,79 @@ describe('the shapes', () => {
       expect(built.body.length, `${def.id} has no body`).toBeGreaterThan(40);
       expect(built.choices.length, `${def.id} offers no choice`).toBeGreaterThan(1);
     }
+  });
+});
+
+/*
+   The three shapes built for the systems that shipped after this file.
+
+   Each is checked on the one property the generic sweep above cannot see: that
+   the answer moves the thing the shape claims it moves. That is this project's
+   standing failure — a lever exported, wired to a button, and connected to
+   nothing — and it has been caught twice this cycle already.
+*/
+describe('the three late shapes', () => {
+  function raise(state: GameState, id: string) {
+    const def = GEN_DEFS.find((d) => d.id === id)!;
+    const rng = new Rng(state.rng);
+    const ctx = def.applies(state, rng);
+    if (!ctx) return null;
+    const built = def.build(state, rng, ctx);
+    state.pendingEvents.push({ ...built, id: 'evt_test', day: state.day });
+    return built;
+  }
+
+  it('will not tell a nameless boss what the street calls them', () => {
+    const state = world();
+    delete state.player.nickname;
+    const def = GEN_DEFS.find((d) => d.id === 'gen_the_name_stuck')!;
+    expect(def.applies(state, new Rng(state.rng))).toBeNull();
+  });
+
+  /*
+     The one that matters. `he_stays` is read every week by `termRevenueShare`
+     and `termExposure`, so buying the old owner out has to take the entry off
+     the front or the player has paid for a sentence.
+  */
+  it('buying the old owner out actually ends the terms', () => {
+    const state = world();
+    state.org.cash = 500_000;
+    const front = ownedBusinesses(state)[0]!;
+    expect(front.terms, 'the fixture did not set the terms').toContain('he_stays');
+
+    expect(raise(state, 'gen_old_owner'), 'the shape did not fire').not.toBeNull();
+    resolveEvent(state, new Rng(state.rng), 'evt_test', 'buy');
+
+    expect(front.terms ?? [], 'the money bought a line of text').not.toContain('he_stays');
+  });
+
+  it('leaves the terms alone when you only lean on them', () => {
+    const state = world();
+    expect(raise(state, 'gen_old_owner')).not.toBeNull();
+    const front = ownedBusinesses(state)[0]!;
+    resolveEvent(state, new Rng(state.rng), 'evt_test', 'lean');
+    expect(front.terms ?? [], 'frightening somebody bought out their share').toContain('he_stays');
+  });
+
+  it('pays the frightened street money the button named', () => {
+    const state = world();
+    const built = raise(state, 'gen_they_are_frightened');
+    expect(built, 'the shape did not fire against a feared family').not.toBeNull();
+
+    const label = built!.choices.find((c) => c.id === 'take')!.label;
+    const named = Number(label.replace(/[^0-9]/g, ''));
+    expect(named, 'the button does not name a figure').toBeGreaterThan(0);
+
+    const before = state.org.dirtyCash;
+    resolveEvent(state, new Rng(state.rng), 'evt_test', 'take');
+    expect(state.org.dirtyCash - before, 'the envelope was not what it said').toBe(named);
+  });
+
+  it('will not offer a collection to a family nobody is afraid of', () => {
+    const state = world();
+    state.org.fear = 0;
+    const def = GEN_DEFS.find((d) => d.id === 'gen_they_are_frightened')!;
+    expect(def.applies(state, new Rng(state.rng))).toBeNull();
   });
 });
 

@@ -17,6 +17,7 @@ import type { TradeId } from '../config/contraband';
 import type { CyclePhaseId } from '../config/market';
 import type { ApproachId } from '../config/operations';
 import type { HeatChannel } from '../config/heat';
+import type { NationalityId } from '../config/nationalities';
 
 export type Id = string;
 
@@ -61,25 +62,61 @@ export type AttributeId =
 
 export type Attributes = Record<AttributeId, number>;
 
+import type { Build } from '../config/build';
+
 export interface Player {
   name: string;
+  /**
+   * Which community you came up in.
+   *
+   * Optional, with a lazy default, because every save written before the
+   * picker existed has to load — the same idiom the nine other optional
+   * fields on this state use. It changes names and nothing else: there is no
+   * attribute, no bonus, and no rule anywhere that reads this and decides you
+   * are better or worse at something.
+   */
+  nationality?: NationalityId;
   rank: RankId;
+  /**
+   * What the boss is made of, and the points still to place.
+   *
+   * Replaces `attributes`, which improved by use and of whose eight entries
+   * two were read by nothing at all. See `config/build.ts` for the count and
+   * the argument.
+   *
+   * Optional, so a save written before the build screen existed loads as
+   * somebody who put nothing anywhere and still has the pool in hand — the
+   * idiom every other optional field on this state uses, and the reason
+   * `SAVE_VERSION` does not move for this.
+   */
+  build?: Build;
+  points?: number;
+  /** Tiers of work opened so far, so points are paid once each. */
+  tiersSeen?: number;
+  /**
+   * What the street calls you, and when it settled on it.
+   *
+   * Optional like the rest of the build, so a save from before loads as
+   * somebody nobody has a word for yet. `renamed` records that the city has
+   * already changed its mind once — it does not get to keep doing that.
+   */
+  nickname?: { id: string; since: number };
+  renamed?: boolean;
   attributes: Attributes;
   /** Progress toward the next point in each attribute, 0..1. */
   attributeProgress: Attributes;
   opsCompleted: number;
   opsFailed: number;
-  /** Rank the player has been offered but not yet accepted. */
-  pendingRank: RankId | null;
   /**
    * What you chose to look like, if you chose.
    *
-   * Optional on purpose: a save written before the customiser existed loads
-   * with nothing here and falls back to a look derived from the name, exactly
-   * as a crew member's is. That is why SAVE_VERSION does not move for this —
-   * save.ts has no migrations and rejects a mismatched version outright, so an
-   * additive optional field is the only kind that can be added without
-   * invalidating every save anybody has.
+   * Optional on purpose, like `nationality` and `build` above and the nine
+   * other late additions to this state: a save written before the customiser
+   * existed loads with nothing here and falls back to a look derived from the
+   * name, exactly as a crew member's is. save.ts has no migrations and rejects
+   * a mismatched version outright, so an additive optional field is the only
+   * kind that can go in without invalidating every save anybody has, and it is
+   * why SAVE_VERSION does not move for this.
    *
    * Only the half of the look that is you. The clothes come off the rank at
    * render time — see ui/art/playerLook.ts.
@@ -104,6 +141,40 @@ export interface Org {
    * save written before this loads with nothing owed, which is correct.
    */
   wagesOwed?: number;
+  /**
+   * Whoever handles the money, and what they think of you.
+   *
+   * Optional with no initialiser, the same idiom as `partner` below and the
+   * nine other late additions — a save written before this existed loads with
+   * nobody handling it, which for those saves is exactly true and reads as the
+   * stranger's rate that used to be the only rate.
+   *
+   * `LAUNDER_CUT_BASE` is 0.24 and it applied to every dollar any family ever
+   * washed. It is what a stranger charges now; see `config/launderers.ts`.
+   */
+  launderer?: { id: string; since: number } | null;
+  /** What each of them thinks of you, 0..100, keyed by id. */
+  laundererTrust?: Record<string, number>;
+  /**
+   * A rival family that owns a share of everything you earn.
+   *
+   * Optional with no initialiser, like the nine other late additions to this
+   * state — most careers never take the deal and a save written before it
+   * existed has to load. See `config/partner.ts` for why it is equity from a
+   * rival rather than a loan from a stranger.
+   */
+  partner?: {
+    factionId: FactionId;
+    share: number;
+    /** What they put in, which is what the buy-out is priced off. */
+    stake: number;
+    sinceDay: number;
+    /** Everything they have taken since, for the panel to report. */
+    taken: number;
+  };
+  /** Day an offer was last turned down, so they do not ask every morning. */
+  partnerRefusedDay?: number;
+
   /** Laundered, freely spendable. */
   cash: number;
   /**
@@ -156,6 +227,25 @@ export interface Org {
      */
     opsSeen: number;
   };
+  /**
+   * What the seven verbs keep, when they keep anything.
+   *
+   * All optional and all absent on a save written before builds existed, which
+   * is why `SAVE_VERSION` does not move for any of this. A boss with no points
+   * placed has no verbs, so every one of these stays undefined for the whole
+   * of such a career.
+   */
+  /** Districts paying a standing weekly take. Muscle. */
+  card?: string[];
+  /** People placed inside somebody else's house. Instinct. */
+  planted?: { where: string; npcId: Id; since: number }[];
+  /** The day the boss comes back out, having gone in for somebody. Stomach. */
+  insideUntilDay?: number;
+  /** The job being looked at properly this week. Method. */
+  cased?: { defId: string; territoryId: string; readyDay: number } | null;
+  /** The last time everybody was in one room. Grip. */
+  lastMeetingDay?: number;
+
   /** Criminal proceeds. Spendable on criminal work, but carries exposure. */
   dirtyCash: number;
   /**
@@ -232,6 +322,15 @@ export interface Npc {
   secret: string | null;
   /** The truth. Never rendered directly — always go through perceive(). */
   stats: NpcStats;
+  /**
+   * Progress toward the next point of skill, from work.
+   *
+   * Optional with a lazy read in `training.ts`, so a save written before
+   * anybody could get better loads with everybody's progress at zero — which
+   * for those saves is exactly true. Same accumulator shape as
+   * `player.attributeProgress`, against the same rising cost curve.
+   */
+  skillProgress?: number;
   /** 0..100. How well the player knows them; shrinks perception noise. */
   familiarity: number;
   daysInCrew: number;
@@ -289,6 +388,18 @@ export interface Npc {
   isSkimming: boolean;
   skimTotal: number;
   joinedDay: number;
+  /**
+   * The last day anything good happened to him.
+   *
+   * Promoted, handed a district, given a raise, put on a score, taught by
+   * somebody better, or heard out in a room. What `stagnationLoyaltyPerTick`
+   * measures against — see `daysSinceGood`.
+   *
+   * Optional, defaulting to `joinedDay`, so a save written before this loads
+   * with every man's clock running from the day he arrived, which is exactly
+   * what the old code did.
+   */
+  lastGoodDay?: number;
   /**
    * The day he started talking to somebody, if he has.
    *
@@ -387,31 +498,69 @@ export type OperationRisk = 'low' | 'moderate' | 'high' | 'extreme';
  * readable directly above the job it gates.
  */
 export interface OpsBoard {
-  /** `rankIndex` of the player's current rank. */
-  rank: number;
+  /** Districts held at Foothold or better. */
   districtsHeld: number;
+  /**
+   * Districts held at Control or better, which is the slow signal.
+   *
+   * Plotted over 24 careers the median reaches one at day 150, two at 210,
+   * three at 240 and never a fourth — almost exactly the pacing the rank
+   * ladder was trying to produce, and it comes from something the player does
+   * on purpose rather than from a clean-money threshold wearing a title.
+   */
+  districtsControlled: number;
   fronts: number;
   crew: number;
   /** Times each job has been run, keyed by `OperationDef.id`. */
   opsBy: Record<string, number>;
+
+  /*
+     Who you know, which is the second axis a job can open on.
+
+     Rank is a clean-money threshold wearing a title, and F15 has 34 of 36
+     careers held by that line — so a board gated on rank alone stops moving
+     around day 90 and stays stopped. These are the facts a job can ask about
+     instead. Everything here is already kept somewhere else; the board just
+     carries it so `opens.met` stays a pure function of one argument.
+  */
+  /** Favours each civic figure currently owes, keyed by their id. */
+  favoursOwed: Record<string, number>;
+  /** Every favour owed, added up. Reaches 2 by day 90 and 4 by day 120. */
+  owedTotal: number;
+  /** How many different figures owe you anything. Caps at 2 in a 300-day career. */
+  owedFigures: number;
+  /** The best trust any surviving rival family holds toward the player. */
+  bestRivalTrust: number;
 }
 
 export interface OperationDef {
   id: string;
   name: string;
   description: string;
-  /** Lowest rank that can run it. */
-  minRank: RankId;
   /**
-   * A second way in, for a player who has done the work without holding the
-   * rank.
+   * How far up the table this sits, 0 for street work to 5 for the last jobs.
    *
-   * Rank is a clean-money threshold as much as anything, and a probe of
-   * twenty-four careers reached Crew Leader in none of them before the heat
-   * work and eight of them after — which still leaves two thirds of careers
-   * with the whole back half of the content sealed off. `need` is what the
-   * locked row says; `met` is what actually opens it. Absent, a job opens on
-   * rank alone, exactly as before.
+   * This used to be `minRank` and it did two unrelated jobs at once: it priced
+   * the work — heat, influence earned, where it belongs on the return curve —
+   * and it also decided whether the player was allowed to see it. The second
+   * of those is gone; `opens` does it now. What is left is the pricing, which
+   * is a property of the job rather than a statement about the player, so it
+   * is a number on the row instead of a rank the player has to reach.
+   */
+  tier: number;
+  /**
+   * What opens it, and the sentence the locked row shows.
+   *
+   * Absent means always open — the street work a player can do on the first
+   * morning with nobody and nothing. Everything else names ground held, fronts
+   * running, people on the payroll, work already done, or who in the city owes
+   * you. `need` is read inline after "Needs", so it is lower-case and reads as
+   * a phrase: 'two districts and a room of your own'.
+   *
+   * Thresholds are set from plotted arrival curves, not by eye. See
+   * `opGates.test.ts` for the rules a gate has to satisfy — in particular that
+   * it may ask about work already done only when that work is itself worth
+   * doing, which three of the original six gates failed.
    */
   opens?: {
     need: string;
@@ -449,6 +598,116 @@ export interface ActiveOperation {
    * existed do not have one; read it through `approachOf`, never directly.
    */
   approach?: ApproachId;
+  /**
+   * The score this belongs to, if any.
+   *
+   * On a setup it says which score the gear goes into. On the job at the end
+   * of it, it says which score to spend the kit and settle. Optional because
+   * saves written before scores existed do not have one, and because most jobs
+   * are still just jobs.
+   */
+  scoreId?: Id;
+}
+
+/**
+ * A job you are building up to.
+ *
+ * One live score per target, held for a window rather than a stage count: the
+ * thing that makes this a caper instead of a permanent unlock is that it
+ * expires. See `scores.ts` for the machine and `config/scores.ts` for the
+ * table.
+ */
+export interface Score {
+  id: Id;
+  /** The job at the end of it. An existing `OperationDef.id`. */
+  defId: string;
+  territoryId: string;
+  openedDay: number;
+  /** The day the window shuts. Prep is wasted if the job has not run. */
+  dueDay: number;
+  /** Gear in hand for this score, by `GearId`. Spent when it fires. */
+  kit: string[];
+  /** Setups attempted and blown. Each one raised alertness. */
+  botched: string[];
+  /** 0..100, subtracted from the main job's odds. */
+  alertness: number;
+  /** The man watching the place, unavailable until it fires or expires. */
+  manId: Id;
+  /**
+   * `open` while setups can run, `running` once the job itself is out, and
+   * then settled one way or the other. Not in the design note, which described
+   * the lifecycle without naming the field that carries it.
+   */
+  status: 'open' | 'running' | 'done' | 'expired';
+  settledDay?: number;
+}
+
+/**
+ * One man being shown how by another.
+ *
+ * Both are off the board for the run of it. `status` carries the lifecycle the
+ * same way `Score` does — a pairing that loses either man to a cell or a
+ * hospital comes apart with nothing learned.
+ */
+export interface Training {
+  id: Id;
+  teacherId: Id;
+  studentId: Id;
+  startDay: number;
+  /** The day it finishes. Both men are held until then. */
+  endDay: number;
+  status: 'running' | 'done' | 'stopped';
+  settledDay?: number;
+}
+
+/**
+ * A job told to keep running itself.
+ *
+ * Deliberately holds no judgement: a policy for who to send and nothing about
+ * when *not* to go. See `standingOrders.ts` — the order does not read the
+ * room, and that is the cost of handing the decision over.
+ */
+export interface StandingOrder {
+  id: Id;
+  defId: string;
+  territoryId: string;
+  /** Which men it grabs. The same two policies the crew picker offers. */
+  how: 'best' | 'rested';
+  /** How it is done. Absent means the ordinary approach. */
+  approach?: ApproachId;
+  setDay: number;
+  launched: number;
+  /**
+   * How well-read this job in this district has become, 0..100.
+   *
+   * Optional, so an order written before patterns existed loads as a clean
+   * one. Kept on the order rather than on the district because it is a record
+   * of what *you* did there, and because it has to survive the order being
+   * called off — see `patternOn`.
+   */
+  pattern?: number;
+  status: 'standing' | 'stopped';
+  settledDay?: number;
+}
+
+/**
+ * Somebody who got away, and the fact that people are still looking.
+ *
+ * Optional on `GameState`, so a save written before this existed loads with
+ * nobody being looked for and `SAVE_VERSION` does not move.
+ */
+export interface Mark {
+  id: Id;
+  npcId: Id;
+  setDay: number;
+  lastTryDay: number;
+  /** The last time he told somebody something. He is not idle out there. */
+  lastTalkDay: number;
+  tries: number;
+  /** Falls on every miss. Below `MARK.hopelessBelow` he is gone for good. */
+  chance: number;
+  status: 'out' | 'landed' | 'lapsed' | 'called_off';
+  settledDay?: number;
 }
 
 export interface OperationResult {
@@ -541,6 +800,55 @@ export interface Home {
   neglect: number;
 }
 
+/**
+ * One thing the boss owns, as against one thing the organization trades out of.
+ *
+ * The design note is in `config/possessions.ts`. Two fields here are worth a
+ * word.
+ *
+ * `paid` is kept rather than recomputed because prices move: `priced()` runs
+ * every catalogue figure through the market phase, so a car bought in a cheap
+ * year and sold in an expensive one is a different transaction from the one
+ * the player made. The resale line has to be able to say what it cost.
+ *
+ * Sold and seized ones stay on the list rather than being spliced out. A
+ * career is partly a record of what happened to it, the Legacy screen reads
+ * that record, and "the Lincoln, taken in the raid on day 212" is worth more
+ * than a shorter array.
+ */
+export interface Possession {
+  id: Id;
+  defId: string;
+  boughtDay: number;
+  /** What was actually handed over, in that year's money. */
+  paid: number;
+  /**
+   * `lost` is losing it at cards, and it is a separate word from `sold` on
+   * purpose: the Legacy screen reads this record, and "lost at cards on day
+   * 212" is a different sentence about a career from "sold on day 212".
+   */
+  status: 'held' | 'sold' | 'seized' | 'lost';
+  /** Set when it stopped being yours, whichever way that happened. */
+  goneDay?: number;
+}
+
+/**
+ * The standing card game, as a record of how you have been playing it.
+ *
+ * Four numbers and no table state — who is sitting opposite is derived from
+ * the seed and the week by `seatedAt`, never stored, so this holds only the
+ * things that are actually consequences.
+ *
+ * `suspicion` is the whole anti-grind mechanism. See `config/cards.ts`.
+ */
+export interface CardPlay {
+  lastPlayedDay: number;
+  /** 0..100. How closely people are watching your hands. Decays weekly. */
+  suspicion: number;
+  hands: number;
+  won: number;
+}
+
 export interface CivicStanding {
   id: string;
   /** 0..100. Drifts toward what they watch; never set directly. */
@@ -549,6 +857,13 @@ export interface CivicStanding {
   owed: number;
   /** Last day they decided they owed you one, for the interval gate. */
   lastFavourDay: number;
+  /**
+   * Last day somebody did them a favour that counted.
+   *
+   * Optional, so a save written before the cap existed loads and reads as
+   * never helped — which for those saves is true enough.
+   */
+  lastHelpedDay?: number;
 }
 
 export interface Promised {
@@ -568,7 +883,7 @@ export interface Promised {
 export interface EvidenceTrace {
   id: Id;
   day: number;
-  source: 'operation' | 'violence' | 'finance' | 'informant';
+  source: 'operation' | 'violence' | 'finance' | 'informant' | 'disposal';
   /** 0..100 contribution to a future case. Decays once the trail goes cold. */
   strength: number;
   npcIds: Id[];
@@ -965,6 +1280,22 @@ export interface Business {
    * existing front behaves exactly as it did.
    */
   pressure?: PressureId;
+  /**
+   * A piece of somebody else's place, rather than a place of your own.
+   *
+   * Set by the Ledger verb. Optional and absent everywhere else, so a front
+   * the family actually bought behaves exactly as it always has.
+   */
+  stake?: number;
+  /**
+   * What was agreed with the man who sold it.
+   *
+   * Optional, so a front bought before any of this existed — or bought off the
+   * panel without a conversation — carries none and behaves exactly as it did.
+   * See `config/frontDeal.ts`: a term is permanent, which is what makes taking
+   * one a decision rather than a discount.
+   */
+  terms?: string[];
 }
 
 // ------------------------------------------------------------ contraband ---
@@ -980,11 +1311,42 @@ export interface Business {
 export interface Contraband {
   /** Units on hand, by trade. */
   stock: Record<TradeId, number>;
-  /** The product arrangement, or null. Arms are made, not bought. */
+  /** The product arrangement, or null. */
   supplierId: string | null;
   supplierSince: number;
+  /**
+   * The arms arrangement, or null. Optional so saves written while arms were
+   * only ever manufactured still load — see HANDOFF §2.
+   *
+   * Arms are still *made* in a workshop, and that is still the better way to
+   * run the trade. This is the second door, added because the first costs
+   * $120,000 and under one career in ten ever holds that.
+   */
+  armsSupplierId?: string | null;
+  armsSupplierSince?: number;
+  /**
+   * What each arrangement thinks of you, 0..100, keyed by supplier id.
+   *
+   * Optional so saves written while suppliers were a flat dice roll still
+   * load. Belongs to the arrangement rather than to you — dropping a supplier
+   * and coming back starts again, because the thing being rewarded is having
+   * kept them.
+   */
+  supplierTrust?: Record<string, number>;
   /** Machine shops. Capital with an address. */
   workshops: { territoryId: string; since: number }[];
+  /**
+   * Plants. The product trade's own supply, at its own price.
+   *
+   * Optional so saves written while product could only ever be bought still
+   * load — see HANDOFF §2. An absent list reads as "you buy everything from
+   * somebody", which for those saves is exactly true.
+   *
+   * Not a second `workshops`. A workshop produces crates; a plant produces
+   * nothing and only decides what a unit costs and whether the arrangement
+   * behind it can walk. See PLANT in config/contraband.ts.
+   */
+  plants?: { territoryId: string; since: number }[];
   /** Districts each trade is running through. */
   routes: Record<TradeId, string[]>;
   /** What last week did, for the panel. */
@@ -993,6 +1355,65 @@ export interface Contraband {
     { moved: number; earned: number; bought: number; seized: number }
   > | null;
   lifetime: Record<TradeId, number>;
+}
+
+import type { Ledger } from './ledger';
+
+// ---------------------------------------------------------------- orders ---
+
+/**
+ * Somebody else's shopping list.
+ *
+ * `sellArms` already sells crates to a rival family — spot, from stock, at
+ * 1.45x. An order is the other shape of the same transaction and a genuinely
+ * different decision: a named buyer wants *n* units **by a given day**, and
+ * saying yes is a promise rather than a sale.
+ *
+ * What that buys the trade is scheduling. Accepting reserves the units out of
+ * distribution and raises what the weekly buy is aiming at, so a commitment is
+ * paid for in source ceiling and cash before it is paid for in stock — which
+ * is what gives a plant, or a second arrangement, something to be *for* beyond
+ * a better margin.
+ */
+export type OrderStatus = 'offered' | 'accepted' | 'filled' | 'failed' | 'lapsed';
+
+export interface Order {
+  id: Id;
+  /**
+   * Which kind of buyer, and which one.
+   *
+   * `FactionId` is a closed four-member union that doubles as a save-format
+   * slot key, so a street gang cannot be a faction — it has no capos, no
+   * strength, no wealth, no agenda and no weekly turn, and adding one to that
+   * union is a save-format change. So buyers are a lightweight thing of their
+   * own, and `buyerId` is a `FactionId` when the buyer is a family and a
+   * `GangId` when it is not.
+   */
+  buyerKind: 'family' | 'gang';
+  buyerId: string;
+  trade: TradeId;
+  units: number;
+  /** Agreed per unit, fixed the day it was offered. The price does not drift. */
+  unitPrice: number;
+  offeredDay: number;
+  /** The offer goes away on this day if nobody answers it. */
+  lapsesDay: number;
+  /** The day you said yes, or absent while it is only an offer. */
+  acceptedDay?: number;
+  /**
+   * The day it is due.
+   *
+   * Set at the offer as `offeredDay + window` so the panel can state the
+   * window, and re-based to `acceptedDay + window` the moment it is accepted.
+   * An offer stands for ten days and the window is the window whenever you
+   * take it — otherwise sitting on one for nine days would silently turn a
+   * three-week job into a twelve-day one.
+   */
+  dueDay: number;
+  delivered: number;
+  status: OrderStatus;
+  /** The day it stopped being live, for the panel. */
+  settledDay?: number;
 }
 
 // ------------------------------------------------------------ succession ---
@@ -1166,15 +1587,50 @@ export interface SitdownBeat {
  * out of the room and reloading puts you back in it.
  */
 export interface Sitdown {
-  kind: 'crew' | 'rival';
+  kind: 'crew' | 'rival' | 'seller';
+  /**
+   * The front being haggled over, when the man in the room is selling one.
+   *
+   * Optional and absent on every other kind of sit-down, the same idiom
+   * `pattern` and `pressure` use, so `SAVE_VERSION` does not move and a save
+   * written before this loads with nobody selling anything.
+   */
+  deal?: {
+    defId: string;
+    territoryId: string;
+    /** The number on the table now. */
+    ask: number;
+    /** And the catalogue price it is being read against. */
+    listed: number;
+    terms: string[];
+  } | null;
   reasonId: string;
   npcId: Id | null;
   factionId: string | null;
   beats: SitdownBeat[];
   /** Tags learned in this conversation. These are what unlock registers. */
   revealed: string[];
+  /**
+   * A question he has put to you and is waiting on.
+   *
+   * While this is set the table narrows to answers to it — that narrowing is
+   * the whole point, because a question you can ignore is not a question. You
+   * may still stand up with it hanging; leaving it unanswered is rude, not
+   * forbidden.
+   */
+  pending?: string | null;
   familiarityBefore: number;
+  /**
+   * How much longer he will sit there.
+   *
+   * Replaces the fixed exchange count. Spent by every beat, spent harder by a
+   * misread, partly bought back by landing something real. At zero he stands
+   * up on his own, which costs — see `SITDOWN.walkedGrievance`.
+   */
+  patience: number;
   done: boolean;
+  /** True when he ended it rather than you. The expensive way for a room to empty. */
+  walkedOut: boolean;
   /** Set when the room empties. What it was all worth, in a sentence. */
   outcome: string | null;
 }
@@ -1318,6 +1774,24 @@ export interface GameState {
    */
   civic?: CivicStanding[];
   /**
+   * What came in, what went out, and what nothing could explain.
+   *
+   * Optional with a lazy initialiser in `ledger.ts`, the same idiom as
+   * `promises`, `civic` and `orders` — so `SAVE_VERSION` does not move and a
+   * save written before this existed loads with no history, which for those
+   * saves is exactly true. Written to and never read by the simulation.
+   */
+  ledger?: Ledger;
+  /**
+   * What other people have asked you to supply, and by when.
+   *
+   * Optional with a lazy initialiser in `orders.ts`, the same idiom as
+   * `promises` and `civic` — so `SAVE_VERSION` does not move and a save
+   * written before orders existed loads with nobody asking you for anything,
+   * which for those saves is exactly true.
+   */
+  orders?: Order[];
+  /**
    * The half of a boss that is not the business.
    *
    * Optional with a lazy initialiser in `personal.ts`, the same idiom as
@@ -1337,6 +1811,27 @@ export interface GameState {
   whispers?: Whisper[];
 
   /**
+   * The things that are yours rather than the organization's.
+   *
+   * Optional with the same lazy idiom as `promises`, `civic`, `home` and
+   * `whispers` — so `SAVE_VERSION` does not move and a save written before
+   * this existed loads as a boss who owns nothing personally, which for those
+   * saves is exactly true. Not in `validate()`, for the same reason none of
+   * the others are.
+   */
+  possessions?: Possession[];
+
+  /**
+   * How the card game has been going.
+   *
+   * Optional with the same lazy idiom as `promises`, `civic`, `home`,
+   * `whispers` and `possessions` — so `SAVE_VERSION` does not move and a save
+   * written before this existed loads as a boss who has never sat down, which
+   * for those saves is exactly true. Not in `validate()`.
+   */
+  cards?: CardPlay;
+
+  /**
    * What the other side has turned out to know, newest first.
    *
    * Optional for the same reason as `promises`: a save from before this existed
@@ -1344,6 +1839,57 @@ export interface GameState {
    * missing data.
    */
   leaks?: Leak[];
+
+  /**
+   * Jobs you are building up to, and how far along each one is.
+   *
+   * Optional with a lazy initialiser in `scores.ts`, the same idiom as
+   * `promises`, `civic`, `orders` and `possessions` — so `SAVE_VERSION` does
+   * not move and a save written before scores existed loads with nobody
+   * planning anything, which for those saves is exactly true. Not in
+   * `validate()`, for the same reason none of the others are.
+   */
+  scores?: Score[];
+
+  /**
+   * Who is being shown how, by whom, and until when.
+   *
+   * Optional with a lazy initialiser in `training.ts`, the same idiom as
+   * `promises`, `civic`, `orders`, `possessions` and `scores` — so
+   * `SAVE_VERSION` does not move and a save written before anybody could be
+   * taught anything loads with nobody being taught. Not in `validate()`, for
+   * the same reason none of the others are.
+   */
+  training?: Training[];
+
+  /**
+   * Jobs that run themselves until told otherwise.
+   *
+   * Optional with a lazy initialiser in `standingOrders.ts`, the same idiom as
+   * `promises`, `civic`, `orders`, `possessions`, `scores` and `training` — so
+   * `SAVE_VERSION` does not move and a save written before this existed loads
+   * with nothing running itself. Not in `validate()`.
+   *
+   * `standing` rather than `orders`, because `orders` is the contraband
+   * trade's and two things by that name in one save is a bug waiting for
+   * somebody tired.
+   */
+  standing?: StandingOrder[];
+  /**
+   * People who got away, and the fact that somebody is still looking.
+   *
+   * Optional with a lazy initialiser, so a save written before a botched
+   * silencing was possible loads with nobody being looked for.
+   */
+  marks?: Mark[];
+  /**
+   * The operations loop, handed over.
+   *
+   * Optional and absent by default, so a save written before this existed
+   * loads with the crews in the player's hands. See `sim/autopilot.ts` — it
+   * measured as a convenience rather than a strategy, and ships as one.
+   */
+  autopilot?: boolean;
 
   /** Counters and one-off markers. Cheaper than adding a field per flag. */
   flags: Record<string, number>;

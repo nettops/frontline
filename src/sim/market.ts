@@ -13,6 +13,7 @@
  */
 
 import { Rng, clamp } from './rng';
+import { note } from './ledger';
 import type { GameState, Loan } from './types';
 import { addLog, nextId } from './util';
 import { DAYS_PER_YEAR } from '../config/economy';
@@ -319,6 +320,9 @@ export function borrow(
   // money in the game that did not have to be washed, which is most of why
   // borrowing is worth doing at all.
   state.org.cash += principal;
+  // Borrowed, not earned — but it is money arriving, and the book has to see
+  // it or every loan reads as an unexplained windfall.
+  note(state, 'other_in', principal);
   addLog(
     state,
     `${def.name}: $${principal.toLocaleString('en-US')} in hand, $${owed.toLocaleString('en-US')} owed.`,
