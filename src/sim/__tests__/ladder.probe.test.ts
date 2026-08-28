@@ -4608,6 +4608,22 @@ describe('the ladder, over the 300 days a person plays', () => {
        meets more authored situations early, so the authored pool supplies more
        of the late ones too. The shortfall is unchanged in kind — six generated
        shapes against twenty-two authored ones — and so is the bar.
+
+       **Green, at 34%, and the bar never moved.** Three more shapes, for the
+       three systems that shipped after `eventgen.ts` was written: the name the
+       street gave you, the old owner still sitting in a front you bought off
+       somebody, and a street that pays because it is frightened of you. All
+       three are gated on things only a long career has, which is where the
+       supply was thin — every earlier shape fires on a man, a front, a street
+       or a case, all of which an eight-week-old family already owns.
+
+           reading                                     before   after
+           new situations after day 180 (median)          21       21
+           shapes never seen before day 180                6        7
+           the generator's share of them                  31%      34%
+
+       The volume did not move and was never the problem. What moved is where
+       the late situations come from, which is the thing the claim was about.
     */
     expect(lived.length, 'nothing lived long enough to have a back half').toBeGreaterThan(8);
     expect(allLate, 'no late situations at all, so the share below is meaningless').toBeGreaterThan(20);
@@ -6859,8 +6875,28 @@ describe('the month in front of the job', () => {
       last.get('came off the board') ?? 0,
       'the game took the job away from somebody already building up to it',
     ).toBe(0);
+    /*
+       **Read against the windows a player opens, not against the ones that
+       shut.** It was `/ expired`, and that denominator gets the sign wrong:
+       repair the other six causes and this share *rises* while the number of
+       scores the game takes away falls. It also has no resolution — the run
+       that caught this had ten expiries in six hundred and twenty-four
+       windows, so a bar of 5% on a denominator of 10 is a bar of "exactly
+       zero" wearing a percentage, and it had been passing at 0 of N by luck
+       rather than by design.
+
+       Same defect as the witness bar two blocks up, which compared counts
+       while claiming a rate. Both are the denominator, and both were found by
+       something else moving the population rather than by anybody reading the
+       assertion.
+
+       The threshold is unchanged and it is a harder bar against this
+       denominator: the comment above records 33 expiries in 148 windows before
+       `tickScores` stopped the clock, which is 22% and would have failed
+       loudly. It reads 1 in 624 now.
+    */
     expect(
-      (last.get('laying low') ?? 0) / Math.max(1, expired),
+      (last.get('laying low') ?? 0) / Math.max(1, opened),
       'going dark is still killing scores outright',
     ).toBeLessThan(0.05);
   });

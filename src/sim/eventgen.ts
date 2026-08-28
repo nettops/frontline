@@ -23,20 +23,28 @@
 
 import { Rng, clamp } from './rng';
 import type { EventDef } from './events';
-import type { GameState, Npc, PendingEvent } from './types';
+import type { GameState, Npc, PendingEvent, Territory } from './types';
 import { money, oneOf, payable } from './memo';
 import { addLog } from './util';
 import { addNote, crewList } from './npc';
 import { remember } from './memory';
 import { recordTie } from './ties';
-import { spend, totalFunds } from './economy';
+import { earnDirty, spend, totalFunds } from './economy';
 import { addHeat } from './heat';
 import { gainFear, gainRespect, trainAttribute } from './player';
 import { ownedBusinesses, weeklyRevenue } from './business';
-import { addInfluence, adjustSentiment, playerInfluence, territoryDef, territoryList } from './territory';
+import {
+  addInfluence,
+  adjustSentiment,
+  playerInfluence,
+  prosperity,
+  territoryDef,
+  territoryList,
+} from './territory';
 import { activeCases, agencyOf, legalCostAt, retainLawyer } from './investigation';
 import { figure, helpFigure } from './civic';
 import { stewardOf } from './delegation';
+import { nicknameOf } from './nicknames';
 import { priced } from './market';
 import { readWhispers } from './whispers';
 import { goHome, home } from './personal';
@@ -700,6 +708,202 @@ const stewardAsks: EventDef = {
   },
 };
 
+/*
+   What a frightened street puts in an envelope.
+
+   Off `prosperity` rather than a flat figure, so a collection from a rich
+   district is worth taking and one from a poor district is mostly a message.
+   Shared between the shape and its resolution, because the number in the
+   button has to be the number that arrives.
+*/
+function frightenedTake(state: GameState, t: Territory): number {
+  return Math.max(
+    500,
+    Math.round(prosperity(state, t.id) * GEN_WHEN.frightenedTakeShare),
+  );
+}
+
+/**
+ * The name the street gave you, said to your face.
+ *
+ * `nicknames.ts` hands out a byname on a weekly roll and then nothing in the
+ * game ever mentions it again — it sits on the player screen next to the title
+ * and pays a stat point. A name is other people's opinion, so the surface it
+ * belongs on is somebody using it in a room, and whether you let them is the
+ * only question worth asking about it.
+ *
+ * Gated on having one, which means this cannot fire before day 120 at the
+ * earliest and usually much later. That is the point: it is content for the
+ * half of a career where the authored pool has been round twice.
+ */
+const theNameStuck: EventDef = {
+  id: 'gen_the_name_stuck',
+  ...shape('gen_the_name_stuck'),
+  applies(state, rng) {
+    if (!nicknameOf(state)) return null;
+    const crew = active(state);
+    return crew.length ? { npc: rng.pick(crew) } : null;
+  },
+  build(state, rng, ctx) {
+    const npc = ctx.npc!;
+    const name = nicknameOf(state)!.name;
+    return {
+      defId: 'gen_the_name_stuck',
+      title: `They are calling you ${name}`,
+      body: oneOf(rng, [
+        `${npc.name} used it in front of four people and did not look up. ` +
+          `Nobody corrected them. It has stopped being a thing said behind your back ` +
+          `and become a thing said in rooms you are standing in.`,
+        `It came up twice at the table. ${npc.name} said it the second time, ` +
+          `to your face, the way you would use somebody's actual name. ` +
+          `Everybody waited to see what you did about it.`,
+        `A message came in addressed to ${name}. ${npc.name} brought it through ` +
+          `and put it down without a word, which is its own kind of question.`,
+      ]),
+      severity: 'opportunity',
+      npcId: npc.id,
+      data: {},
+      choices: [
+        {
+          id: 'own',
+          label: 'Let it stand',
+          hint: 'People will say it more, and mean it.',
+        },
+        {
+          id: 'refuse',
+          label: 'Put a stop to it',
+          hint: 'They will use your name. They will also remember being told.',
+        },
+      ],
+    };
+  },
+};
+
+/**
+ * The man you bought the front from, who is still in the front.
+ *
+ * `frontDeal.ts` lets a place be closed on "they keep a piece", which is
+ * cheaper up front and leaves somebody in the building with a claim on it. The
+ * terms moved revenue and exposure from the day they shipped and nothing ever
+ * said his name again — a deal with a person in it that becomes a percentage
+ * the following morning is a deal the player forgets making.
+ *
+ * So he comes back, once the place has had time to become his again.
+ */
+const oldOwner: EventDef = {
+  id: 'gen_old_owner',
+  ...shape('gen_old_owner'),
+  applies(state, rng) {
+    const kept = ownedBusinesses(state).filter(
+      (b) =>
+        b.terms?.includes('he_stays') &&
+        state.day - b.purchasedDay < GEN_WHEN.oldOwnerSettlesAfterDays,
+    );
+    return kept.length ? { business: rng.pick(kept) } : null;
+  },
+  build(state, rng, ctx) {
+    const b = ctx.business!;
+    const where = territoryDef(b.territoryId).name;
+    const weekly = weeklyRevenue(state, b);
+    const buyout = Math.max(3_000, Math.round(weekly * GEN_EFFECT.oldOwnerBuyoutWeeks));
+    return {
+      defId: 'gen_old_owner',
+      title: `The old owner in ${where}`,
+      body: oneOf(rng, [
+        `They still have a key and still call it theirs. The staff go to them first ` +
+          `and to your manager second, and the piece they kept is starting to look, ` +
+          `from where they are standing, like the part that matters.`,
+        `They have been telling people in ${where} that what they sold was the ` +
+          `paperwork and not the place. It is the kind of thing that is funny ` +
+          `until somebody official writes it down.`,
+        `A word from ${where}: the one you left in there has been taking meetings ` +
+          `in the back that nobody told you about. Nothing you could point at. ` +
+          `Everything you would recognise.`,
+      ]),
+      severity: 'warning',
+      npcId: null,
+      data: { businessId: b.id },
+      choices: [
+        {
+          id: 'buy',
+          label: 'Buy the rest of it off them',
+          ...payable(state, priced(state, buyout), 'and the place is only yours'),
+        },
+        {
+          id: 'lean',
+          label: 'Remind them what they signed',
+          hint: 'They will stop. The place will feel it.',
+        },
+        {
+          id: 'leave',
+          label: 'Let them keep the corner',
+          hint: 'Cheapest today. They are still there tomorrow.',
+        },
+      ],
+    };
+  },
+};
+
+/**
+ * A street that pays because it is frightened, which is not the same as a
+ * street that pays.
+ *
+ * Fear was reworked this cycle into something a career can actually reach, and
+ * every consequence of it is a multiplier somewhere — recruit costs, witness
+ * odds, defection. None of it is ever *said*, so a boss at fear 80 and a boss
+ * at fear 20 read the same log. This is the one place the game tells you what
+ * being frightening looks like from the other side, and it makes you decide
+ * whether you want it.
+ */
+const theyAreFrightened: EventDef = {
+  id: 'gen_they_are_frightened',
+  ...shape('gen_they_are_frightened'),
+  applies(state, rng) {
+    if (state.org.fear < GEN_WHEN.frightenedFear) return null;
+    const sour = territoryList(state).filter(
+      (t) =>
+        t.influence.player >= GEN_WHEN.districtInfluence &&
+        t.sentiment <= GEN_WHEN.frightenedSentimentUnder,
+    );
+    return sour.length ? { territory: rng.pick(sour) } : null;
+  },
+  build(state, rng, ctx) {
+    const t = ctx.territory!;
+    const where = territoryDef(t.id).name;
+    const take = frightenedTake(state, t);
+    return {
+      defId: 'gen_they_are_frightened',
+      title: `${where} has taken a collection`,
+      body: oneOf(rng, [
+        `Nobody asked them to. Somebody in ${where} went round the shops with an ` +
+          `envelope and it came back full, and whoever brought it would not ` +
+          `look at anybody while they were holding it.`,
+        `An envelope arrived from ${where} with no name on it and no message. ` +
+          `The street decided on its own what the rate was. Nobody wants to be ` +
+          `the one who did not put in.`,
+        `They have started paying before anybody comes. A shopkeeper in ${where} ` +
+          `asked one of yours whether it was enough, and one of yours had no ` +
+          `idea what they were being asked about.`,
+      ]),
+      severity: 'opportunity',
+      npcId: null,
+      data: { territoryId: t.id },
+      choices: [
+        {
+          id: 'take',
+          label: `Take it — ${money(take)}`,
+          hint: 'It spends. They will remember why they gave it.',
+        },
+        {
+          id: 'refuse',
+          label: 'Send it back',
+          hint: 'Costs you the money and buys something the money cannot.',
+        },
+      ],
+    };
+  },
+};
+
 export const GEN_DEFS: EventDef[] = [
   wantsAWord,
   badBlood,
@@ -712,6 +916,9 @@ export const GEN_DEFS: EventDef[] = [
   nameCameUp,
   askedForYou,
   stewardAsks,
+  theNameStuck,
+  oldOwner,
+  theyAreFrightened,
 ];
 
 // ------------------------------------------------------------- resolution ---
@@ -944,6 +1151,90 @@ export function resolveGenerated(
 
     case 'gen_asked_for_you': {
       if (choiceId === 'go') goHome(state);
+      return;
+    }
+
+    case 'gen_the_name_stuck': {
+      if (choiceId === 'own') {
+        gainFear(state, GEN_EFFECT.nameOwnedFear);
+        gainRespect(state, GEN_EFFECT.nameOwnedRespect);
+        addLog(state, `Nobody is going to stop saying it now.`, 'neutral');
+        return;
+      }
+      /*
+         Refusing a name costs standing, and it costs it with the man who used
+         it. Both, because the name is other people's opinion and telling them
+         to stop having it is a thing they notice.
+      */
+      gainRespect(state, GEN_EFFECT.nameRefusedRespect);
+      if (npc) {
+        npc.stats.loyalty = clamp(npc.stats.loyalty + GEN_EFFECT.nameRefusedLoyalty, 0, 100);
+        addNote(npc, state.day, 'Was told what not to call you.', 'bad');
+        addLog(state, `${npc.name} will use your name. So will everybody else, now.`, 'crew');
+      }
+      return;
+    }
+
+    case 'gen_old_owner': {
+      const b = ownedBusinesses(state).find((x) => x.id === String(event.data.businessId ?? ''));
+      if (!b) return;
+      const where = territoryDef(b.territoryId).name;
+      if (choiceId === 'buy') {
+        const cost = priced(
+          state,
+          Math.max(3_000, Math.round(weeklyRevenue(state, b) * GEN_EFFECT.oldOwnerBuyoutWeeks)),
+        );
+        if (!spend(state, cost, 'world')) {
+          addLog(state, `The money was not there, so the corner in ${where} stays theirs.`, 'failure');
+          return;
+        }
+        /*
+           The terms come off, which is the whole point of paying.
+
+           `termRevenueShare` and `termExposure` read this array every week, so
+           removing the entry is not cosmetic — it is the eighteen percent of
+           revenue and the exposure the deal was costing, bought back.
+        */
+        b.terms = (b.terms ?? []).filter((t) => t !== 'he_stays');
+        b.health = clamp(b.health + GEN_EFFECT.oldOwnerBoughtHealth, 0, 100);
+        b.exposure = clamp(b.exposure + GEN_EFFECT.oldOwnerBoughtExposure, 0, 100);
+        addLog(state, `${where} is yours outright. They took the money and the door.`, 'money');
+        return;
+      }
+      if (choiceId === 'lean') {
+        /*
+           He stops, and the place suffers for it. The terms stay — you did not
+           buy him out, you frightened him, and a frightened manager is worse
+           at managing.
+        */
+        b.health = clamp(b.health + GEN_EFFECT.oldOwnerLeanedHealth, 0, 100);
+        gainFear(state, GEN_EFFECT.oldOwnerLeanedFear);
+        addLog(state, `They were reminded. ${where} has been quiet since, in every sense.`, 'neutral');
+        return;
+      }
+      b.exposure = clamp(b.exposure + GEN_EFFECT.oldOwnerLeftExposure, 0, 100);
+      addLog(state, `The corner in ${where} stays theirs, and so do the opinions.`, 'neutral');
+      return;
+    }
+
+    case 'gen_they_are_frightened': {
+      const t = state.territories[String(event.data.territoryId ?? '')];
+      if (!t) return;
+      const where = territoryDef(t.id).name;
+      if (choiceId === 'take') {
+        /*
+           Dirty rather than clean. Nobody wrote a receipt for an envelope, and
+           routing it through the wash is the same decision every other take in
+           this game makes the player face.
+        */
+        earnDirty(state, frightenedTake(state, t), 'other_in');
+        adjustSentiment(state, t.id, GEN_EFFECT.frightenedTakenSentiment);
+        addLog(state, `${where} paid without being asked, and knows it.`, 'money');
+        return;
+      }
+      adjustSentiment(state, t.id, GEN_EFFECT.frightenedRefusedSentiment);
+      gainFear(state, GEN_EFFECT.frightenedRefusedFear);
+      addLog(state, `The envelope went back to ${where} unopened. That will be talked about.`, 'neutral');
       return;
     }
 

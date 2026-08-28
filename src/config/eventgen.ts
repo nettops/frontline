@@ -135,6 +135,23 @@ export const GEN_SHAPES: GenShapeDef[] = [
      month's cooldown it is 3.3.
   */
   { id: 'gen_asked_for_you', subject: 'home', weight: 2, cooldownDays: 30 },
+  /*
+     Three shapes for the three systems built after this file was written.
+
+     The generated pool thins exactly where the authored one does — late, once
+     both have been round twice — and every shape above fires on something an
+     early family already has. A name the street gave you, a front bought off
+     somebody who is still in it, and a street that pays because it is
+     frightened are all things that only exist after a career has been running,
+     which is the half of the game that goes quiet.
+
+     None of them is a new mechanic. The name moves respect and fear, the old
+     owner moves a front's health and exposure, and the frightened street moves
+     sentiment and dirty money — all numbers systems already own.
+  */
+  { id: 'gen_the_name_stuck', subject: 'crew', weight: 4, cooldownDays: 45 },
+  { id: 'gen_old_owner', subject: 'business', weight: 5, cooldownDays: 20 },
+  { id: 'gen_they_are_frightened', subject: 'district', weight: 4, cooldownDays: 16 },
 ];
 
 /**
@@ -227,6 +244,28 @@ export const GEN_WHEN = {
    * permanently eligible is not an event, it is a subscription.
    */
   neglect: 45,
+  /**
+   * How feared you have to be before a street pays without being asked.
+   *
+   * Above `FEAR.witnessBonusFrom`, so the shape belongs to a family that has
+   * genuinely spent something on being frightening rather than one that had a
+   * bad month. Measured this cycle: a career that never runs a loud job peaks
+   * around fear 29, and one that runs them peaks at 84.
+   */
+  frightenedFear: 45,
+  /** ...and how sour the street has to be for the money to be the whole reason. */
+  frightenedSentimentUnder: 45,
+  /** How long an old owner stays in a front before he stops being news. */
+  oldOwnerSettlesAfterDays: 240,
+  /**
+   * What a frightened street puts in the envelope, as a share of its
+   * prosperity.
+   *
+   * Sized against the district weekly the holdings system pays — 420 to 950 —
+   * so a collection is a good week rather than a windfall. Money that large
+   * would make being frightening the whole game.
+   */
+  frightenedTakeShare: 0.04,
 } as const;
 
 /**
@@ -297,6 +336,29 @@ export const GEN_EFFECT = {
   refusedLoyalty: -6,
   refusedGrievance: 8,
   refusedFear: 2,
+  /*
+     The three shapes added after the build, and what their answers move.
+
+     All inside the range above, for the same reason it was chosen: a generated
+     memo must not outweigh a written one.
+  */
+  /** Letting a name be used to your face, and what it does either way. */
+  nameOwnedFear: 3,
+  nameOwnedRespect: 4,
+  nameRefusedRespect: -3,
+  nameRefusedLoyalty: -4,
+  /** Buying an old owner out, as a multiple of what the front makes in a week. */
+  oldOwnerBuyoutWeeks: 9,
+  oldOwnerBoughtHealth: 10,
+  oldOwnerBoughtExposure: -8,
+  /** ...and leaving him in it, which is cheaper and louder. */
+  oldOwnerLeftExposure: 6,
+  oldOwnerLeanedHealth: -12,
+  oldOwnerLeanedFear: 3,
+  /** What taking a frightened street's money costs, and refusing it buys. */
+  frightenedTakenSentiment: -6,
+  frightenedRefusedSentiment: 5,
+  frightenedRefusedFear: -2,
 
   /** Taking a side in somebody else's argument. */
   backedTrust: 12,

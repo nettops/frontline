@@ -7,7 +7,7 @@
 
 import { Rng, clamp } from './rng';
 import type { GameState, Npc, RoleId } from './types';
-import { addEvidence, addLog, withArticle } from './util';
+import { addEvidence, addLog, say, withArticle } from './util';
 import {
   addNote,
   somethingGood,
@@ -70,10 +70,37 @@ export function refreshRecruits(state: GameState, rng: Rng, force = false): void
      men, and found both gone and four strangers in their place with no
      indication the list had ever been perishable.
   */
+  /*
+     ...and say it differently each time, with somebody in it.
+
+     One sentence, every RECRUIT_REFRESH_DAYS, for four years. `scorecard.probe`
+     measured it at 4% of everything a player reads across 48 careers — the
+     loudest whole line in the game, ahead of every job outcome and every
+     payday.
+
+     The variants name a face off the new list, which is the thing the line is
+     for: the point is not that a list refreshed, it is that there are people
+     on it and they will not be there next week either.
+  */
   if (had > 0) {
+    const fresh = Object.values(state.recruits);
+    const face = fresh.length ? fresh[0] : null;
     addLog(
       state,
-      'The people asking around are not the same people as last week.',
+      say(
+        `recruits_${state.day}`,
+        state.day,
+        [
+          'The people asking around are not the same people as last week.',
+          'The list turned over. None of last week is on it.',
+          'Word went round that you were hiring. Different word, different people.',
+          face ? `${face.name} has been asking after you. So have ${fresh.length - 1} others.` : null,
+          face
+            ? `${face.name} is new on the list, and the ones you were looking at are not.`
+            : null,
+          face ? `Somebody sent ${face.name} your way. The old names have moved on.` : null,
+        ].filter((x): x is string => x !== null),
+      ),
       'crew',
     );
   }

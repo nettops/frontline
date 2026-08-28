@@ -462,6 +462,23 @@ export default function BusinessesPanel() {
                Round 12 sat in front of this table and did not own a front for
                two hundred days. The information was in the build the whole time.
             */}
+            {/*
+               And the same repair F14 got on the crew sheet: the door says
+               what is behind it.
+
+               Round 13 read four sit-down buttons for 299 days as "buttons that
+               would produce a line of text", found the scene on day 300, and
+               called it probably the best system in the game. This button says
+               "Go and see", which is the same shape of promise and the same
+               risk of reading as a purchase with a longer word on it. The
+               price in the column is the asking price, and saying so is what
+               makes the room worth walking into.
+            */}
+            <p className="faint" style={{ fontSize: 11.5, margin: '0 18px 10px' }}>
+              The price shown is what they are asking, not what you will pay. Going to see
+              somebody opens a conversation — how you handle it decides the number, and what
+              you agree to besides the number.
+            </p>
             {!options.some((o) => o.check.ok) && (
               <p className="hot" style={{ margin: '0 14px 10px' }}>
                 {/* The one you are closest to being able to buy, for the same

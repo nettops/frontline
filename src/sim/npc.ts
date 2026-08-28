@@ -14,7 +14,7 @@ import type {
   NpcStats,
   RoleId,
 } from './types';
-import { addEvidence, addLog, nextId, pushEvent } from './util';
+import { addEvidence, addLog, nextId, pushEvent, say } from './util';
 import { applyGoalDrift, goalBoard, goalEffect, reviewGoal } from './goals';
 import { decayTies, followDeparture, tieDrift } from './ties';
 import {
@@ -43,7 +43,7 @@ import {
   type NationalityDef,
 } from '../config/nationalities';
 import { GOAL_BY_ID, GOAL_CERTAIN_ABOVE, GOAL_VISIBLE_ABOVE } from '../config/goals';
-import { DAYS_PER_YEAR, FEAR, ROLE_WAGE } from '../config/economy';
+import { DAYS_PER_YEAR, FEAR, ROLE_LABEL, ROLE_WAGE } from '../config/economy';
 import { WORLD } from '../config/build';
 import { worldPull } from './build';
 import { priced, prices } from './market';
@@ -430,7 +430,25 @@ export function tickNpcs(state: GameState): void {
         addLog(state, `${npc.name} has recovered and is available again.`, 'crew');
       } else if (was === 'arrested') {
         addNote(npc, state.day, 'Released. Did not say what they told them.', 'neutral');
-        addLog(state, `${npc.name} is out. Nobody has asked what they said.`, 'crew');
+        /*
+           Variants, because this is one of the eight lines that carried the
+           game's voice. `scorecard.probe` measured it at 2.1% of everything a
+           player reads across 48 careers.
+
+           What varies is what the family knows, which is the thing the line
+           is actually about — a man comes back and nobody wants to be the one
+           who asks.
+        */
+        addLog(
+          state,
+          say(`out_${npc.id}`, state.day, [
+            `${npc.name} is out. Nobody has asked what they said.`,
+            `${npc.name} is back on the street. Nobody has brought it up.`,
+            `They let ${npc.name} go. Nobody wants to be the one who asks why.`,
+            `${npc.name} walked out this morning and went straight home.`,
+          ]),
+          'crew',
+        );
       }
     }
   }
@@ -620,9 +638,29 @@ export function driftNpcs(state: GameState, rng: Rng): void {
       npc.status = 'defected';
       npc.unavailableUntilDay = null;
       addNote(npc, state.day, 'Left the organization.', 'bad');
+      /*
+         The same repair. Measured at 2.8% of everything read, and it is a
+         sentence a player meets dozens of times in a career.
+
+         The variants take what the man was carrying out of the state — how
+         long he was here, what he did — so a soldier of three weeks and a capo
+         of three years do not leave in identical words.
+      */
       addLog(
         state,
-        `${npc.name} is gone. No message, no meeting, and they knew a great deal.`,
+        say(
+          `gone_${npc.id}`,
+          state.day,
+          [
+            `${npc.name} is gone. No message, no meeting, and they knew a great deal.`,
+            `${npc.name} did not come in. ${npc.name} is not coming in.`,
+            `Somebody saw ${npc.name} on a train platform with a case.`,
+            npc.daysInCrew > 365
+              ? `${npc.name} is gone, after ${Math.floor(npc.daysInCrew / 365)} years of it, without a word.`
+              : `${npc.name} is gone. ${npc.daysInCrew} days, and not one of them explained.`,
+            `${ROLE_LABEL[npc.role]}, and now an empty chair. ${npc.name} has left.`,
+          ],
+        ),
         'crew',
       );
 

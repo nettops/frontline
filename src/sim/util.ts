@@ -1,8 +1,9 @@
 /**
- * Small shared helpers. Imports types only, so every system can use it
- * without creating an import cycle.
+ * Small shared helpers. Imports types only — and `Rng`, which imports nothing
+ * at all — so every system can use it without creating an import cycle.
  */
 
+import { Rng } from './rng';
 import type {
   EvidenceTrace,
   GameState,
@@ -34,6 +35,32 @@ export function addEvidence(
 
 /** Newest entries first. Trimmed so a long game does not grow unbounded. */
 const LOG_LIMIT = 400;
+
+/**
+ * One of several ways of saying the same thing, chosen without rolling a die.
+ *
+ * **Use this and not `rng.pick` for prose.** Determinism here is not the
+ * problem — `rng.pick` is perfectly deterministic. The problem is that it
+ * *advances the stream*, so a sentence gaining four variants moves every later
+ * job outcome, defection check and heat event in the game by one call. The
+ * first version of the voice repair did exactly that and `scorecard.probe`
+ * watched Difficulty fall from 5.8 to 3.8 — careers ending early went from 56%
+ * to 67% — because of a change that only touched words.
+ *
+ * That is the second time in one session. The nickname roll drew from
+ * `state.rng` for the same reason and it took four full `ladder.probe` runs to
+ * find, because a text change is the last place anybody looks for a balance
+ * regression.
+ *
+ * `Rng.stableNoise` is the documented way to get a number without touching the
+ * stream. The key should name the thing being described and the day, so a
+ * replay reads identically and two events on one morning do not pick the same
+ * line.
+ */
+export function say(key: string, day: number, lines: string[]): string {
+  if (lines.length === 0) return '';
+  return lines[Math.floor(Rng.stableNoise(key, day) * lines.length) % lines.length];
+}
 
 export function addLog(state: GameState, text: string, kind: LogKind = 'neutral'): void {
   const entry: LogEntry = { day: state.day, text, kind };
