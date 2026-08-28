@@ -969,7 +969,15 @@ export const APPROACHES: ApproachDef[] = [
     payout: 1.3,
     heat: 1.8,
     respect: 1.4,
-    fear: 2,
+    /*
+       Was 2, against a failure cost of 3 charged on every job.
+
+       That put the break-even success rate at 60% while the work runs at 52%
+       heavy and 58% straight, so being loud drained fear for every career in
+       the game. See the note on `FEAR.onFailure`, which carries the
+       measurement. At 3 against 2 the line falls to 40%.
+    */
+    fear: 3,
     sentiment: -3,
   },
 ];

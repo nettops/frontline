@@ -3,7 +3,6 @@ import { useState } from 'react';
 import { useGame, mutate } from '../../store';
 import { Panel, Empty, KeyValue, Bar } from '../components';
 import {
-  acquireBusiness,
   acquisitionOptions,
   businessDef,
   healthPressure,
@@ -27,6 +26,7 @@ import {
 } from '../../sim/launderers';
 import { LAUNDER_CUT_BASE } from '../../config/businesses';
 import { territoryDef } from '../../sim/territory';
+import { openDeal } from '../../sim/frontDeal';
 import { formatMoney, formatShortDay, formatPercent } from '../../sim/util';
 import { HEALTH, EXPOSURE_ALARMING_ABOVE, SHUTTER_REFUND_SHARE } from '../../config/businesses';
 import { priced } from '../../sim/market';
@@ -500,15 +500,23 @@ export default function BusinessesPanel() {
                     <td className="num mono">{formatMoney(def.launderCapacity)}</td>
                     <td className="num mono">{def.legitimacy}</td>
                     <td>
+                      {/*
+                           You go and see them, rather than pressing Buy.
+
+                           The button used to call `acquireBusiness` directly,
+                           which is what made this a shop: a price, a button,
+                           and nobody on the other side of it. The price it
+                           quotes is now what the place is worth on the open
+                           market, and what you actually pay is whatever the
+                           two of you get to.
+                        */}
                       <button
                         className="btn small"
                         disabled={!check.ok}
-                        title={check.reason ?? 'Buy it'}
-                        onClick={() =>
-                          mutate((s) => acquireBusiness(s, def.id, territory.id), true)
-                        }
+                        title={check.reason ?? 'Go and talk to whoever owns it'}
+                        onClick={() => mutate((s) => openDeal(s, def.id, territory.id), true)}
                       >
-                        Buy
+                        Go and see
                       </button>
                     </td>
                   </tr>

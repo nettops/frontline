@@ -47,7 +47,7 @@ import {
 } from '../cards';
 import { figure } from '../civic';
 import { postMortem } from '../legacy';
-import { heldPossessions, possessions, buyPossession } from '../possessions';
+import { heldPossessions, possessions, grantPossession } from '../possessions';
 import { CARDS, NOBODIES, TABLES, TABLE_BY_ID } from '../../config/cards';
 import { CIVIC, CIVIC_FIGURES } from '../../config/civic';
 import type { GameState } from '../types';
@@ -254,7 +254,7 @@ describe('sitting down at all', () => {
 describe('a boss with nothing but a watch', () => {
   it('can put it up instead of money', () => {
     const state = game();
-    expect(buyPossession(state, new Rng(state.rng), 'necklace').ok).toBe(true);
+    expect(grantPossession(state, new Rng(state.rng), 'necklace')).toBeTruthy();
     state.org.cash = 0;
     state.org.dirtyCash = 0;
     nextWeek(state);
@@ -265,7 +265,7 @@ describe('a boss with nothing but a watch', () => {
 
   it('will not be let stake a watch against the top table', () => {
     const state = game();
-    expect(buyPossession(state, new Rng(state.rng), 'watch').ok).toBe(true);
+    expect(grantPossession(state, new Rng(state.rng), 'watch')).toBeTruthy();
     const no = canSit(state, 'upstairs', 'watch');
     expect(no.ok).toBe(false);
     expect(no.reason).toMatch(/\$/);
@@ -273,7 +273,7 @@ describe('a boss with nothing but a watch', () => {
 
   it('loses it, and the record says how', () => {
     const state = game();
-    expect(buyPossession(state, new Rng(state.rng), 'necklace').ok).toBe(true);
+    expect(grantPossession(state, new Rng(state.rng), 'necklace')).toBeTruthy();
     state.org.cash = 0;
     state.org.dirtyCash = 0;
     nextWeek(state);

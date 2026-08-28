@@ -20,8 +20,26 @@ import type { AttributeId, Attributes, RankId, RoleId } from '../sim/types';
  * with the neighbourhood, and with anybody who had a choice.
  */
 export const FEAR = {
-  /** Fear bleeds off if you stop reminding people. Faster than standing does. */
-  decayPerWeek: 1.4,
+  /**
+   * Fear bleeds off if you stop reminding people, as a share of what is there.
+   *
+   * **Was 1.4 a week, flat, and flat was the defect.** A constant drain has no
+   * settling point: any sustained positive income climbs to the ceiling and
+   * any deficit falls to zero, so the level a family lives at is decided by
+   * the sign of a subtraction rather than by how hard it is working. A share
+   * settles where the weekly income matches it, which is what makes "how
+   * frightening are you" a readable consequence of how you play.
+   *
+   * The same repair `config/heat.ts` made for heat decay, and the note there
+   * about why a flat rate is wrong applies here word for word.
+   *
+   *     settled level = weekly income / decayShare
+   *
+   * At 0.08 a family running every job loud settles near 75, and one picking
+   * its moments settles near 8. That gap is the design: being feared is a way
+   * of running a family, not a garnish.
+   */
+  decayShare: 0.08,
   /** Ceiling, on the same scale as heat. */
   max: 100,
 
@@ -29,8 +47,34 @@ export const FEAR = {
   fromViolence: 6,
   fromWarClash: 4,
   fromIntimidation: 4,
-  /** What a public failure costs. Being feared is a claim; failing tests it. */
-  onFailure: -3,
+  /**
+   * What a public failure costs. Being feared is a claim; failing tests it.
+   *
+   * **Was -3 and charged on every failed job, and both halves were wrong.**
+   *
+   * Measured, the first time this project ever looked: fear is granted +2 only
+   * when a *loud* job succeeds and taken away 3 whenever *any* job fails, so
+   * the break-even success rate was
+   *
+   *     loss / (gain + loss) = 3 / (2 + 3) = 60%
+   *
+   * and the work actually runs at **52% heavy, 58% straight**. Every career in
+   * this game was below the line. Fear did not accumulate slowly; it drained,
+   * always, for everybody, which is why 36 careers of 36 peaked at 11 and
+   * ended at 2 and why an arm that ran every job heavy for 300 days still only
+   * reached 34 of 100.
+   *
+   * Worse, the asymmetry made selective use impossible in principle: the gain
+   * counted loud jobs and the loss counted all of them, so a family running
+   * one loud job a week paid the penalty on the nine quiet failures beside it.
+   *
+   * So: -2, and only on jobs actually run loud. Break-even falls to
+   * 2 / (3 + 2) = 40%, comfortably under where the work runs. The idea in the
+   * sentence above is kept and is the reason this is not simply deleted — a
+   * loud job that goes wrong in front of everybody really is the claim being
+   * tested. A quiet burglary going wrong is not.
+   */
+  onFailure: -2,
 
   /** Fear suppresses defection: multiplier on the weekly chance, at maximum. */
   defectionAtMax: 0.45,

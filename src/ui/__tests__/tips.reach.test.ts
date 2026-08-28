@@ -30,7 +30,7 @@ import { operableTerritories, playerInfluence } from '../../sim/territory';
 import { availableCrew } from '../../sim/npc';
 import { TIPS } from '../tips';
 import { Rng } from '../../sim/rng';
-import { buyPossession } from '../../sim/possessions';
+import { grantPossession } from '../../sim/possessions';
 import { acquireBusiness, canAcquire } from '../../sim/business';
 import { BUSINESSES } from '../../config/businesses';
 
@@ -39,7 +39,7 @@ const ORDINARY = [
   'first_job', 'it_saves', 'reading_people', 'wages', 'dirty_money', 'heat',
   'case_open', 'ground', 'sitdown', 'grievance', 'delegate',
   'leaks', 'rivals', 'war', 'heir', 'trade', 'why',
-  'something_of_your_own', 'the_game',
+  'the_game',
 ];
 
 /** Reachable, but only by doing something this bot never does. */
@@ -61,6 +61,18 @@ const NEEDS_AN_ACTION: Record<string, string> = {
      owns nothing.
   */
   borrow_a_front: 'a front you cannot afford, which this bot never has',
+  /*
+     Moved out of ORDINARY when the possessions shop was deleted, and the
+     reason is a real one rather than a convenience.
+
+     A thing arrives when a job comes home worth `POSSESSION.fromTakeShare` of
+     the cheapest thing in the catalogue — a five-figure night. This bot runs
+     the opening tier of work and never earns one, so the tip is unreachable
+     here for the same reason `borrow_a_front` is: the harness is not playing
+     the part of the game the tip is about. Reachability on careers that do is
+     measured in `ladder.probe`, not here.
+  */
+  something_of_your_own: 'a job big enough to come home with something',
 };
 
 describe('the advice', () => {
@@ -159,25 +171,26 @@ describe('the advice', () => {
      the tip fires either way. A gate nothing exercises is a gate that will be
      deleted by accident.
   */
-  it('offers the catalogue only to a boss who could actually buy something', () => {
+  it('explains what a thing is only when there is one, or one is coming', () => {
     const s = newGame({ name: 'Skint', difficulty: 'normal', mode: 'career', seed: 4 });
     const tip = TIPS.find((t) => t.id === 'something_of_your_own')!;
     expect(tip, 'the tip is gone').toBeDefined();
 
-    // Nothing clean, so nothing to say.
-    s.org.cash = 100;
-    s.org.dirtyCash = 500_000;
+    /*
+       The gate used to be affordability, and the tip used to say "Yourself has
+       a catalogue now". There is no catalogue: 0 of 36 ordinary careers ever
+       bought from it, and the shop is gone. Money is no longer the question,
+       so pointing a rich boss at a shop is not the thing to check.
+    */
+    s.org.cash = 500_000;
     expect(
       tip.when(s),
-      'a boss with nothing clean and a suitcase of dirty is being pointed at a shop',
+      'a boss with money and no score open is being told about a shop that does not exist',
     ).toBe(false);
 
-    s.org.cash = 50_000;
-    expect(tip.when(s)).toBe(true);
-
-    // And it stops once the point has been taken.
-    buyPossession(s, new Rng(s.rng), 'watch');
-    expect(tip.when(s), 'the tip keeps nagging after the boss has bought something').toBe(false);
+    // It arrives with the thing, or with the job that will bring one home.
+    grantPossession(s, new Rng(s.rng), 'watch');
+    expect(tip.when(s), 'the boss owns something and was never told what it is').toBe(true);
   });
 
   it('accounts for every tip in the list', () => {

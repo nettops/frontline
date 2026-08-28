@@ -20,6 +20,10 @@
  */
 
 import { Rng, clamp } from './rng';
+import { SELLER_REGISTERS, SELLER_REGISTER_BY_ID } from '../config/frontDeal';
+import { dealBeat, sellerStats } from './frontDeal';
+import { BUSINESS_BY_ID } from '../config/businesses';
+import { territoryDef } from './territory';
 import type { FactionId } from '../config/factions';
 import type { GameState, Npc, NpcStatId, NpcStats, Sitdown } from './types';
 import {
@@ -159,6 +163,8 @@ export function houseRead(state: GameState, factionId: FactionId): HouseRead[] {
 function statsOf(state: GameState, sit: Sitdown): NpcStats | null {
   if (sit.npcId) return state.npcs[sit.npcId]?.stats ?? null;
   if (sit.factionId) return houseStats(state, sit.factionId as FactionId);
+  // And the man selling you a shop, worked out from the district he is in.
+  if (sit.deal) return sellerStats(state, sit.deal.defId, sit.deal.territoryId);
   return null;
 }
 
@@ -232,7 +238,11 @@ export function sitdownOptions(state: GameState): Option[] {
   */
   const pool = sit.pending
     ? ANSWER_REGISTERS.filter((r) => r.answers === sit.pending)
-    : (sit.kind === 'crew' ? CREW_REGISTERS : RIVAL_REGISTERS);
+    : sit.kind === 'crew'
+      ? CREW_REGISTERS
+      : sit.kind === 'seller'
+        ? SELLER_REGISTERS
+        : RIVAL_REGISTERS;
 
   return pool
     .filter((r) => !used.has(r.id) && (!r.needs || sit.revealed.includes(r.needs)))
@@ -286,7 +296,7 @@ export function chooseRegister(state: GameState, _rng: Rng, registerId: string):
   const sit = state.sitdown;
   if (!sit || sit.done) return { ok: false, message: 'Nobody is in the room.' };
 
-  const reg = REGISTER_BY_ID[registerId];
+  const reg = REGISTER_BY_ID[registerId] ?? SELLER_REGISTER_BY_ID[registerId];
   if (!reg) return { ok: false, message: 'Not something you can say.' };
   if (!availableRegisters(state).some((r) => r.id === registerId)) {
     return { ok: false, message: 'Not on the table.' };
@@ -339,6 +349,15 @@ export function chooseRegister(state: GameState, _rng: Rng, registerId: string):
       man.stats[reg.calms] = clamp(man.stats[reg.calms] - SITDOWN.calmed, 0, 100);
     }
   }
+
+  /*
+     And what it did to the number on the table, when there is one.
+
+     Beside the promise and the calm rather than inside `paid` below, for the
+     same reason those are: this is a property of the words that were said, not
+     of what the conversation was for.
+  */
+  if (sit.deal) dealBeat(state, reg.id, landed);
 
   // Using it is how you get better at it, whether or not it worked.
   trainAttribute(state, reg.trains, landed ? 1 : 0.5);
@@ -428,9 +447,11 @@ function heWalks(state: GameState, sit: Sitdown): void {
     addNote(npc, state.day, 'Had enough, and said so by leaving.', 'bad');
   }
   settle(state, sit);
-  sit.outcome = npc
-    ? `${npc.name} had heard enough. They were not finished being asked, and they left anyway.`
-    : 'They had heard enough.';
+  sit.outcome = sit.deal
+    ? dealOutcome(sit)
+    : npc
+      ? `${npc.name} had heard enough. They were not finished being asked, and they left anyway.`
+      : 'They had heard enough.';
 }
 
 /** Kept for the callers that mean "the room is over", whoever ended it. */
@@ -450,8 +471,37 @@ function settle(state: GameState, sit: Sitdown): void {
   const target = sit.npcId ?? sit.factionId ?? '';
   state.flags[satKey(target)] = state.day;
 
+  /*
+     A room with a shop in it settles on the shop.
+
+     `REASON_BY_ID` has no entry for buying and should not — a reason is what
+     you wanted *from a person you already know*, and a man selling premises
+     wants one thing that is written on the deal. So the outcome is the number
+     you got to, which is the only thing that was ever at stake here.
+  */
+  if (sit.deal) {
+    sit.outcome = dealOutcome(sit);
+    return;
+  }
+
   const got = reason ? sit.revealed.includes(reason.wants) : false;
   sit.outcome = got ? paid(state, sit, reason!.wants) : missed(state, sit);
+}
+
+/** What the room came to, when what was in it was a shop. */
+function dealOutcome(sit: Sitdown): string {
+  const deal = sit.deal;
+  if (!deal) return 'Nothing came of it.';
+  const where = territoryDef(deal.territoryId).name;
+  const what = BUSINESS_BY_ID[deal.defId]?.name.toLowerCase() ?? 'the place';
+  if (sit.walkedOut) {
+    return `That is the end of it. The ${what} in ${where} is not for sale to you.`;
+  }
+  const moved = deal.listed - deal.ask;
+  const price = money(deal.ask);
+  if (moved > 0) return `${price} for the ${what} in ${where}, which is ${money(moved)} under the asking.`;
+  if (moved < 0) return `${price} for the ${what} in ${where}. You are paying over the odds for it.`;
+  return `${price} for the ${what} in ${where}, which is what it is worth.`;
 }
 
 function nameOf(state: GameState, sit: Sitdown): string {

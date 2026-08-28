@@ -16,6 +16,8 @@
  */
 
 import { Rng, clamp } from './rng';
+import { WORLD } from '../config/build';
+import { worldPull } from './build';
 import type {
   Faction,
   FactionAction,
@@ -474,7 +476,17 @@ function scorePoach(state: GameState, faction: Faction, rng: Rng): Option {
 
   // The unhappier he is, the more attractive the approach.
   const unhappiness = clamp((POACH.loyaltyBelow - target.stats.loyalty) / 45, 0, 1);
-  const appetite = (personality.ambition + personality.aggression) / 2;
+  /*
+     ...less whatever they have heard about the family they would be moving on.
+
+     The Muscle half of the build. Fear already suppresses your own people
+     leaving; this is the other direction — what a house weighs before it comes
+     after you. A boss who is genuinely frightening is poached from less, which
+     is the reputation actually doing something outside his own roster.
+  */
+  const appetite =
+    ((personality.ambition + personality.aggression) / 2) *
+    (1 - worldPull(state, 'muscle') * WORLD.muscleRivalChill);
   const score = appetite * unhappiness * AI.weights.poach;
 
   return {

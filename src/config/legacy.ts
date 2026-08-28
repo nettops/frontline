@@ -166,6 +166,56 @@ export const SHAPE_BARS = {
    */
   kingpinDistricts: 4,
   /**
+   * ...and how much of that map has your own people standing on it.
+   *
+   * **Third time this bar has gone red, and the third time the quantity was
+   * the problem rather than the number.** Footholds first, then control, and
+   * now dominance: `1:3 2:4 3:13 4:16` at day 300, which tops out at four with
+   * sixteen careers of thirty-six sitting on the ceiling. The Kingpin was the
+   * verdict on 44% of them and *no* value between the median and the 75th
+   * fixes that — 3 names 32 careers, 4 names 16, and 5 makes the shape
+   * extinct. There is no inside to this range either.
+   *
+   * The cause is one level further out than the last two. Nothing in
+   * `OPERATIONS` gates above three districts, so a rational player takes a
+   * fourth and stops; `ladder.probe` reads `bestDistricts` as 4 on 33 careers
+   * of 36. The same file proved separately that a bot which simply keeps
+   * expanding takes all twelve, so the ceiling belongs to the player's reasons
+   * and not to the game. That is a finding about `OPERATIONS`, and it is
+   * written down in `ladder.probe` where it was measured.
+   *
+   * What this adds is the half the shape's own verdict has always claimed.
+   * "Whoever comes next inherits a map you drew" is not a map with nobody on
+   * it — ground held with nobody running it is a line on a map, which is
+   * precisely the condition `holdings.ts` enforces before a district yields
+   * anything. Same construction as `legitimate`, which needs legitimacy *and*
+   * businesses, and `ghost`, which needs obscurity *and* an estate. The
+   * Kingpin was the only ground shape resting on one scalar, at weight 90.
+   *
+   * Plotted before it was placed, at day 300: `0:1 1:1 2:8 3:10 4:16`, median
+   * 3 and 75th 4. Four, by DIRECTOR section 5.
+   *
+   * **Measured, and it was expected to fail.** The two histograms are the same
+   * shape with the same ceiling and the same sixteen careers sitting on it, so
+   * the prediction written down before the run was that requiring both would
+   * name the same sixteen and change nothing.
+   *
+   *     before   kingpin 16 · don 11 · financier 7 · unremarkable 1 · diplomat 1
+   *     after    don 12 · financier 12 · kingpin 10 · unremarkable 1 · diplomat 1
+   *
+   * Six careers dominate four districts without running four of them — a
+   * steward killed, or ground taken faster than there were people to put in
+   * it — and that gap was enough. The Kingpin falls from 44% to 28% and the
+   * heaviest named shape to 33%. Three shapes now sit within two of each other
+   * where one previously took nearly half the population.
+   *
+   * The finding underneath is unchanged and is not fixed by this. Every
+   * territory quantity in `ladder.probe` is flat at four by day 300 because
+   * nothing in `OPERATIONS` gates above three districts. This shape no longer
+   * rests on that ceiling; the ceiling is still there.
+   */
+  kingpinRunning: 4,
+  /**
    * Estate for the Financial Boss.
    *
    * Was 250,000, sized against a day-300 distribution whose median career
@@ -242,8 +292,38 @@ export const SHAPE_BARS = {
    * businesses.
    */
   legitimateAbove: 72,
-  /** Respect for the Old-School Don. */
-  donRespect: 260,
+  /**
+   * Respect for the Old-School Don, and it had never been plotted.
+   *
+   * Was 260. Every other bar in this block carries a percentile in its
+   * comment; this one carried a number and the words "Respect for the
+   * Old-School Don", and nothing in the project had ever printed the
+   * distribution it sits in. `ladder.probe` now does: respect at day 300 reads
+   * 396 / 558 / 669 / 862 across the population for the 25th, median, 60th and
+   * 75th.
+   *
+   * So 260 sat *below the 25th percentile* — under every career the instrument
+   * has ever measured. It was the horoscope this file's header forbids,
+   * hiding behind the fact that heavier shapes were claiming those careers
+   * first. The moment nicknames started paying grip and crews stopped walking,
+   * respect rose, the Don outlived the shapes above it, and it became the
+   * verdict on 42% of the game.
+   *
+   * Exactly the defect `legitimateAbove` had, but not the same end of the
+   * band. That shape is weighted 80 and was claiming careers before most
+   * things could reach them, so it went just under the 75th. The Don is
+   * weighted 65 with four shapes above it, which is `financierEstate`'s
+   * situation — *"the heavier shapes take most of what clears this, so the top
+   * of the band puts the shape near extinction"* — and 820 proved that to the
+   * letter: it read `kingpin 10, unremarkable 9, diplomat 8, financier 8,
+   * don 1`, one career in thirty-six.
+   *
+   * So the median end, the same as the financier: 600 is just above the median
+   * of 558 and comfortably inside the band. It reads
+   * `kingpin 10, financier 8, unremarkable 8, diplomat 7, don 3` — five names
+   * with a spread, and the top of them on 28% of careers.
+   */
+  donRespect: 600,
   /** Fear for the Street King. */
   streetKingFear: 55,
   /**

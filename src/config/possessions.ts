@@ -355,4 +355,21 @@ export const POSSESSION = {
    * never in is not the same as a house with everybody's things in it.
    */
   clearedByVisitAtHome: 32,
+
+  /**
+   * How much of a score's take comes home as a thing.
+   *
+   * The crew did not go shopping with the money — they came back carrying
+   * something, and the something is worth less than the haul. A fifth is
+   * enough that a serious score produces a car and an ordinary one produces
+   * nothing, which is the distinction worth drawing: a possession should mark
+   * a job somebody would still be talking about.
+   *
+   * Not tuned against the estate. `SCORE_TARGETS` pay from the tens of
+   * thousands into the hundreds, and the catalogue runs $2,400 to $220,000, so
+   * this is the figure that decides where on the catalogue an ordinary career
+   * ever reaches. It is the dial to turn if the answer is "everything" or
+   * "nothing".
+   */
+  fromTakeShare: 0.2,
 } as const;

@@ -1,4 +1,7 @@
 import { useGame, mutate } from '../../store';
+import { buildRead, canSpendPoint, pointsLeft, spendPoint } from '../../sim/build';
+import { nicknameRead } from '../../sim/nicknames';
+import { BUILD, STAT_BY_ID } from '../../config/build';
 import { Panel, Bar, KeyValue } from '../components';
 import { estate } from '../../sim/estate';
 import { careerShape, legitimacy } from '../../sim/legacy';
@@ -6,28 +9,14 @@ import { maxCrew } from '../../sim/player';
 import { authorityRead } from '../../sim/authority';
 import { canGoHome, goHome, homeRead } from '../../sim/personal';
 import {
-  buyPossession,
-  canBuyPossession,
   possessionRows,
-  possessionValue,
   sellPossession,
 } from '../../sim/possessions';
-import { Rng } from '../../sim/rng';
 import { controlledTerritories } from '../../sim/territory';
 import { formatMoney } from '../../sim/util';
-import {
-  ATTRIBUTE_BLURB,
-  ATTRIBUTE_IDS,
-  ATTRIBUTE_LABEL,
-  ATTRIBUTE_MAX,
-  attributeProgressNeeded,
-} from '../../config/economy';
 import { DIFFICULTY_BY_ID } from '../../config/difficulty';
 import {
   POSSESSION,
-  POSSESSIONS,
-  POSSESSION_KIND_LABEL,
-  type PossessionKind,
 } from '../../config/possessions';
 
 /** So the sentence in the panel cannot drift away from the number. */
@@ -121,8 +110,6 @@ function Worth() {
 function Possessions() {
   const state = useGame();
   const owned = possessionRows(state);
-  const ownedIds = new Set(owned.map((row) => row.def.id));
-  const kinds: PossessionKind[] = ['home', 'car', 'jewellery'];
 
   const seen = (visibility: number) =>
     visibility >= 0.75 ? 'Everybody' : visibility >= 0.4 ? 'People notice' : 'Nobody much';
@@ -175,63 +162,26 @@ function Possessions() {
         </table>
       )}
 
-      {kinds.map((kind) => {
-        const offer = POSSESSIONS.filter((d) => d.kind === kind && !ownedIds.has(d.id));
-        if (offer.length === 0) return null;
-        return (
-          <div key={kind} style={{ marginBottom: 10 }}>
-            <div className="tiny" style={{ margin: '4px 0 6px' }}>
-              {POSSESSION_KIND_LABEL[kind]}
-            </div>
-            <table className="table">
-              <tbody>
-                {offer.map((def) => {
-                  const check = canBuyPossession(state, def.id);
-                  return (
-                    <tr key={def.id}>
-                      <td>
-                        <div>{def.name}</div>
-                        <div className="faint tiny">{def.blurb}</div>
-                      </td>
-                      <td className="num mono">{formatMoney(possessionValue(state, def))}</td>
-                      <td className="dim">{seen(def.visibility)}</td>
-                      <td>
-                        <button
-                          className="btn small"
-                          disabled={!check.ok}
-                          /*
-                             The refusal goes in the tooltip *and* under the
-                             row when it bites. `refusals.test.ts` exists
-                             because a priced option put its figure in the
-                             hint and its refusal in the disabled reason, and
-                             the panel rendered one instead of the other — so
-                             the price vanished exactly when the player could
-                             not pay it.
-                          */
-                          title={check.reason ?? 'Buy it'}
-                          onClick={() =>
-                            mutate((g) => buyPossession(g, new Rng(g.rng), def.id), true)
-                          }
-                        >
-                          Buy
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-            {offer.some((def) => !canBuyPossession(state, def.id).ok) && (
-              <p className="faint tiny" style={{ margin: '4px 0 0' }}>
-                {canBuyPossession(
-                  state,
-                  offer.find((def) => !canBuyPossession(state, def.id).ok)!.id,
-                ).reason}
-              </p>
-            )}
-          </div>
-        );
-      })}
+      {/*
+           The shop is gone, and this is where it stood.
+
+           Measured on 36 ordinary careers at day 300: **0 of 36 bought
+           anything.** Not a discoverability problem — front income compounds
+           and a possession does not, so every dollar spent here was a dollar
+           not spent on premises that pay for four years, and ignoring the
+           catalogue was correct play. A shop whose right answer is "do not" is
+           not a decision, and a greyed-out one would have been worse: the
+           player would keep asking what unlocks it.
+
+           Things arrive from the work now — see `takeSomething`. What is left
+           on this screen is what the boss has, which is the half that five
+           other systems were always reading.
+        */}
+      {owned.length === 0 && (
+        <p className="faint tiny" style={{ margin: '4px 0 0' }}>
+          Nothing yet. Things turn up when a score comes home.
+        </p>
+      )}
     </Panel>
   );
 }
@@ -243,11 +193,24 @@ export default function PlayerPanel() {
   const authorityNow = authorityRead(state);
   const houseNow = homeRead(state);
   const goingHome = canGoHome(state);
+  const named = nicknameRead(state);
+  const rows = buildRead(state);
+  const left = pointsLeft(state);
 
   return (
     <>
       <div className="page-head">
-        <h1 className="page-title">{player.name}</h1>
+        <h1 className="page-title">
+          {player.name}
+          {/*
+               What the street calls you, beside the name you were given.
+
+               On the title rather than in a panel of its own, because that is
+               what a byname is — it is not a stat with a screen, it is the
+               thing people say instead of your surname.
+            */}
+          {named && <span className="faint"> · {named.name}</span>}
+        </h1>
         <span className="tiny">{difficulty.name}</span>
       </div>
 
@@ -360,48 +323,98 @@ export default function PlayerPanel() {
 
       <Possessions />
 
-      <Panel title="What you are good at">
-        <p className="dim" style={{ marginTop: 0 }}>
-          Attributes improve by use. Running a job trains what that job demands, and
-          handling people trains how you handle people.
-        </p>
-        <div className="grid-3">
-          {ATTRIBUTE_IDS.map((id) => {
-            const value = player.attributes[id];
-            const progress = player.attributeProgress[id];
-            const needed = attributeProgressNeeded(value);
+      <Panel title="What you are made of">
+        {/*
+             The build, and the screen that used to be here.
+
+             Eight attributes that improved by use. Measured on how often each
+             was read anywhere outside this panel: leadership 7, influence 6,
+             negotiation 5, streetSmarts 5, business 1, intimidation 1,
+             intelligence 0, strategy 0 — **two of the eight were read by
+             nothing at all**, and this screen showed all eight with a progress
+             bar under each as though they were equally alive.
+
+             What replaced it is finite. Points are the decision; a boss is
+             definitely weak somewhere and he chose where. See
+             `config/build.ts`.
+          */}
+        {/*
+             Why they call you it, and what it is worth.
+
+             Above the seven because it is a *comment* on them — a name is the
+             street's reading of a build, and a point it hands you is already
+             counted in the numbers below.
+          */}
+        {named && (
+          <p className="tiny" style={{ margin: '0 0 10px' }}>
+            <span className="brass">{named.name}</span>{' '}
+            <span className="faint">{named.blurb}</span>{' '}
+            <span className="dim">{named.grant}</span>
+          </p>
+        )}
+
+        <div className="row between" style={{ marginTop: 0, marginBottom: 8 }}>
+          <p className="dim" style={{ margin: 0 }}>
+            Points are placed, not earned. What you leave at the bottom is a thing you
+            will never be able to do.
+          </p>
+          <span className="mono brass" style={{ whiteSpace: 'nowrap' }}>
+            {left} to place
+          </span>
+        </div>
+
+        <div className="grid-2">
+          {rows.map((row) => {
+            const def = STAT_BY_ID[row.id];
+            const can = canSpendPoint(state, row.id);
             return (
-              <div key={id}>
+              <div key={row.id} style={{ marginBottom: 10 }}>
                 <div className="row between">
-                  <span>{ATTRIBUTE_LABEL[id]}</span>
+                  <span>{def.label}</span>
                   <span className="mono brass">
-                    {value}
+                    {row.level}
                     <span className="faint" style={{ fontSize: 11 }}>
-                      /{ATTRIBUTE_MAX}
+                      /{BUILD.max}
                     </span>
                   </span>
                 </div>
                 <div style={{ margin: '4px 0 5px' }}>
-                  <Bar value={value} max={ATTRIBUTE_MAX} />
+                  <Bar value={row.level} max={BUILD.max} />
                 </div>
-                {/*
-                   Two stacked bars with nothing to tell them apart is one bar
-                   too many. A playtester read the pair as decoration and never
-                   worked out that the lower one is the only thing on the page
-                   that moves week to week — so it says what it is measuring
-                   and how far along it is.
-                */}
-                <div style={{ marginBottom: 4 }}>
-                  <Bar value={progress} max={needed} tone="cold" />
-                  <div className="faint tiny" style={{ marginTop: 2 }}>
-                    {value >= ATTRIBUTE_MAX
-                      ? 'as good as it gets'
-                      : `${Math.round(progress)} of ${Math.round(needed)} towards ${value + 1}`}
-                  </div>
-                </div>
-                <p className="faint" style={{ fontSize: 11.5, margin: 0 }}>
-                  {ATTRIBUTE_BLURB[id]}
+                <p className="faint" style={{ fontSize: 11.5, margin: '0 0 4px' }}>
+                  {def.blurb}
                 </p>
+
+                {/*
+                     What the points have bought, and what the next one would.
+
+                     The verb is a threshold, so the screen has to say how far
+                     off it is — a bar with a hidden line in it is the kind of
+                     thing round 12 spent ninety days not understanding.
+                  */}
+                <p
+                  className={row.verb ? 'tiny' : 'faint tiny'}
+                  style={{ margin: '0 0 4px' }}
+                >
+                  {row.verb
+                    ? `${def.verb} — ${def.verbBlurb}`
+                    : `${def.verb} at ${row.level + row.toVerb}. ${
+                        row.toVerb === 1 ? 'One more point.' : `${row.toVerb} more points.`
+                      }`}
+                </p>
+                <p className={row.noticed ? 'tiny dim' : 'faint tiny'} style={{ margin: 0 }}>
+                  {row.noticed ? def.world : 'Nobody has noticed yet.'}
+                </p>
+
+                <button
+                  className="btn small"
+                  style={{ marginTop: 6 }}
+                  disabled={!can.ok}
+                  title={can.reason ?? `Put a point into ${def.label}`}
+                  onClick={() => mutate((g) => spendPoint(g, row.id), false)}
+                >
+                  Put a point in
+                </button>
               </div>
             );
           })}

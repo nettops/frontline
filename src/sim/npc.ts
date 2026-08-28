@@ -44,6 +44,8 @@ import {
 } from '../config/nationalities';
 import { GOAL_BY_ID, GOAL_CERTAIN_ABOVE, GOAL_VISIBLE_ABOVE } from '../config/goals';
 import { DAYS_PER_YEAR, FEAR, ROLE_WAGE } from '../config/economy';
+import { WORLD } from '../config/build';
+import { worldPull } from './build';
 import { priced, prices } from './market';
 import { DIFFICULTY_BY_ID } from '../config/difficulty';
 
@@ -455,6 +457,16 @@ export function driftNpcs(state: GameState, rng: Rng): void {
    */
   const fear = clamp(state.org.fear / FEAR.max, 0, 1);
   const defectionChill = 1 - fear * (1 - FEAR.defectionAtMax);
+  /*
+     And how hard the boss holds his own people.
+
+     The Grip half of the build, and it lands on the deepest hole in this game:
+     343 hires a career and 291 of them walk. Fear already suppresses walking
+     out, and that is a different thing — a frightened man has not left *yet*.
+     Grip is the other reason somebody stays, and it works on the loyalty drift
+     rather than on the leaving, so it is the thing fear is not.
+  */
+  const held = worldPull(state, 'grip');
 
   for (const npc of Object.values(state.npcs)) {
     if (isFormerCrew(npc) || npc.status === 'arrested') continue;
@@ -464,7 +476,7 @@ export function driftNpcs(state: GameState, rng: Rng): void {
     applyGoalDrift(npc);
     decayTies(state, npc);
 
-    let loyaltyDelta = 0;
+    let loyaltyDelta = held * WORLD.gripLoyaltyPerWeek;
 
     /*
      * Who he is, who he has to work with, and what he is after.

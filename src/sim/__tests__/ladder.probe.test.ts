@@ -44,12 +44,17 @@ import { liveMarks } from '../marks';
 import { SCORE_TARGETS, SETUP_BY_ID } from '../../config/scores';
 import { PATTERN } from '../../config/standingOrders';
 import { workingHoldings, yieldOf, yieldsHeld } from '../holdings';
+import { spendPoint } from '../build';
+import type { StatId } from '../../config/build';
+import { home, neglectRisk } from '../personal';
+import { possessionsWorth } from '../possessions';
 import { HOLDING, YIELDS, type YieldKind } from '../../config/holdings';
 import { setAutopilot } from '../autopilot';
 import { OPERATION_BY_ID } from '../../config/operations';
 import { crewList, isOutOfReach } from '../npc';
 import { eligibleStewards, needsSteward, putInCharge } from '../delegation';
 import {
+  controlLevel,
   controlledTerritories,
   hasPresence,
   operableTerritories,
@@ -133,11 +138,8 @@ import { isGenerated } from '../eventgen';
 import { civicRead, spendFavour } from '../civic';
 import { careerShape, legitimacy } from '../legacy';
 import { CIVIC, CIVIC_FIGURES } from '../../config/civic';
-import { POSSESSIONS, POSSESSION_BY_ID } from '../../config/possessions';
+import { POSSESSIONS } from '../../config/possessions';
 import {
-  buyPossession,
-  canBuyPossession,
-  cleanPurse,
   heldPossessions,
   possessionValue,
 } from '../possessions';
@@ -182,7 +184,8 @@ import {
 import { acceptOrder, liveOrders, orderList, refuseOrder } from '../orders';
 import { GANGS } from '../../config/orders';
 import { SENTIMENT_HOSTILE_BELOW } from '../../config/territories';
-import { activeCases, worstStage } from '../investigation';
+import { activeCases, pressureWitness, worstStage } from '../investigation';
+import { PRESSURE_WITNESS } from '../../config/lawEnforcement';
 import { stageIndex } from '../../config/lawEnforcement';
 import { ownedBusinesses } from '../business';
 import type { PressureId } from '../../config/pressure';
@@ -282,6 +285,16 @@ interface Climb {
     everPresence: number;
     everFoothold: number;
     everControl: number;
+    /**
+     * Districts at *dominance* on the last day, which is what names a Kingpin.
+     *
+     * `careerShape` counts this band and nothing in this file ever captured
+     * it, so the two times the Kingpin bar has had to be re-plotted it was
+     * re-plotted against a histogram printed by hand into a comment. A bar
+     * goes between the median and the 75th of a plotted distribution, and the
+     * distribution has to be here for that to be possible.
+     */
+    dominatedAtEnd: number;
     /** Average influence across districts the family had any presence in. */
     meanWhereWorking: number;
     samples: number;
@@ -554,6 +567,15 @@ interface Climb {
     /** What the family is worth at the end, which is what the shapes read. */
     finalEstate: number;
     /**
+     * And the respect it holds at the end, for the same reason.
+     *
+     * `donRespect` was the one bar in `SHAPE_BARS` placed with no percentile
+     * beside it, and it became the verdict on 42% of careers the moment
+     * nicknames started paying grip. Nothing captured the quantity it reads,
+     * so no re-plot was possible without adding this.
+     */
+    finalRespect: number;
+    /**
      * Whether the possessions catalogue is reachable at all.
      *
      * The blueprint's own objection to building it: *"a sink only bites
@@ -653,6 +675,37 @@ interface Climb {
       controlled: number;
       /** Men tied up running ground, which is the price of all of it. */
       stewards: number;
+    };
+    /**
+     * The three things nothing in this project has ever measured.
+     *
+     * Fear, what a boss owns, and whether anybody is waiting at home. All
+     * three are built, all three are wired, and no probe arm, bar or blind
+     * round has ever looked at one of them. `ladder.probe` searches the word
+     * "fear" and finds it only inside a loyalty-drift table where it
+     * contributes -0.02 of -1.45 — which is either a system that does nothing
+     * or a system nothing switches on, and a reading of -0.02 cannot tell you
+     * which.
+     */
+    /** What leaning on the people who talk actually did. */
+    leaning: { tried: number; landed: number; backfired: number; strengthMoved: number };
+    self: {
+      /** Jobs deliberately run loud, for the arm that picks its moments. */
+      heavyRuns: number;
+      /** The most frightening the family ever was, and where it settled. */
+      peakFear: number;
+      finalFear: number;
+      /** Weeks spent above the level where fear starts paying for itself. */
+      weeksFeared: number;
+      /** What the boss owns, and what it is worth. */
+      owned: number;
+      ownedWorth: number;
+      /** How far from home it got, and how often anybody went back. */
+      peakNeglect: number;
+      finalNeglect: number;
+      visits: number;
+      /** The multiplier neglect was putting on being deposed, at the end. */
+      depositionRisk: number;
     };
     /** What a bot that puts its green men with its good ones did. */
     teaching: {
@@ -873,20 +926,6 @@ interface Policy {
    */
   books?: boolean;
   /**
-   * Buys the things a boss buys, and keeps paying for them.
-   *
-   * No bot in this project has ever bought a possession. It banks its clean
-   * money and it buys fronts, which is a perfectly sensible way to play and is
-   * the only way anything here has ever been measured — so the whole luxury
-   * tier is invisible to every bar in this file.
-   *
-   * That matters more than usual for this feature, because the surplus it
-   * exists to absorb peaks on **day 294 of 300**. A catalogue only bought in
-   * the last fortnight has taken the money without ever having been a
-   * decision, and no instrument that does not shop can tell the difference.
-   */
-  shops?: boolean;
-  /**
    * Builds up to the big jobs instead of walking straight at them.
    *
    * F7 in full, and the precedent is direct. The money-sink tier shipped with
@@ -1090,6 +1129,117 @@ interface Policy {
    * handing over the operations loop quietly hands over the map with it.
    */
   handsOver?: boolean;
+  /**
+   * What it buys a front *for*.
+   *
+   * F7, and this one was created by the repair it is measuring. The catalogue
+   * used to be a price ladder — seven of ten entries beaten on every quality
+   * axis by something else, revenue per dollar flat at 50 per $1,000, capacity
+   * and discretion correlating at -0.41 while the file's own header claimed
+   * they pulled against each other. So "buy the dearest thing you can cover",
+   * which is what this bot has always done, was a perfectly good rule: dearest
+   * was strictly best.
+   *
+   * It is not any more. After the re-cost the dearest front a rich family can
+   * buy is `real_estate`, which earns more than anything but the casino and
+   * washes $6,000 a week — the *worst* washer on the board. A bot buying by
+   * price now walks straight into the lowest-capacity entry in the game, and
+   * the probe duly reports that laundering capacity is the binding constraint
+   * on 58% of paydays.
+   *
+   * That reading cannot distinguish two very different worlds:
+   *
+   *   - the clean economy is structurally short of capacity, which is a real
+   *     problem and the thing the third piece of this work was going to fix;
+   *   - or a bot is buying badly into a catalogue that stopped rewarding what
+   *     it optimises for, and the wall is a *choice* rather than a gap.
+   *
+   * So: one arm that buys for what a front can move, one that buys for what it
+   * earns, both against the baseline that buys for what it costs. The
+   * catalogue re-cost was supposed to make those three different families.
+   * If they come out the same, it was not a repair, it was a reshuffle.
+   */
+  frontTaste?: 'washing' | 'earning';
+  /**
+   * Runs the work heavy, and lets the street see who took it.
+   *
+   * F7, and the third time in one session that a system read as dead because
+   * nothing here had ever chosen it.
+   *
+   * The first look at fear on 36 ordinary careers came back peak 10 of 100,
+   * ending at 0, with **no career ever above 30**, and the obvious reading was
+   * that a mechanic with nine tuned constants was delivering a tenth of its
+   * value. That reading was wrong, and the reason is one line in this file:
+   * `const how: ApproachId = DEFAULT_APPROACH`. Straight carries `fear: 0`.
+   * Heavy carries `fear: 2`. **This bot has never once chosen to be
+   * frightening**, so every point of fear those careers had was something that
+   * happened *to* them — a man hurt on a job that went wrong, a clash in a war,
+   * an event answered under pressure.
+   *
+   * So the arm plays the approach the fear is on. Everything else is
+   * unchanged, which makes the pairing exact: `APPROACHES` says heavy takes
+   * 30% more, costs four points of odds, runs 1.8x the heat and 3 points of
+   * public feeling a job. Whether being feared is worth that bill is the
+   * question the game has been asking since approaches were written, and
+   * nothing has ever answered it.
+   */
+  heavy?: boolean;
+  /**
+   * ...and the same thing done where it actually pays.
+   *
+   * The arm above runs every job heavy for four years and loses $2.4M on 35
+   * careers of 36, which prices *indiscriminate* use and nothing else. This
+   * file has made that mistake once already and caught it: cutting people
+   * measured -$1,110,650 used nineteen times a career and +$7 used three
+   * times, and the distance between those two numbers was the entire feature.
+   *
+   * Heavy takes 30% more, so it pays in proportion to the size of the job —
+   * a third of a big score is real money and a third of a shakedown is not.
+   * It costs 1.8x heat, so it is affordable when the street is quiet and not
+   * when a task force is forming. Both halves of that are readable off the
+   * board before launching, which is what makes this a decision rather than a
+   * dice roll, and neither is a figure this bot has to be told.
+   *
+   * **The rule is fixed before the result is read** and is not iterated
+   * afterwards. Raising the bar until an arm comes out ahead is tuning a bot
+   * to flatter a mechanic, which is DIRECTOR section 5 in a false beard.
+   */
+  heavyWhenItPays?: boolean;
+  /**
+   * What this boss put his points into.
+   *
+   * Defaults to `BASELINE_BUILD`. An arm that wants a different man supplies
+   * one, which is the only way anything in this file will ever price a build
+   * against another build.
+   */
+  build?: Partial<Record<StatId, number>>;
+  /**
+   * Leans on the people who are talking to them.
+   *
+   * F7, and the fourth system this session that read as dead because nothing
+   * had ever chosen it. `pressureWitness` lives in `investigation.ts`, is
+   * reachable from the Law panel, has its own unit test, and **has never been
+   * called by anything in this project** — no arm, no bar, no blind round.
+   *
+   * It matters more than the other three because it is what fear is *for*. The
+   * supply side has been tuned twice today without anybody looking at the
+   * demand side, and the demand side is this:
+   *
+   *     costs        $12,000
+   *     succeeds at  50% + intimidation x 2.5pts + fear x 25pts
+   *     on success   strips 6-14 case strength, and buys 4 more fear
+   *     on failure   +16 evidence and +12 heat, on the case you were killing
+   *
+   * So being feared is not only a discount on defection. It is a 25-point
+   * swing on a coin-flip that decides whether an investigation reaches a
+   * verdict, and the failure puts sixteen points of evidence into the file you
+   * were trying to empty. Whether fear pays for itself is a question about
+   * *this* loop, and it has never once been asked.
+   *
+   * The rule is the plain one and it is fixed before the arm runs: lean on a
+   * named suspect when a case is worth worrying about and the money is there.
+   */
+  leansOnWitnesses?: boolean;
 }
 
 /**
@@ -1120,6 +1270,119 @@ const CYCLE_DAYS = 21;
 const SMART_QUIET_ABOVE = 40;
 const SMART_STOP_ABOVE = 65;
 
+/**
+ * Where fear starts paying for itself.
+ *
+ * Not a tuned figure and not a bar. `FEAR.defectionAtMax` and
+ * `FEAR.witnessBonusAtMax` both scale from zero, so there is no threshold in
+ * the design to read — this is a line drawn across the middle of the scale so
+ * "weeks spent frightening" means something countable. It is used for
+ * reporting and nothing asserts against it.
+ */
+/**
+ * What the baseline boss puts his points into.
+ *
+ * One point in each of the seven, which is level two, and seven of the
+ * fourteen held back.
+ *
+ * **The rule is that a baseline must not sit on a threshold.** `worldShare` is
+ * zero at and below `WORLD_AT`, which is three, and thirteen of the fourteen
+ * nicknames grant a point in a stat. A build that stops exactly on three
+ * therefore turns every name the street hands out into world pull for that
+ * career — the control moves whenever the thing being measured fires. Level
+ * two absorbs a granted point and stays at zero, which is the same rule
+ * DIRECTOR section 5 states for bars, applied to the control instead.
+ *
+ * The seven unspent points are the cost of that and are not hidden: nothing in
+ * the simulation reads `pointsLeft`, so they change nothing, and a player who
+ * holds points back is a real player. What this bot is not is a player with a
+ * *good* build. No bar in this file can say whether a build is worth having.
+ * That needs its own arm with its own `build`, paired against this one.
+ *
+ * ## Two versions of this were wrong, and the second was wrong quietly
+ *
+ * **The first was concentrated and it revalued the game.** It read
+ * `{ method: 4, grip: 3, ledger: 5, word: 2 }`, and these numbers are points
+ * spent *above the floor* — so `ledger: 5` is level six, `worldPull` 0.43, and
+ * a laundering cut of 0.133 against the 0.24 every recorded figure in this
+ * file was taken at. Nearly halved. Four bars went red at once.
+ *
+ * **The second was a flat fourteen — two everywhere, level three, and
+ * numerically inert.** `worldPull` 0.000 on all seven and no verb open, which
+ * looked like the answer and was not: it put every stat on the cliff edge
+ * above, so a single granted point crossed it. Four bars stayed red, and a
+ * *different* four.
+ *
+ * ## What the sweep actually found
+ *
+ * Four full runs, one variable at a time, red bars in the last column:
+ *
+ *     baseline              nicknames  top shape verdict            red
+ *     3/3/2/2/2/1/1         on         don 15, fin 13, king  6       3
+ *     flat 2 (level 3)      on         fin 17, don  9, king  8       4
+ *     flat 2 (level 3)      OFF        don 14, king 11, fin  8       2
+ *     1 each (level 2)      on         fin 15, king 10, don  9       4
+ *     1 each + own stream   on         don 15, king 10, fin  8       1
+ *
+ * The one bar left standing after that was the shape verdicts, and it was not
+ * about builds either: `donRespect` had never been plotted and sat below the
+ * 25th percentile of the respect it reads. Re-plotted against the distribution
+ * this file now prints, the suite is green.
+ *
+ * The build was never the whole story. Nicknames were, through two channels,
+ * and the third row is what separated them: with the weekly roll switched off
+ * the population came back to within one career of what this file had
+ * recorded, on a baseline that was otherwise unchanged.
+ *
+ * The first channel was the roll itself. `tickNickname` drew from `state.rng`,
+ * so a cosmetic weekly check moved every job outcome, defection test and heat
+ * event by one call a week from day 120 on, and four bars that sit within one
+ * to three careers of their thresholds flipped. That is fixed in
+ * `sim/nicknames.ts`, which now derives its own stream from seed and day; the
+ * precedent is `Rng.stableNoise`, written for exactly this hazard.
+ *
+ * The second channel is real and stays: a granted point is a granted point,
+ * and the shape verdicts moved because grip keeps crews together. That is the
+ * feature working.
+ *
+ * That is the risk the standing-order plan wrote down in as many words —
+ * *"recorded numbers move"* — walked into by the person who wrote it, twice,
+ * and it took four runs to separate the instrument from the thing it measures.
+ */
+const BASELINE_BUILD: Partial<Record<StatId, number>> = {
+  method: 1,
+  grip: 1,
+  ledger: 1,
+  word: 1,
+  muscle: 1,
+  instinct: 1,
+  stomach: 1,
+};
+
+const FEARED_ABOVE = 30;
+
+/**
+ * When a job is worth doing loudly, and when the street is quiet enough for it.
+ *
+ * Heavy pays 30% more and costs four points of odds, 1.8x heat and three
+ * points of public feeling. So it earns its keep on the jobs where 30% is a
+ * large number, and only while there is heat budget to spend. $20,000 is the
+ * top of the ordinary board and 45 is comfortably under the 70 this bot lays
+ * low at — both chosen before the arm ran once, and neither revisited after.
+ */
+/**
+ * How strong a case has to be before it is worth leaning on somebody.
+ *
+ * `PRESSURE_WITNESS` strips 6 to 14 points and puts 16 back on a miss, so
+ * leaning on a case weaker than the backfire is spending $12,000 to make
+ * things worse. Twenty is comfortably above that and comfortably below the
+ * strength that convicts. Fixed before the arm ran once.
+ */
+const LEAN_ON_CASE_ABOVE = 20;
+
+const HEAVY_WORTH_IT = 20_000;
+const HEAVY_QUIET_BELOW = 45;
+
 const CUT_FAILURES_BEFORE = 3;
 
 /**
@@ -1136,6 +1399,33 @@ function climb(seed: number, days: number, policy: Policy = {}): Climb {
   const rng = new Rng(state.rng);
   // The shipped switch, thrown on the first morning and never touched again.
   if (policy.handsOver) setAutopilot(state, true);
+
+  /*
+     The boss places his points, because a boss who does not is nobody.
+
+     F7, and the fourth of the session. `config/build.ts` gives a career 14
+     points to distribute across seven stats and this bot placed none of them,
+     so every figure in this file was describing a man at the floor of
+     everything — a career no player would ever have. It is the same defect as
+     a bot that never chose the heavy approach, never bought for capacity and
+     never wanted a district for what it yields.
+
+     It showed up as a regression rather than as a blind spot, which is the
+     only luck in it. `launderCut` used to read `attributes.business`, an
+     attribute that grew by use, so the bot bought its own cut down over a
+     career without ever deciding to. Ledger replaced it, the bot places
+     nothing, and the cut stayed at the ceiling for three hundred days.
+
+     The spread below is not a build a player would call clever. It is the
+     plainest reading of "spend it on the things this bot actually does": it
+     works, it holds people, it launders. Whether a *good* build beats it is a
+     separate question and wants its own arms — the point here is only that the
+     baseline stops being a man with nothing.
+  */
+  const chosen = policy.build ?? BASELINE_BUILD;
+  for (const id of Object.keys(chosen) as StatId[]) {
+    for (let i = 0; i < (chosen[id] ?? 0); i++) spendPoint(state, id);
+  }
   const reachedOn = new Map<string, number>();
   const shopping = {
     bought: [] as string[],
@@ -1180,6 +1470,22 @@ function climb(seed: number, days: number, policy: Policy = {}): Climb {
   };
   /** Marks already counted, so an ending is tallied once and not every day. */
   const marksSeen = new Set<string>();
+  /*
+     Fear, what the boss owns, and whether anybody is still at home.
+
+     Watched weekly rather than read at the end, because two of the three are
+     claims that expire — fear decays 1.4 a week and neglect only ever rises
+     between visits, so a final reading of either says what last Tuesday was
+     like and nothing about the career.
+  */
+  const leaning = { tried: 0, landed: 0, backfired: 0, strengthMoved: 0 };
+  let heavyRuns = 0;
+  let peakFear = 0;
+  let weeksFeared = 0;
+  let peakNeglect = 0;
+  let homeVisits = 0;
+  let neglectBefore = 0;
+
   const teaching = {
     started: 0,
     finished: 0,
@@ -1483,6 +1789,25 @@ function climb(seed: number, days: number, policy: Policy = {}): Climb {
        from the outside and the probe is the only thing that can tell them
        apart.
     */
+    /*
+       The three unmeasured systems, watched every week.
+
+       A visit is counted by the neglect *falling*, because the bot never
+       presses the button — `goHome` is reachable only through an event choice
+       in `eventgen.ts` and through a control on the Yourself screen, and
+       neither is something this bot does. If this counter reads zero across
+       thirty-six careers then nothing in four years of play ever went home,
+       which is itself the finding.
+    */
+    if (state.day % 7 === 0) {
+      peakFear = Math.max(peakFear, state.org.fear);
+      if (state.org.fear >= FEARED_ABOVE) weeksFeared += 1;
+      const now = home(state).neglect;
+      peakNeglect = Math.max(peakNeglect, now);
+      if (now < neglectBefore - 1) homeVisits += 1;
+      neglectBefore = now;
+    }
+
     const bill = weeklyWageBill(state);
     if (state.day % 7 === 0) {
       /*
@@ -1532,6 +1857,46 @@ function climb(seed: number, days: number, policy: Policy = {}): Climb {
        it, and what needs measuring is what happens after the roll, not whether
        a bot can optimise a roll.
     */
+    /*
+       Leaning on somebody who is talking, which is the only thing fear is
+       ever spent on.
+
+       Weekly, like every other decision this bot takes. One a week at most —
+       a family that leans on four people in an afternoon is not being careful,
+       and the backfire puts evidence into the case rather than taking it out.
+    */
+    if (policy.leansOnWitnesses && state.day % 7 === 0) {
+      const worth = activeCases(state)
+        .filter((c) => c.strength >= LEAN_ON_CASE_ABOVE && c.suspectIds.length > 0)
+        .sort((a, b) => b.strength - a.strength)[0];
+      if (worth && totalFunds(state) >= PRESSURE_WITNESS.cost * 2) {
+        const who = worth.suspectIds.find((id) => state.npcs[id]?.status === 'active');
+        if (who) {
+          /*
+             Counted before the result is read, and the first version was not.
+
+             `pressureWitness` returns `ok: false` when the witness goes
+             straight to them, so `if (out.ok) leaning.tried += 1` counted only
+             the attempts that worked. The arm duly reported "tried 16, landed
+             16" on both populations — a 100% success rate on an action whose
+             own config puts the ceiling at 90% — and the bar asking whether
+             fear helps it land passed against two numbers that were the same
+             number by construction. An attempt is an attempt whatever came of
+             it.
+          */
+          const before = worth.strength;
+          leaning.tried += 1;
+          const out = pressureWitness(state, rng, worth.id, who);
+          if (out.ok) {
+            leaning.landed += 1;
+            leaning.strengthMoved += before - worth.strength;
+          } else {
+            leaning.backfired += 1;
+          }
+        }
+      }
+    }
+
     if ((policy.cuts || policy.cutsRarely) && state.day % 7 === 0) {
       // A boss who only does this when somebody is a genuine disaster, and
       // even then not often. Both figures fixed before the arm was ever run.
@@ -1758,7 +2123,21 @@ function climb(seed: number, days: number, policy: Policy = {}): Climb {
         }
       }
 
-      const catalogue = [...BUSINESSES].sort((a, b) => b.cost - a.cost);
+      /*
+         What it is shopping for.
+
+         The default is unchanged and is the rule every recorded figure in this
+         file was taken under: the dearest thing the money covers. The two
+         tastes rank the same catalogue by what a front gives per dollar spent,
+         which is the comparison a player makes standing in front of the panel
+         and the one the re-cost exists to make answerable.
+      */
+      const catalogue =
+        policy.frontTaste === 'washing'
+          ? [...BUSINESSES].sort((a, b) => b.launderCapacity / b.cost - a.launderCapacity / a.cost)
+          : policy.frontTaste === 'earning'
+            ? [...BUSINESSES].sort((a, b) => b.revenue / b.cost - a.revenue / a.cost)
+            : [...BUSINESSES].sort((a, b) => b.cost - a.cost);
       for (const t of territoryList(state)) {
         let bought = false;
         for (const def of catalogue) {
@@ -1916,7 +2295,24 @@ function climb(seed: number, days: number, policy: Policy = {}): Climb {
     }
 
     if (!isLayingLow(state) && state.org.heat >= 70) startLayLow(state);
-    const how: ApproachId = DEFAULT_APPROACH;
+    /*
+       How the work gets done.
+
+       Hard-coded to `standard` since approaches were written, which is why
+       fear read as a dead system: the only deliberate source of it in the
+       whole game is the heavy approach, and nothing here ever picked it.
+    */
+    const how: ApproachId = policy.heavy ? 'heavy' : DEFAULT_APPROACH;
+    /*
+       And the version that reads the room first.
+
+       Big enough to be worth the odds, quiet enough to afford the heat. Both
+       thresholds written before the arm was ever run.
+    */
+    const heavyNow = (def: { payout: readonly number[] | number[] }) =>
+      policy.heavyWhenItPays &&
+      def.payout[1] >= HEAVY_WORTH_IT &&
+      state.org.heat <= HEAVY_QUIET_BELOW;
 
     if (!isLayingLow(state) && !policy.auto && !policy.handsOver) {
       /*
@@ -2311,10 +2707,11 @@ function climb(seed: number, days: number, policy: Policy = {}): Climb {
               // A prepared job runs where it was prepared. Anywhere else and
               // the gear was got ready for somewhere the crew never went.
               sc ? sc.territoryId : where,
-              how,
+              heavyNow(def) ? 'heavy' : how,
             ),
           );
           if (out) {
+            if (heavyNow(def)) heavyRuns += 1;
             launchEra[state.day < 90 ? 0 : state.day < 180 ? 1 : 2] += 1;
             // Recorded on every arm, not only the allocator's, or the two
             // columns would be quoted in different currencies.
@@ -2530,29 +2927,13 @@ function climb(seed: number, days: number, policy: Policy = {}): Climb {
          One purchase a week either way. Nobody buys a boat and a country club
          on the same Friday.
       */
-      if (policy.shops) {
-        const keeping = heldPossessions(state);
-        const owned = new Set(keeping.map((h) => h.defId));
-        if (keeping.some((h) => POSSESSION_BY_ID[h.defId]?.upkeep)) shopping.weeksKeeping += 1;
+      /*
+         The shopping block stood here and the shop it used is gone.
 
-        const affordable = POSSESSIONS.filter((d) => d.upkeep && !owned.has(d.id))
-          .map((d) => ({ def: d, price: possessionValue(state, d) }))
-          .filter(
-            (o) =>
-              cleanPurse(state) - o.price >= liquid + priced(state, o.def.upkeep!) * 12 &&
-              canBuyPossession(state, o.def.id).ok,
-          )
-          .sort((a, b) => a.price - b.price);
-
-        if (affordable.length > 0) {
-          const pick = affordable[0].def;
-          if (buyPossession(state, rng, pick.id).ok) {
-            shopping.bought.push(pick.id);
-            if (shopping.firstDay === null) shopping.firstDay = state.day;
-          }
-        }
-      }
-
+         See the note above the deleted `somewhere for the money to go` block:
+         0 of 36 ordinary careers ever bought a possession, so every figure
+         this arm produced was a figure about a bot that had been told to.
+      */
       const spare = state.org.cash - liquid;
       if (spare >= HOLDINGS.minimum) {
         if (putAway(state, spare).ok) banked += spare;
@@ -3421,6 +3802,7 @@ function climb(seed: number, days: number, policy: Policy = {}): Climb {
          sized against the wrong one of those.
       */
       finalEstate: estate(state).total,
+      finalRespect: state.org.respect,
       tables: {
         weeksOpen: newSys.tableWeeks,
         weeksWorthSitting: newSys.worthSitting,
@@ -3444,6 +3826,19 @@ function climb(seed: number, days: number, policy: Policy = {}): Climb {
         talked: Object.values(state.evidence)
           .filter((e) => e.detail.includes('has been talking to somebody again'))
           .reduce((sum, e) => sum + e.strength, 0),
+      },
+      leaning,
+      self: {
+        heavyRuns,
+        peakFear: Math.round(peakFear),
+        finalFear: Math.round(state.org.fear),
+        weeksFeared,
+        owned: heldPossessions(state).length,
+        ownedWorth: Math.round(possessionsWorth(state)),
+        peakNeglect: Math.round(peakNeglect),
+        finalNeglect: Math.round(home(state).neglect),
+        visits: homeVisits,
+        depositionRisk: Number(neglectRisk(state).toFixed(2)),
       },
       ground: {
         working: workingHoldings(state).length,
@@ -3548,6 +3943,7 @@ function climb(seed: number, days: number, policy: Policy = {}): Climb {
       everPresence: everAt(10),
       everFoothold: everAt(25),
       everControl: everAt(50),
+      dominatedAtEnd: territoryList(state).filter((t) => controlLevel(t) === 'dominance').length,
       meanWhereWorking: infSamples ? infTotal / infSamples : 0,
       samples: infSamples,
     },
@@ -4448,8 +4844,20 @@ describe('the systems nobody had measured', () => {
        *foothold* and the histogram of that was `2:1 3:1 4:31 5:3` — a point
        mass, where no value of any bar separates anybody.
 
-       `careerShape` counts dominance now and reads financier 14, kingpin 10,
-       don 9, unremarkable 3. Recorded in `config/legacy.ts` beside the bar.
+       `careerShape` counts dominance now, and after `donRespect` was re-plotted
+       it reads kingpin 10, financier 8, unremarkable 8, diplomat 7, don 3.
+       Recorded in `config/legacy.ts` beside both bars.
+
+       **The Don was the next one to go, and for the same reason.** Nicknames
+       pay grip, grip keeps crews together, crews that stay earn respect — and
+       `donRespect` was the one bar in `SHAPE_BARS` nobody had ever plotted, at
+       260 against a population reading 396 / 558 / 669 / 862. Below the 25th
+       percentile. It became the verdict on 42% of careers and the fault was
+       never in the careers.
+
+       That is three placements in this pass — the union boss, the alderman and
+       now the Don — where the reading was wrong before the bar was, and it is
+       the same lesson every time: print the distribution first.
 
        The instrument, not the bar. That is the third time in this pass, after
        the union boss and the alderman.
@@ -4461,6 +4869,44 @@ describe('the systems nobody had measured', () => {
     const d = RUNS_300.map((r) => r.bestDistricts).sort((a, b) => a - b);
     const hist = new Map<number, number>();
     for (const n of d) hist.set(n, (hist.get(n) ?? 0) + 1);
+    /*
+       And the band the Kingpin bar actually counts, which is not the one above.
+
+       `careerShape` reads districts at *dominance* on the last day.
+       `bestDistricts` is the record's high-water mark at a lower band, and the
+       two previous re-plots of `kingpinDistricts` were done against a
+       histogram typed into a comment by hand because nothing captured this.
+    */
+    const dom = RUNS_300.map((r) => r.influence.dominatedAtEnd).sort((a, b) => a - b);
+    const domHist = new Map<number, number>();
+    for (const n of dom) domHist.set(n, (domHist.get(n) ?? 0) + 1);
+    /*
+       And the half the Kingpin is about to gain, plotted before it is placed.
+
+       Dominating four districts cannot separate anybody: the histogram above
+       tops out at four and sixteen careers of thirty-six sit on the ceiling,
+       so there is no value between the median and the 75th that satisfies the
+       horoscope condition. Ground you actually *run* — held at control with
+       your own people standing in it — is the quantity the shape's own verdict
+       already claims, and this is what it looks like across a population.
+    */
+    const ran = RUNS_300.map((r) => r.newSystems.ground.working).sort((a, b) => a - b);
+    const ranHist = new Map<number, number>();
+    for (const n of ran) ranHist.set(n, (ranHist.get(n) ?? 0) + 1);
+    // eslint-disable-next-line no-console
+    console.log(
+      `         districts RUN at day 300 (held and staffed) — ` +
+        [...ranHist].sort((a, b) => a[0] - b[0]).map(([k, n]) => `${k}: ${n}`).join(', ') +
+        ` · median/60th/75th/90th ${median(ran)} / ${pct(ran, 0.6)} / ${pct(ran, 0.75)}` +
+        ` / ${pct(ran, 0.9)}`,
+    );
+    // eslint-disable-next-line no-console
+    console.log(
+      `         districts DOMINATED at day 300 — ` +
+        [...domHist].sort((a, b) => a[0] - b[0]).map(([k, n]) => `${k}: ${n}`).join(', ') +
+        ` · median/60th/75th/90th ${median(dom)} / ${pct(dom, 0.6)} / ${pct(dom, 0.75)}` +
+        ` / ${pct(dom, 0.9)} (the kingpin bar is ${SHAPE_BARS.kingpinDistricts})`,
+    );
     // eslint-disable-next-line no-console
     console.log(
       `         districts held at day 300 — ` +
@@ -4483,6 +4929,21 @@ describe('the systems nobody had measured', () => {
       `         estate now, 25th / median / 60th / 75th: ` +
         `${money(pct(es, 0.25))} / ${money(median(es))} / ${money(pct(es, 0.6))} / ` +
         `${money(pct(es, 0.75))} (the financier bar is ${money(SHAPE_BARS.financierEstate)})`,
+    );
+    /*
+       And the same for the Don, which had never been plotted at all.
+
+       Every other bar in `SHAPE_BARS` carries a percentile in its comment.
+       `donRespect` carried the words "Respect for the Old-School Don" and a
+       number, and nothing in this project had ever printed the distribution it
+       sits in.
+    */
+    const rs = RUNS_300.map((r) => r.newSystems.finalRespect).sort((a, b) => a - b);
+    // eslint-disable-next-line no-console
+    console.log(
+      `         respect now, 25th / median / 60th / 75th: ` +
+        `${Math.round(pct(rs, 0.25))} / ${Math.round(median(rs))} / ${Math.round(pct(rs, 0.6))} / ` +
+        `${Math.round(pct(rs, 0.75))} (the don bar is ${SHAPE_BARS.donRespect})`,
     );
 
     const named = [...shapes].filter(([k]) => k !== 'unremarkable').sort((a, b) => b[1] - a[1]);
@@ -4575,17 +5036,6 @@ const RUNS_BOOKS = Array.from({ length: 36 }, (_, i) =>
   climb(700 + i, HUMAN_DAYS, { trades: true, books: true }),
 );
 
-/*
-   A bot that buys things, against the same bot that does not.
-
-   Everything measured in this file until now was measured on a family that
-   banks its clean money and buys fronts with it, which is why the possessions
-   catalogue has never appeared in a single reading. F7: an instrument blind to
-   a system reports confidently about everything around it.
-*/
-const RUNS_SHOPS = Array.from({ length: 36 }, (_, i) =>
-  climb(700 + i, HUMAN_DAYS, { shops: true }),
-);
 
 /*
    A bot that builds up to the big jobs, against the same bot that walks
@@ -4750,6 +5200,72 @@ const RUNS_GROUND = Array.from({ length: 36 }, (_, i) =>
 );
 
 /*
+   A family that lets the street see who took it.
+
+   Paired seed-for-seed against `RUNS_300`, which plays the identical career
+   straight. The only difference is the approach on every job, and the approach
+   is the only deliberate source of fear in the game.
+*/
+const RUNS_HEAVY = Array.from({ length: 36 }, (_, i) =>
+  climb(700 + i, HUMAN_DAYS, { heavy: true }),
+);
+
+/*
+   The same thing done where it pays, which is how anybody would do it.
+
+   Same seeds, same baseline. The only thing between this population and the
+   one above is how freely the approach is used.
+*/
+const RUNS_HEAVY_SMART = Array.from({ length: 36 }, (_, i) =>
+  climb(700 + i, HUMAN_DAYS, { heavyWhenItPays: true }),
+);
+
+/*
+   Spending fear instead of only earning it.
+
+   Two arms, because the question is a pair. `RUNS_LEAN` leans on witnesses
+   while playing straight, so it reads what the action is worth to an ordinary
+   family. `RUNS_LEAN_FEARED` does the same while running heavy where it pays,
+   which is the only way a family ever has fear to spend — and the difference
+   between them is what being feared is actually worth.
+*/
+const RUNS_LEAN = Array.from({ length: 36 }, (_, i) =>
+  climb(700 + i, HUMAN_DAYS, { leansOnWitnesses: true }),
+);
+/*
+   The feared half of the pair, and the policy matters more than it looks.
+
+   This ran `heavyWhenItPays`, which is the arm that only goes loud on jobs
+   where thirty percent is real money — it runs 44 loud jobs in four years and
+   peaks at fear 29. Against `leansOnWitnesses` alone, peaking at 42, that is
+   not a feared family and an unfeared one. It is two unfeared families, and
+   the bar under it was reading the gap between them as a finding about fear.
+
+   `heavy` is the arm that is actually frightening: 37 weeks of 42 above
+   `FEARED_ABOVE`, against zero. It loses money doing it, and that is priced by
+   its own bar two blocks up — this pair is about whether the witness lands,
+   and for that the arm has to have the thing being tested.
+*/
+const RUNS_LEAN_FEARED = Array.from({ length: 36 }, (_, i) =>
+  climb(700 + i, HUMAN_DAYS, { leansOnWitnesses: true, heavy: true }),
+);
+
+/*
+   Two families shopping for two different things, against one shopping by price.
+
+   All three play identically in every other respect and run the same seeds.
+   The only difference is how `BUSINESSES` is sorted before the affordability
+   check, which is exactly the decision the catalogue re-cost created and
+   exactly the decision nothing in this project has ever made.
+*/
+const RUNS_WASHERS = Array.from({ length: 36 }, (_, i) =>
+  climb(700 + i, HUMAN_DAYS, { frontTaste: 'washing' }),
+);
+const RUNS_EARNERS = Array.from({ length: 36 }, (_, i) =>
+  climb(700 + i, HUMAN_DAYS, { frontTaste: 'earning' }),
+);
+
+/*
    ...and the same boss, on a map where holding things gives nothing.
 
    The control, and the arm above is worthless without it. Read against
@@ -4794,106 +5310,27 @@ const RUNS_GROUND_DEAD = (() => {
   (HOLDING as unknown as Record<string, number>).share = was;
   return runs;
 })();
+/*
+   The catalogue was a shop, and nobody ever went in.
 
-describe('somewhere for the money to go', () => {
-  it('says whether an ordinary career ever buys any of it', () => {
-    const bought = RUNS_SHOPS.filter((r) => r.newSystems.shopping.bought.length > 0);
-    const days = bought
-      .map((r) => r.newSystems.shopping.firstDay!)
-      .sort((a, b) => a - b);
-    // Distinct rows, not purchases: a warrant takes things, and the bot buys
-    // another one, so `bought` runs past the size of the catalogue.
-    const counts = RUNS_SHOPS.map((r) => new Set(r.newSystems.shopping.bought).size);
-    const tier = POSSESSIONS.filter((d) => d.upkeep).length;
-    const tally = new Map<string, number>();
-    for (const r of RUNS_SHOPS) {
-      for (const id of r.newSystems.shopping.bought) tally.set(id, (tally.get(id) ?? 0) + 1);
-    }
+   This block measured `RUNS_SHOPS` — an arm told to buy possessions — and it
+   is gone along with the shop. What killed it was a reading taken for the
+   first time today, on the baseline rather than on an arm built to exercise
+   the feature: **0 of 36 ordinary careers ever bought anything.**
 
-    // eslint-disable-next-line no-console
-    console.log(
-      `sinks: ${bought.length}/${RUNS_SHOPS.length} careers bought something on the ` +
-        `upkeep tier
-` +
-        (bought.length
-          ? `       first purchase, 25th / median / 75th day: ` +
-            `${pct(days, 0.25)} / ${median(days)} / ${pct(days, 0.75)}
-`
-          : '') +
-        `       how many things a career ended up with: ` +
-        Array.from({ length: tier + 1 }, (_, n) => n)
-          .map((n) => `${n}: ${counts.filter((c) => c === n).length}`)
-          .join(', ') +
-        `  (of ${tier} rows; ` +
-        `${RUNS_SHOPS.reduce((t, r) => t + r.newSystems.shopping.bought.length, 0)} purchases ` +
-        `in all, the extras being things a warrant took)` +
-        `
-       purchases by row (a seized thing gets replaced): ` +
-        POSSESSIONS.filter((d) => d.upkeep)
-          .map((d) => `${d.id} ${tally.get(d.id) ?? 0}/${RUNS_SHOPS.length}`)
-          .join(', ') +
-        `
-       weeks keeping something, median ` +
-        `${median(RUNS_SHOPS.map((r) => r.newSystems.shopping.weeksKeeping))}` +
-        `; estate median $${median(RUNS_SHOPS.map((r) => r.bestEstate)).toLocaleString('en-US')}` +
-        ` against $${median(RUNS_300.map((r) => r.bestEstate)).toLocaleString('en-US')} not shopping`,
-    );
+   Everything this file had said about possessions was said about a bot that
+   had been instructed to use them. The paired estate gap of -$782,674 was
+   real and it priced the wrong thing: not "is this a bad buy" but "what
+   happens when you make somebody do it". Nobody was choosing it, because front
+   income compounds and a possession does not, so every dollar spent in the
+   shop was a dollar not spent on premises that pay for four years.
 
-    /*
-       Reachable, and reachable in time to be lived with.
-
-       The surplus peaks on day 294 of 300. A catalogue only bought in the last
-       fortnight has absorbed the money without ever having been a decision,
-       which is the specific way this feature fails while looking like it
-       worked. Both ends are asserted for the same reason the patron test
-       asserts both: a price low enough that everybody buys everything has not
-       fixed the sink, it has deleted the choice.
-    */
-    expect(
-      bought.length,
-      'nobody ever buys anything on the upkeep tier',
-    ).toBeGreaterThanOrEqual(Math.ceil(RUNS_SHOPS.length / 2));
-    expect(
-      median(days),
-      'the catalogue is only reachable in the last fortnight of a career',
-    ).toBeLessThan(240);
-    expect(
-      counts.filter((c) => c === tier).length,
-      'every career buys the entire catalogue, so none of it is a choice',
-    ).toBeLessThan(RUNS_SHOPS.length);
-  });
-
-  it('says whether keeping it costs anything worth noticing', () => {
-    /*
-       Paired against the same seeds, participants only, per HANDOFF section 3.
-       A family that never bought anything cannot be told apart from one that
-       did, and averaging the two hides the whole effect.
-    */
-    const gap = pairedGap(
-      RUNS_SHOPS,
-      RUNS_300,
-      (r) => r.bestEstate,
-      (r) => (r as (typeof RUNS_SHOPS)[number]).newSystems.shopping.bought.length > 0,
-    );
-
-    // eslint-disable-next-line no-console
-    console.log(
-      `sinks: paired estate gap for careers that shopped: ` +
-        `$${Math.round(gap).toLocaleString('en-US')}
-` +
-        `       weeks the upkeep could not be met, median ` +
-        `${median(RUNS_SHOPS.map((r) => r.newSystems.shopping.weeksShort))}`,
-    );
-
-    /*
-       It has to cost something. A sink that leaves the family exactly as rich
-       is not absorbing anything — it is a purchase that happens to sit in the
-       estate at face, which is what `holdings` already does for free.
-    */
-    expect(gap, 'buying and keeping all of it costs the family nothing').toBeLessThan(0);
-  });
-});
-
+   The object stays. It counts toward the estate, the law can take one, the
+   post-mortem lists it, and a roof of your own makes an evening at home worth
+   more — five systems, none of them a catalogue. It arrives from a landed
+   score now, through `takeSomething`, so a possession is a record of something
+   the family did rather than something it went out and purchased.
+*/
 describe('handing the job loop over', () => {
   it('says whether automating beats playing, and it must not', () => {
     const ran = RUNS_AUTO.filter((r) => r.newSystems.auto.launched > 0);
@@ -7786,3 +8223,324 @@ describe('what the ground is for', () => {
     ).toBeGreaterThanOrEqual(at(RUNS_GROUND, (r) => r.newSystems.ground.controlled));
   });
 });
+
+/*
+   Where a career actually stalls, now that fronts have been reworked twice.
+
+   The third piece of the front work was going to be "fix the money wall", sold
+   on F15: money blocks 97% of the weeks a career owns no front, and 30 careers
+   of 36 finish under $100,000 holding exactly one. That is no longer what this
+   build does — every career compounds, the median holds ten fronts at the end,
+   and fronts are missing on 2% of paydays. F15 is stale, and when it went stale
+   is not knowable from here: the heat-decay repair, the wash-cut repair and the
+   job-table restake all moved estates a long way.
+
+   What the probe reports instead is that **laundering capacity is the binding
+   constraint on 58% of paydays**. Before building anything against that, this
+   asks whether it is a property of the economy or a property of the bot.
+*/
+describe('where the clean money stops', () => {
+  it('says whether the capacity wall is the economy or the shopping', () => {
+    const at = (rs: typeof RUNS_300, f: (r: (typeof RUNS_300)[number]) => number) =>
+      median(rs.map(f));
+    const share = (rs: typeof RUNS_300, f: (w: (typeof RUNS_300)[number]['wash']) => number) => {
+      const weeks = median(rs.map((r) => r.wash.capacityBound + r.wash.dirtyBound + r.wash.nothingToWash + r.wash.noFronts));
+      return weeks > 0 ? Math.round((median(rs.map((r) => f(r.wash))) / weeks) * 100) : 0;
+    };
+    const used = (rs: typeof RUNS_300) =>
+      Math.round((median(rs.map((r) => r.wash.laundered)) / median(rs.map((r) => r.wash.capacity))) * 100);
+
+    const rows: [string, typeof RUNS_300][] = [
+      ['by price ', RUNS_300],
+      ['for washing', RUNS_WASHERS],
+      ['for earning', RUNS_EARNERS],
+    ];
+
+    // eslint-disable-next-line no-console
+    console.log(
+      `fronts: what a career buys them for, ${HUMAN_DAYS} days, same seeds
+` +
+        rows
+          .map(
+            ([name, rs]) =>
+              `        ${name}  capacity-bound ${share(rs, (w) => w.capacityBound)}%` +
+              ` · dirty-bound ${share(rs, (w) => w.dirtyBound)}%` +
+              ` · no fronts ${share(rs, (w) => w.noFronts)}%
+` +
+              `                     laundered $${Math.round(at(rs, (r) => r.wash.laundered)).toLocaleString('en-US')}` +
+              ` of $${Math.round(at(rs, (r) => r.wash.capacity)).toLocaleString('en-US')} offered (${used(rs)}% used)` +
+              `; front revenue $${Math.round(at(rs, (r) => r.wash.revenue)).toLocaleString('en-US')}
+` +
+              `                     fronts ${at(rs, (r) => r.fronts)}` +
+              `; estate $${Math.round(at(rs, (r) => r.bestEstate)).toLocaleString('en-US')}`,
+          )
+          .join('\n'),
+    );
+
+    /*
+       Instrument first. Three arms that bought the same fronts would produce
+       three identical rows and a confident-looking table saying nothing, which
+       is this project's signature failure and has been caught four times.
+    */
+    expect(
+      at(RUNS_WASHERS, (r) => r.wash.capacity),
+      'buying for capacity bought the same capacity as buying by price, so the arms are not different',
+    ).not.toBe(at(RUNS_300, (r) => r.wash.capacity));
+
+    /*
+       And the question. If shopping for capacity clears the wall, the wall is
+       a decision the player is making badly and the catalogue re-cost is what
+       made it a decision — there is nothing structural to repair. If it does
+       not, the shortage is real and the third piece of this work has a target.
+
+       Written as a comparison rather than a threshold, and recorded either way.
+    */
+    expect(
+      at(RUNS_WASHERS, (r) => r.wash.capacity),
+      'buying deliberately for capacity got less capacity than buying by price',
+    ).toBeGreaterThan(at(RUNS_300, (r) => r.wash.capacity));
+  });
+});
+
+/*
+   The half of a boss that is not the business.
+
+   Three systems — being feared, what the man owns, and whether anybody is
+   still at home — all built, all wired, and none of them ever measured. A
+   search of this file for "fear" before today found it in exactly one place: a
+   loyalty-drift table where it contributes -0.02 of -1.45. That reading cannot
+   distinguish a system that does nothing from a system nothing switches on,
+   and the difference decides whether the repair is to the mechanic or to the
+   reasons to reach for it.
+
+   This asks nothing and asserts almost nothing. It is a diagnosis, and it is
+   written before any design so the design has something to answer to.
+*/
+describe('the half that is not the business', () => {
+  it('says what fear, property and home actually do across a career', () => {
+    const at = (f: (r: (typeof RUNS_300)[number]) => number) => median(RUNS_300.map(f));
+    const any = (f: (r: (typeof RUNS_300)[number]) => number) => RUNS_300.filter((r) => f(r) > 0).length;
+
+    // eslint-disable-next-line no-console
+    console.log(
+      `self: ${RUNS_300.length} careers, ${HUMAN_DAYS} days
+` +
+        `      FEAR   peak ${at((r) => r.newSystems.self.peakFear)}, ended ${at((r) => r.newSystems.self.finalFear)}` +
+        `; weeks above ${FEARED_ABOVE}: ${at((r) => r.newSystems.self.weeksFeared)} of ${Math.floor(HUMAN_DAYS / 7)}` +
+        `; careers that were ever frightening: ${any((r) => r.newSystems.self.weeksFeared)}/${RUNS_300.length}
+` +
+        `      OWNS   ${at((r) => r.newSystems.self.owned)} things worth ` +
+        `$${Math.round(at((r) => r.newSystems.self.ownedWorth)).toLocaleString('en-US')}` +
+        `; careers that ever bought anything: ${any((r) => r.newSystems.self.owned)}/${RUNS_300.length}
+` +
+        `      HOME   neglect peak ${at((r) => r.newSystems.self.peakNeglect)}, ended ${at((r) => r.newSystems.self.finalNeglect)}` +
+        `; visits ${at((r) => r.newSystems.self.visits)}` +
+        `; careers that ever went home: ${any((r) => r.newSystems.self.visits)}/${RUNS_300.length}` +
+        `; deposition risk at the end x${at((r) => r.newSystems.self.depositionRisk)}`,
+    );
+
+    /*
+       The only assertion, and it is on the instrument rather than the game.
+
+       Every figure above could be zero for a true and interesting reason, so
+       none of them gets a bar until somebody has decided what these systems
+       are for. What must not be zero is the reading itself — a career that
+       ran 300 days has a home whether or not anybody visited it, and if this
+       comes back empty the capture is broken and the table above is furniture.
+    */
+    expect(
+      RUNS_300.filter((r) => r.newSystems.self.peakNeglect > 0).length,
+      'no career accumulated any neglect at all, so the home is not being ticked',
+    ).toBe(RUNS_300.length);
+  });
+});
+
+/*
+   Whether being frightening is a way to run a family.
+
+   `FEAR` has nine tuned constants. Fear suppresses defection, helps witness
+   pressure and shakedowns, and costs loyalty, public feeling and recruiting.
+   The first reading this project ever took of it said peak 10 of 100 on 36
+   careers with nobody ever above 30 — and the honest-looking conclusion was
+   that an entire mechanic was running at a tenth strength.
+
+   That conclusion was wrong and the cause was one line in this file. The only
+   deliberate source of fear in the game is the heavy approach, worth 2 a job,
+   and this bot has always run `DEFAULT_APPROACH`, worth 0. Every point those
+   careers ever had arrived from something that happened *to* them.
+
+   So this asks the question the game has been posing since approaches were
+   written and nothing ever answered: heavy takes 30% more and costs four
+   points of odds, 1.8x the heat and three points of public feeling a job. Is
+   the fear worth the bill?
+*/
+describe('being frightening', () => {
+  it('says what running heavy actually buys', () => {
+    const at = (rs: typeof RUNS_300, f: (r: (typeof RUNS_300)[number]) => number) =>
+      median(rs.map(f));
+    const gaps = RUNS_HEAVY.map((r, i) => r.bestEstate - RUNS_300[i].bestEstate).sort(
+      (a, b) => a - b,
+    );
+    const smart = RUNS_HEAVY_SMART.map((r, i) => r.bestEstate - RUNS_300[i].bestEstate).sort(
+      (a, b) => a - b,
+    );
+
+    // eslint-disable-next-line no-console
+    console.log(
+      `heavy: ${RUNS_HEAVY.length} careers, ${HUMAN_DAYS} days, heavy / straight
+` +
+        `       fear peak ${at(RUNS_HEAVY, (r) => r.newSystems.self.peakFear)}` +
+        ` / ${at(RUNS_300, (r) => r.newSystems.self.peakFear)}` +
+        `; ended ${at(RUNS_HEAVY, (r) => r.newSystems.self.finalFear)}` +
+        ` / ${at(RUNS_300, (r) => r.newSystems.self.finalFear)}
+` +
+        `       weeks above ${FEARED_ABOVE}: ${at(RUNS_HEAVY, (r) => r.newSystems.self.weeksFeared)}` +
+        ` / ${at(RUNS_300, (r) => r.newSystems.self.weeksFeared)} of ${Math.floor(HUMAN_DAYS / 7)}` +
+        `; careers ever frightening ${RUNS_HEAVY.filter((r) => r.newSystems.self.weeksFeared > 0).length}` +
+        `/${RUNS_HEAVY.length}
+` +
+        `       what it cost: heat-weeks ${Math.round(at(RUNS_HEAVY, (r) => r.danger.heat))}` +
+        ` / ${Math.round(at(RUNS_300, (r) => r.danger.heat))}` +
+        `; walked ${at(RUNS_HEAVY, (r) => r.lost.defected)} / ${at(RUNS_300, (r) => r.lost.defected)}` +
+        `; crew ${at(RUNS_HEAVY, (r) => r.newSystems.crewLeft)} / ${at(RUNS_300, (r) => r.newSystems.crewLeft)}
+` +
+        `       what it bought: districts ${at(RUNS_HEAVY, (r) => r.bestDistricts)}` +
+        ` / ${at(RUNS_300, (r) => r.bestDistricts)}` +
+        `; respect ${at(RUNS_HEAVY, (r) => r.bestRespect)} / ${at(RUNS_300, (r) => r.bestRespect)}
+` +
+        `       estate 25th / median / 75th: ` +
+        `$${Math.round(pct(gaps, 0.25)).toLocaleString('en-US')} / ` +
+        `$${Math.round(median(gaps)).toLocaleString('en-US')} / ` +
+        `$${Math.round(pct(gaps, 0.75)).toLocaleString('en-US')}` +
+        `; ahead on ${gaps.filter((g) => g > 0).length}/${gaps.length}
+` +
+        `       picking its moments: ${at(RUNS_HEAVY_SMART, (r) => r.newSystems.self.heavyRuns)}` +
+        ` jobs run loud, fear peak ${at(RUNS_HEAVY_SMART, (r) => r.newSystems.self.peakFear)}` +
+        `; walked ${at(RUNS_HEAVY_SMART, (r) => r.lost.defected)}` +
+        `; estate $${Math.round(median(smart)).toLocaleString('en-US')}` +
+        `, ahead on ${smart.filter((g) => g > 0).length}/${smart.length}
+` +
+        /*
+           The number that explains the other six.
+
+           Fear is granted +2 only when a loud job *succeeds* and taken away 3
+           whenever any job fails, and heavy costs four points of odds on top.
+           So the break-even success rate is 60%: below that, running heavy
+           destroys fear faster than it builds it, which is why total
+           commitment peaks at 34 and ends at 5.
+        */
+        `       odds the work actually ran at: heavy ` +
+        `${Math.round(at(RUNS_HEAVY, (r) => (r.newSystems.matched.oddsSum / Math.max(1, r.newSystems.matched.launched)) * 100))}%` +
+        `, straight ${Math.round(at(RUNS_300, (r) => (r.newSystems.matched.oddsSum / Math.max(1, r.newSystems.matched.launched)) * 100))}%` +
+        ` — fear breaks even at ${Math.round((-FEAR.onFailure / (2 - FEAR.onFailure)) * 100)}%`,
+    );
+
+    /*
+       Instrument first, and this is the bar that decides whether the earlier
+       reading was about the game or about the bot. If an arm that runs every
+       job heavy still never reaches a level where `FEAR`'s constants do
+       anything, then fear really is unreachable and the repair is to the
+       mechanic. If it climbs, the repair is to the reasons, and the table
+       above is the first honest look this project has had at it.
+    */
+    expect(
+      at(RUNS_HEAVY, (r) => r.newSystems.self.peakFear),
+      'running every job heavy for 300 days built no more fear than playing straight',
+    ).toBeGreaterThan(at(RUNS_300, (r) => r.newSystems.self.peakFear));
+  });
+});
+
+/*
+   What fear is for.
+
+   Every reading this project has ever taken of fear was a reading of the
+   supply: how much a family has, how fast it drains, what it costs to build.
+   Nothing has ever looked at the demand, and the demand is one action —
+   `pressureWitness` — which has never been called by any arm, bar or blind
+   round in the history of this repository.
+
+   It is the thing being feared buys. A witness who stops talking takes 6 to 14
+   points off a case; a witness who does not adds 16 and twelve points of heat
+   to the case you were trying to empty. Fear is worth 25 points of that
+   coin-flip at maximum, which is the largest single modifier on any action in
+   the law system.
+*/
+describe('what being feared is for', () => {
+  it('says whether leaning on the people who talk is worth doing', () => {
+    const at = (rs: typeof RUNS_300, f: (r: (typeof RUNS_300)[number]) => number) =>
+      median(rs.map(f));
+    const gap = (rs: typeof RUNS_300) =>
+      rs.map((r, i) => r.bestEstate - RUNS_300[i].bestEstate).sort((a, b) => a - b);
+
+    const plain = gap(RUNS_LEAN);
+    const feared = gap(RUNS_LEAN_FEARED);
+
+    // eslint-disable-next-line no-console
+    console.log(
+      `leaning: ${RUNS_LEAN.length} careers, ${HUMAN_DAYS} days
+` +
+        `         straight and leaning: tried ${at(RUNS_LEAN, (r) => r.newSystems.leaning.tried)}` +
+        `, landed ${at(RUNS_LEAN, (r) => r.newSystems.leaning.landed)}` +
+        `, case strength taken off ${Math.round(at(RUNS_LEAN, (r) => r.newSystems.leaning.strengthMoved))}` +
+        ` (${Math.round(at(RUNS_LEAN, (r) => (r.newSystems.leaning.landed / Math.max(1, r.newSystems.leaning.tried)) * 100))}%)` +
+        `; fear peak ${at(RUNS_LEAN, (r) => r.newSystems.self.peakFear)}
+` +
+        `         feared and leaning:   tried ${at(RUNS_LEAN_FEARED, (r) => r.newSystems.leaning.tried)}` +
+        `, landed ${at(RUNS_LEAN_FEARED, (r) => r.newSystems.leaning.landed)}` +
+        `, case strength taken off ${Math.round(at(RUNS_LEAN_FEARED, (r) => r.newSystems.leaning.strengthMoved))}` +
+        ` (${Math.round(at(RUNS_LEAN_FEARED, (r) => (r.newSystems.leaning.landed / Math.max(1, r.newSystems.leaning.tried)) * 100))}%)` +
+        `; fear peak ${at(RUNS_LEAN_FEARED, (r) => r.newSystems.self.peakFear)}
+` +
+        `         what it did to the law: peak case ` +
+        `${Math.round(at(RUNS_LEAN, (r) => r.danger.peakCase))} straight-leaning / ` +
+        `${Math.round(at(RUNS_LEAN_FEARED, (r) => r.danger.peakCase))} feared-leaning / ` +
+        `${Math.round(at(RUNS_300, (r) => r.danger.peakCase))} neither
+` +
+        `         estate against playing straight: leaning ` +
+        `$${Math.round(median(plain)).toLocaleString('en-US')}` +
+        ` (ahead ${plain.filter((g) => g > 0).length}/36)` +
+        `; feared and leaning $${Math.round(median(feared)).toLocaleString('en-US')}` +
+        ` (ahead ${feared.filter((g) => g > 0).length}/36)`,
+    );
+
+    /*
+       Instrument first, and this file has been bitten by exactly this: an arm
+       that never took the action would report a believable nothing and look
+       like a finding about the mechanic.
+    */
+    expect(
+      at(RUNS_LEAN, (r) => r.newSystems.leaning.tried),
+      'nobody ever leaned on anybody, so this measures a career that did not use the feature',
+    ).toBeGreaterThan(0);
+
+    /*
+       And the property the whole supply side was tuned for: a family with fear
+       to spend should land this more often than one without. If it does not,
+       then `FEAR.witnessBonusAtMax` is decoration and everything done to the
+       supply of fear today was in service of nothing.
+
+       **This compared counts, and "more often" is a rate.** The two arms do
+       not lean the same number of times — they meet different cases and only
+       lean on the ones above `LEAN_ON_CASE_ABOVE` — so one reading had the
+       feared arm at 18 attempts and 14 landings against 19 and 17, failed, and
+       was reporting that fear had made leaning *worse* when the rates were 79%
+       against 77% the other way. That is the denominator defect this file
+       caught once already this session in the capture itself, arriving a
+       second time in the assertion built on top of it.
+
+       Rates now, with a floor under both denominators so the comparison
+       cannot be two small numbers arguing.
+    */
+    const leanRate = (runs: typeof RUNS_LEAN) =>
+      at(runs, (r) => r.newSystems.leaning.landed / Math.max(1, r.newSystems.leaning.tried));
+    expect(
+      at(RUNS_LEAN_FEARED, (r) => r.newSystems.leaning.tried),
+      'the feared arm barely leaned on anybody, so its rate is not a reading',
+    ).toBeGreaterThanOrEqual(5);
+    expect(
+      leanRate(RUNS_LEAN_FEARED),
+      'being feared did not make leaning on a witness land any more often',
+    ).toBeGreaterThanOrEqual(leanRate(RUNS_LEAN));
+  });
+});
+
