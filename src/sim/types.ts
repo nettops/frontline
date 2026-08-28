@@ -44,6 +44,8 @@ export type AttributeId =
 
 export type Attributes = Record<AttributeId, number>;
 
+import type { Build } from '../config/build';
+
 export interface Player {
   name: string;
   /**
@@ -57,6 +59,31 @@ export interface Player {
    */
   nationality?: NationalityId;
   rank: RankId;
+  /**
+   * What the boss is made of, and the points still to place.
+   *
+   * Replaces `attributes`, which improved by use and of whose eight entries
+   * two were read by nothing at all. See `config/build.ts` for the count and
+   * the argument.
+   *
+   * Optional, so a save written before the build screen existed loads as
+   * somebody who put nothing anywhere and still has the pool in hand — the
+   * idiom every other optional field on this state uses, and the reason
+   * `SAVE_VERSION` does not move for this.
+   */
+  build?: Build;
+  points?: number;
+  /** Tiers of work opened so far, so points are paid once each. */
+  tiersSeen?: number;
+  /**
+   * What the street calls you, and when it settled on it.
+   *
+   * Optional like the rest of the build, so a save from before loads as
+   * somebody nobody has a word for yet. `renamed` records that the city has
+   * already changed its mind once — it does not get to keep doing that.
+   */
+  nickname?: { id: string; since: number };
+  renamed?: boolean;
   attributes: Attributes;
   /** Progress toward the next point in each attribute, 0..1. */
   attributeProgress: Attributes;
@@ -168,6 +195,25 @@ export interface Org {
      */
     opsSeen: number;
   };
+  /**
+   * What the seven verbs keep, when they keep anything.
+   *
+   * All optional and all absent on a save written before builds existed, which
+   * is why `SAVE_VERSION` does not move for any of this. A boss with no points
+   * placed has no verbs, so every one of these stays undefined for the whole
+   * of such a career.
+   */
+  /** Districts paying a standing weekly take. Muscle. */
+  card?: string[];
+  /** People placed inside somebody else's house. Instinct. */
+  planted?: { where: string; npcId: Id; since: number }[];
+  /** The day the boss comes back out, having gone in for somebody. Stomach. */
+  insideUntilDay?: number;
+  /** The job being looked at properly this week. Method. */
+  cased?: { defId: string; territoryId: string; readyDay: number } | null;
+  /** The last time everybody was in one room. Grip. */
+  lastMeetingDay?: number;
+
   /** Criminal proceeds. Spendable on criminal work, but carries exposure. */
   dirtyCash: number;
   /**
@@ -1192,6 +1238,22 @@ export interface Business {
    * existing front behaves exactly as it did.
    */
   pressure?: PressureId;
+  /**
+   * A piece of somebody else's place, rather than a place of your own.
+   *
+   * Set by the Ledger verb. Optional and absent everywhere else, so a front
+   * the family actually bought behaves exactly as it always has.
+   */
+  stake?: number;
+  /**
+   * What was agreed with the man who sold it.
+   *
+   * Optional, so a front bought before any of this existed — or bought off the
+   * panel without a conversation — carries none and behaves exactly as it did.
+   * See `config/frontDeal.ts`: a term is permanent, which is what makes taking
+   * one a decision rather than a discount.
+   */
+  terms?: string[];
 }
 
 // ------------------------------------------------------------ contraband ---
@@ -1483,7 +1545,23 @@ export interface SitdownBeat {
  * out of the room and reloading puts you back in it.
  */
 export interface Sitdown {
-  kind: 'crew' | 'rival';
+  kind: 'crew' | 'rival' | 'seller';
+  /**
+   * The front being haggled over, when the man in the room is selling one.
+   *
+   * Optional and absent on every other kind of sit-down, the same idiom
+   * `pattern` and `pressure` use, so `SAVE_VERSION` does not move and a save
+   * written before this loads with nobody selling anything.
+   */
+  deal?: {
+    defId: string;
+    territoryId: string;
+    /** The number on the table now. */
+    ask: number;
+    /** And the catalogue price it is being read against. */
+    listed: number;
+    terms: string[];
+  } | null;
   reasonId: string;
   npcId: Id | null;
   factionId: string | null;

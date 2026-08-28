@@ -7,6 +7,7 @@
  */
 
 import { Rng } from './rng';
+import { availableOperations } from './operations';
 import type { GameState } from './types';
 import { addEvidence, addLog } from './util';
 import { tickOperations } from './operations';
@@ -44,6 +45,9 @@ import { tickWhispers } from './whispers';
 import { tickEvents } from './events';
 import { tickWorld } from './world';
 import { tickFear, tickRecord, tickStanding } from './player';
+import { tickCard, tickInside } from './verbs';
+import { tickPoints } from './build';
+import { tickNickname } from './nicknames';
 import { refreshRecruits } from './crew';
 import { addInfluence, territoryDef } from './territory';
 import { bond } from './diplomacy';
@@ -126,6 +130,23 @@ export function advanceDay(state: GameState): void {
   tickHeat(state);
   // 4a. Being feared fades, and charges rent while it lasts.
   tickFear(state);
+  /*
+     The two verbs that keep running while nobody is looking at them.
+
+     The card collects and costs public feeling; the boss comes back out when
+     his time is done. Both no-ops for a build that never took Muscle or
+     Stomach, which is every build that did not put the points there.
+  */
+  /*
+     And what climbing has paid.
+
+     Read off the board rather than fired from wherever a tier happens to open,
+     so it cannot be missed and so an old save catches up on its first morning.
+  */
+  tickPoints(state, new Set(availableOperations(state).map((o) => o.tier)).size);
+  tickNickname(state);
+  tickCard(state);
+  tickInside(state);
   tickStanding(state);
   tickHoldings(state);
   // 5. Availability timers, familiarity, and the calendar turning over.

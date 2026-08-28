@@ -1,4 +1,11 @@
 import { useState } from 'react';
+import {
+  callEverybodyIn,
+  canCallEverybodyIn,
+  canTakeTheWeight,
+  takeTheWeight,
+} from '../../sim/verbs';
+import { hasVerb } from '../../sim/build';
 import { useGame, mutate } from '../../store';
 import { Panel, Empty, StatRead, StatusTag, KeyValue, Bar, payRead } from '../components';
 import {
@@ -66,6 +73,15 @@ export default function CrewPanel() {
   const cost = recruitCost(state);
   const payroll = payrollForecast(state);
   const marks = liveMarks(state);
+  /*
+     Men the law is currently holding, for the Stomach verb.
+
+     Empty for every build without the points, so the panel it feeds never
+     renders — the same rule the card and the meeting follow.
+  */
+  const inside = hasVerb(state, 'stomach')
+    ? crew.filter((n) => n.status === 'arrested')
+    : [];
   // What the place actually earns in a week: finished jobs plus the fronts.
   const income = recentWeeklyTake(state) + totalWeeklyRevenue(state);
 
@@ -81,6 +97,59 @@ export default function CrewPanel() {
         You cannot see what these people actually are. You see what you have had the
         chance to notice, and that sharpens only by working alongside them.
       </p>
+
+      {/*
+           The one thing a boss with Grip can do that nobody else can.
+
+           On the crew screen rather than on the build screen, because the
+           build screen says what you *are* and this is a thing you *do* — and
+           the room it produces is about these people. Shown only when it is
+           open, because a control that is never available to most builds is
+           clutter for most careers.
+        */}
+      {/*
+           Going in for one of them, which is the Stomach verb.
+
+           On the crew screen because the decision is about a person, and it
+           only appears when they actually have somebody — a standing button
+           offering to go to prison for nobody in particular would be the
+           strangest control in the game.
+        */}
+      {inside.length > 0 && (
+        <Panel title="They have somebody">
+          {inside.map((npc) => {
+            const can = canTakeTheWeight(state, npc.id);
+            return (
+              <div key={npc.id} className="row between" style={{ marginBottom: 6 }}>
+                <span>{npc.name}</span>
+                <button
+                  className="btn small"
+                  disabled={!can.ok}
+                  title={can.message}
+                  onClick={() => mutate((g) => takeTheWeight(g, npc.id), true)}
+                >
+                  Go in for them
+                </button>
+              </div>
+            );
+          })}
+          <p className="faint tiny" style={{ marginBottom: 0 }}>
+            You do the time instead. Everybody finds out who did it.
+          </p>
+        </Panel>
+      )}
+
+      {canCallEverybodyIn(state).ok && (
+        <Panel title="Everybody in">
+          <p className="dim" style={{ marginTop: 0 }}>
+            The whole family in one room. Grievances come out, and you find out who did
+            not come.
+          </p>
+          <button className="btn" onClick={() => mutate((g) => callEverybodyIn(g), true)}>
+            Call everybody in
+          </button>
+        </Panel>
+      )}
 
       <Panel title="Your people" flush>
         {crew.length === 0 ? (

@@ -14,6 +14,8 @@
  * and what you can do about it, and changes no balance figure at all.
  */
 
+import { WORLD } from '../config/build';
+import { worldPull } from './build';
 import { clamp } from './rng';
 import type { GameState } from './types';
 import { holdingShare } from './holdings';
@@ -242,5 +244,14 @@ export function quietShare(state: GameState): number {
 }
 
 export function heatSuccessPenalty(state: GameState): number {
-  return (state.org.heat / 100) * HEAT_SUCCESS_PENALTY_AT_MAX;
+  /*
+     Less of it, for a boss whose people do not panic.
+
+     The Stomach half of the build. Heat is the second largest drain in the
+     game — -0.46 loyalty per crew-week against stagnation's -0.60 — and its
+     other cost is here, on the odds of every job run while the street is warm.
+     A family that can work through it is the whole of what Stomach means.
+  */
+  const carried = Math.max(0, state.org.heat - worldPull(state, 'stomach') * WORLD.stomachHeatRoom);
+  return (carried / 100) * HEAT_SUCCESS_PENALTY_AT_MAX;
 }

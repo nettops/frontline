@@ -84,7 +84,14 @@ export function tickFear(state: GameState): void {
   if (state.day % PAYDAY_INTERVAL !== 0) return;
   const level = fearLevel(state);
 
-  state.org.fear = Math.max(0, state.org.fear - FEAR.decayPerWeek);
+  /*
+     A share of what is there, not a flat weekly bill.
+
+     See the note on `FEAR.decayShare`. A constant drain has no settling point,
+     so the level a family lived at was decided by the sign of a subtraction
+     rather than by how it played. This is the repair `heat.ts` already made.
+  */
+  state.org.fear = Math.max(0, state.org.fear - state.org.fear * FEAR.decayShare);
   if (level <= 0) return;
 
   // A neighbourhood that is frightened of you is not a neighbourhood that

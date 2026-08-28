@@ -51,7 +51,6 @@ import {
   EXPOSURE_HEAT_AT_MAX,
   LAUNDER_CUT_BASE,
   LAUNDER_CUT_MIN,
-  LAUNDER_CUT_PER_BUSINESS_POINT,
   BUSINESS_FROM,
   LEGITIMATE_REVENUE_SCALE,
   SHUTTER_REFUND_SHARE,
@@ -61,6 +60,9 @@ import {
 } from '../config/businesses';
 import { CONTROL_THRESHOLDS, SENTIMENT_HOSTILE_BELOW } from '../config/territories';
 import { PAYDAY_INTERVAL } from '../config/economy';
+import { termExposure, termRevenueShare } from './frontDeal';
+import { WORLD } from '../config/build';
+import { worldPull } from './build';
 import type { ControlLevel } from '../config/territories';
 
 export function businessDef(business: Business): BusinessDef {
@@ -119,6 +121,14 @@ export function weeklyRevenue(state: GameState, business: Business): number {
       wealthScale(state, business.territoryId) *
       LEGITIMATE_REVENUE_SCALE *
       scale *
+      /*
+         Less whatever the man who sold it kept.
+
+         The other half of a term, and the reason a term is a decision rather
+         than a discount: he took less for it because a share of every week
+         from here is still his, and nothing in the game ever buys that back.
+      */
+      termRevenueShare(business) *
       // The cycle. A front is the most exposed thing you own to what the city
       // is actually doing — it is the only income in the game that comes from
       // people choosing to walk in.
@@ -309,7 +319,15 @@ export function launderOutlook(state: GameState): LaunderOutlook {
  * reason to have one.
  */
 export function launderCut(state: GameState): number {
-  const skill = state.player.attributes.business * LAUNDER_CUT_PER_BUSINESS_POINT;
+  /*
+     What the boss knows about paper.
+
+     Was `attributes.business`, one of the eight the build replaced — and one
+     of the two that was read exactly once in the entire codebase. Ledger is
+     the same idea with a decision attached: you either put the points here or
+     you pay the cut all career.
+  */
+  const skill = worldPull(state, 'ledger') * WORLD.ledgerCut;
   /*
      Freight in, freight out, and nobody counting very carefully.
 
@@ -456,9 +474,24 @@ export function acquireBusiness(
   state: GameState,
   defId: string,
   territoryId: string,
+  /*
+     What was actually agreed, when somebody sat down and agreed it.
+
+     `check.cost` is the catalogue price and stays the default, so every
+     existing caller — the panel, the memo, the probe — behaves exactly as it
+     did. `frontDeal.ts` passes the number the two of you shook on, which is
+     the only thing that separates a negotiated purchase from a shop.
+
+     Deliberately not a discount parameter. The room can settle above the shelf
+     price as well as below it, and a caller that could only ever reduce would
+     be a haggle with extra steps.
+  */
+  agreedPrice?: number,
 ): Business | null {
   const check = canAcquire(state, defId, territoryId);
   if (!check.ok) return null;
+  const price = agreedPrice ?? check.cost;
+  if (price > check.cost && !canAfford(state, price - (state.org.holdings ?? 0))) return null;
   /*
      Holdings first, because this is the one thing they are for.
 
@@ -470,8 +503,8 @@ export function acquireBusiness(
 
      Everything else in the game still has to draw on the wallet.
   */
-  const fromHoldings = Math.min(state.org.holdings ?? 0, check.cost);
-  const rest = check.cost - fromHoldings;
+  const fromHoldings = Math.min(state.org.holdings ?? 0, price);
+  const rest = price - fromHoldings;
   if (rest > 0 && !canAfford(state, rest)) return null;
   state.org.holdings = (state.org.holdings ?? 0) - fromHoldings;
   if (rest > 0 && !spend(state, rest, 'premises')) {
@@ -687,7 +720,19 @@ export function tickBusinesses(
        restaurant nobody is washing through is quietly becoming a restaurant.
     */
     const lean = pressureOf(business);
-    business.exposure = clamp(business.exposure + lean.exposure, 0, 100);
+    /*
+       And the man you agreed to look after, who is standing outside it.
+
+       A front bought by promising the previous owner protection is a front
+       with somebody on the street who can be pointed at. It is not a large
+       number and it never stops, which is the shape every term in
+       `config/frontDeal.ts` takes: cheap once, permanent afterwards.
+    */
+    business.exposure = clamp(
+      business.exposure + lean.exposure + termExposure(business),
+      0,
+      100,
+    );
 
     // Quiet weeks let a front cool off, faster the more ordinary it looks.
     const decay = EXPOSURE_DECAY_BASE + def.legitimacy * EXPOSURE_DECAY_PER_LEGITIMACY;

@@ -1,4 +1,6 @@
 import { useState } from 'react';
+import { canCase, caseJob } from '../../sim/verbs';
+import { hasVerb } from '../../sim/build';
 import { useGame, mutate } from '../../store';
 import { Panel, Empty, Bar, StatRead } from '../components';
 import {
@@ -519,6 +521,29 @@ export default function OperationsPanel() {
           </p>
 
           {/*
+               Casing it, which is the Method verb.
+
+               Offered on the assemble screen because that is where a boss is
+               already deciding about this job in this district, and the verb is
+               about this pair and no other.
+            */}
+          {hasVerb(state, 'method') && (
+            <p className="tiny" style={{ margin: '0 0 8px' }}>
+              <button
+                className="btn small"
+                disabled={!canCase(state, territoryId).ok}
+                title={canCase(state, territoryId).message}
+                onClick={() => mutate((g) => caseJob(g, def.id, territoryId), false)}
+              >
+                Spend the week on it
+              </button>{' '}
+              <span className="faint">
+                A week watching the place, and it runs like a planned job.
+              </span>
+            </p>
+          )}
+
+          {/*
              Putting somebody on a place, which is the whole feature in one
              button.
 
@@ -808,6 +833,17 @@ export default function OperationsPanel() {
                   */}
                   {breakdown.pattern !== 0 && (
                     <Term label="They know the routine" value={breakdown.pattern} signed />
+                  )}
+                  {/*
+                       The week somebody spent watching the place.
+
+                       Rendered like prep, because it is the same kind of fact:
+                       something the player did on purpose that is worth points
+                       tonight. A bonus the player cannot see is a bonus that
+                       may as well not exist.
+                    */}
+                  {breakdown.cased !== 0 && (
+                    <Term label="You had it watched" value={breakdown.cased} signed />
                   )}
                   {breakdown.world !== 0 && (
                     <Term label="The city right now" value={breakdown.world} signed />

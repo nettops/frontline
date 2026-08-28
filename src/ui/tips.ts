@@ -35,9 +35,9 @@ import { canBorrow, totalOwed } from '../sim/market';
 import { canAcquire } from '../sim/business';
 
 import { BUSINESSES } from '../config/businesses';
-import { POSSESSIONS } from '../config/possessions';
 import { cards, tableRead } from '../sim/cards';
-import { canBuyPossession, heldPossessions } from '../sim/possessions';
+import { heldPossessions } from '../sim/possessions';
+import { liveScores } from '../sim/scores';
 import { isLayingLow } from '../sim/heat';
 import { eligibleStewards } from '../sim/delegation';
 import { playerInfluence, territoryList } from '../sim/territory';
@@ -292,13 +292,19 @@ export const TIPS: Tip[] = [
     only: ['career', 'sandbox'],
     label: 'Yours',
     text:
-      'The fronts belong to the organization. Nothing belongs to you. Yourself has a catalogue now — a car, a watch, three rooms with your own name on the door. They count toward what the family is worth exactly as money put away does, so buying one costs you no rank; what it costs is that the money has stopped being money. Clean money only. What people can see makes you look more legitimate and puts your name in the paper, and those are not the same thing.',
+      'The fronts belong to the organization. Nothing belongs to you. Things that are yours turn up when a score comes home — a car, a watch, three rooms with your own name on the door. They count toward what the family is worth exactly as money put away does, and what people can see makes you look more legitimate and puts your name in the paper, which are not the same thing. The law can take one off you when a case lands.',
     panel: 'player',
-    when: (s) =>
-      heldPossessions(s).length === 0 &&
-      // Something in the catalogue is actually within reach, so this is advice
-      // at the moment it becomes true rather than a standing advertisement.
-      POSSESSIONS.some((def) => canBuyPossession(s, def.id).ok),
+    /*
+       Fires on the first thing that ever arrives, not on the first thing the
+       player could afford.
+
+       This used to read "Yourself has a catalogue now" and wait for something
+       in that catalogue to come within reach. There is no catalogue — 0 of 36
+       careers ever bought from it and the shop is gone. A tip explaining how
+       to shop would have outlived the shop by exactly as long as nobody read
+       this line.
+    */
+    when: (s) => heldPossessions(s).length > 0 || liveScores(s).length > 0,
   },
   {
     /*

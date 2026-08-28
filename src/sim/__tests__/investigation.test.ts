@@ -10,7 +10,7 @@ import { describe, expect, it } from 'vitest';
 
 import { Rng } from '../rng';
 import { newGame } from '../state';
-import { buyPossession, heldPossessions } from '../possessions';
+import { grantPossession, heldPossessions } from '../possessions';
 import { runDaysSolvent } from './helpers';
 import { addEvidence } from '../util';
 import { crewList } from '../npc';
@@ -425,7 +425,7 @@ describe('what a case does to you', () => {
   it('takes the boss\'s own things when a warrant lands', () => {
     const state = fresh();
     state.org.cash = 500_000;
-    expect(buyPossession(state, new Rng(state.rng), 'roadster').ok).toBe(true);
+    expect(grantPossession(state, new Rng(state.rng), 'roadster')).toBeTruthy();
     expect(heldPossessions(state).length).toBe(1);
 
     const investigation = openCaseFor(state, 'city_police', 70);

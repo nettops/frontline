@@ -21,6 +21,11 @@ import { addEvidence, addLog, nextId, weightedPick } from './util';
 import { addHeat, heatSuccessPenalty, isLayingLow } from './heat';
 import { earnDirty, refundDirty, spend, totalFunds } from './economy';
 import { ownedBusinesses } from './business';
+import { takeSomething } from './possessions';
+import { casedBonus, spendCasing } from './verbs';
+import { earningsBonus } from './nicknames';
+import { WORLD } from '../config/build';
+import { worldPull } from './build';
 import {
   addNote,
   creditOperation,
@@ -333,6 +338,14 @@ export interface ChanceBreakdown {
    * of the feature honest.
    */
   pattern: number;
+  /**
+   * A week spent looking at this job in this district properly.
+   *
+   * The Method verb. Zero for every boss who did not put the points there and
+   * for every job that was not the one cased, which is the same shape `prep`
+   * has for a player who never opens a score.
+   */
+  cased: number;
   total: number;
 }
 
@@ -443,6 +456,16 @@ export function successBreakdown(
   */
   const patternTerm = -patternDelta(patternOn(state, def.id, territoryId));
 
+  /*
+     And a week spent looking at this one properly.
+
+     The Method verb, and it reads as a term on the odds for the same reason
+     `prep` does: the player is entitled to see what the week bought, on the
+     screen where the decision is made. Zero for every boss without the points
+     and for every job except the one actually cased.
+  */
+  const casedTerm = casedBonus(state, def.id, territoryId) / 100;
+
   const total = clamp(
     def.baseSuccess +
       crewTerm +
@@ -454,7 +477,8 @@ export function successBreakdown(
       worldTerm +
       approachTerm +
       prepTerm +
-      patternTerm,
+      patternTerm +
+      casedTerm,
     MIN_SUCCESS_CHANCE,
     MAX_SUCCESS_CHANCE,
   );
@@ -471,6 +495,7 @@ export function successBreakdown(
     approach: approachTerm,
     prep: prepTerm,
     pattern: patternTerm,
+    cased: casedTerm,
     total,
   };
 }
@@ -815,7 +840,25 @@ function resolveOperation(state: GameState, rng: Rng, op: ActiveOperation): void
       heatMultiplier(territory, tDef, unfamiliar) *
       crewTraitEffect(crew, 'heat') *
       kitHeat(score) *
-      patternHeat(patternOn(state, def.id, territory.id));
+      patternHeat(patternOn(state, def.id, territory.id)) *
+      /*
+         And how little of a trace a well-run job leaves.
+
+         The Method half of the build: "crews come back clean, and the work
+         gets attributed to nobody." Applied only to the heat of a job that
+         *worked*, because a botched one leaves what it leaves however good the
+         planning was — that is what botched means.
+      */
+      (1 - worldPull(state, 'method') * WORLD.methodQuiet);
+    /*
+       And whatever it is worth being who they think you are.
+
+       The names that pay in money rather than in a point — see
+       `config/nicknames.ts`. On the payout rather than on the odds, because a
+       reputation does not make a job go better; it makes people hand over more
+       once it has gone.
+    */
+    payout = Math.round(payout * (1 + earningsBonus(state)));
     result.payout = payout;
     result.heat = heat;
     earnDirty(state, payout, 'jobs');
@@ -874,9 +917,18 @@ function resolveOperation(state: GameState, rng: Rng, op: ActiveOperation): void
     result.heat = heat;
     addHeat(state, heat, 'street', `${def.name} went wrong`);
     gainRespect(state, -Math.ceil(def.respect / 3));
-    // Being feared is a claim about what happens to people who cross you.
-    // Failing in public is the claim being tested and found wanting.
-    gainFear(state, FEAR.onFailure);
+    /*
+       Being feared is a claim about what happens to people who cross you.
+       Failing in public is the claim being tested and found wanting.
+
+       **Only on a job that was run loud.** This charged every failure,
+       including quiet ones, while the gain counted only loud successes — so a
+       family running one heavy job a week paid the penalty on the nine quiet
+       failures beside it and could never build a reputation at all. A burglary
+       going wrong in the dark is not a public failure of a claim to violence.
+       See the measurement on `FEAR.onFailure`.
+    */
+    if (approach.fear > 0) gainFear(state, FEAR.onFailure);
     trainAttribute(state, def.attribute, 0.4);
     state.player.opsFailed += 1;
 
@@ -901,6 +953,36 @@ function resolveOperation(state: GameState, rng: Rng, op: ActiveOperation): void
     disposeOf(state, rng, score, crew, approachOf(op), success);
     closeScore(state, score, 'done');
   }
+
+  /*
+     And what came back with them.
+
+     The one way a possession enters the game now that the catalogue is not a
+     shop — see the header on `takeSomething`.
+
+     **Any job that landed, not only a score.** The first version hung this on
+     `closeScore` because a thing you own ought to be a record of something you
+     did, and a score is the game's marker for that. `tips.reach` refused it
+     inside a minute: an ordinary career never opens one, so the possession
+     would have been as unreachable as the shop it replaced. Swapping "nobody
+     buys anything" for "nobody is given anything" is not a repair.
+
+     Nothing gates this except the size of the haul, and that gate is the whole
+     of the design. `POSSESSION.fromTakeShare` is a fifth, and the cheapest
+     thing in the catalogue is $2,400 — so a night has to clear five figures
+     before anything comes home at all, and the dearest things need a haul this
+     game rarely produces. A shakedown buys nobody a car.
+  */
+  if (success) takeSomething(state, rng, result.payout);
+
+  /*
+     And the week you spent looking at it is spent.
+
+     Whether it worked or not — the casing bought the odds it bought, and a
+     boss who could re-run a cased job until it landed would be holding a
+     re-roll rather than having done the groundwork.
+  */
+  spendCasing(state, def.id, op.territoryId);
 
   // Men who worked a job together come out of it knowing each other slightly
   // better than they did, which over years is where every alliance and every
@@ -1021,7 +1103,24 @@ function applyFailureConsequence(
       // read about by everybody else.
       adjustSentiment(state, territoryId, SENTIMENT_ON_VIOLENCE);
       cover(state, rng, 'street_violence', { territoryId, who: victim.name });
-      gainFear(state, FEAR.fromViolence);
+      /*
+         And it buys the family nothing.
+
+         This granted `FEAR.fromViolence` — six points, the same as an act of
+         violence the family chose. Measured, it was the largest source of fear
+         in ordinary play: a career fails roughly four jobs a week and this
+         fires on a good share of them, which is why an arm that never once ran
+         a job loud still ended at fear 56 while the whole mechanic is built
+         around being frightening on purpose.
+
+         It is backwards on its face. `fromViolence` is what the street pays
+         you for hurting somebody. Nobody was hurt here except one of yours, on
+         a job that went wrong, and a boss whose men keep coming home injured
+         is not building a reputation for violence — he is building one for
+         losing. The neighbourhood already reacts through `adjustSentiment` and
+         the papers already carry it through `cover`; those are the right
+         consequences and they stay.
+      */
       return `${victim.name} is hurt — out for ${days} days.`;
     }
 

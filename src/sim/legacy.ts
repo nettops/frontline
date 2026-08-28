@@ -13,6 +13,7 @@ import { clamp } from './rng';
 import { estate } from './estate';
 import { territoryList, playerInfluence, controlLevel } from './territory';
 import { figure } from './civic';
+import { workingHoldings } from './holdings';
 import { possessions } from './possessions';
 import { POSSESSION_BY_ID } from '../config/possessions';
 import { CIVIC_FIGURES } from '../config/civic';
@@ -98,6 +99,15 @@ export function careerShape(state: GameState): CareerShape {
      quantity being questioned.
   */
   const held = territoryList(state).filter((t) => controlLevel(t) === 'dominance').length;
+  /*
+     And the half that stops a map being a line on a map.
+
+     See the note on `kingpinRunning`. Dominating four districts named 44% of
+     careers and no placement of that one number could do better, because
+     nothing in the game asks for a fifth district and every career ends with
+     four. Ground with nobody running it is not ground somebody inherits.
+  */
+  const running = workingHoldings(state).length;
   const owed = CIVIC_FIGURES.reduce((sum, def) => sum + figure(state, def.id).owed, 0);
   const peak = state.org.record?.estate ?? worth.total;
   const notoriety = state.city?.notoriety ?? 0;
@@ -138,8 +148,9 @@ export function careerShape(state: GameState): CareerShape {
   );
   claim(
     'kingpin',
-    held >= SHAPE_BARS.kingpinDistricts,
-    `${held} districts answering, of ${territoryList(state).length} in the city.`,
+    held >= SHAPE_BARS.kingpinDistricts && running >= SHAPE_BARS.kingpinRunning,
+    `${held} districts answering of ${territoryList(state).length} in the city, ` +
+      `${running} of them with your own people standing in them.`,
   );
   claim(
     'legitimate',

@@ -26,6 +26,8 @@
  * lazy-initialiser rule that whispers broke on the day it was written.
  */
 import { describe, expect, it } from 'vitest';
+import * as possessionsModule from '../possessions';
+import { grantPossession, possessionsWorth, takeSomething } from '../possessions';
 import { newGame } from '../state';
 import { Rng } from '../rng';
 import { estate } from '../estate';
@@ -33,17 +35,14 @@ import { legitimacy, postMortem } from '../legacy';
 import { priced } from '../market';
 import { home, goHome } from '../personal';
 import {
-  buyPossession,
-  canBuyPossession,
   heldPossessions,
   ownsHome,
-  possessionValue,
   possessions,
   sellPossession,
   seizeOnePossession,
   tickPossessions,
 } from '../possessions';
-import { POSSESSION, POSSESSION_BY_ID, POSSESSIONS } from '../../config/possessions';
+import { POSSESSION_BY_ID, POSSESSIONS } from '../../config/possessions';
 import { PAYDAY_INTERVAL } from '../../config/economy';
 import { territoryList } from '../territory';
 import type { GameState } from '../types';
@@ -54,12 +53,19 @@ function game(seed = 4, clean = 250_000): GameState {
   return state;
 }
 
-/** The one thing everything else here is measured against. */
+/*
+   The one thing everything else here is measured against.
+
+   Was `buyPossession`, and the shop it belonged to is gone — 0 of 36 ordinary
+   careers ever used it. `grantPossession` puts a named thing in the room
+   without a transaction, which is what every test below actually wanted: they
+   are about owning, selling, upkeep, seizure and the post-mortem, and none of
+   them was ever about the purchase.
+*/
 function buy(state: GameState, defId: string) {
-  const rng = new Rng(state.rng);
-  const result = buyPossession(state, rng, defId);
-  expect(result.ok, result.ok ? '' : result.reason).toBe(true);
-  return result;
+  const result = grantPossession(state, new Rng(state.rng), defId);
+  expect(result, `nothing was handed over for ${defId}`).toBeTruthy();
+  return result!;
 }
 
 describe('owning something', () => {
@@ -74,38 +80,6 @@ describe('owning something', () => {
     expect(state.rng.calls).toBe(before);
   });
 
-  it('takes the money out of the clean pool and nowhere else', () => {
-    const state = game();
-    state.org.dirtyCash = 500_000;
-    const cleanBefore = state.org.cash;
-    const dirtyBefore = state.org.dirtyCash;
-
-    buy(state, 'lincoln');
-
-    const price = priced(state, POSSESSION_BY_ID.lincoln.cost);
-    expect(state.org.cash).toBe(cleanBefore - price);
-    /*
-       The rule the whole catalogue rests on. `spend()` takes dirty first, so
-       using it here would let a boss turn a suitcase into a Lincoln — which is
-       laundering, and laundering is what fronts are for.
-    */
-    expect(state.org.dirtyCash).toBe(dirtyBefore);
-  });
-
-  it('refuses by naming both figures, the way every other refusal here does', () => {
-    const state = game(4, 900);
-    const no = canBuyPossession(state, 'roadster');
-    expect(no.ok).toBe(false);
-    expect(no.reason).toMatch(/\$/);
-    // Not "you cannot afford this". What it costs, and what you have.
-    expect(no.reason).toMatch(/900/);
-
-    const rng = new Rng(state.rng);
-    const attempt = buyPossession(state, rng, 'roadster');
-    expect(attempt.ok).toBe(false);
-    expect(state.org.cash).toBe(900);
-  });
-
   /*
      Money put away is still your money.
 
@@ -118,70 +92,9 @@ describe('owning something', () => {
 
      Fronts have always drawn on holdings, and so have tribute and settlements.
      This makes the third system agree with the two that already did.
-  */
-  it('counts money put away, the way buying a front does', () => {
-    const state = game(4, 5_000);
-    state.org.holdings = 250_000;
-    expect(canBuyPossession(state, 'old_place').ok).toBe(true);
-  });
-
-  it('takes it out of holdings first, and charges no hurry price for it', () => {
-    /*
-       No toll, for the reason `acquireBusiness` gives: moving money from a box
-       at a bank into a thing you own is not selling in a hurry. Measured, the
-       15% made a one-point difference to what a career could reach — so this
-       is about the three systems agreeing, not about the money.
-    */
-    const state = game(4, 5_000);
-    state.org.holdings = 250_000;
-    const price = priced(state, POSSESSION_BY_ID.old_place.cost);
-
-    buy(state, 'old_place');
-
-    expect(state.org.holdings).toBe(250_000 - price);
-    expect(state.org.cash).toBe(5_000);
-  });
-
-  it('takes the remainder off the wallet when holdings do not cover it', () => {
-    const state = game(4, 60_000);
-    const price = priced(state, POSSESSION_BY_ID.old_place.cost);
-    state.org.holdings = price - 20_000;
-
-    buy(state, 'old_place');
-
-    expect(state.org.holdings).toBe(0);
-    expect(state.org.cash).toBe(40_000);
-  });
-
-  it('still will not touch dirty money, however it is paid for', () => {
-    // The rule the catalogue actually rests on, and the one this must not
-    // weaken: a suitcase does not become a Lincoln. Holdings are clean.
-    const state = game(4, 0);
-    state.org.dirtyCash = 500_000;
-    state.org.holdings = 0;
-    expect(canBuyPossession(state, 'watch').ok).toBe(false);
-  });
-
-  it('cannot be bought twice', () => {
-    const state = game();
-    buy(state, 'watch');
-    expect(canBuyPossession(state, 'watch').ok).toBe(false);
-  });
 });
 
 describe('the trade it is meant to be', () => {
-  it('leaves the estate where it was — you swapped money for a thing', () => {
-    const state = game();
-    const before = estate(state).total;
-    buy(state, 'house_hill');
-    /*
-       Counts at face, exactly as `holdings` does. Buying a possession is not
-       supposed to move rank in either direction; what it moves is what you can
-       do tomorrow.
-    */
-    expect(estate(state).total).toBe(before);
-    expect(estate(state).possessions).toBe(priced(state, POSSESSION_BY_ID.house_hill.cost));
-  });
 
   it('gives back less than it took', () => {
     const state = game();
@@ -276,19 +189,6 @@ describe('the two sides of being seen', () => {
 });
 
 describe('reachable by the careers that need it', () => {
-  it('opens well below what a stuck career finishes with', () => {
-    const state = game();
-    const cheapest = Math.min(...POSSESSIONS.map((p) => p.cost));
-    /*
-       Thirty of thirty-six careers finish under $100,000 and the median
-       estate at day 300 is $29,759. A catalogue that starts above five
-       thousand is a catalogue for the sixth of players who least need one.
-    */
-    expect(cheapest).toBeLessThanOrEqual(5_000);
-    expect(possessionValue(state, POSSESSION_BY_ID.watch)).toBeLessThanOrEqual(
-      priced(state, 5_000),
-    );
-  });
 
   it('offers something in every kind at the bottom of the money', () => {
     const kinds = new Set(POSSESSIONS.filter((p) => p.cost <= 25_000).map((p) => p.kind));
@@ -503,5 +403,75 @@ describe('the foundation', () => {
     tickPossessions(state);
 
     expect(t.sentiment).toBe(before);
+  });
+});
+
+/*
+   Nobody shops any more.
+
+   Measured on 36 ordinary careers at day 300, the first time this project ever
+   looked: **0 of 36 bought anything.** The one figure that existed before —
+   that careers which shopped ended $782,674 poorer — came from a probe arm
+   that was *told* to shop, so what it priced was a decision nobody was making.
+
+   The reason is arithmetic and it was never going to bend. Front income is
+   paid into holdings and compounds; a possession is money turned into a thing
+   that sits there. A dollar spent here is a dollar not spent on a shop that
+   pays every week for four years, so the catalogue was a strictly worse use of
+   every dollar in the game and the correct play was always to ignore it.
+
+   So the shop is gone and the object stays. Possessions still count toward the
+   estate, the law can still take one, the post-mortem still lists everything
+   you ever had, and owning a roof still makes an evening at home worth more —
+   five systems that were never about shopping. What changed is where a thing
+   comes from: **you do not buy it, the work brings it back.**
+*/
+describe('where a thing comes from now', () => {
+  it('cannot be bought at all', () => {
+    // The whole purchase path is gone rather than disabled. A greyed-out shop
+    // is still a shop, and a player would keep asking what unlocks it.
+    const mod = possessionsModule as Record<string, unknown>;
+    expect(mod.buyPossession, 'the shop is still standing').toBeUndefined();
+    expect(mod.canBuyPossession, 'the shop is still standing').toBeUndefined();
+  });
+
+  it('arrives when a score lands, and is not paid for', () => {
+    const state = game();
+    const before = state.org.cash + (state.org.holdings ?? 0);
+
+    const got = takeSomething(state, new Rng(state.rng), 250_000);
+    expect(got, 'a quarter-million score brought nothing back').toBeTruthy();
+    expect(heldPossessions(state)).toHaveLength(1);
+    expect(
+      state.org.cash + (state.org.holdings ?? 0),
+      'the family paid for something it was given',
+    ).toBe(before);
+  });
+
+  it('brings back something the take could plausibly cover', () => {
+    const small = game();
+    takeSomething(small, new Rng(small.rng), 9_000);
+    const big = game();
+    takeSomething(big, new Rng(big.rng), 400_000);
+
+    const worth = (s: GameState) => possessionsWorth(s);
+    expect(
+      worth(small),
+      'a nine-thousand-dollar job came back with the same thing a four-hundred-thousand one did',
+    ).toBeLessThan(worth(big));
+  });
+
+  it('does not hand over the same thing twice', () => {
+    const state = game();
+    const rng = new Rng(state.rng);
+    for (let i = 0; i < 12; i++) takeSomething(state, rng, 60_000);
+    const ids = heldPossessions(state).map((p) => p.defId);
+    expect(new Set(ids).size, 'the same object was taken twice').toBe(ids.length);
+  });
+
+  it('brings back nothing when the take is too small to be worth anything', () => {
+    const state = game();
+    expect(takeSomething(state, new Rng(state.rng), 400)).toBeNull();
+    expect(heldPossessions(state)).toHaveLength(0);
   });
 });

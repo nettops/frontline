@@ -10,6 +10,11 @@ import {
   patienceRead,
   sitdownOptions,
 } from '../sim/sitdown';
+import { closeDeal, dealTerms, sellerRead } from '../sim/frontDeal';
+import { SELLER_REGISTER_BY_ID, TERMS, type TermId } from '../config/frontDeal';
+import { BUSINESS_BY_ID } from '../config/businesses';
+import { territoryDef } from '../sim/territory';
+import { formatMoney } from '../sim/util';
 import { perceive } from '../sim/npc';
 import { houseName } from '../sim/houses';
 import { formatShortDay } from '../sim/util';
@@ -75,6 +80,13 @@ export default function SitdownModal({ onDone }: { onDone: (days: number) => voi
     play(landed ? 'good' : 'tick');
   };
 
+  const shake = () => {
+    mutate((s) => closeDeal(s), true);
+    play('good');
+    // Buying premises is a day's work, the same as everything else the room does.
+    onDone(1);
+  };
+
   const walkOut = () => {
     const finished = state.sitdown?.done ?? false;
     mutate((s) => {
@@ -117,15 +129,26 @@ export default function SitdownModal({ onDone }: { onDone: (days: number) => voi
 
   const reason = REASON_BY_ID[sit.reasonId];
   const options = sitdownOptions(state);
+  /*
+     Who is in the room. A seller has no name because a seller is not somebody
+     you know — they are the person who happens to own the premises, and giving
+     them a name would imply a relationship that does not exist and will not
+     survive the afternoon.
+  */
+  const deal = sit.deal ?? null;
   const name = npc
     ? npc.name
-    : sit.factionId
-      ? houseName(state, sit.factionId as FactionId)
-      : 'Somebody';
+    : deal
+      ? `Whoever owns the ${BUSINESS_BY_ID[deal.defId]?.name.toLowerCase() ?? 'place'}`
+      : sit.factionId
+        ? houseName(state, sit.factionId as FactionId)
+        : 'Somebody';
 
   const subtitle = npc
     ? `${ROLE_LABEL[npc.role]} · ${timeIn(npc.daysInCrew)} · you know them ${Math.round(npc.familiarity)}%`
-    : (state.factions[sit.factionId ?? '']?.leader?.name ?? 'The other house');
+    : deal
+      ? `${territoryDef(deal.territoryId).name} · asking ${formatMoney(deal.listed)} on the open market`
+      : (state.factions[sit.factionId ?? '']?.leader?.name ?? 'The other house');
 
   return (
     <div className="room-backdrop" role="dialog" aria-modal="true" aria-label={`Sit-down with ${name}`}>
@@ -169,17 +192,51 @@ export default function SitdownModal({ onDone }: { onDone: (days: number) => voi
                     </span>
                   );
                 })
-              : sit.factionId
-                ? houseRead(state, sit.factionId as FactionId).map((read, i) => (
+              : deal
+                ? sellerRead(state, deal.defId, deal.territoryId).map((read, i) => (
                     <span key={i} className={`room-chip ${read.tone}`}>
                       {read.text}
                     </span>
                   ))
-                : null}
+                : sit.factionId
+                  ? houseRead(state, sit.factionId as FactionId).map((read, i) => (
+                      <span key={i} className={`room-chip ${read.tone}`}>
+                        {read.text}
+                      </span>
+                    ))
+                  : null}
           </div>
 
           {reason && <p className="room-why">{reason.blurb}</p>}
         </div>
+
+        {/*
+             The number on the table, which is the only thing in this room that
+             is allowed to be a number.
+
+             Every other reading in a sit-down is a phrase, because what a boss
+             has to go on is the way somebody is sitting. A price is different:
+             it has been said out loud by the person asking for it, and hiding
+             it behind "they want a lot for it" would be coy rather than
+             uncertain. What stays hidden is whether they would take less.
+          */}
+        {deal && (
+          <div className="room-deal">
+            <span className="room-deal-now">{formatMoney(deal.ask)}</span>
+            <span className="room-deal-was">
+              {deal.ask === deal.listed
+                ? 'what it is worth'
+                : deal.ask > deal.listed
+                  ? `${formatMoney(deal.ask - deal.listed)} over the odds`
+                  : `${formatMoney(deal.listed - deal.ask)} under`}
+            </span>
+            {dealTerms(state).map((id: TermId) => (
+              <span key={id} className="room-deal-term" title={TERMS[id].blurb}>
+                {TERMS[id].label}
+              </span>
+            ))}
+          </div>
+        )}
 
         <div className="room-talk">
           {sit.beats.length === 0 && !sit.done && (
@@ -201,7 +258,7 @@ export default function SitdownModal({ onDone }: { onDone: (days: number) => voi
              the pair, since that is what it describes: how the room took it.
           */}
           {sit.beats.map((beat, i) => {
-            const reg = REGISTER_BY_ID[beat.registerId];
+            const reg = REGISTER_BY_ID[beat.registerId] ?? SELLER_REGISTER_BY_ID[beat.registerId];
             return (
               <div key={i} className="room-exchange">
                 {reg?.says ? (
@@ -267,8 +324,22 @@ export default function SitdownModal({ onDone }: { onDone: (days: number) => voi
            the words here have to read as a choice rather than an exit.
         */}
         <footer className="room-foot">
+          {/*
+             Shaking on it, which is the whole point of having been in the room.
+
+             Offered right up until they stand up, and gone the moment they do —
+             `closeDeal` refuses after a walk-out and this must not offer a
+             button that is going to refuse. Leaving without shaking costs
+             nothing but the day, which is the same contract every other
+             sit-down has.
+          */}
+          {deal && !sit.walkedOut && (
+            <button className="room-shake" onClick={shake}>
+              shake on {formatMoney(deal.ask)}
+            </button>
+          )}
           <button className="room-leave" onClick={walkOut}>
-            {sit.done ? 'close the door' : 'that is all'}
+            {sit.done ? 'close the door' : deal ? 'leave it' : 'that is all'}
           </button>
           <span>
             {sit.done ? 'esc' : 'you keep what you have — esc'}

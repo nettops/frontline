@@ -29,7 +29,7 @@ import { cover } from './perception';
 import { note } from './ledger';
 import { adjustSentiment, hasPresence, territoryList } from './territory';
 import { PAYDAY_INTERVAL } from '../config/economy';
-import { POSSESSION, POSSESSION_BY_ID, type PossessionDef } from '../config/possessions';
+import { POSSESSION, POSSESSIONS, POSSESSION_BY_ID, type PossessionDef } from '../config/possessions';
 import type { GameState, Possession } from './types';
 
 /**
@@ -126,73 +126,86 @@ export interface Refusal {
  * a refusal that says "you cannot afford this" tells the player nothing they
  * did not already suspect and nothing about how far off they are.
  */
-export function canBuyPossession(state: GameState, defId: string): Refusal {
-  const def = POSSESSION_BY_ID[defId];
-  if (!def) return { ok: false, reason: 'No such thing.' };
-
-  if (heldPossessions(state).some((p) => p.defId === defId)) {
-    return { ok: false, reason: `You already own ${def.name.toLowerCase()}.` };
-  }
-
-  const price = possessionValue(state, def);
-  const purse = cleanPurse(state);
-  if (purse < price) {
-    return {
-      ok: false,
-      reason:
-        `${formatMoney(price)}, and you have ${formatMoney(purse)} clean including what is ` +
-        `put away. Dirty money does not buy things in your own name — that is what a front ` +
-        `is for.`,
-    };
-  }
-  return { ok: true };
-}
-
-export interface Bought extends Refusal {
-  possession?: Possession;
-}
-
-export function buyPossession(state: GameState, rng: Rng, defId: string): Bought {
-  const check = canBuyPossession(state, defId);
-  if (!check.ok) return check;
-
-  const def = POSSESSION_BY_ID[defId];
-  const price = possessionValue(state, def);
-
+/**
+ * What the work brings back.
+ *
+ * The catalogue used to be a shop. Measured across 36 ordinary careers at day
+ * 300 — the first time this project ever looked — **0 of 36 bought anything**,
+ * and the only figure that existed beforehand came from a probe arm that had
+ * been told to shop and duly ended $782,674 poorer for it.
+ *
+ * Nobody was making a mistake. Front income is paid into holdings and
+ * compounds; a possession is money turned into a thing that sits there. A
+ * dollar spent in the shop was a dollar not spent on premises that pay every
+ * week for four years, so the catalogue was a strictly worse use of every
+ * dollar in the game and ignoring it was correct play. A shop whose right
+ * answer is "do not" is not a decision, and the repair is not a discount.
+ *
+ * So the shop is gone and the object stays. Everything possessions were ever
+ * load-bearing for had nothing to do with buying them: they count toward the
+ * estate, `seizeOnePossession` is the law taking one off you when a case
+ * lands, the post-mortem lists what a career had, and owning a roof makes an
+ * evening at home worth `POSSESSION.clearedByVisitAtHome` instead of
+ * `HOME.clearedByVisit`. Five systems, none of them a catalogue.
+ *
+ * What arrives instead is what a score brought home. A thing you own is now a
+ * record of something you did rather than something you went and bought, which
+ * is also the only reading under which the post-mortem's list means anything.
+ */
+export function takeSomething(state: GameState, rng: Rng, take: number): Possession | null {
   /*
-     By hand rather than through `spend`. See the note at the top of the file.
+     The dearest thing the job could plausibly have come back with.
 
-     Holdings first, and no hurry price, for the reason `acquireBusiness`
-     gives: moving money out of a box at a bank and into a thing you own is not
-     selling in a hurry. Measured, the 15% `takeBack` toll changed what a
-     career could reach by a single percentage point — so this is about the
-     three systems that spend clean money agreeing with each other, not about
-     the money.
+     A share of the take rather than the whole of it, because the crew did not
+     spend the money on it — they came back with something, and the something
+     is smaller than the haul. Read against the catalogue price so a thing that
+     arrives is a thing the player would recognise the value of.
   */
-  const fromHoldings = Math.min(state.org.holdings ?? 0, price);
-  state.org.holdings = (state.org.holdings ?? 0) - fromHoldings;
-  state.org.cash -= price - fromHoldings;
+  const ceiling = take * POSSESSION.fromTakeShare;
+  const already = new Set(heldPossessions(state).map((p) => p.defId));
+
+  const candidates = POSSESSIONS.filter(
+    (def) => !already.has(def.id) && possessionValue(state, def) <= ceiling,
+  ).sort((a, b) => possessionValue(state, b) - possessionValue(state, a));
+  if (candidates.length === 0) return null;
+
+  return grantPossession(state, rng, candidates[0].id);
+}
+
+/**
+ * Somebody hands you a thing.
+ *
+ * Split out from `takeSomething` because choosing *which* thing and recording
+ * that you now have it are two different jobs, and only the first one is a
+ * policy. Nothing in the game calls this directly — a score is the one way a
+ * possession arrives — but a test that needs a specific object in the room
+ * should not have to reverse-engineer a take that produces it.
+ */
+export function grantPossession(state: GameState, rng: Rng, defId: string): Possession | null {
+  const def = POSSESSION_BY_ID[defId];
+  if (!def) return null;
+  if (heldPossessions(state).some((p) => p.defId === defId)) return null;
 
   const possession: Possession = {
     id: `pos_${state.nextId++}`,
-    defId,
+    defId: def.id,
     boughtDay: state.day,
-    paid: price,
+    /*
+       What it would have cost, kept for the estate and for selling.
+
+       Nothing was paid, but the thing is still worth what the thing is worth,
+       and `sellPossession` prices off this field. Recording zero here would
+       make everything the family ever took unsellable and invisible to the
+       estate, which is the opposite of the point.
+    */
+    paid: possessionValue(state, def),
     status: 'held',
   };
   possessions(state).push(possession);
 
-  addLog(state, `You bought ${def.name.toLowerCase()}. ${formatMoney(price)}.`, 'money');
+  addLog(state, `${def.name} came back with them. Nobody asked whose it was.`, 'money');
 
-  /*
-     And whatever the city makes of it.
-
-     Through `cover` rather than by touching notoriety directly, so a shopping
-     trip obeys the two-stories-a-day rule like everything else and cannot turn
-     into a front page every time. `named` is true because this is the one kind
-     of story where there is no question who it is about — it is a thing with
-     your name on the paperwork.
-  */
+  // And whatever the city makes of it, through `cover` like every other story.
   if (def.visibility > 0) {
     cover(state, rng, 'display', {
       named: true,
@@ -201,7 +214,7 @@ export function buyPossession(state: GameState, rng: Rng, defId: string): Bought
     });
   }
 
-  return { ok: true, possession };
+  return possession;
 }
 
 /**

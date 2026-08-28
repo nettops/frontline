@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest';
+import { spendPoint, statLevel } from '../build';
+import { BUILD } from '../../config/build';
 
 import { Rng } from '../rng';
 import { newGame } from '../state';
@@ -471,10 +473,19 @@ describe('businesses and laundering', () => {
     }
   });
 
-  it('buys the cut down as the player learns the business', () => {
+  /*
+     Was `attributes.business`, and the attribute is gone.
+
+     `business` was one of the eight the build replaced, and one of the two
+     that the whole codebase read exactly once — here. Ledger is the same idea
+     with a decision attached: the cut comes down because you put points there
+     rather than because time passed.
+  */
+  it('buys the cut down for a boss who knows paper', () => {
     const state = fresh();
     const naive = launderCut(state);
-    state.player.attributes.business = 20;
+    state.player.points = 99;
+    while (statLevel(state, 'ledger') < BUILD.max) spendPoint(state, 'ledger');
     expect(launderCut(state)).toBeLessThan(naive);
   });
 

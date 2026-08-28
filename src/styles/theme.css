@@ -2301,6 +2301,61 @@ th.sortable:hover {
   color: var(--text-faint);
 }
 
+/*
+   The number on the table.
+
+   The one figure a sit-down is allowed to show. Every other reading in this
+   room is a phrase because what a boss has to go on is the way somebody is
+   sitting — but a price has been said out loud by the person asking for it,
+   and hiding it would be coy rather than uncertain. What stays hidden is
+   whether they would take less.
+*/
+.room-deal {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 10px 0 2px;
+  border-top: 1px solid var(--line);
+}
+.room-deal-now {
+  font-family: var(--font-mono);
+  font-size: 22px;
+  color: var(--brass);
+  font-variant-numeric: tabular-nums;
+}
+.room-deal-was {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-dim);
+}
+.room-deal-term {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  padding: 3px 8px;
+  border: 1px dashed var(--brass-dim);
+  border-radius: var(--radius);
+  color: var(--brass);
+  cursor: help;
+}
+
+/* Shaking on it. The only affirmative button the room has ever had. */
+.room-shake {
+  background: none;
+  border: 1px solid var(--brass-dim);
+  border-radius: var(--radius);
+  color: var(--brass);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  padding: 5px 10px;
+  cursor: pointer;
+  margin-right: auto;
+}
+.room-shake:hover {
+  border-color: var(--brass);
+  color: var(--text);
+}
+
 .room-leave {
   background: none;
   border: 1px solid var(--line);

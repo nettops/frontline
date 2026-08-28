@@ -1,4 +1,6 @@
 import { useState } from 'react';
+import { canPutOnCard, cardTake, putOnCard, takeOffCard } from '../../sim/verbs';
+import { hasVerb } from '../../sim/build';
 import { useGame, mutate } from '../../store';
 import { Panel, Bar, KeyValue } from '../components';
 import {
@@ -70,6 +72,19 @@ export default function TerritoryPanel() {
     const level = controlLevel(t);
     return level === 'control' || level === 'dominance';
   }).length;
+
+  /*
+     What the card can reach: ground held outright, and whether the build
+     opened the verb at all. `hasVerb` rather than a level comparison, so the
+     threshold lives in one place.
+  */
+  const onCard = {
+    open: hasVerb(state, 'muscle'),
+    districts: territories.filter((t) => {
+      const level = controlLevel(t);
+      return level === 'control' || level === 'dominance';
+    }),
+  };
   const working = territories.filter(hasPresence).length;
 
   return (
@@ -100,6 +115,54 @@ export default function TerritoryPanel() {
         worked — and the more of it is yours, the less attention your work in it
         draws.
       </p>
+
+      {/*
+           The card, which is the Muscle verb.
+
+           Above the map because it is a thing you decide about districts you
+           already hold, not a thing you do while looking at one. Only rendered
+           when the build opens it — see `config/build.ts`.
+        */}
+      {onCard.open && (
+        <Panel title="On the card">
+          <p className="dim" style={{ marginTop: 0 }}>
+            Ground that pays every week whether anybody worked or not. What it is worth
+            depends entirely on what people think you would do about it not being paid.
+          </p>
+          <table className="data">
+            <tbody>
+              {onCard.districts.map((t) => {
+                const on = (state.org.card ?? []).includes(t.id);
+                const can = canPutOnCard(state, t.id);
+                return (
+                  <tr key={t.id}>
+                    <td>{territoryDef(t.id).name}</td>
+                    <td className="dim">{on ? 'paying' : 'not on the card'}</td>
+                    <td>
+                      <button
+                        className="btn small"
+                        disabled={!on && !can.ok}
+                        title={on ? 'Take it off' : (can.message ?? 'Put it on the card')}
+                        onClick={() =>
+                          mutate(
+                            (g) => (on ? takeOffCard(g, t.id) : putOnCard(g, t.id)),
+                            false,
+                          )
+                        }
+                      >
+                        {on ? 'Take it off' : 'Put it on'}
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+          <p className="faint tiny" style={{ marginBottom: 0 }}>
+            {formatMoney(cardTake(state))} a week at what you are worth now.
+          </p>
+        </Panel>
+      )}
 
       <Panel
         title="The city"
