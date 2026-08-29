@@ -1,6 +1,18 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './ui/App';
+/*
+   The three faces of the One Sheet skin, vendored through Fontsource so the
+   game keeps working with no network. Anton is the poster face and ships one
+   weight because it has one; Plex carries the working text and the data.
+*/
+import '@fontsource/anton';
+import '@fontsource/ibm-plex-sans/400.css';
+import '@fontsource/ibm-plex-sans/400-italic.css';
+import '@fontsource/ibm-plex-sans/500.css';
+import '@fontsource/ibm-plex-sans/600.css';
+import '@fontsource/ibm-plex-mono/400.css';
+import '@fontsource/ibm-plex-mono/600.css';
 import './styles/theme.css';
 
 /*

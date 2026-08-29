@@ -46,6 +46,42 @@ function Stat({
 }
 
 /**
+ * Heat is the one masthead figure with an instrument under it: a wedge that
+ * fills toward the ceiling, in the colour of the tier the reading is in. The
+ * number still counts and still tints on a move — the wedge answers the
+ * question the number does not, which is "am I in the red".
+ */
+function HeatStat({
+  heat,
+  tierName,
+  tierDescription,
+}: {
+  heat: number;
+  tierName: string;
+  tierDescription: string;
+}) {
+  const { value: shown, dir } = useCounter(heat);
+  // Heat rising is bad news, so the move colour inverts, as it always has.
+  const move = dir && (dir === 'up' ? 'down' : 'up');
+  // The same edges the overview's tier flag uses: quiet, warming, in the red.
+  const tone = heat <= 25 ? 'ok' : heat <= 60 ? '' : 'hot';
+  return (
+    <div className="stat" title={`${tierName} — ${tierDescription}`}>
+      <div className="stat-label">Heat · {tierName}</div>
+      <div className={['stat-value', 'heat', move && `moved-${move}`].filter(Boolean).join(' ')}>
+        {Math.round(shown)}
+      </div>
+      <div className="bar stat-heat-bar">
+        <div
+          className={tone ? `bar-fill ${tone}` : 'bar-fill'}
+          style={{ width: `${Math.max(0, Math.min(100, heat))}%` }}
+        />
+      </div>
+    </div>
+  );
+}
+
+/**
  * What the top of the screen says when there is no organization to report on.
  *
  * Simulation has a player-shaped hole in it, and five zeroes where the money
@@ -194,14 +230,7 @@ export default function StatBar({ onStep }: { onStep: (days: number) => void }) 
           tone={org.fear > 45 ? 'hot' : undefined}
           title="What people do for you because of the alternative. Keeps witnesses quiet and people from walking out — and costs you with the neighbourhood, the city, and anybody who had a choice."
         />
-        <Stat
-          label="Heat"
-          value={org.heat}
-          format={(n) => String(Math.round(n))}
-          tone={org.heat > 40 ? 'hot' : undefined}
-          title={`${tier.name} — ${tier.description}`}
-          invert
-        />
+        <HeatStat heat={org.heat} tierName={tier.name} tierDescription={tier.description} />
         <Stat label="Crew" value={crew} format={(n) => String(Math.round(n))} />
       </div>
       )}
