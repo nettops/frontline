@@ -1,15 +1,13 @@
 /**
  * Handing the operations loop over.
  *
- * This is the one thing in this project that was measured thoroughly and then
- * never shipped. `ladder.probe` has carried a `matchOps` arm for a while: your
- * best and most careful people on the riskiest work, whoever is left on the
- * safe jobs, running every day with nothing chosen by hand. It read 19 careers
- * of 36 ahead at +$202,308, and 18 of 36 at +$71,570 once the family also
- * trains people — a convenience rather than a strategy, which is exactly the
- * bar `RUNS_AUTO` sets for anything that plays turns for you.
- *
- * So it ships as what it measured as: a way to stop clicking, not a way to win.
+ * `ladder.probe` measured this twice. The `matchOps` arm — best people on the
+ * riskiest work, jobs in expected-value order — read 19 careers of 36 ahead
+ * at +$202,308. The `matchOpsSmart` arm added the two heat levers and read
+ * 20/36 ahead at +$347,540, level with a careful hand. The first shipped
+ * under the old "automation must not beat playing" bar; the second shipped
+ * on 2026-08-29 when the owner reversed that bar — the autopilot is a
+ * supported way to play, so it plays as well as a careful hand.
  *
  * Two properties matter more than anything about the payoff, and both come
  * straight from what the probe learned building it:
@@ -30,7 +28,9 @@ import { crewList, generateNpc } from '../npc';
 import { autopilotOn, setAutopilot, tickAutopilot } from '../autopilot';
 import { advanceDay } from '../clock';
 import { SAVE_VERSION } from '../state';
+import { availableOperations } from '../operations';
 import { OPERATION_BY_ID } from '../../config/operations';
+import { AUTOPILOT } from '../../config/autopilot';
 import type { GameState } from '../types';
 
 function game(seed = 7): GameState {
@@ -143,12 +143,58 @@ describe('what it does with the day', () => {
   });
 
   /*
-     It is not clever about danger, and that is deliberate.
+     It reads the room now, and the two levers are the measured ones.
 
-     A standing order does not read the room and neither does this. Laying low
-     is the one thing it respects, and it gets that for free by asking the same
-     `canLaunch` every other launch asks.
+     The `matchOpsSmart` experiment in ladder.probe settled this across 36
+     careers: quieter work above AUTOPILOT.quietAbove, nothing at all above
+     AUTOPILOT.stopAbove, and the result stays level with careful hand play.
+     For years the finding was withheld under the "automation must not beat
+     playing" bar; the project owner reversed that bar on 2026-08-29 — the
+     autopilot is a way to play, not a handicapped convenience — so the
+     finding ships exactly as it measured.
   */
+  it('runs nothing at all once the heat is genuinely bad', () => {
+    const state = game();
+    state.org.heat = AUTOPILOT.stopAbove;
+    setAutopilot(state, true);
+    tickAutopilot(state, new Rng(state.rng));
+    expect(Object.keys(state.activeOperations)).toHaveLength(0);
+  });
+
+  it('keeps to the quieter work once they are looking at you', () => {
+    const state = newGame({
+      name: 'Auto',
+      difficulty: 'normal',
+      seed: 7,
+      mode: 'sandbox',
+      sandboxStart: 'seated',
+    });
+    const rng = new Rng(state.rng);
+    while (crewList(state).filter((n) => n.status !== 'dead').length < 12) {
+      const npc = generateNpc(state, rng, 'soldier');
+      state.npcs[npc.id] = npc;
+    }
+    state.org.dirtyCash = 400_000;
+    state.org.heat = AUTOPILOT.quietAbove;
+
+    // Instrument first: a board with no loud work on it proves nothing.
+    const byRisk = { extreme: 3, high: 2, moderate: 1, low: 0 } as const;
+    expect(
+      availableOperations(state).some((def) => byRisk[def.risk] > 1),
+      'the board offered nothing loud, so the filter was never tested',
+    ).toBe(true);
+
+    setAutopilot(state, true);
+    tickAutopilot(state, new Rng(state.rng));
+
+    const out = Object.values(state.activeOperations);
+    expect(out.length, 'going quiet is not the same as stopping').toBeGreaterThan(0);
+    expect(
+      out.every((op) => byRisk[OPERATION_BY_ID[op.defId].risk] <= 1),
+      'something loud went out while they were already looking',
+    ).toBe(true);
+  });
+
   it('stays in while the family is dark', () => {
     const state = game();
     setAutopilot(state, true);

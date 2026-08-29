@@ -9,10 +9,10 @@
  * What it measured as is what it ships as. Nineteen careers of thirty-six came
  * out ahead at +$202,308 — and eighteen of thirty-six at +$71,570 once the
  * family also trains people, because the pairing rule works directly against
- * concentration and mentoring hands the skill back. **A convenience, not a
- * strategy**, which is exactly the bar `RUNS_AUTO` sets for anything that
- * plays turns for you: it must not beat playing, it may only save you the
- * clicking.
+ * concentration and mentoring hands the skill back. With the heat sense it
+ * reads 20/36 ahead at +$347,540: **a real way to play**, and that is the bar
+ * now — the loop must play as well as a careful hand, because laziness is a
+ * supported way to enjoy the game, not a penalty.
  *
  * Two properties carry it, and the second was expensive to learn:
  *
@@ -24,11 +24,18 @@
  * of them was the idea. *How* you rank the board matters far more than who you
  * send, and in the opposite direction.
  *
- * **It is not clever about danger.** It does not read heat, it does not read
- * the case being built, and it does not decide tonight is a bad night — the
- * same omission `standingOrders.ts` is built around. Laying low is the one
- * thing it respects, and it gets that for free by asking the same `canLaunch`
- * every other launch asks.
+ * **It reads the heat, crudely, and that reversal was a decision.** For years
+ * the omission was deliberate — the `matchOpsSmart` experiment in ladder.probe
+ * measured a heat sense at level-to-ahead of careful hand play, and the old
+ * `RUNS_AUTO` bar ("automation must not beat playing") kept it out. The
+ * project owner reversed that bar on 2026-08-29: the autopilot is a supported
+ * way to play the game, not a handicapped convenience, so it should play as
+ * well as a careful hand. The two levers that ship are exactly the two that
+ * were measured — quieter work above `AUTOPILOT.quietAbove`, nothing at all
+ * above `AUTOPILOT.stopAbove` — and nothing cleverer, because the finding
+ * belongs to those numbers. It still does not read the case being built, and
+ * it still respects laying low through the same `canLaunch` as everything
+ * else.
  */
 
 import type { GameState, OperationDef } from './types';
@@ -46,6 +53,7 @@ import {
 } from './operations';
 import { scoreOn, setupsLeft } from './scores';
 import { controlLevel, operableTerritories } from './territory';
+import { AUTOPILOT } from '../config/autopilot';
 import { SETUP_BY_ID } from '../config/scores';
 
 /** Higher is more dangerous. The order crews are handed out in. */
@@ -133,6 +141,9 @@ function tonightsGround(state: GameState): string | undefined {
 export function tickAutopilot(state: GameState, _rng: Rng): void {
   if (!autopilotOn(state) || state.gameOver) return;
   if (isLayingLow(state)) return;
+  // The heat sense, upper lever: past the stop line nothing goes out until
+  // it cools. See config/autopilot.ts for where both numbers come from.
+  if (state.org.heat >= AUTOPILOT.stopAbove) return;
 
   const where = tonightsGround(state);
   if (!where) return;
@@ -151,6 +162,8 @@ export function tickAutopilot(state: GameState, _rng: Rng): void {
   const taking: OperationDef[] = [];
   for (const def of [...availableOperations(state)].sort((a, b) => worth(b) - worth(a))) {
     if (SETUP_BY_ID[def.id] || def.crewRequired <= 0) continue;
+    // Lower lever: once they are already looking, only the quieter work goes.
+    if (state.org.heat >= AUTOPILOT.quietAbove && BY_RISK[def.risk] > 1) continue;
     const score = scoreOn(state, def.id);
     if (score && setupsLeft(state, score).length > 0 && state.day < score.dueDay - 3) continue;
 
