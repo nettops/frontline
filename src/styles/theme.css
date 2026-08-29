@@ -1524,6 +1524,28 @@ th.sortable:hover {
   color: var(--text);
 }
 
+/* ---------------------------------------------------------------- street --- */
+
+/*
+   The street outside, on the Overview. Same plate the portraits sit on:
+   never resample it, never let it shout over the numbers under it.
+*/
+.street-scene {
+  background: #0b0a08;
+  border: 1px solid var(--line);
+  padding: 12px;
+  margin-bottom: 16px;
+  overflow-x: auto;
+}
+
+.street-scene canvas {
+  display: block;
+  margin: 0 auto;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  max-width: 100%;
+}
+
 /* ------------------------------------------------------------------ wire --- */
 
 /*

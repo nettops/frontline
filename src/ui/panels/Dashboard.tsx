@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useGame, mutate } from '../../store';
 import { Panel, Empty, KeyValue, Bar, Gauge } from '../components';
 import InMotion from '../InMotion';
+import StreetScene from '../StreetScene';
 import type { PanelId } from '../Rail';
 import { crewList, availableCrew } from '../../sim/npc';
 import { attention } from '../../sim/attention';
@@ -215,6 +216,9 @@ export default function Dashboard({ onNavigate }: { onNavigate: (id: PanelId) =>
       )}
 
       {state.mode === 'simulation' && <CityOverview />}
+
+      {/* The street outside — every drawn fact is a panel fact, second-told. */}
+      {state.mode !== 'simulation' && <StreetScene />}
 
       {state.mode !== 'simulation' && (
       <div className="grid-2">
