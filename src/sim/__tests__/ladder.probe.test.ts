@@ -5723,9 +5723,15 @@ describe('handing the job loop over', () => {
            v plain allocator +$210,165, ahead on 19/36
            heat-weeks        2,006 against 1,937 and 1,994 by hand
 
-       **Letting the autopilot watch the heat beats playing by hand**, which is
-       the one thing this bar exists to forbid. So heat management does not
-       ship, and the reason is a number rather than a design slogan.
+       **Letting the autopilot watch the heat beats playing by hand**, which
+       was the one thing the old bar existed to forbid — so for a long time
+       heat management did not ship, and the reason was a number rather than a
+       design slogan. On 2026-08-29 the owner reversed the bar: the autopilot
+       is a supported way to play, not a handicapped convenience, and these
+       two levers now live in `autopilot.ts` with their thresholds in
+       `config/autopilot.ts`. The assertion below is kept as the record of
+       what the old bar measured, and stays skipped for the new reason: the
+       finding is now the feature.
 
        The mechanism is the reverse of what it looks like. It launches *more*
        jobs than the version that ignores heat, and runs slightly *hotter* —
@@ -5736,9 +5742,6 @@ describe('handing the job loop over', () => {
        the feature, because never being benched is worth more than any
        allocation rule.
 
-       Skipped rather than left red: the shipped autopilot does not do this, so
-       the game passes. This is a concluded experiment kept for its finding, the
-       same way the two sweeps in this file are.
     */
     expect(
       gapsVsHand.filter((g) => g > 0).length,
@@ -8393,6 +8396,16 @@ describe('what the ground is for', () => {
        It is doing roughly half the work for roughly the same result, and this
        instrument cannot say whether that is efficiency or the hand wasting
        nights. It is not a claim, it is a thing to look at later.
+
+       Re-measured 2026-08-29, after the heat sense shipped into the
+       autopilot: districts controlled still 12 / 12, estate gap
+       -$3,326,485 / -$1,305,912 / +$2,668,376 with 16/36 ahead. The map bar
+       below still holds and the ahead-count is still a coin flip; the median
+       moved against the switch because this scenario's boss runs hot by
+       design — a ground-chaser generates the heat that benches the stop
+       lever, where the clean allocator comparison (`matchOpsSmart`, above)
+       reads +$347,540 ahead of the hand. Which scenario a lazy boss
+       resembles is theirs to decide; both numbers are recorded.
     */
     expect(
       at(RUNS_GROUND_AUTO, (r) => r.newSystems.ground.controlled),

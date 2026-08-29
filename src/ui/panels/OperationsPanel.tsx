@@ -26,6 +26,7 @@ import {
   setupsLeft,
 } from '../../sim/scores';
 import { SCORE, SETUP_BY_ID } from '../../config/scores';
+import { AUTOPILOT } from '../../config/autopilot';
 import { PATTERN } from '../../config/standingOrders';
 import { autopilotOn, setAutopilot } from '../../sim/autopilot';
 import {
@@ -301,9 +302,10 @@ export default function OperationsPanel() {
          Placed above the board rather than tucked in a settings menu for the
          same reason the standing-order list is: an automation you cannot see
          is not a decision you are still making. The line under it says what it
-         measured as rather than what it promises — it is a way to stop
-         clicking, not a way to win, and a player who turns it on expecting an
-         edge should be told otherwise here rather than find out in four years.
+         measured as rather than what it promises. Since 2026-08-29 that
+         measurement includes the heat sense — the owner's call is that the
+         autopilot is a way to play, not a handicapped convenience, so it runs
+         the two levers the probe proved level with a careful hand.
       */}
       <Panel title="The work">
         <div className="kv">
@@ -326,9 +328,10 @@ export default function OperationsPanel() {
         </div>
         <p className="faint tiny" style={{ margin: '8px 0 0' }}>
           It changes who goes, never what runs — the jobs are the ones you would have
-          taken anyway. It does not read heat and it does not decide tonight is a bad
-          night. Measured, it comes out level with playing by hand: this saves you the
-          clicking, it does not win you anything.
+          taken anyway. It watches the heat the way a careful hand does: past{' '}
+          {AUTOPILOT.quietAbove} only the quiet work goes out, past {AUTOPILOT.stopAbove}{' '}
+          nothing does until it cools. Measured, it plays level with a careful hand —
+          a real way to run the outfit, not a way to beat it.
         </p>
       </Panel>
 
