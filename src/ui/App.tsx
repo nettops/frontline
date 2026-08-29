@@ -4,6 +4,9 @@ import { advanceDay, advanceDays } from '../sim/clock';
 import { careerShape, postMortem } from '../sim/legacy';
 import { buildReport, snapshot, type DayReport } from './report';
 import { play } from './audio';
+import type { LogEntry } from '../sim/types';
+import { LIVE_SPEEDS, liveBlocked } from './live';
+import LiveWire from './LiveWire';
 import TitleScreen from './TitleScreen';
 import StatBar from './StatBar';
 import Rail, { panelsFor, type PanelId } from './Rail';
@@ -47,6 +50,49 @@ export default function App() {
      what you were in the middle of doing, not about the organization.
   */
   const [remaining, setRemaining] = useState(0);
+
+  /*
+     The wire. While this is set, a timer drives the identical `advanceDay`
+     the +1 day button drives, one day per tick — a watched week and a
+     pressed week are the same week to the simulation, which is the whole
+     fairness guarantee. The marker is the newest log entry at the moment
+     watching began; everything above it is the feed.
+
+     View state, not save state, for the same reason `remaining` is: it is a
+     statement about what you are doing, not about the organization.
+  */
+  const [live, setLive] = useState<{
+    paused: boolean;
+    speedIdx: number;
+    marker: LogEntry | null;
+  } | null>(null);
+
+  const startLive = useCallback(() => {
+    const s = getState();
+    if (!s || s.gameOver) return;
+    setReport(null);
+    setLive({ paused: false, speedIdx: 0, marker: s.log[0] ?? null });
+  }, []);
+
+  const stopLive = useCallback(() => setLive(null), []);
+
+  useEffect(() => {
+    if (!live || live.paused) return;
+    const id = setInterval(() => {
+      const s = getState();
+      if (!s) return;
+      if (s.gameOver) {
+        setLive(null);
+        return;
+      }
+      // A memo or a sit-down holds the wire rather than stopping it: the
+      // modal is already on screen, and answering it lets the days resume
+      // without the player re-arming anything.
+      if (liveBlocked(s)) return;
+      mutate((g) => advanceDay(g), true);
+    }, LIVE_SPEEDS[live.speedIdx].ms);
+    return () => clearInterval(id);
+  }, [live]);
 
   /**
    * The only place time moves.
@@ -93,6 +139,12 @@ export default function App() {
       }
       if (e.metaKey || e.ctrlKey || e.altKey) return;
       if (e.key === 'Escape') {
+        // Esc stops the wire before it clears anything else — while watching
+        // it is the biggest thing on screen, so it goes first.
+        if (live) {
+          setLive(null);
+          return;
+        }
         setReport(null);
         return;
       }
@@ -102,15 +154,18 @@ export default function App() {
       if (getState()?.pendingEvents.length || getState()?.sitdown) return;
       if (e.key === ' ') {
         e.preventDefault();
-        step(1);
+        // While the wire runs, space is the hold key, not the day key —
+        // advancing by hand under a running timer would double-step.
+        if (live) setLive({ ...live, paused: !live.paused });
+        else step(1);
       } else if (e.key === 'w' || e.key === 'W') {
         e.preventDefault();
-        step(7);
+        if (!live) step(7);
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [step]);
+  }, [step, live]);
 
   if (!state) return <TitleScreen />;
 
@@ -189,10 +244,20 @@ export default function App() {
 
   return (
     <div className="app">
-      <StatBar onStep={step} />
+      <StatBar onStep={step} live={!!live} onLive={live ? stopLive : startLive} />
       <Rail active={shown} onSelect={goto} />
       <main className="main">
-        {report && (
+        {live && (
+          <LiveWire
+            paused={live.paused}
+            speedIdx={live.speedIdx}
+            marker={live.marker}
+            onPause={() => setLive({ ...live, paused: !live.paused })}
+            onSpeed={(idx) => setLive({ ...live, speedIdx: idx })}
+            onStop={stopLive}
+          />
+        )}
+        {!live && report && (
           <Bulletin report={report} onGo={goto} onDismiss={() => setReport(null)} />
         )}
         {/*

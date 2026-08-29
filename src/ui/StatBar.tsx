@@ -142,7 +142,16 @@ function CityStats() {
   );
 }
 
-export default function StatBar({ onStep }: { onStep: (days: number) => void }) {
+export default function StatBar({
+  onStep,
+  live,
+  onLive,
+}: {
+  onStep: (days: number) => void;
+  /** The wire is running: the hand-driven time keys stand down. */
+  live: boolean;
+  onLive: () => void;
+}) {
   const state = useGame();
   const { org, player } = state;
   const [muted, setMutedState] = useState(isMuted);
@@ -282,7 +291,12 @@ export default function StatBar({ onStep }: { onStep: (days: number) => void }) 
               key={step.label}
               className={i === SIMULATION_STEPS.length - 1 ? 'btn small primary' : 'btn small'}
               onClick={() => onStep(step.days)}
-              title={`Run the city for ${step.label.replace('+1 ', 'another ')}`}
+              disabled={live}
+              title={
+                live
+                  ? 'The wire is running. Stop it to drive by hand.'
+                  : `Run the city for ${step.label.replace('+1 ', 'another ')}`
+              }
             >
               {step.label}
             </button>
@@ -293,9 +307,11 @@ export default function StatBar({ onStep }: { onStep: (days: number) => void }) 
               key={step.label}
               className={step.primary ? 'btn small primary' : 'btn small'}
               onClick={() => onStep(step.days)}
-              disabled={blocked}
+              disabled={blocked || live}
               title={
-                waiting
+                live
+                  ? 'The wire is running. Stop it to drive by hand.'
+                  : waiting
                   ? 'Something is waiting for your answer'
                   : talking
                     ? 'You are in a room with somebody. The day waits.'
@@ -310,6 +326,22 @@ export default function StatBar({ onStep }: { onStep: (days: number) => void }) 
             </button>
           ))
         )}
+        {/*
+           The wire. One switch, both directions, and red while it runs —
+           red everywhere else in this interface means a live thing you have
+           to reckon with, which is exactly what a running clock is.
+        */}
+        <button
+          className={live ? 'btn small danger' : 'btn small'}
+          onClick={onLive}
+          title={
+            live
+              ? 'Stop the wire (Esc). The days stop where they are.'
+              : 'Watch the days run by themselves. Memos still stop the clock; space holds it.'
+          }
+        >
+          {live ? '■ stop' : '▶ watch'}
+        </button>
       </div>
     </header>
   );

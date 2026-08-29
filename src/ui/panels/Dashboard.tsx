@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useGame, mutate } from '../../store';
 import { Panel, Empty, KeyValue, Bar, Gauge } from '../components';
+import InMotion from '../InMotion';
 import type { PanelId } from '../Rail';
 import { crewList, availableCrew } from '../../sim/npc';
 import { attention } from '../../sim/attention';
@@ -13,7 +14,6 @@ import { activeCondition, conditionDaysLeft } from '../../sim/world';
 import { activeWars, factionStrength } from '../../sim/diplomacy';
 import { rivals } from '../../sim/faction';
 import { districtOwner, territoryList } from '../../sim/territory';
-import { OPERATION_BY_ID } from '../../config/operations';
 import { PAYDAY_INTERVAL } from '../../config/economy';
 import {
   heatSeverity,
@@ -190,7 +190,6 @@ export default function Dashboard({ onNavigate }: { onNavigate: (id: PanelId) =>
   const tier = heatTier(org.heat);
   const crew = crewList(state);
   const free = availableCrew(state);
-  const ops = Object.values(state.activeOperations);
   const wanting = attention(state);
   const laying = isLayingLow(state);
   const payroll = payrollForecast(state);
@@ -401,53 +400,13 @@ export default function Dashboard({ onNavigate }: { onNavigate: (id: PanelId) =>
       </div>
       )}
 
-      {state.mode !== 'simulation' && (
-      <Panel
-        title="Work in progress"
-        action={
-          <button className="btn small" onClick={() => onNavigate('operations')}>
-            Operations
-          </button>
-        }
-        flush
-      >
-        {ops.length === 0 ? (
-          <Empty>Nothing running. Nothing earning.</Empty>
-        ) : (
-          <div className="table-wrap">
-            <table className="data">
-              <thead>
-                <tr>
-                  <th>Job</th>
-                  <th>Crew</th>
-                  <th className="num">Odds shown</th>
-                  <th className="num">Days left</th>
-                  <th>Progress</th>
-                </tr>
-              </thead>
-              <tbody>
-                {ops.map((op) => {
-                  const def = OPERATION_BY_ID[op.defId];
-                  const total = op.endDay - op.startDay;
-                  const done = state.day - op.startDay;
-                  return (
-                    <tr key={op.id}>
-                      <td>{def.name}</td>
-                      <td className="num mono">{op.crewIds.length}</td>
-                      <td className="num mono">{Math.round(op.successChance * 100)}%</td>
-                      <td className="num mono">{op.endDay - state.day}</td>
-                      <td style={{ minWidth: 120 }}>
-                        <Bar value={done} max={total} />
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </Panel>
-      )}
+      {/*
+        The board. This was "Work in progress" and showed operations alone,
+        which made the trades, a teaching pairing and a war invisible from the
+        home screen — four running things you could only watch by touring four
+        panels. One list, every kind, each row a door to its panel.
+      */}
+      {state.mode !== 'simulation' && <InMotion onNavigate={onNavigate} />}
 
       <Panel title="What has been happening" flush>
         {state.log.length === 0 ? (
