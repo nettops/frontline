@@ -833,6 +833,81 @@ export interface Possession {
 }
 
 /**
+ * Something on the shelf, and what it has already been used for.
+ *
+ * `bodies` is the whole system. A piece kept after a killing ties the next one
+ * to it, which is the decision `config/pieces.ts` exists to create — and some
+ * of what the family owns on the first morning already carries a body, because
+ * a gun that has been in a house for years has been out before.
+ */
+export interface Piece {
+  id: Id;
+  /** A `PIECES` id, which is also a sprite id on the armoury sheet. */
+  defId: string;
+  cls: 'pocket' | 'coat' | 'long';
+  provenance: 'house' | 'cold' | 'crate' | 'given';
+  gotDay: number;
+  /** Killings this piece has been out on, including before you had it. */
+  bodies: number;
+  /** `dumped` covers the river and the evidence room alike. It is gone. */
+  status: 'shelf' | 'dumped';
+}
+
+/**
+ * Somebody you have sent people after.
+ *
+ * The waiting is most of what makes it frightening, so this is state with a
+ * day on it rather than a function call — the same stance `marks` takes. You
+ * decided once; from here you read the record.
+ */
+export interface Contract {
+  id: Id;
+  kind: 'capo' | 'boss' | 'witness';
+  /** The family it is aimed at, or whose case it is aimed at. */
+  factionId: FactionId | null;
+  /** The capo, or the witness. Absent for a boss, who is the family's own. */
+  targetId: string | null;
+  /** Set for a witness contract, so the case can be found again. */
+  caseId?: string;
+  /** What the player will see it called, captured now in case he is gone. */
+  targetName: string;
+  /** Where it will happen, for attribution. */
+  territoryId: string | null;
+  crewIds: Id[];
+  openedDay: number;
+  endDay: number;
+  /** Snapshotted at launch, so the panel cannot lie about it afterwards. */
+  chance: number;
+  paid: number;
+  status: 'open' | 'landed' | 'missed' | 'void';
+  settledDay?: number;
+}
+
+/**
+ * The shelf, and the standing decision about it.
+ *
+ * A policy rather than a prompt, which is `standingOrders.ts` and
+ * `delegation.ts`'s stance: you decide once and read the record afterwards.
+ * The defaults are `pocket` and keep, which is both the measured game and the
+ * correct early play — four pieces and no money to replace one.
+ */
+export interface Armoury {
+  pieces: Piece[];
+  carry: 'pocket' | 'coat' | 'long';
+  /** Get rid of it afterwards, at the cost of the piece. */
+  dump: boolean;
+  /**
+   * Use a charge on a contract instead of sending somebody with a gun.
+   *
+   * Optional so a save written before charges existed loads as a family that
+   * has never done it, which for those saves is exactly true. See `CHARGE` in
+   * `config/pieces.ts` — the point of it is which agency ends up reading the
+   * file, not how large the number is.
+   */
+  charge?: boolean;
+}
+
+/**
  * The standing card game, as a record of how you have been playing it.
  *
  * Four numbers and no table state — who is sitting opposite is derived from
@@ -883,7 +958,12 @@ export interface Promised {
 export interface EvidenceTrace {
   id: Id;
   day: number;
-  source: 'operation' | 'violence' | 'finance' | 'informant' | 'disposal';
+  /**
+   * `ordnance` is a charge, and it is the only source no local force works.
+   * See `AGENCIES` — the point of it is not a bigger number, it is that it
+   * changes *who* is reading the file.
+   */
+  source: 'operation' | 'violence' | 'finance' | 'informant' | 'disposal' | 'ordnance';
   /** 0..100 contribution to a future case. Decays once the trail goes cold. */
   strength: number;
   npcIds: Id[];
@@ -1820,6 +1900,27 @@ export interface GameState {
    * the others are.
    */
   possessions?: Possession[];
+
+  /**
+   * What the family keeps, and what it does with it afterwards.
+   *
+   * The same lazy idiom as `possessions` and `marks`, so `SAVE_VERSION` does
+   * not move — and here the idiom says something true rather than merely
+   * convenient. A save written before this loads as a family that always had
+   * its guns, because it did. `sim/pieces.ts` seeds the shelf on first read
+   * off `Rng.stableNoise`, never the stream.
+   */
+  armoury?: Armoury;
+
+  /**
+   * People you have sent people after, and how each of those ended.
+   *
+   * Same lazy idiom as `armoury`, `marks` and `possessions`, so `SAVE_VERSION`
+   * does not move and a save written before this loads as a boss who has never
+   * sent anybody. Kept after they settle, because the Legacy screen reads this
+   * record and "the Falcone boss, day 412" is a sentence about a career.
+   */
+  contracts?: Contract[];
 
   /**
    * How the card game has been going.

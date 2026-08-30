@@ -14,6 +14,7 @@ export type PanelId =
   | 'territory'
   | 'businesses'
   | 'contraband'
+  | 'armoury'
   | 'rivals'
   | 'law'
   | 'intelligence'
@@ -45,6 +46,7 @@ const BUILT: Entry[] = [
   { id: 'territory', label: 'Territory', city: true },
   { id: 'businesses', label: 'Businesses' },
   { id: 'contraband', label: 'The Trade' },
+  { id: 'armoury', label: 'The Armoury' },
   { id: 'rivals', label: 'Rivals', city: true },
   { id: 'law', label: 'Law Enforcement' },
   { id: 'intelligence', label: 'Intelligence' },

@@ -28,6 +28,7 @@ import { informFromMemory, remember } from './memory';
 import { gainFear, gainRespect } from './player';
 import { activeCases } from './investigation';
 import { territoryDef } from './territory';
+import { armFor, leftBehind, spent } from './pieces';
 
 export interface Check {
   ok: boolean;
@@ -290,15 +291,25 @@ export function accuse(state: GameState, npcId: Id): Check {
   npc.informingSince = undefined;
   addNote(npc, state.day, 'You decided it was them.', 'bad');
 
-  // Killing one of your own is the same act whoever he turned out to be.
-  addHeat(state, INFORMANT.heat, 'street', 'a man of yours found dead');
+  /*
+     Killing one of your own is the same act whoever he turned out to be — and
+     it is now also an act somebody carried something to. `armFor` cannot fail
+     and cannot draw; on the default policy its three multipliers are 0, 1 and
+     1, so the measured figures below are unchanged. See `sim/pieces.ts`.
+
+     There is no roll in this one, so it lands by definition and the Rng is
+     built from state the way `clock.ts` does it, only to settle the disposal.
+  */
+  const act = armFor(state);
+  addHeat(state, INFORMANT.heat * act.heat, 'street', 'a man of yours found dead');
   addEvidence(state, {
     day: state.day,
     source: 'violence',
-    strength: INFORMANT.evidenceStrength,
+    strength: Math.round(INFORMANT.evidenceStrength * act.evidence),
     npcIds: [npc.id],
-    detail: `${npc.name} was killed. They worked for you and everybody knew it.`,
+    detail: `${npc.name} was killed. They worked for you and everybody knew it. It left ${leftBehind(act)}.`,
   });
+  spent(state, new Rng(state.rng), act, { npcIds: [npc.id], landed: true });
   gainFear(state, INFORMANT.anyFearGain);
 
   const others = crewList(state).filter(
