@@ -15,6 +15,8 @@ import { playerInfluence, territoryDef } from '../../sim/territory';
 import { formatMoney, formatShortDay } from '../../sim/util';
 import { Rng } from '../../sim/rng';
 import { approachCapo, canApproach, readCapos } from '../../sim/capos';
+import { canContract, openContract, type ContractTarget } from '../../sim/contract';
+import { CONTRACT } from '../../config/contract';
 import { prices } from '../../sim/market';
 import { spend, totalFunds } from '../../sim/economy';
 import {
@@ -138,6 +140,7 @@ export default function RivalsPanel() {
 
 function RivalDetail({ faction, onClose }: { faction: Faction; onClose: () => void }) {
   const state = useGame();
+  const [bossNote, setBossNote] = useState<string | null>(null);
   const read = readFaction(state, faction);
   const shared = contestedWith(state, faction.id);
   const suspicions = readSuspicions(state, faction.id, read.intel);
@@ -185,6 +188,20 @@ function RivalDetail({ faction, onClose }: { faction: Faction; onClose: () => vo
                       {faction.leader.reputation}
                     </div>
                   )}
+                  {/*
+                     Behind the same intel gate as his name, because you cannot
+                     send people after a man you have not heard of. Not gated on
+                     anything else: `silence.ts` sets the stance and this
+                     follows it — the game prices the mistake and does not
+                     prevent it.
+                  */}
+                  <div style={{ marginTop: 6 }}>
+                    <ContractButton
+                      target={{ kind: 'boss', factionId: faction.id }}
+                      onDone={setBossNote}
+                    />
+                  </div>
+                  {bossNote && <div className="hot tiny">{bossNote}</div>}
                 </>
               ) : (
                 <span className="faint">
@@ -362,6 +379,50 @@ function RivalDetail({ faction, onClose }: { faction: Faction; onClose: () => vo
  * grudge on a single roll, and a bet whose odds you cannot see is a slot
  * machine rather than a decision.
  */
+/**
+ * Sending people after somebody.
+ *
+ * One button, used for a capo and for the man above him, because they are the
+ * same act against people of different sizes and two components would drift.
+ *
+ * It says the cost, the odds and — the part that matters — that the men are
+ * gone for the week. A player who does not know a contract takes two of his
+ * people off the board for five days has not been told the price.
+ *
+ * It says nothing at all about what the family will conclude. That is
+ * `beliefs.ts`'s rule, not a UI decision: you find out who they blame by
+ * watching what they do.
+ */
+function ContractButton({
+  target,
+  onDone,
+}: {
+  target: ContractTarget;
+  onDone: (message: string) => void;
+}) {
+  const state = useGame();
+  const check = canContract(state, target);
+  return (
+    <button
+      className="btn small danger"
+      disabled={!check.ok}
+      title={
+        check.ok
+          ? `${formatMoney(check.cost ?? 0)}, ${CONTRACT.crew} men gone for ${CONTRACT.days} days, ` +
+            `and roughly ${Math.round((check.chance ?? 0) * 100)}% that it happens. ` +
+            'If it does not, they know somebody tried.'
+          : check.message
+      }
+      onClick={() => {
+        const out = mutate((s) => openContract(s, target), true);
+        if (out) onDone(out.message);
+      }}
+    >
+      {check.ok ? `Send somebody — ${formatMoney(check.cost ?? 0)}` : 'Not possible'}
+    </button>
+  );
+}
+
 function Roster({ faction, intel }: { faction: Faction; intel: number }) {
   const state = useGame();
   const roster = readCapos(state, faction.id, intel);
@@ -450,6 +511,17 @@ function Roster({ faction, intel }: { faction: Faction; intel: number }) {
                           ? `Make an offer — ${formatMoney(check.cost)}`
                           : 'Not possible'}
                       </button>
+                      {/*
+                         The other verb on the same man, and deliberately the
+                         same width beside it. Buying him and killing him are
+                         the two things you can do about somebody who runs a
+                         piece of another family, and the panel should not make
+                         one of them look like the normal one.
+                      */}
+                      <ContractButton
+                        target={{ kind: 'capo', factionId: faction.id, capoId: capo.id }}
+                        onDone={setNote}
+                      />
                     </td>
                   </tr>
                 );

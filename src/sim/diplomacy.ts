@@ -44,6 +44,7 @@ import {
   type DiplomaticActionId,
 } from '../config/diplomacy';
 import { houseShort } from './houses';
+import { givenPiece } from './pieces';
 
 /*
  * Local copies of two one-line readers that also live in faction.ts.
@@ -1077,6 +1078,17 @@ export function doDiplomacy(
         grudge: -DIPLOMACY.allianceRelationship / 2,
       });
       const holds = alliesOf(state, 'player').includes(target);
+      /*
+         An understanding that actually holds gets sealed with something.
+
+         This is the third door onto the armoury and the only one you do not
+         open yourself — `config/pieces.ts` describes `given` as the piece
+         worth more than the job and impossible to sell without saying who
+         from, and until now nothing in the game ever handed one over. Only on
+         an alliance that `alliesOf` says is real: a family that took your
+         money and said the right things has not given you anything.
+      */
+      if (holds) givenPiece(state, target);
       addLog(
         state,
         holds

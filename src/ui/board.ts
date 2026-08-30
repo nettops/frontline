@@ -5,8 +5,9 @@
  * state, it decides nothing, and it is never saved — adding a row to it
  * cannot change the outcome of a game.
  *
- * One row per running thing, five kinds: a job out on the street, a teaching
- * pairing, each of the two trades once it has a source or stock, and a war.
+ * One row per running thing, six kinds: a war, somebody you have sent people
+ * after, a job out on the street, a teaching pairing, and each of the two
+ * trades once it has a source or stock.
  * An open sit-down deliberately has no row — it is a modal, and a row that
  * can only ever be read through the thing it reports on is furniture.
  *
@@ -23,9 +24,10 @@ import { territoryDef } from '../sim/territory';
 import { throughput } from '../sim/contraband';
 import { houseShort } from '../sim/houses';
 import { formatShortDay } from '../sim/util';
+import { openContracts } from '../sim/contract';
 
 export interface BoardItem {
-  kind: 'war' | 'job' | 'teaching' | 'product' | 'arms';
+  kind: 'war' | 'contract' | 'job' | 'teaching' | 'product' | 'arms';
   key: string;
   title: string;
   sub: string;
@@ -78,6 +80,32 @@ export function boardItems(state: GameState): BoardItem[] {
       figure: `${weeks}w`,
       progress: null,
       panel: 'diplomacy',
+    });
+  }
+
+  /*
+     Then anybody you have sent people after.
+
+     Second only to a war, and above the jobs, because two of your people are
+     off the board and something is going to happen at the end of it that you
+     cannot call back. A contract had no row at all when it shipped: you sent
+     two men out for five days and the only trace was one line in the log,
+     which is `marks` before it got a panel.
+
+     The target is named because you named him. Nothing here says what the
+     other family is making of it — that is `beliefs.ts`'s rule, and you find
+     out by watching what they do.
+  */
+  for (const contract of openContracts(state).sort((a, b) => a.endDay - b.endDay)) {
+    const total = Math.max(1, contract.endDay - contract.openedDay);
+    rows.push({
+      kind: 'contract',
+      key: `contract:${contract.id}`,
+      title: `Somebody has gone for ${contract.targetName}`,
+      sub: `${contract.crewIds.length} of yours, off the board until ${formatShortDay(contract.endDay)}`,
+      figure: `${Math.max(0, contract.endDay - day)}d`,
+      progress: Math.max(0, Math.min(1, (day - contract.openedDay) / total)),
+      panel: contract.kind === 'witness' ? 'law' : 'rivals',
     });
   }
 

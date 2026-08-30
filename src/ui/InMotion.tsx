@@ -11,6 +11,7 @@ import { boardItems, type BoardItem } from './board';
 
 const KIND_LABEL: Record<BoardItem['kind'], string> = {
   war: 'War',
+  contract: 'Sent',
   job: 'Job',
   teaching: 'Teaching',
   product: 'Product',

@@ -551,9 +551,35 @@ export function warCasualty(state: GameState, rng: Rng, factionId: FactionId): b
   if (!rng.chance(CAPO_WAR.deathChance)) return false;
 
   const capo = rng.pick(faction.capos);
+  removeCapo(state, factionId, capo.id, CAPO_WAR.wearinessOnDeath);
+  return true;
+}
+
+/**
+ * Taking a named man off a family's board.
+ *
+ * Extracted from `warCasualty` rather than copied when contracts arrived,
+ * because "somebody died" has to cost a family exactly the same whether a war
+ * did it or the player sent two men. Two versions of this would have drifted
+ * the first time either was touched.
+ *
+ * The weariness is the caller's, because that is the one thing the two cases
+ * genuinely differ on — a war grinding somebody down and a killing out of
+ * nowhere do not take the same amount of fight out of a house.
+ */
+export function removeCapo(
+  state: GameState,
+  factionId: FactionId,
+  capoId: string,
+  weariness: number,
+): boolean {
+  const faction = state.factions[factionId];
+  const capo = faction?.capos?.find((c) => c.id === capoId);
+  if (!faction || !capo) return false;
+
   faction.capos = faction.capos.filter((c) => c.id !== capo.id);
   faction.strength = clamp(faction.strength - capoWorth(faction, capo), 0, 100);
-  faction.warWeariness = Math.min(100, faction.warWeariness + CAPO_WAR.wearinessOnDeath);
+  faction.warWeariness = Math.min(100, faction.warWeariness + weariness);
 
   addLog(
     state,

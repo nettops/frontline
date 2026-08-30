@@ -22,6 +22,8 @@ import {
   HEAT_CHANNEL_LABEL,
 } from '../../config/heat';
 import { channelHeat } from '../../sim/heat';
+import { canContract, openContract, type ContractTarget } from '../../sim/contract';
+import { CONTRACT } from '../../config/contract';
 import type { Investigation } from '../../sim/types';
 
 export default function LawPanel() {
@@ -317,6 +319,48 @@ function CaseDetail({
                     {npc.name}
                   </button>
                 ))}
+
+                {/*
+                   And what happens when leaning is not enough.
+
+                   Kept under the same heading and visibly below it, because it
+                   is the escalation of the row above rather than a separate
+                   idea — and because a player should read the cheap version
+                   first. `silence` is not this: that is about one of yours
+                   talking in general, and this is aimed at one file.
+                */}
+                <div className="tiny" style={{ marginTop: 8 }}>
+                  Or send somebody, which takes {CONTRACT.crew} of your people for{' '}
+                  {CONTRACT.days} days
+                </div>
+                {suspects.slice(0, 5).map((npc) => {
+                  const target: ContractTarget = {
+                    kind: 'witness',
+                    caseId: investigation.id,
+                    npcId: npc.id,
+                  };
+                  const check = canContract(state, target);
+                  return (
+                    <button
+                      key={`ct-${npc.id}`}
+                      className="btn small danger"
+                      disabled={!check.ok}
+                      title={
+                        check.ok
+                          ? `${formatMoney(check.cost ?? 0)}, roughly ` +
+                            `${Math.round((check.chance ?? 0) * 100)}% that it happens. ` +
+                            'If it does not, they find out why they mattered.'
+                          : check.message
+                      }
+                      onClick={() => {
+                        const out = mutate((s) => openContract(s, target), true);
+                        if (out) setMessage(out.message);
+                      }}
+                    >
+                      {npc.name} — {check.ok ? formatMoney(check.cost ?? 0) : 'not possible'}
+                    </button>
+                  );
+                })}
               </>
             )}
           </div>

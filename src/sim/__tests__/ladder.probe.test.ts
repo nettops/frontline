@@ -41,6 +41,9 @@ import { cancelStanding, liveStanding, setStanding } from '../standingOrders';
 import { canSilence, silence } from '../silence';
 import { SILENCE, MARK } from '../../config/silence';
 import { liveMarks } from '../marks';
+import { buyCold, setCarry, setDump, shelf } from '../pieces';
+import { canContract, contractCost, openContract } from '../contract';
+import { CLASS, COLD, type PieceClass } from '../../config/pieces';
 import { SCORE_TARGETS, SETUP_BY_ID } from '../../config/scores';
 import { PATTERN } from '../../config/standingOrders';
 import { workingHoldings, yieldOf, yieldsHeld } from '../holdings';
@@ -88,9 +91,11 @@ import {
   doDiplomacy,
   factionStrength,
   playerStrength,
+  playerWars,
   relationship,
   relationshipLabelFor,
 } from '../diplomacy';
+import { caposOf } from '../capos';
 import { CASE_CLOSED_BELOW, type LawyerLevel } from '../../config/lawEnforcement';
 import { retainLawyer, weeklyLegalCost } from '../investigation';
 import { AI, RIVAL_IDS } from '../../config/factions';
@@ -659,6 +664,29 @@ interface Climb {
       firstDay: number | null;
     };
     /**
+     * What the family carried while it was doing all that.
+     *
+     * Everything here is read off the evidence at the end rather than counted
+     * as it happens, for the reason `talked` is: what matters is what is on
+     * the books when the career finishes.
+     */
+    pieces: {
+      /** Traces filed by a piece that had been out before. The core mechanic. */
+      joined: number;
+      /** ...and by one that did not go in the river. */
+      recovered: number;
+      /** Everything a killing put on the books, however it got there. */
+      violence: number;
+      /** Bought cold, because the house guns ran out. */
+      bought: number;
+      /** People it sent people after, and how those ended. */
+      sent: number;
+      sentLanded: number;
+      /** Still on the shelf at the end, and what they have done between them. */
+      onShelf: number;
+      bodies: number;
+    };
+    /**
      * What a bot that takes ground for what it gives ended up with.
      *
      * Counted at the end rather than accumulated, because a yield is a fact
@@ -1073,6 +1101,63 @@ interface Policy {
    */
   cutsRarely?: boolean;
   /**
+   * What the family carries, as a standing decision on the first morning.
+   *
+   * F7 again, and the same shape as `cuts` above: `sim/pieces.ts` shipped with
+   * unit tests and nothing else. The unit tests prove the mechanic does what it
+   * says; they cannot say whether either standing decision is ever worth
+   * taking, and a policy that is never the right call is a trap with a toggle.
+   *
+   * `undefined` is the shipped default, `pocket`, whose three multipliers are
+   * 0, 1 and 1 — so an arm that leaves this alone is the measured game and the
+   * baseline these read against.
+   *
+   * Only meaningful alongside `cuts` or `cutsRarely`, because those are the
+   * only arms that ever reach an act with a body in it.
+   */
+  /**
+   * Sends people after a rival capo, but only while a war is already running.
+   *
+   * F7 again: `contract.ts` shipped with unit tests and nothing else, so the
+   * first jobs in this game that leave a body were invisible to every bar in
+   * this file. The unit tests prove a contract does what it says; they cannot
+   * say whether killing rival capos is a way to play.
+   *
+   * This arm is deliberately the *same rule the autopilot ships* — see
+   * `AUTOPILOT_CONTRACTS`, where "only at war" is a safety property rather
+   * than a threshold. So what it measures is what a player who throws the
+   * switch actually gets.
+   */
+  contractsAtWar?: boolean;
+  /**
+   * ...and the same verb used the way a hand can use it, war or no war.
+   *
+   * The half the arm above cannot answer. A contract can *start* a war, and
+   * that is the decision the loop is not allowed to take on anybody's behalf —
+   * so the only way to find out whether it is a good one is to measure a bot
+   * that takes it. If going after a rival unprovoked is simply better, the
+   * autopilot's gate is costing players money and should be revisited. If it
+   * is ruinous, the gate is protecting them.
+   *
+   * **The rule is fixed before the result is read**, per the note on
+   * `cutsRarely`: the strongest rival's biggest man, weekly, whenever there is
+   * eight times the price in the bank. It is not iterated afterwards.
+   */
+  contractsFreely?: boolean;
+  carries?: PieceClass;
+  /**
+   * ...and whether it gets rid of the thing afterwards.
+   *
+   * The decision the whole feature exists for, and the one with a genuine
+   * argument on both sides. Keeping is free and ties tonight to the last time;
+   * dumping costs the piece and, once the house guns run out, real money.
+   *
+   * The bar is the usual one: **neither may dominate.** If dumping is simply
+   * better then the toggle is a difficulty setting a player will find once and
+   * never touch again, and the same is true in reverse.
+   */
+  dumps?: boolean;
+  /**
    * Takes ground for what it gives, and puts somebody in it.
    *
    * F7 again, and this time the blindness was measured before the arm existed.
@@ -1399,6 +1484,14 @@ function climb(seed: number, days: number, policy: Policy = {}): Climb {
   const rng = new Rng(state.rng);
   // The shipped switch, thrown on the first morning and never touched again.
   if (policy.handsOver) setAutopilot(state, true);
+  /*
+     And the other two, which are also standing decisions and are also thrown
+     once. Left alone they are `pocket` and keep, which is the measured game —
+     an arm that sets neither is byte-identical on the stream to one built
+     before any of this existed.
+  */
+  if (policy.carries) setCarry(state, policy.carries);
+  if (policy.dumps) setDump(state, true);
 
   /*
      The boss places his points, because a boss who does not is nobody.
@@ -1470,6 +1563,10 @@ function climb(seed: number, days: number, policy: Policy = {}): Climb {
   };
   /** Marks already counted, so an ending is tallied once and not every day. */
   const marksSeen = new Set<string>();
+  /** Cold pieces this career actually paid for. */
+  let coldBought = 0;
+  /** People it sent people after, and how those ended. */
+  const contracts = { opened: 0, landed: 0, missed: 0 };
   /*
      Fear, what the boss owns, and whether anybody is still at home.
 
@@ -1920,6 +2017,58 @@ function climb(seed: number, days: number, policy: Policy = {}): Climb {
         silence(state, rng, worst.id);
         if (worst.status === 'dead') cutting.landed += 1;
         if (liveMarks(state).length > before) cutting.marksOut += 1;
+      }
+
+      /*
+         Keeping the shelf stocked, and stocked with the right thing.
+
+         **The rule was fixed before any arm was run**, per the note on
+         `cutsRarely`: buy when the money is genuinely spare — ten times the
+         price, so this never competes with a job stake — and only for one of
+         two reasons.
+
+         The second reason was added after the first run and it is a repair to
+         the instrument, not to the rule. `carries: 'long'` reported +1 point
+         of landing against a configured +10, and heat-weeks identical to four
+         significant figures, because **a day-one shelf holds no long guns and
+         the bot never bought one**. `armFor` fell back to whatever was oldest
+         and the class lever was never once exercised. That is the same defect
+         as the bot that never delegated and the bot that placed no points: an
+         arm measuring a decision the bot could not take.
+
+         A boss who has told his people to carry rifles buys rifles.
+      */
+      const short = shelf(state).length < 2;
+      const wrongKit = !!policy.carries && !shelf(state).some((p) => p.cls === policy.carries);
+      if ((policy.dumps ? short : false) || wrongKit) {
+        if (totalFunds(state) > COLD.cost * 10 && buyCold(state).ok) coldBought += 1;
+      }
+    }
+
+    /*
+       And sending somebody after one of theirs.
+
+       Weekly, beside the decision about your own people, because they are
+       the same kind of decision pointed in opposite directions. The rule is
+       the autopilot's own — their biggest man, eight times the price in the
+       bank — so the `contractsAtWar` arm measures the shipped behaviour and
+       `contractsFreely` measures the same act without the war gate.
+    */
+    if ((policy.contractsAtWar || policy.contractsFreely) && state.day % 7 === 0) {
+      const enemies = policy.contractsFreely
+        ? [...RIVAL_IDS].sort(
+            (a, b) => (state.factions[b]?.strength ?? 0) - (state.factions[a]?.strength ?? 0),
+          )
+        : playerWars(state).map((f) => f.id);
+      for (const id of enemies) {
+        const target = [...caposOf(state, id)].sort((a, b) => b.share - a.share)[0];
+        if (!target) continue;
+        const wanted = { kind: 'capo' as const, factionId: id, capoId: target.id };
+        if (totalFunds(state) < contractCost(state, wanted) * 8) continue;
+        if (!canContract(state, wanted).ok) continue;
+        openContract(state, wanted);
+        contracts.opened += 1;
+        break;
       }
     }
 
@@ -3827,6 +3976,34 @@ function climb(seed: number, days: number, policy: Policy = {}): Climb {
           .filter((e) => e.detail.includes('has been talking to somebody again'))
           .reduce((sum, e) => sum + e.strength, 0),
       },
+      /*
+         The armoury, read off the books at the end.
+
+         `joined` is the mechanic itself and the only figure here that could
+         not exist before this feature: a trace that exists because the same
+         object was used twice. `recovered` is its opposite number — what the
+         other policy pays instead.
+      */
+      pieces: (() => {
+        const traces = Object.values(state.evidence);
+        const rack = shelf(state);
+        return {
+          joined: traces
+            .filter((e) => e.detail.includes('same case now'))
+            .reduce((sum, e) => sum + e.strength, 0),
+          recovered: traces
+            .filter((e) => e.source === 'disposal' && e.detail.includes('should not have'))
+            .reduce((sum, e) => sum + e.strength, 0),
+          violence: traces
+            .filter((e) => e.source === 'violence')
+            .reduce((sum, e) => sum + e.strength, 0),
+          bought: coldBought,
+          sent: contracts.opened,
+          sentLanded: (state.contracts ?? []).filter((c) => c.status === 'landed').length,
+          onShelf: rack.length,
+          bodies: rack.reduce((n, p) => n + p.bodies, 0),
+        };
+      })(),
       leaning,
       self: {
         heavyRuns,
@@ -5288,6 +5465,70 @@ const RUNS_CUTS = Array.from({ length: 36 }, (_, i) =>
 */
 const RUNS_CUTS_RARE = Array.from({ length: 36 }, (_, i) =>
   climb(700 + i, HUMAN_DAYS, { cutsRarely: true }),
+);
+
+/*
+   The armoury, on the only arm that ever reaches an act with a body in it.
+
+   Three populations against `RUNS_CUTS`, which is the same bot carrying the
+   shipped default — a pocket piece out of the family cupboard, kept. Same
+   seeds, same everything else, one standing decision changed.
+
+   Each answers a different question and each has a way of failing:
+
+   - `LONG` asks what the loud gun is worth. Better odds and 75% more heat,
+     which is a bad trade or a good one depending entirely on what heat costs
+     this bot, and that is a number nobody has read.
+   - `DUMPS` asks whether getting rid of it pays. It also buys cold when it can
+     afford to, because a boss who dumps and never replaces is not a policy, he
+     is a boss who has run out.
+   - `BOTH` is there because a player who has decided to take this seriously
+     takes it seriously in both columns, and two levers can interact.
+*/
+const RUNS_PIECES_LONG = Array.from({ length: 36 }, (_, i) =>
+  climb(700 + i, HUMAN_DAYS, { cuts: true, carries: 'long' }),
+);
+const RUNS_PIECES_DUMP = Array.from({ length: 36 }, (_, i) =>
+  climb(700 + i, HUMAN_DAYS, { cuts: true, dumps: true }),
+);
+const RUNS_PIECES_BOTH = Array.from({ length: 36 }, (_, i) =>
+  climb(700 + i, HUMAN_DAYS, { cuts: true, carries: 'long', dumps: true }),
+);
+
+/*
+   And the same question asked of a boss who does this three times in four
+   years rather than nineteen.
+
+   The arms above sit on `cuts`, which is the indiscriminate bot this file has
+   already shown to be ruinous. "Dumping pays" measured on a boss who kills
+   constantly is a statement about that boss. `cutsRarely` is how a person
+   would actually use the mechanic, and it is the population where the price of
+   a cold piece has to be compared against something other than a fortune.
+
+   Paired against `RUNS_CUTS_RARE`, which is the same bot keeping.
+*/
+const RUNS_PIECES_DUMP_RARE = Array.from({ length: 36 }, (_, i) =>
+  climb(700 + i, HUMAN_DAYS, { cutsRarely: true, dumps: true }),
+);
+
+/*
+   Sending people after somebody else's people.
+
+   Two arms and one baseline, and the pair is the whole question. `AT_WAR` is
+   the rule the autopilot ships under; `FREELY` is the same act without the war
+   gate, which is the thing the loop is deliberately not allowed to decide.
+
+   If `FREELY` is simply better, the gate is costing players money and needs
+   revisiting. If it is ruinous, the gate is protecting them and the shipped
+   restriction is doing real work rather than being caution for its own sake.
+
+   Both against `RUNS_300`, which plays identically and never sends anybody.
+*/
+const RUNS_CONTRACT_WAR = Array.from({ length: 36 }, (_, i) =>
+  climb(700 + i, HUMAN_DAYS, { contractsAtWar: true }),
+);
+const RUNS_CONTRACT_FREE = Array.from({ length: 36 }, (_, i) =>
+  climb(700 + i, HUMAN_DAYS, { contractsFreely: true }),
 );
 
 /*
@@ -7137,6 +7378,282 @@ describe('the month in front of the job', () => {
       Math.floor(gaps.length / 3),
     );
     expect(ahead, 'building up to a job is free money').toBeLessThan(gaps.length);
+  });
+});
+
+describe('what the family carries', () => {
+  /*
+     Two standing decisions, and the bar for both is the one this project sets
+     everywhere: **neither may dominate.** A toggle a player can find the right
+     answer to once is a difficulty setting wearing a policy's clothes.
+
+     Every arm here is `RUNS_CUTS` — the bot that deals with its worst men —
+     with one decision changed, because that is the only population in this
+     file that ever reaches an act with a body in it. Read against `RUNS_CUTS`
+     itself, which carries the shipped default.
+
+     This arm has already earned its keep. Before it could measure anything it
+     found that `armFor`'s refill handed out clean guns for nothing, which made
+     dumping strictly better: get rid of everything, scrape up a fresh one,
+     never tie two nights together, pay nothing at all. What the family scrapes
+     up has been out before now. See `sim/pieces.ts`.
+  */
+  const gapsAgainstCuts = (rs: typeof RUNS_CUTS) =>
+    rs
+      .map((r, i) => r.bestEstate - RUNS_CUTS[i].bestEstate)
+      .sort((a, b) => a - b);
+  const at = (rs: typeof RUNS_CUTS, f: (r: (typeof RUNS_CUTS)[number]) => number) =>
+    median(rs.map(f));
+
+  it('says what the loud gun is actually worth', () => {
+    const long = gapsAgainstCuts(RUNS_PIECES_LONG);
+    const landRate = (rs: typeof RUNS_CUTS) => {
+      const tried = rs.reduce((t, r) => t + r.newSystems.cutting.tried, 0);
+      const landed = rs.reduce((t, r) => t + r.newSystems.cutting.landed, 0);
+      return tried ? Math.round((landed / tried) * 100) : 0;
+    };
+
+    // eslint-disable-next-line no-console
+    console.log(
+      `pieces: carrying long against carrying pocket, 36 careers
+` +
+        `        it worked ${landRate(RUNS_PIECES_LONG)}% of the time` +
+        ` against ${landRate(RUNS_CUTS)}%` +
+        ` (config says +${Math.round(CLASS.long.odds * 100)} points)
+` +
+        `        heat-weeks ${Math.round(at(RUNS_PIECES_LONG, (r) => r.danger.heat))}` +
+        ` against ${Math.round(at(RUNS_CUTS, (r) => r.danger.heat))}` +
+        ` (config says x${CLASS.long.heat})
+` +
+        `        violence on the books ${Math.round(
+          at(RUNS_PIECES_LONG, (r) => r.newSystems.pieces.violence),
+        )} against ${Math.round(at(RUNS_CUTS, (r) => r.newSystems.pieces.violence))}
+` +
+        `        estate against pocket, 25th / median / 75th: ` +
+        `$${Math.round(pct(long, 0.25)).toLocaleString('en-US')} / ` +
+        `$${Math.round(median(long)).toLocaleString('en-US')} / ` +
+        `$${Math.round(pct(long, 0.75)).toLocaleString('en-US')}
+` +
+        `        careers ahead: ${long.filter((g) => g > 0).length}/${long.length}`,
+    );
+
+    /*
+       The instrument before the property, which is the order this file has
+       learned to work in. An arm where the two land at the same rate is not
+       measuring the class at all — it is measuring a bot that never reached
+       the act, and every false negative this project has shipped had that
+       shape.
+    */
+    expect(
+      RUNS_PIECES_LONG.reduce((t, r) => t + r.newSystems.cutting.tried, 0),
+      'the long-gun arm never once reached an act with a body in it',
+    ).toBeGreaterThan(0);
+    expect(
+      landRate(RUNS_PIECES_LONG),
+      'a long gun landed no more often than a pocket one, so the class is decoration',
+    ).toBeGreaterThan(landRate(RUNS_CUTS));
+
+    /*
+       And the property. Better odds bought with more attention is only a
+       decision while the attention is real — if carrying long is free money
+       there is no reason ever to carry anything else.
+    */
+    expect(
+      long.filter((g) => g > 0).length,
+      'the loud gun made every career richer, so there is no decision in it',
+    ).toBeLessThan(long.length);
+  });
+
+  it('says whether getting rid of it pays for itself', () => {
+    const dump = gapsAgainstCuts(RUNS_PIECES_DUMP);
+    const both = gapsAgainstCuts(RUNS_PIECES_BOTH);
+
+    // eslint-disable-next-line no-console
+    console.log(
+      `pieces: dumping against keeping, 36 careers
+` +
+        `        joined traces ${Math.round(at(RUNS_CUTS, (r) => r.newSystems.pieces.joined))}` +
+        ` keeping against ${Math.round(
+          at(RUNS_PIECES_DUMP, (r) => r.newSystems.pieces.joined),
+        )} dumping
+` +
+        `        recovered instead: ${Math.round(
+          at(RUNS_PIECES_DUMP, (r) => r.newSystems.pieces.recovered),
+        )} against ${Math.round(at(RUNS_CUTS, (r) => r.newSystems.pieces.recovered))}
+` +
+        `        cold pieces paid for: ${RUNS_PIECES_DUMP.reduce(
+          (t, r) => t + r.newSystems.pieces.bought,
+          0,
+        )} across the arm, at $${COLD.cost.toLocaleString('en-US')} each
+` +
+        `        shelf at the end ${at(RUNS_PIECES_DUMP, (r) => r.newSystems.pieces.onShelf)}` +
+        ` carrying ${at(RUNS_PIECES_DUMP, (r) => r.newSystems.pieces.bodies)} bodies,` +
+        ` against ${at(RUNS_CUTS, (r) => r.newSystems.pieces.onShelf)} carrying ` +
+        `${at(RUNS_CUTS, (r) => r.newSystems.pieces.bodies)} keeping
+` +
+        `        estate against keeping, 25th / median / 75th: ` +
+        `$${Math.round(pct(dump, 0.25)).toLocaleString('en-US')} / ` +
+        `$${Math.round(median(dump)).toLocaleString('en-US')} / ` +
+        `$${Math.round(pct(dump, 0.75)).toLocaleString('en-US')}
+` +
+        `        careers ahead: ${dump.filter((g) => g > 0).length}/${dump.length}` +
+        `; doing both: ${both.filter((g) => g > 0).length}/${both.length}` +
+        ` at $${Math.round(median(both)).toLocaleString('en-US')}`,
+    );
+
+    /*
+       The mechanic has to be running in the arm that is supposed to show it.
+       A keeping bot that never joins two nights is a bot that killed once.
+    */
+    expect(
+      RUNS_CUTS.reduce((t, r) => t + r.newSystems.pieces.joined, 0),
+      'keeping a piece never once tied two nights together, so the core does not run',
+    ).toBeGreaterThan(0);
+
+    /*
+       And it has to be the thing dumping buys. Fewer joins is the entire
+       purchase; if dumping joins as much as keeping then the policy does
+       nothing and the toggle is a lie.
+    */
+    expect(
+      RUNS_PIECES_DUMP.reduce((t, r) => t + r.newSystems.pieces.joined, 0),
+      'dumping tied as many nights together as keeping, so it buys nothing',
+    ).toBeLessThan(RUNS_CUTS.reduce((t, r) => t + r.newSystems.pieces.joined, 0));
+
+    // Neither way round may be free money.
+    expect(
+      dump.filter((g) => g > 0).length,
+      'dumping made every career richer, so keeping is never the right call',
+    ).toBeLessThan(dump.length);
+    expect(
+      dump.filter((g) => g > 0).length,
+      'dumping made no career richer at all, so it is a button nobody should press',
+    ).toBeGreaterThan(0);
+  });
+
+  /*
+     The half the arm above cannot answer, and the same correction `cutsRarely`
+     makes to the arm it sits beside.
+
+     Nineteen killings a career is not how anybody plays. A cold piece costing
+     nothing worth noticing is a true statement about a boss with a fortune and
+     a body count; what a player needs to know is whether it costs anything to
+     the boss who uses this three times in four years, which is the only boss
+     for whom the mechanic is a decision rather than a symptom.
+  */
+  it('says whether either decision still reads that way used sparingly', () => {
+    const gaps = RUNS_PIECES_DUMP_RARE.map(
+      (r, i) => r.bestEstate - RUNS_CUTS_RARE[i].bestEstate,
+    ).sort((a, b) => a - b);
+    const tried = (rs: typeof RUNS_CUTS) =>
+      median(rs.map((r) => r.newSystems.cutting.tried));
+
+    // eslint-disable-next-line no-console
+    console.log(
+      `pieces: dumping, done sparingly — ${tried(RUNS_PIECES_DUMP_RARE)} killings a career` +
+        ` against ${tried(RUNS_CUTS)} doing it freely
+` +
+        `        joined traces ${Math.round(
+          at(RUNS_CUTS_RARE, (r) => r.newSystems.pieces.joined),
+        )} keeping against ${Math.round(
+          at(RUNS_PIECES_DUMP_RARE, (r) => r.newSystems.pieces.joined),
+        )} dumping
+` +
+        `        cold pieces paid for: ${RUNS_PIECES_DUMP_RARE.reduce(
+          (t, r) => t + r.newSystems.pieces.bought,
+          0,
+        )} across the arm
+` +
+        `        estate against keeping, 25th / median / 75th: ` +
+        `$${Math.round(pct(gaps, 0.25)).toLocaleString('en-US')} / ` +
+        `$${Math.round(median(gaps)).toLocaleString('en-US')} / ` +
+        `$${Math.round(pct(gaps, 0.75)).toLocaleString('en-US')}
+` +
+        `        careers ahead: ${gaps.filter((g) => g > 0).length}/${gaps.length}`,
+    );
+
+    // Reported, not asserted on the estate. The sparing arm kills three times
+    // in four years, so the population it moves is small by construction and
+    // an estate bar on it would be reading noise — the mistake this file has
+    // made and caught three times. The bar that matters is above.
+    expect(
+      RUNS_PIECES_DUMP_RARE.reduce((t, r) => t + r.newSystems.cutting.tried, 0),
+      'the sparing arm never reached the act, so it says nothing',
+    ).toBeGreaterThan(0);
+  });
+});
+
+describe('sending people after somebody else’s people', () => {
+  /*
+     `contract.ts` shipped with unit tests and nothing else, which is the same
+     F7 that hid `silence` and `marks` from every bar in this file for a year.
+     The unit tests prove a contract does what it says. They cannot say whether
+     it is a way to play, and they cannot say whether the autopilot's war gate
+     is protecting the player or costing them.
+
+     Read against `RUNS_300`: the same bot, the same seeds, never sending
+     anybody.
+  */
+  const gapsAgainst300 = (rs: typeof RUNS_300) =>
+    rs.map((r, i) => r.bestEstate - RUNS_300[i].bestEstate).sort((a, b) => a - b);
+  const at = (rs: typeof RUNS_300, f: (r: (typeof RUNS_300)[number]) => number) =>
+    median(rs.map(f));
+
+  it('says whether it is worth doing, and whether the war gate earns its keep', () => {
+    const war = gapsAgainst300(RUNS_CONTRACT_WAR);
+    const free = gapsAgainst300(RUNS_CONTRACT_FREE);
+    const sent = (rs: typeof RUNS_300) =>
+      rs.reduce((t, r) => t + r.newSystems.pieces.sent, 0);
+    const landed = (rs: typeof RUNS_300) =>
+      rs.reduce((t, r) => t + r.newSystems.pieces.sentLanded, 0);
+
+    // eslint-disable-next-line no-console
+    console.log(
+      `contracts: only at war — ${sent(RUNS_CONTRACT_WAR)} sent across 36 careers, ` +
+        `${landed(RUNS_CONTRACT_WAR)} landed
+` +
+        `           estate against never sending, 25th / median / 75th: ` +
+        `$${Math.round(pct(war, 0.25)).toLocaleString('en-US')} / ` +
+        `$${Math.round(median(war)).toLocaleString('en-US')} / ` +
+        `$${Math.round(pct(war, 0.75)).toLocaleString('en-US')}
+` +
+        `           careers ahead: ${war.filter((g) => g > 0).length}/${war.length}
+` +
+        `           freely — ${sent(RUNS_CONTRACT_FREE)} sent, ${landed(RUNS_CONTRACT_FREE)} landed
+` +
+        `           estate: $${Math.round(pct(free, 0.25)).toLocaleString('en-US')} / ` +
+        `$${Math.round(median(free)).toLocaleString('en-US')} / ` +
+        `$${Math.round(pct(free, 0.75)).toLocaleString('en-US')}` +
+        `; ahead ${free.filter((g) => g > 0).length}/${free.length}
+` +
+        `           what it cost: crew ${at(RUNS_CONTRACT_FREE, (r) => r.newSystems.crewLeft)} ` +
+        `freely / ${at(RUNS_CONTRACT_WAR, (r) => r.newSystems.crewLeft)} at war / ` +
+        `${at(RUNS_300, (r) => r.newSystems.crewLeft)} never
+` +
+        `           heat-weeks ${Math.round(at(RUNS_CONTRACT_FREE, (r) => r.danger.heat))} / ` +
+        `${Math.round(at(RUNS_CONTRACT_WAR, (r) => r.danger.heat))} / ` +
+        `${Math.round(at(RUNS_300, (r) => r.danger.heat))}`,
+    );
+
+    /*
+       The instrument before the property. An arm that never reached the act
+       satisfies every bar below by doing nothing, which is the shape of every
+       false negative this file has caught.
+    */
+    expect(
+      sent(RUNS_CONTRACT_FREE),
+      'the unrestricted arm never sent anybody anywhere, so it measures nothing',
+    ).toBeGreaterThan(0);
+    expect(
+      landed(RUNS_CONTRACT_FREE),
+      'thirty-six careers of contracts and not one ever landed',
+    ).toBeGreaterThan(0);
+
+    // And it must not be free money in either shape.
+    expect(
+      free.filter((g) => g > 0).length,
+      'going after rivals unprovoked made every career richer',
+    ).toBeLessThan(free.length);
   });
 });
 
