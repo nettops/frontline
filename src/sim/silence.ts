@@ -34,6 +34,7 @@ import { SILENCE } from '../config/silence';
 import { putOutMark } from './marks';
 import { DISMISSAL } from '../config/npcs';
 import { CREW_SKILL_VS_DISCIPLINE } from '../config/operations';
+import { armFor, leftBehind, spent } from './pieces';
 
 export interface SilenceCheck {
   ok: boolean;
@@ -131,7 +132,18 @@ export function silence(state: GameState, rng: Rng, npcId: Id): SilenceCheck {
   if (!guard.ok) return guard;
 
   const npc = state.npcs[npcId];
-  const worked = rng.chance(chanceOf(npc));
+  /*
+     What they took with them.
+
+     `armFor` cannot fail and cannot draw — see `sim/pieces.ts`. On the default
+     policy it returns a pocket piece out of the family cupboard, whose three
+     multipliers are 0, 1 and 1, so every figure below is the figure this was
+     measured with. A boss who has changed the policy has changed the act.
+  */
+  const act = armFor(state);
+  const worked = rng.chance(
+    clamp(chanceOf(npc) + act.odds, SILENCE.minChance, SILENCE.maxChance),
+  );
   npc.unavailableUntilDay = null;
 
   if (worked) {
@@ -139,18 +151,22 @@ export function silence(state: GameState, rng: Rng, npcId: Id): SilenceCheck {
     // Whatever he was doing for the other side, he has stopped.
     npc.informingSince = undefined;
     addNote(npc, state.day, 'You decided they were finished.', 'bad');
-    addHeat(state, SILENCE.heat, 'street', 'a man of yours found dead');
+    addHeat(state, SILENCE.heat * act.heat, 'street', 'a man of yours found dead');
     /*
        The purchase. A violence trace and nothing from inside — this is the
        only exit in the game that does not leave somebody who can be asked
        questions, and it is the entire reason to pay for it.
+
+       What is left is now a fact about the piece rather than a constant. A
+       cold gun files a little over half of this; one out of your own crates
+       files half again as much, and points at the workshop.
     */
     addEvidence(state, {
       day: state.day,
       source: 'violence',
-      strength: SILENCE.evidenceStrength,
+      strength: Math.round(SILENCE.evidenceStrength * act.evidence),
       npcIds: [npc.id],
-      detail: `${npc.name} was found. They worked for you and everybody knew it.`,
+      detail: `${npc.name} was found. They worked for you and everybody knew it. Whoever did it left ${leftBehind(act)}.`,
     });
     addLog(state, `${npc.name} will not be talking to anybody.`, 'crew');
   } else {
@@ -162,7 +178,7 @@ export function silence(state: GameState, rng: Rng, npcId: Id): SilenceCheck {
     */
     npc.status = 'defected';
     addNote(npc, state.day, 'They know what you tried to do.', 'bad');
-    addHeat(state, SILENCE.heatOnFailure, 'street', 'somebody survived something');
+    addHeat(state, SILENCE.heatOnFailure * act.heat, 'street', 'somebody survived something');
     addEvidence(state, {
       day: state.day,
       source: 'informant',
@@ -189,6 +205,15 @@ export function silence(state: GameState, rng: Rng, npcId: Id): SilenceCheck {
     */
     putOutMark(state, npc.id);
   }
+
+  /*
+     And what happened to the piece.
+
+     After the roll, so the stream reads chance-then-disposal — and on the
+     default policy `spent` draws nothing at all, which is what keeps every
+     career that never opens the panel exactly where it was.
+  */
+  spent(state, rng, act, { npcIds: [npc.id], landed: worked });
 
   theRoomFindsOut(state, npc, worked);
   return {

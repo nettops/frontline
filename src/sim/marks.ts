@@ -31,11 +31,12 @@
  */
 
 import type { GameState, Id, Mark, Npc } from './types';
-import { Rng } from './rng';
+import { Rng, clamp } from './rng';
 import { addEvidence, addLog, nextId } from './util';
 import { addHeat } from './heat';
 import { addNote } from './npc';
 import { MARK } from '../config/silence';
+import { armFor, leftBehind, spent, type ArmedAct } from './pieces';
 
 /**
  * Everything out, lazily.
@@ -117,20 +118,22 @@ function talks(state: GameState, npc: Npc): void {
   });
 }
 
-function lands(state: GameState, mark: Mark, npc: Npc): void {
+function lands(state: GameState, rng: Rng, act: ArmedAct, mark: Mark, npc: Npc): void {
   mark.status = 'landed';
   mark.settledDay = state.day;
   npc.status = 'dead';
   npc.informingSince = undefined;
   addNote(state.day ? npc : npc, state.day, 'They were found.', 'bad');
-  addHeat(state, MARK.heatOnLanding, 'street', 'a body turned up');
+
+  addHeat(state, MARK.heatOnLanding * act.heat, 'street', 'a body turned up');
   addEvidence(state, {
     day: state.day,
     source: 'violence',
-    strength: MARK.evidenceOnLanding,
+    strength: Math.round(MARK.evidenceOnLanding * act.evidence),
     npcIds: [npc.id],
-    detail: `${npc.name} was found dead a long way from home.`,
+    detail: `${npc.name} was found dead a long way from home, and whoever did it left ${leftBehind(act)}.`,
   });
+  spent(state, rng, act, { npcIds: [npc.id], landed: true });
   addLog(state, `They found ${npc.name}. It is finished.`, 'crew');
 }
 
@@ -160,8 +163,16 @@ export function tickMarks(state: GameState, rng: Rng): void {
     mark.tries += 1;
     addHeat(state, MARK.heatPerTry, 'street', 'people asking after somebody');
 
-    if (rng.chance(mark.chance)) {
-      lands(state, mark, npc);
+    /*
+       What the people looking for him are carrying.
+
+       Read before the roll because it moves the roll — see `sim/pieces.ts`.
+       Nothing is spent on a miss: they did not find him, so there was no
+       night and there is no piece to get rid of.
+    */
+    const act = armFor(state);
+    if (rng.chance(clamp(mark.chance + act.odds, 0, 1))) {
+      lands(state, rng, act, mark, npc);
       continue;
     }
 

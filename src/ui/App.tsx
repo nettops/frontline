@@ -19,6 +19,7 @@ import OperationsPanel from './panels/OperationsPanel';
 import TerritoryPanel from './panels/TerritoryPanel';
 import BusinessesPanel from './panels/BusinessesPanel';
 import ContrabandPanel from './panels/ContrabandPanel';
+import ArmouryPanel from './panels/ArmouryPanel';
 import RivalsPanel from './panels/RivalsPanel';
 import LawPanel from './panels/LawPanel';
 import IntelligencePanel from './panels/IntelligencePanel';
@@ -291,6 +292,7 @@ export default function App() {
           {shown === 'territory' && <TerritoryPanel />}
           {shown === 'businesses' && <BusinessesPanel />}
           {shown === 'contraband' && <ContrabandPanel />}
+          {shown === 'armoury' && <ArmouryPanel />}
           {shown === 'rivals' && <RivalsPanel />}
           {shown === 'law' && <LawPanel />}
           {shown === 'intelligence' && <IntelligencePanel />}

@@ -292,11 +292,21 @@ h4 {
 /*
    Every figure on the masthead is a poster numeral. The number is the
    picture: what separates the purses from the rest is ink, not size alone.
-   Tabular figures come from Anton's default digits being effectively
-   monospaced; the counter animation needs them not to jitter.
+
+   The face is the mono, not the poster, and that was a measurement rather than
+   a preference. Anton has no `tnum` feature, so `font-variant-numeric:
+   tabular-nums` on it does nothing at all — measured at 22px, every digit
+   renders 10.875px wide except `1`, which is 7.281px. A third narrower. The
+   comment that used to sit here claimed Anton's digits were "effectively
+   monospaced" and it was simply wrong, so every counter in the masthead
+   shifted whenever a 1 came or went.
+
+   IBM Plex Mono has real tabular figures and is already loaded. The poster
+   face keeps the labels and the page titles, where nothing counts.
 */
 .stat-value {
-  font-family: var(--font-poster);
+  font-family: var(--font-mono);
+  font-weight: 600;
   font-variant-numeric: tabular-nums;
   font-size: 22px;
   line-height: 1.1;
@@ -1544,6 +1554,92 @@ th.sortable:hover {
   image-rendering: pixelated;
   image-rendering: crisp-edges;
   max-width: 100%;
+}
+
+/* --------------------------------------------------------------- armoury --- */
+
+/*
+   The rack. A list, so it is laid out as one — four columns on a grid rather
+   than four floated things, because the sprite cell is fixed at 48x16 and the
+   whole reason the sheet uses a fixed cell is that a list of them lines up.
+
+   The reading column is last and it is the one that matters, so it takes the
+   space nothing else claimed.
+*/
+.piece-rack {
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid var(--line);
+}
+
+/*
+   Four columns and the last one is the point. The reading is what a player
+   actually has to read before they use the thing, so it takes the space, and
+   the provenance is a tag rather than a paragraph for the same reason.
+*/
+.piece-row {
+  display: grid;
+  grid-template-columns: 104px minmax(96px, 0.9fr) max-content minmax(0, 2fr);
+  gap: 12px;
+  align-items: center;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+/* The rest-of-the-rack panels have no provenance column. */
+.piece-rack .piece-row:not(:has(.tag)) {
+  grid-template-columns: 104px minmax(96px, 0.9fr) minmax(0, 2fr);
+}
+
+/* Nearest-neighbour or the whole point of drawing it by hand is thrown away. */
+.piece-art {
+  display: block;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  background: #0b0a08;
+  border: 1px solid var(--line);
+}
+
+.piece-name {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.piece-prov {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.piece-read {
+  color: var(--text-dim);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+/*
+   A piece that has been out before. Amber, not red — this is a thing to know
+   before you use it and not a thing that has gone wrong, and the palette
+   reserves red for no way back.
+*/
+.piece-read.warn {
+  color: var(--brass);
+}
+
+.carry-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+@media (max-width: 720px) {
+  .piece-row {
+    grid-template-columns: 104px 1fr;
+    row-gap: 4px;
+  }
 }
 
 /* ------------------------------------------------------------------ wire --- */
