@@ -36,6 +36,16 @@
  * belongs to those numbers. It still does not read the case being built, and
  * it still respects laying low through the same `canLaunch` as everything
  * else.
+ *
+ * **And a third pass, added when contracts shipped.** A hand player gained a
+ * verb the loop did not have, which is exactly the gap the bar above exists to
+ * close. It sends people after a rival capo — but *only inside a war the
+ * player already chose*, and that is a safety property rather than a
+ * threshold: a contract can start a war, and a loop that decides whether a war
+ * is worth starting is making the largest decision in the game on somebody's
+ * behalf. Handing over the operations loop was never consent to that. Last in
+ * the tick, so it can only spend what the work left behind. See
+ * `AUTOPILOT_CONTRACTS`.
  */
 
 import type { GameState, OperationDef } from './types';
@@ -53,7 +63,11 @@ import {
 } from './operations';
 import { scoreOn, setupsLeft } from './scores';
 import { controlLevel, operableTerritories } from './territory';
-import { AUTOPILOT } from '../config/autopilot';
+import { AUTOPILOT, AUTOPILOT_CONTRACTS } from '../config/autopilot';
+import { CONTRACT } from '../config/contract';
+import { canContract, contractCost, openContract, openContracts } from './contract';
+import { caposOf } from './capos';
+import { playerWars } from './diplomacy';
 import { SETUP_BY_ID } from '../config/scores';
 
 /** Higher is more dangerous. The order crews are handed out in. */
@@ -152,6 +166,17 @@ export function tickAutopilot(state: GameState, _rng: Rng): void {
   let bodiesLeft = availableCrew(state).length;
 
   /*
+     Two men held back, if there is a war on and somebody to send them after.
+
+     Before the jobs pass, because after it there is never anybody left — the
+     loop fills the board every night by design, and the first version of this
+     took only leftovers and therefore fired about once a career. See
+     `AUTOPILOT_CONTRACTS` for the trace.
+  */
+  const reserving = wantsToSend(state);
+  if (reserving) bodiesLeft -= CONTRACT.crew;
+
+  /*
      Pass one: what runs.
 
      Setups are left alone — groundwork is a decision about a score, and a
@@ -195,5 +220,49 @@ export function tickAutopilot(state: GameState, _rng: Rng): void {
       undefined,
       score?.id,
     );
+  }
+
+  // Pass three, with the two men pass one was told not to spend.
+  if (reserving) sendSomebody(state);
+}
+
+/**
+ * Whether tonight is a night for it, asked before anything is allocated.
+ *
+ * Every condition that does not depend on who ends up where, so the jobs pass
+ * can be told to hold two men back without the answer changing underneath it.
+ *
+ * "Only at war" is a safety property rather than a threshold: a contract can
+ * start a war, and a loop that weighs whether a war is worth starting is
+ * making the largest decision in the game unasked. Handing over the operations
+ * loop was never consent to that.
+ */
+function wantsToSend(state: GameState): boolean {
+  if (openContracts(state).length >= AUTOPILOT_CONTRACTS.maxOpen) return false;
+  if (playerWars(state).length === 0) return false;
+  if (availableCrew(state).length < AUTOPILOT_CONTRACTS.minRoster) return false;
+  return true;
+}
+
+/**
+ * Going after their people, during a war that is already running.
+ *
+ * Their biggest man, which is also their hardest to reach — `share` drives
+ * both. Taking the largest share off the board is what shortens a war, and the
+ * odds falling as the target grows is what keeps it from being an obvious
+ * move.
+ */
+function sendSomebody(state: GameState): void {
+  for (const faction of playerWars(state)) {
+    const target = [...caposOf(state, faction.id)].sort((a, b) => b.share - a.share)[0];
+    if (!target) continue;
+    const wanted = { kind: 'capo' as const, factionId: faction.id, capoId: target.id };
+    if (totalFunds(state) < contractCost(state, wanted) * AUTOPILOT_CONTRACTS.fundsMultiple) {
+      continue;
+    }
+    if (!canContract(state, wanted).ok) continue;
+    openContract(state, wanted);
+    addLog(state, 'Somebody has been sent. It is a war, and that is what a war is.', 'crew');
+    return;
   }
 }

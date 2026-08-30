@@ -18,6 +18,7 @@ import { tickScores } from './scores';
 import { tickTraining } from './training';
 import { tickStandingOrders } from './standingOrders';
 import { tickMarks } from './marks';
+import { tickContracts } from './contract';
 import { tickAutopilot } from './autopilot';
 import { closeWeek } from './ledger';
 import { tickPossessions } from './possessions';
@@ -96,6 +97,11 @@ export function advanceDay(state: GameState): void {
   //      mark takes nobody off the board — it is other people's problem, and
   //      the only thing it competes for is the attention it draws.
   tickMarks(state, rng);
+  // 1b5a. And anybody *you* sent people after. Beside the marks and for the
+  //       same reason — it is a decision already taken, playing itself out on
+  //       its own clock. Before the operations loop, because the men it holds
+  //       are men that loop must not also be able to send.
+  tickContracts(state, rng);
   // 1b6. And the whole operations loop, if it has been handed over. Last of
   //      the lot, so it draws on a bench that scores, pairings and standing
   //      orders have already taken from — the autopilot gets what is left
