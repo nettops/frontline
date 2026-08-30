@@ -3,6 +3,7 @@ import { canPutOnCard, cardTake, putOnCard, takeOffCard } from '../../sim/verbs'
 import { hasVerb } from '../../sim/build';
 import { useGame, mutate } from '../../store';
 import { Panel, Bar, KeyValue } from '../components';
+import StreetScene from '../StreetScene';
 import {
   averageTake,
   canPutInCharge,
@@ -487,6 +488,15 @@ function DistrictDetail({
         </button>
       }
     >
+      {/*
+         The same street the Overview draws, at this address.
+
+         Everything on it is a second telling of something further down this
+         very panel — the fronts you run here, the ground you hold, what the
+         law is doing — which is the scene's whole rule. Your own car and your
+         own dead stay outside your own house; see `streetLook`.
+      */}
+      {state.mode !== 'simulation' && <StreetScene where={territory.id} />}
       <p className="dim" style={{ marginTop: 0 }}>
         {def.blurb}
       </p>

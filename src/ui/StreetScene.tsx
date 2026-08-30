@@ -30,7 +30,7 @@ import {
 
 const SCALE = 3;
 
-export default function StreetScene() {
+export default function StreetScene({ where }: { where?: string } = {}) {
   const state = useGame();
   const canvas = useRef<HTMLCanvasElement>(null);
   const still = useRef<HTMLCanvasElement | null>(null);
@@ -38,7 +38,7 @@ export default function StreetScene() {
   const walkers = useRef<Walker[]>([]);
   const bands = useRef({ traffic: 0, peds: 0 });
   const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  const look = streetLook(state);
+  const look = streetLook(state, where);
   const key = JSON.stringify(look);
   bands.current = { traffic: look.traffic, peds: look.peds };
 
