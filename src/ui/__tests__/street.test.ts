@@ -11,6 +11,8 @@ import { newGame } from '../../sim/state';
 import type { GameState } from '../../sim/types';
 import { HOME_TERRITORY } from '../../config/territories';
 import { streetLook } from '../streetLook';
+import { addHeat } from '../../sim/heat';
+import { crewList } from '../../sim/npc';
 
 function fresh(seed = 5): GameState {
   return newGame({ name: 'Tester', difficulty: 'normal', seed });
@@ -88,6 +90,46 @@ describe('the street', () => {
     const look = streetLook(state);
     expect(look.truck).toBe(true);
     expect(look.crates).toBeGreaterThan(0);
+  });
+
+  it('parks a marked car once the street itself is warm, and not before', () => {
+    // The Law panel's street bar, wearing wheels. Not a case — a uniform
+    // outside is a smaller fact than an investigation and the scene should be
+    // able to say the smaller thing.
+    const state = fresh();
+    expect(streetLook(state).cruiser).toBe(false);
+    addHeat(state, 60, 'street', 'a very loud month');
+    expect(streetLook(state).cruiser).toBe(true);
+  });
+
+  it('brings a hearse the week somebody of yours is buried, and not after', () => {
+    const state = fresh();
+    expect(streetLook(state).hearse).toBe(false);
+    const man = crewList(state).find((n) => n.status !== 'boss')!;
+    man.status = 'dead';
+    man.notes.push({ day: state.day, text: 'They were found.', kind: 'bad' });
+    expect(streetLook(state).hearse).toBe(true);
+    // A week later the car has gone and the man is still dead. The scene
+    // reports this week, not the whole career.
+    state.day += 30;
+    expect(streetLook(state).hearse).toBe(false);
+  });
+
+  it('leaves a stripped shell only where that job actually ran', () => {
+    const state = fresh();
+    expect(streetLook(state).stripped).toBe(false);
+    state.activeOperations['op1'] = {
+      id: 'op1',
+      defId: 'boost_cars',
+      territoryId: HOME_TERRITORY,
+      crewIds: [],
+      startDay: state.day,
+      endDay: state.day + 3,
+      investment: 0,
+      successChance: 0.5,
+      projectedPayout: 0,
+    } as never;
+    expect(streetLook(state).stripped).toBe(true);
   });
 
   it('puts your fronts on the street in their own state', () => {

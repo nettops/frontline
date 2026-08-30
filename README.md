@@ -492,16 +492,25 @@ slowest part of playing this.
 
 ### The other skin
 
-The game ships wearing two looks. The default is the one it was designed in:
-warm tobacco-dark, brass for money and used sparingly, paper reserved for the
-one document the game actually hands you. The other, behind the `crt` button in
-the stat bar, is an IBM DOS terminal — CGA grey on black, behind a phosphor
-tube with scanlines, a shadow mask, bloom, a vignette and a sync roll that
-takes nine seconds to cross the screen.
+**The default look is not the one this section used to describe.** The game was
+designed in a warm tobacco-dark palette with brass for money and paper reserved
+for the one document it hands you; that was replaced by **One Sheet**, which is
+what ships now — flat ink blocks on a warm black, four semantic inks, and a
+single 12px cut corner that means *this one is live*. Anton for the poster
+numerals, IBM Plex Sans and Mono for everything that has to be read. The
+token *names* did not change, which is why the whole thing was a values edit
+rather than a rewrite.
+
+The second look, an IBM DOS terminal behind a phosphor tube, is **parked**. It
+is still in the tree at `styles/crt.css` and `ui/skin.ts`, and
+`ui/__tests__/skin.test.ts` fails if either is imported or if the toggle
+reappears anywhere — it was built, it was never approved, and it has not been
+squared with the One Sheet cuts. What follows is a record of what it took,
+because the findings outlived the feature.
 
 It is about two hundred and forty lines, and it is that small for one reason:
-`theme.css` uses `var(--…)` 238 times against ten hardcoded colours, so almost
-the whole game recolours from the `:root` block. The mapping onto the CGA
+`theme.css` uses `var(--…)` heavily against very few hardcoded colours, so
+almost the whole game recolours from the `:root` block. The mapping onto the CGA
 sixteen turned out to be one-to-one with nothing left over — the game already
 needed a ground, three text weights, a money colour, a danger colour, a good
 colour and a cold institutional colour, and CGA has exactly those and no more.
@@ -546,6 +555,14 @@ Nothing was ported from cool-retro-term, which is where the idea came from. It
 is a Qt6/QML application and its effects are GLSL shaders under GPL2/3; this
 project is not GPL, so lifting them would relicense the game. The layers here
 are written from the same physics.
+
+**One measurement from the One Sheet work worth keeping here**, because it is
+the kind of thing that is easy to assert and cheap to check: Anton has no `tnum`
+feature, so `font-variant-numeric: tabular-nums` on it does nothing. At 22px
+every digit renders 10.875px wide except `1`, which is 7.281px — a third
+narrower, and every counter in the masthead shifted whenever a 1 came or went.
+The stat values are set in Plex Mono, whose digits measure a spread of exactly
+zero.
 
 ### Three ways to play
 

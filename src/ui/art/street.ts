@@ -75,19 +75,47 @@ function frontPal(
 }
 
 /*
-   The two sprites this file authors itself, both placeholders the sheets
-   have already asked for better versions of: the cast library needs a
-   full-figure variant before the pedestrians can be people. They are a
-   count, not characters.
+   The people, authored here rather than ported.
+
+   `pixel-cast.html` settled a character as 32x40 and **half-figure** — head
+   and torso, no legs — so there is nothing on any sheet to copy for somebody
+   walking. A true full-figure cast variant is a prototype-sheet job and it is
+   still owed; what is here is a deliberate second thing, at a twelfth of the
+   size, built to the sheets' craft rather than out of their parts.
+
+   Three builds and six palettes, which is what took them from "a count" to
+   "a street". The builds differ only in shoulder width and hat, because at
+   eleven pixels tall that is the entire vocabulary — anything finer is noise
+   the reader cannot resolve. The palettes take the cast library's own skin
+   and garment ramps, so the people outside are from the same world as the
+   people in the portraits.
 */
-const PED = ['.hh.', '.hh.', '.ff.', 'cccc', 'cccc', 'cccc', '.cc.', '.cc.', '.c.c', '.c.c', '.b.b'];
+const PED_BUILDS = [
+  // Ordinary: hat, coat, four wide.
+  ['.hh.', '.hh.', '.ff.', 'cccc', 'cccc', 'cccc', '.cc.', '.cc.', '.c.c', '.c.c', '.b.b'],
+  // Broader, and bare-headed. Somebody who works outside.
+  ['.ff.', '.ff.', '.ff.', 'cccc', 'cccc', 'cccc', 'cccc', '.cc.', '.c.c', '.c.c', '.b.b'],
+  // Slighter, longer coat. Reads as a woman or a younger man at this size.
+  ['.hh.', '.ff.', '.ff.', '.cc.', 'cccc', 'cccc', 'cccc', '.cc.', '.cc.', '.c.c', '.b.b'],
+];
 /* The other half of the walk: legs passing. Two frames is a stride at this
    size; a third would be a flourish nobody reads at twelve pixels. */
-const PED_STEP = ['.hh.', '.hh.', '.ff.', 'cccc', 'cccc', 'cccc', '.cc.', '.cc.', '.cc.', '.cc.', '.bb.'];
+const PED_BUILD_STEPS = [
+  ['.hh.', '.hh.', '.ff.', 'cccc', 'cccc', 'cccc', '.cc.', '.cc.', '.cc.', '.cc.', '.bb.'],
+  ['.ff.', '.ff.', '.ff.', 'cccc', 'cccc', 'cccc', 'cccc', '.cc.', '.cc.', '.cc.', '.bb.'],
+  ['.hh.', '.ff.', '.ff.', '.cc.', 'cccc', 'cccc', 'cccc', '.cc.', '.cc.', '.cc.', '.bb.'],
+];
+/** Kept for the still layer, which draws one standing figure per band. */
+const PED = PED_BUILDS[0];
 const PED_PALS: Record<string, string>[] = [
   { h: '#1c1713', f: '#8a6a4f', c: '#3b3528', b: '#15110e' },
   { h: '#2e2a24', f: '#6f4f37', c: '#4a4436', b: '#15110e' },
   { h: '#3d3d42', f: '#8a6a4f', c: '#26221d', b: '#15110e' },
+  // Three more off the cast sheet's ramps: a darker skin, a paler one, and
+  // the one coat colour in this palette that is not brown or black.
+  { h: '#1c1713', f: '#5f4030', c: '#2a2a2e', b: '#15110e' },
+  { h: '#2e2a24', f: '#a68766', c: '#3d5464', b: '#15110e' },
+  { h: '#3b2519', f: '#6f4f37', c: '#4f3a22', b: '#15110e' },
 ];
 const CRATE = ['0000000000', '0mmmmMmmm0', '0nnnnMnnn0', '0mmmmMmmm0', '0nnnnMnnn0', '0000000000'];
 const CRATE_PAL: Record<string, string> = { '0': '#0c0a09', m: '#5f3d27', n: '#3b2519', M: '#855838' };
@@ -252,9 +280,20 @@ export function drawStreet(
      traffic band, because "cars that do not belong" only means something
      on a street that also has cars that do.
   */
+  /*
+     The kerb, in the order things matter.
+
+     Later entries win the three slots, so the loudest facts survive a crowded
+     street: a hearse and a burned-out shell are the two that mean somebody is
+     not coming back, and an unmarked car is the one the whole scene was built
+     around. The ambient traffic below only ever fills what is left.
+  */
   const parked: { id: string; paint?: string }[] = [];
+  if (look.stripped) parked.push({ id: 'stripped' });
   if (look.car) parked.push({ id: look.car, paint: look.car === 'wedge' ? 'maroon' : look.car === 'towncar' ? 'black' : 'blue' });
   if (look.truck) parked.push({ id: 'boxtruck' });
+  if (look.cruiser) parked.push({ id: 'cruiser' });
+  if (look.hearse) parked.push({ id: 'hearse' });
   if (look.shell) parked.push({ id: 'burned' });
   if (look.unmarked) parked.push({ id: 'unmarked' });
   const showing = parked.slice(-3);
@@ -320,6 +359,8 @@ export interface Walker {
   /** Cells per second, signed. */
   speed: number;
   pal: number;
+  /** Which of the three builds this one is. */
+  build: number;
   /** A door worth stopping at, or null for straight across. */
   doorX: number | null;
 }
@@ -332,7 +373,13 @@ export function makeWalker(seed: number, fromDoor: boolean): Walker {
   // Somebody leaving a shop is going somewhere else; somebody arriving from
   // the edge has an errand here half the time.
   const doorX = fromDoor ? null : hash(`werr:${seed}`) % 2 === 0 ? door : null;
-  return { x, speed: pace, pal: hash(`wpal:${seed}`) % PED_PALS.length, doorX };
+  return {
+    x,
+    speed: pace,
+    pal: hash(`wpal:${seed}`) % PED_PALS.length,
+    build: hash(`wbuild:${seed}`) % PED_BUILDS.length,
+    doorX,
+  };
 }
 
 /** Off the pavement, one way or another: through a door, or off the block. */
@@ -356,7 +403,8 @@ export function drawLive(
   for (const w of walkers) {
     // The stride is tied to position, not a clock — a walker that stops
     // stops mid-step, and no timer has to exist for the legs.
-    const frame = Math.floor(w.x / 3) % 2 === 0 ? PED : PED_STEP;
+    const frame =
+      Math.floor(w.x / 3) % 2 === 0 ? PED_BUILDS[w.build] : PED_BUILD_STEPS[w.build];
     blit(ctx, frame, PED_PALS[w.pal], Math.round(w.x), 29, s);
   }
   // Far lane first, near lane last, so oncoming traffic passes behind.
