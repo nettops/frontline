@@ -8,7 +8,7 @@ import { approaches } from '../../sim/approaches';
 import { rankNow, nextRank, whatItNeeds } from '../../sim/rank';
 import { openSitdown } from '../../sim/sitdown';
 import { payrollForecast, weeklyWageBill } from '../../sim/economy';
-import { isLayingLow, startLayLow } from '../../sim/heat';
+import { channelHeat, isLayingLow, startLayLow } from '../../sim/heat';
 import { arrestRisk, weeklyLegalCost } from '../../sim/investigation';
 import { maxCrew } from '../../sim/player';
 import { formatMoney, formatShortDay } from '../../sim/util';
@@ -110,7 +110,30 @@ function LayLow() {
   const perPayday = weeklyWageBill(state) + weeklyLegalCost(state);
   const cost = Math.round(perPayday * paydays + (state.org.wagesOwed ?? 0));
   const pointless = state.org.heatBy.street < 1;
-  const tier = heatTier(state.org.heat);
+
+  /*
+     What going quiet is actually governed by, which is not the tier.
+
+     The copy here quoted `HeatTier.decayMultiplier` and concluded from it that
+     going quiet "will not clear this". Both halves were wrong. That multiplier
+     scales `HEAT_ABSORPTION` — what a large organization makes go away by
+     existing — and the heat-ratchet rework deliberately took it *off* the
+     decay path, because scaling decay by it was what made the meter a one-way
+     door. `tickHeat` multiplies by `quietShare`, the difficulty, the channel,
+     and four for laying low. No tier anywhere.
+
+     Round 16's tester read the sentence at heat 58, believed it, and put off
+     going dark from day 42 to day 78. Heat then went 58 to 16 in ten days.
+     They filed those 36 days as where their run broke, and they were right.
+
+     What genuinely decides whether this helps is `LAY_LOW_BY_CHANNEL`: four on
+     the street, one on the books, nought inside the family. So the warning is
+     about where your heat is, which is a fact the player can act on — go
+     quiet for street trouble, deal with the informant for the other kind.
+  */
+  const street = channelHeat(state, 'street');
+  const elsewhere = channelHeat(state, 'money') + channelHeat(state, 'inside');
+  const mostlyElsewhere = elsewhere > street;
 
   if (!armed) {
     return (
@@ -131,11 +154,9 @@ function LayLow() {
            now says what tier they are in and what that does to the rate.
         */
         title={`${LAY_LOW_DURATION_DAYS} days dark. Only quiet work moves; anything louder is refused, and the street reads it as weakness. ${
-          tier.decayMultiplier >= 0.7
-            ? 'Street heat falls fast from here.'
-            : `At ${tier.name} street heat only bleeds off at ${Math.round(
-                tier.decayMultiplier * 100,
-              )}% of the usual rate — going quiet helps, but it will not clear this on its own.`
+          mostlyElsewhere
+            ? 'Most of what is on you is not street trouble, and going dark does almost nothing for the books and nothing at all for somebody talking.'
+            : 'Street heat comes off four times faster while you are dark, and fastest when there is most of it.'
         }${pointless ? ' There is no street heat to lose right now.' : ''}`}
       >
         Lay low
@@ -162,13 +183,15 @@ function LayLow() {
         {LAY_LOW_DURATION_DAYS} days idle · about {formatMoney(cost)} in wages and counsel ·{' '}
         {LAY_LOW_RESPECT_COST} respect
         {pointless ? ' · nothing to cool' : ''}
-        {!pointless && tier.decayMultiplier < 0.7 && (
+        {!pointless && mostlyElsewhere && (
           <span className="hot">
             {' '}
-            · at {tier.name} street heat only falls at{' '}
-            {Math.round(tier.decayMultiplier * 100)}% of the usual rate, so this will not
-            clear it
+            · most of what is on you is not on the street — this will barely touch the
+            books and will do nothing about anybody talking
           </span>
+        )}
+        {!pointless && !mostlyElsewhere && (
+          <span className="faint"> · street heat comes off four times faster while dark</span>
         )}
       </span>
       <button className="btn small" onClick={() => setArmed(false)}>
