@@ -74,7 +74,7 @@ export interface CivicFigureDef {
    *
    * Deliberately below the midpoint. A relationship that only pays at 80 is a
    * relationship nobody in a 300-day career ever sees, which is the mistake
-   * `PATRON` makes at Influence 9 — see `HANDOFF.md` F2.
+   * `PATRON` makes at Influence 9 — see `docs/HANDOFF.md` F2.
    */
   owesAbove: number;
   /**

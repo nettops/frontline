@@ -348,7 +348,7 @@ describe('balance', () => {
 
   it('does not let anyone coast to the top in two years', () => {
     /*
-       Restated, with the readings that justify it, under DIRECTOR.md §5.
+       Restated, with the readings that justify it, under docs/DIRECTOR.md §5.
 
        This asserted `rank < boss` for every one of the 48 careers and passed
        for the life of the project. It began failing on a change that has

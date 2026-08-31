@@ -2,12 +2,12 @@
 
 Runs daily at 08:00. Produces a ranked backlog of candidate improvements for
 the developer to review. **Does not implement, test, or self-score the game.**
-Implementation happens only after developer approval, through `DIRECTOR.md`'s
+Implementation happens only after developer approval, through `docs/DIRECTOR.md`'s
 normal hypothesis → change → blind re-measure → keep-or-revert cycle.
 
 This exists to feed that process a diagnosed, ranked backlog — not to bypass
-it. Read `HANDOFF.md` and the tail of
-`docs/superpowers/findings/director-log.md` first, so ideas build on the
+it. Read `docs/HANDOFF.md` and the tail of
+`docs/findings/director-log.md` first, so ideas build on the
 findings already open (F1, F2, F5, F6, F7, F9) instead of re-discovering them.
 
 ---
@@ -22,7 +22,7 @@ findings already open (F1, F2, F5, F6, F7, F9) instead of re-discovering them.
   businesses, territory, reputation, and any other implemented system.
 - Identify unfinished, placeholder, shallow, repetitive, or disconnected
   mechanics.
-- Check `HANDOFF.md` and the director log so you don't propose something
+- Check `docs/HANDOFF.md` and the director log so you don't propose something
   already tried, already reverted, or already a named finding.
 
 Treat the codebase as the source of truth. Never assume a system exists
@@ -75,7 +75,7 @@ paying off, a rival family collapsing into a power vacuum.
 Score each candidate 1–10 on: Fun, Strategic depth, Replayability,
 Emergent storytelling, Player agency, Immersion, System interaction,
 Implementation value. This scores the *idea's design merit* — it is not a
-claim about the shipped game, which stays blind-tested per `DIRECTOR.md`
+claim about the shipped game, which stays blind-tested per `docs/DIRECTOR.md`
 §0.
 
 Favor ideas that improve multiple systems at once. A feature that only

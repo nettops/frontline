@@ -479,7 +479,7 @@ houses at 84, 100 and 100 sitting Neutral for 224 days.
 
 ## 6. Constraints any proposal here must satisfy
 
-From `HANDOFF.md` §2, and non-negotiable:
+From `docs/HANDOFF.md` §2, and non-negotiable:
 
 - **No jsdom. No `@types/node`.** Tests are pure sim.
 - **Config must not import sim.** Balance numbers live in `src/config/`.

@@ -1,0 +1,36 @@
+# The test suite is the project's balance guard, not just a regression net:
+# determinism, a 365-day soak, and the invariants in opReturn and broke that
+# keep the operation table honest. None of that is worth anything if a push can
+# land without running it, which until now it could.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# A branch that gets two pushes in a minute only needs the second one checked.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - run: npm ci
+
+      # `build` is `tsc -b && vite build`, so this is the typecheck and the
+      # production build in one step.
+      - name: Typecheck and build
+        run: npm run build
+
+      - name: Test
+        run: npm test

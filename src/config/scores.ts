@@ -1,7 +1,7 @@
 /**
  * Scores: the month in front of the job.
  *
- * The design note is `docs/superpowers/specs/2026-08-23-scores-and-setups-design.md`.
+ * The design note is `docs/specs/2026-08-23-scores-and-setups-design.md`.
  * What follows is the table it asks for, and three decisions in it are worth
  * saying out loud because they are the ones that keep this from becoming a
  * money printer.
