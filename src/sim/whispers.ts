@@ -38,6 +38,9 @@ import { weightedPick } from './util';
 import { WHISPERS, WHISPER_KINDS, WHISPER_CONFIDENCE_LABEL } from '../config/whispers';
 import { RIVAL_IDS } from '../config/factions';
 import type { GameState, Whisper } from './types';
+import { canSpendFavour, figure } from './civic';
+import { addLog } from './util';
+import { LOOK_INTO } from '../config/whispers';
 
 /** Lazily created, so a save written before this existed still loads. */
 function feed(state: GameState): Whisper[] {
@@ -174,6 +177,7 @@ export function tickWhispers(state: GameState): void {
 
   const [lo, hi] = made.truth ? WHISPERS.confidenceWhenTrue : WHISPERS.confidenceWhenWrong;
   list.unshift({
+    id: `${state.day}:${kind}:${made.subject}`,
     day: state.day,
     kind,
     text: made.text,
@@ -186,6 +190,8 @@ export function tickWhispers(state: GameState): void {
 }
 
 export interface WhisperRead {
+  /** Handle for a follow-up. Derived for a feed written before this existed. */
+  id: string;
   day: number;
   text: string;
   /**
@@ -216,6 +222,7 @@ export function readWhispers(state: GameState): WhisperRead[] {
   return feed(state)
     .filter((w) => state.day - w.day <= WHISPERS.staleAfterDays)
     .map((w) => ({
+      id: whisperId(w),
       day: w.day,
       text: w.text,
       subject: w.subject,
@@ -223,5 +230,114 @@ export function readWhispers(state: GameState): WhisperRead[] {
       certainty:
         WHISPER_CONFIDENCE_LABEL.find(([bar]) => w.confidence >= bar)?.[1] ?? 'They are guessing',
       corroborated: w.corroborated,
+      checkedBy: w.checkedBy ?? [],
     }));
+}
+
+/**
+ * The handle for a whisper, including the ones written before handles existed.
+ *
+ * Derived rather than assigned on load, so nothing has to migrate a save and
+ * an old feed is addressable the moment the panel offers a button. The shape
+ * matches what `tickWhispers` assigns, so an old whisper and a new one about
+ * the same thing on the same day would collide — which they cannot, because
+ * `tickWhispers` corroborates an existing subject rather than adding a second.
+ */
+export function whisperId(w: Whisper): string {
+  return w.id ?? `${w.day}:${w.kind}:${w.subject}`;
+}
+
+export interface LookCheck {
+  ok: boolean;
+  reason?: string;
+}
+
+/**
+ * Whether this contact would go and find out about this rumour.
+ *
+ * Three gates and each names its own refusal, which is the rule
+ * `refusals.test.ts` enforces and F10 was four rounds of the game breaking.
+ */
+export function canLookInto(state: GameState, id: string, contactId: string): LookCheck {
+  const w = feed(state).find((x) => whisperId(x) === id);
+  if (!w) return { ok: false, reason: 'Nothing by that description.' };
+  if (state.day - w.day > LOOK_INTO.worthCheckingWithin) {
+    return {
+      ok: false,
+      reason:
+        `That is ${state.day - w.day} days old and nothing over ` +
+        `${LOOK_INTO.worthCheckingWithin} is worth a favour. Whatever it was about ` +
+        `has happened or has not.`,
+    };
+  }
+  if ((w.checkedBy ?? []).includes(contactId)) {
+    return { ok: false, reason: 'They have already told you what they think.' };
+  }
+  const favour = canSpendFavour(state, contactId);
+  if (!favour.ok) return { ok: false, reason: favour.reason };
+  return { ok: true };
+}
+
+export interface LookResult {
+  ok: boolean;
+  message: string;
+  /** What came back, or null if nothing did. Never says whether it is so. */
+  agreed: boolean | null;
+}
+
+/**
+ * Send somebody to find out, and get an opinion rather than an answer.
+ *
+ * The contact is right `LOOK_INTO.contactIsRight` of the time, which is the
+ * point: this is a second source, and this game's information is fallible on
+ * the way in — `wrongChance` is the whole reason the feed is interesting — so
+ * making it infallible on the way back would delete the mechanic in order to
+ * add a button to it.
+ *
+ * `truth` is read here and never returned, exactly as `readWhispers` refuses
+ * to carry it. What the player gets is the confidence moving and a sentence.
+ *
+ * **The draw is `stableNoise`, not the causal stream**, for the reason stated
+ * at the top of this file — and for a second one that turns out to matter
+ * more. Keyed on the whisper, the contact and the day, the answer is fixed
+ * for that combination: a player cannot re-roll by asking the same person
+ * twice in an afternoon, and asking somebody *else* is a genuinely different
+ * question rather than another go at the same one.
+ */
+export function lookInto(state: GameState, id: string, contactId: string): LookResult {
+  const guard = canLookInto(state, id, contactId);
+  if (!guard.ok) return { ok: false, message: guard.reason ?? 'No.', agreed: null };
+
+  const w = feed(state).find((x) => whisperId(x) === id)!;
+
+  /*
+     The favour is spent, and their signature move is not performed.
+
+     `spendFavour` runs the thing that figure is *for* — a case cooled, a
+     licence found, a word put in. Calling it here would answer a question and
+     cool a case in the same breath, which is not what the player asked for and
+     is a second effect they did not choose. So this takes the currency through
+     the same gates and then does its own thing with it, which is what asking
+     somebody a question actually is.
+  */
+  figure(state, contactId).owed -= 1;
+
+  const roll = Rng.stableNoise(`look:${state.rng.seed}:${id}:${contactId}`, state.day);
+  const rightThisTime = roll < LOOK_INTO.contactIsRight;
+  // What they come back saying. Agreement with the rumour, not with the world.
+  const agreed = rightThisTime ? w.truth : !w.truth;
+
+  w.checkedBy = [...(w.checkedBy ?? []), contactId];
+  w.confidence = clamp(
+    w.confidence + (agreed ? LOOK_INTO.agreesConfidence : LOOK_INTO.disagreesConfidence),
+    0,
+    1,
+  );
+  if (agreed) w.corroborated = true;
+
+  const message = agreed
+    ? 'They went and asked. What came back matches what you had heard.'
+    : 'They went and asked, and came back with nothing that supports it.';
+  addLog(state, message, 'crew');
+  return { ok: true, message, agreed };
 }
