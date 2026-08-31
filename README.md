@@ -913,6 +913,9 @@ it through a version-counter store. No Redux, no ECS, no event bus.
 ```
 src/
   config/     All balance numbers. Tune the game here, never in logic.
+    tuning/         The numbers, as plain JSON — editable without a toolchain.
+                    difficulty, heat and economy so far; the `.ts` files beside
+                    them keep the shapes and the reasons. See tuning/README.md.
     economy.ts      wages, rank thresholds, attribute curves
     operations.ts   the job list, success formula weights, failure tables
     npcs.ts         traits, stat ranges, perception bands, drift rules

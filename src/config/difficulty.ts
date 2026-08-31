@@ -2,10 +2,16 @@
  * Difficulty multipliers.
  *
  * Every system reads these rather than branching on difficulty, so adding a
- * new mode is one entry here.
+ * new mode is one entry here — and the entry is now in `tuning/difficulty.json`
+ * rather than in this file, so changing one does not need a TypeScript
+ * toolchain. What stays here is the shape and the reason for each field: JSON
+ * cannot hold a comment, and a number nobody can read the intent of is a
+ * number the next person changes by accident.
  */
 
 import type { DifficultyId } from '../sim/types';
+import { checkIds } from './tuning/check';
+import data from './tuning/difficulty.json';
 
 export interface DifficultyDef {
   id: DifficultyId;
@@ -29,61 +35,14 @@ export interface DifficultyDef {
   ironman: boolean;
 }
 
-export const DIFFICULTIES: DifficultyDef[] = [
-  {
-    id: 'easy',
-    name: 'Easy',
-    blurb: 'Room to make mistakes. Law enforcement is slow and your people are patient.',
-    heatGain: 0.7,
-    heatDecay: 1.5,
-    successModifier: 0.08,
-    payout: 1.15,
-    expenses: 0.85,
-    loyaltyDecay: 0.6,
-    eventPressure: 0.7,
-    ironman: false,
-  },
-  {
-    id: 'normal',
-    name: 'Normal',
-    blurb: 'The intended experience. Mistakes cost, but they do not end you.',
-    heatGain: 1,
-    heatDecay: 1,
-    successModifier: 0,
-    payout: 1,
-    expenses: 1,
-    loyaltyDecay: 1,
-    eventPressure: 1,
-    ironman: false,
-  },
-  {
-    id: 'hard',
-    name: 'Hard',
-    blurb: 'Heat sticks, crews get restless, and the margins are thin.',
-    heatGain: 1.3,
-    heatDecay: 0.75,
-    successModifier: -0.06,
-    payout: 0.88,
-    expenses: 1.2,
-    loyaltyDecay: 1.4,
-    eventPressure: 1.35,
-    ironman: false,
-  },
-  {
-    id: 'brutal',
-    name: 'Brutal',
-    blurb:
-      'One bad run can end the organization. No manual saves — you live with every decision.',
-    heatGain: 1.6,
-    heatDecay: 0.55,
-    successModifier: -0.12,
-    payout: 0.78,
-    expenses: 1.4,
-    loyaltyDecay: 1.9,
-    eventPressure: 1.7,
-    ironman: true,
-  },
-];
+export const DIFFICULTIES: DifficultyDef[] = data as DifficultyDef[];
+
+checkIds('tuning/difficulty.json', 'difficulty id', DIFFICULTIES.map((d) => d.id), [
+  'easy',
+  'normal',
+  'hard',
+  'brutal',
+]);
 
 export const DIFFICULTY_BY_ID: Record<DifficultyId, DifficultyDef> = Object.fromEntries(
   DIFFICULTIES.map((d) => [d.id, d]),
