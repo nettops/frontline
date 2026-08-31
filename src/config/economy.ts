@@ -269,6 +269,26 @@ export interface RankDef {
   id: RankId;
   name: string;
   blurb: string;
+  /**
+   * What the organization has to be for this to be what people call you.
+   *
+   * Read against the same `OpsBoard` the job table gates on, deliberately, so
+   * that what you are called and what you are allowed to do can never
+   * disagree. A rank derived from one set of facts and a ladder gated on
+   * another is how the old `requires` field went wrong twice.
+   *
+   * Absent on the first rung, which is where everybody starts.
+   */
+  needs?: {
+    /** Districts held at Control or better — the slow signal. */
+    districtsControlled?: number;
+    fronts?: number;
+    crew?: number;
+    /** Favours owed to you across every civic figure. */
+    owedTotal?: number;
+    /** Best trust any surviving rival family holds toward you. */
+    bestRivalTrust?: number;
+  };
 }
 
 /**
@@ -304,31 +324,70 @@ export const RANKS: RankDef[] = [
     id: 'enforcer',
     name: 'Enforcer',
     blurb: 'People on the block know what happens when you show up.',
+    /*
+       Deliberately cheap, and reachable inside the first month.
+
+       Round 16 had three testers play 120 days and finish on the rung they
+       started on, because nothing in the game ever moved it. The first move
+       has to arrive while a player is still forming the idea that moving is
+       possible — so this asks for a crew and somewhere to put them, which is
+       what the opening twenty days are about anyway.
+    */
+    needs: { crew: 4, fronts: 1 },
   },
   {
     id: 'crew_leader',
     name: 'Crew Leader',
     blurb: 'You give the orders now. The mistakes are yours too.',
+    needs: { districtsControlled: 1, fronts: 2, crew: 6 },
   },
   {
     id: 'capo',
     name: 'Capo',
     blurb: 'A seat at the table, and everyone at it counting your earnings.',
+    /*
+       Sized against measured careers rather than against a feeling.
+
+       `districtsControlled` reaches a median of two at day 210 over 24
+       careers, and round 16's three testers were at two or three by day 120 —
+       so this is a rung a good hundred-day career reaches and a slow one does
+       not, which is the distribution a middle rung should have.
+    */
+    needs: { districtsControlled: 2, fronts: 3, crew: 9 },
   },
   {
     id: 'underboss',
     name: 'Underboss',
     blurb: 'Second in the room. First in the indictment.',
+    /*
+       The first rung that asks for something other than growth.
+
+       Everything below is more — more ground, more shops, more people. From
+       here it wants somebody outside the family to owe you, because that is
+       what the top half of this game is actually about and a ladder made only
+       of quantities would never say so.
+    */
+    needs: { districtsControlled: 3, fronts: 5, crew: 13, owedTotal: 1 },
   },
   {
     id: 'boss',
     name: 'Boss',
     blurb: 'Your family. Your rules. Your problem when it goes wrong.',
+    needs: { districtsControlled: 4, fronts: 7, crew: 18, owedTotal: 2 },
   },
   {
     id: 'crime_lord',
     name: 'Crime Lord',
     blurb: 'Cities move around you. So do task forces.',
+    /*
+       The only rung that needs a rival to think well of you.
+
+       `districtsControlled` never reached four in 24 measured careers, so this
+       is deliberately beyond what has been observed — a rung that exists to be
+       visible from below rather than to be commonly reached. The trust term is
+       what stops it being purely a matter of outlasting everybody.
+    */
+    needs: { districtsControlled: 5, fronts: 9, crew: 24, owedTotal: 3, bestRivalTrust: 55 },
   },
 ];
 
