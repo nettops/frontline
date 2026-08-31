@@ -269,7 +269,7 @@ fantasy through the door the design leaves open.
 
 ## 4. How it gets measured
 
-Paired against the same seeds, per `HANDOFF.md` §3 — paired comparisons only, no
+Paired against the same seeds, per `docs/HANDOFF.md` §3 — paired comparisons only, no
 bar pointed at a population containing non-participants.
 
 | question | instrument | bar |

@@ -3,7 +3,7 @@
 One entry per iteration. Read it before starting the next one; its purpose is to
 make it obvious when the game has stopped improving.
 
-Rules it operates under: `DIRECTOR.md`.
+Rules it operates under: `docs/DIRECTOR.md`.
 
 ---
 
@@ -334,10 +334,10 @@ signpost, it needs its price or its design changed.
 
 Handled by changing what gets asked, not by changing how anyone plays:
 
-    PLAYTEST.md    Part 4 splits non-use four ways and runs before the scores;
+    docs/PLAYTEST.md    Part 4 splits non-use four ways and runs before the scores;
                    Part 2 requires a score to name the coverage it rests on, and
                    to be marked unscored where it rests on nothing
-    DIRECTOR.md    §4 extends the unscored discipline from rungs to systems, and
+    docs/DIRECTOR.md    §4 extends the unscored discipline from rungs to systems, and
                    forbids prompting a tester mid-round; §5 records what each
                    instrument does not touch
     scorecard.probe.test.ts   states its own narrowness in its header
@@ -364,11 +364,11 @@ it joins Fun, Writing and Interface on the list of things an instrument with no
 eyes and no stake cannot score, and a number there would be the surest of the
 nineteen.
 
-    PLAYTEST.md   Part 2 gains the axis, held apart from Fun and required not to
+    docs/PLAYTEST.md   Part 2 gains the axis, held apart from Fun and required not to
                   track it; Part 3 gains three questions it summarises — name
                   somebody without looking, name something you did that you did
                   not want to do, and say what you would have lost
-    DIRECTOR.md   §1 states the target and the prohibition
+    docs/DIRECTOR.md   §1 states the target and the prohibition
 
 **This breaks comparability.** Rounds 1 to 10 have nine axes and round 11 has
 ten. The nine stay comparable; Standing in it has no history and its first
@@ -933,13 +933,13 @@ something inside a ~300-day career, or it is being tuned for an observer that
 does not exist. Iteration 4 (`BUSINESS_FROM.launderingPerWeek`, sized for 38
 weeks) is confirmed as the pattern to follow.
 
-This unblocks **blind round 12** (HANDOFF.md §7), which measures iteration 2
+This unblocks **blind round 12** (docs/HANDOFF.md §7), which measures iteration 2
 (rival pressure / grievance ledger), iteration 3 (F8, the conviction heat
 discount — still untested, no round has yet seen a conviction), and the round
 11 repairs (16 items, all done) together.
 
 Not dispatched this session — no browser tooling available. The next session
-with browser access should run it directly per DIRECTOR.md §4 / PLAYTEST.md,
+with browser access should run it directly per docs/DIRECTOR.md §4 / docs/PLAYTEST.md,
 without re-litigating this decision.
 
 ---
@@ -947,7 +947,7 @@ without re-litigating this decision.
 
 Instance `round12`, storage `mafia:run-round12:*`. Pre-flight: tsc clean, 616
 tests, 54 files, green. Dispatched to a fresh agent with the tester half of
-PLAYTEST.md only.
+docs/PLAYTEST.md only.
 
 **The tester played two careers and labelled them.** Run 1 blind, wiped out day
 119 — "Nobody left and nothing to pay anyone with". Run 2, informed by run 1,
@@ -1517,7 +1517,7 @@ $150 wage bill.
 
 ### Change 1 — the brief stops asking for what a bot measures better
 
-Eight checkpoints down to three. `PLAYTEST.md` has said since round 7 that
+Eight checkpoints down to three. `docs/PLAYTEST.md` has said since round 7 that
 `ladder.probe` produces a trajectory better than a person can, and the brief kept
 asking for one anyway. Three is enough to read the scores against — Depth 8 from
 a dead organization on day 119 is not Depth 8 at Underboss.
@@ -1529,7 +1529,7 @@ F14's measurement and it names no feature**, which the mid-round prompting rule
 requires. Round 12 answered day 19 and round 13 answered day 300 for the same
 system on the same build; neither report could have produced that finding alone.
 
-### Change 3 — `DIRECTOR.md` §4 gains a sizing rule, §6 a check-first rule
+### Change 3 — `docs/DIRECTOR.md` §4 gains a sizing rule, §6 a check-first rule
 
 Three shapes — full round, targeted round, not a round — with the third pointing
 at §6. A targeted round gets the same brief with the stopping rule changed and

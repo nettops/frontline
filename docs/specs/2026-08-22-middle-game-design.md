@@ -322,7 +322,7 @@ unchallenged.
 
 ## 4. Constraints any of this must satisfy
 
-From `HANDOFF.md` §2, unchanged:
+From `docs/HANDOFF.md` §2, unchanged:
 
 - No jsdom, no `@types/node`. Config must not import sim.
 - New state fields are optional. **Never bump `SAVE_VERSION`**, never add to

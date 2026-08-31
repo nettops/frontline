@@ -1,6 +1,6 @@
 # Financial rework — implementation plan
 
-Spec: `docs/superpowers/specs/2026-08-20-financial-rework-design.md`
+Spec: `docs/specs/2026-08-20-financial-rework-design.md`
 
 **Goal:** rank measures the estate — cash, holdings, fronts and ground — so that
 $60,000 is reachable by building something and $5,000,000 is reachable by

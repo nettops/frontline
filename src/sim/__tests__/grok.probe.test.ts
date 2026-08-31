@@ -234,7 +234,7 @@ describe('how long the game keeps offering something new', () => {
        The guard first, as always. A bot that fell over in week three would
        still produce a settling week, and it would be a very impressive one.
 
-       Restated with its readings under DIRECTOR.md §5. This required every one
+       Restated with its readings under docs/DIRECTOR.md §5. This required every one
        of the eight careers to reach week 20, and began failing on a change
        unrelated to it — gating the front-for-sale memo on the district having
        a slot free, which removes that event from the weighted pool in some

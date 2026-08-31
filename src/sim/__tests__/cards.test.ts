@@ -70,7 +70,7 @@ function game(seed = 5, respect = 250): GameState {
      `tickCards` is gated on `day % intervalDays === 0`, which the real clock
      satisfies because it advances a day at a time. A fixture that starts on
      day 40 and steps by 7 sits at 5 mod 7 forever, so the decay never runs —
-     the clock trap in `HANDOFF.md`, met here on the first attempt at this
+     the clock trap in `docs/HANDOFF.md`, met here on the first attempt at this
      file. It cost one red test and would have cost nothing at all if the
      assertion had been "less than before" instead of "zero", which is the
      part worth remembering.

@@ -27,7 +27,7 @@ never arrived, and a twenty-year run reached exactly the same rungs on exactly
 the same days as a four-year one.
 
 Attempts already made and their results are recorded in
-`docs/superpowers/plans/2026-08-19-fun-depth-pacing.md`: cutting the laundering
+`docs/plans/2026-08-19-fun-depth-pacing.md`: cutting the laundering
 rate, holding working capital back for the fronts, giving neighbourhood goodwill
 more headroom, making counsel affordable, letting fronts survive light pressure,
 and letting money be put away. The best of them moved the peak balance 16%. The

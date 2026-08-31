@@ -451,7 +451,7 @@ Expected: PASS, with a `surplus:` line printed. Read it.
 
 - [ ] **Step 4: Write the numbers down**
 
-Append the printed line verbatim to `docs/superpowers/plans/2026-08-19-fun-depth-pacing.md` under a new heading `## Probe results`, with today's date. Task 4 reads it from there. Do not summarise it — paste it.
+Append the printed line verbatim to `docs/plans/2026-08-19-fun-depth-pacing.md` under a new heading `## Probe results`, with today's date. Task 4 reads it from there. Do not summarise it — paste it.
 
 - [ ] **Step 5: Full suite**
 
@@ -1835,9 +1835,9 @@ npx tsc --noEmit && npx vitest run
 ### Task 14: Record what the instruments said
 
 **Files:**
-- Modify: `docs/superpowers/plans/2026-08-19-fun-depth-pacing.md` (`## Probe results`)
+- Modify: `docs/plans/2026-08-19-fun-depth-pacing.md` (`## Probe results`)
 - Modify: `README.md`
-- Modify: `PLAYTEST.md`
+- Modify: `docs/PLAYTEST.md`
 
 - [ ] **Step 1: Run all three probes and paste their lines verbatim**
 
@@ -1861,7 +1861,7 @@ Fill in the third column honestly. A condition that was not met is the finding, 
 
 The README already carries the honest reading of the grok figure. Add the surplus and spread figures beside it in the same voice, and say what each is for.
 
-- [ ] **Step 4: Add a round-7 note to `PLAYTEST.md`**
+- [ ] **Step 4: Add a round-7 note to `docs/PLAYTEST.md`**
 
 Under "What changed, and why", record that round 6's plateau finding drove this work and what it changed, so the next reader knows which build the next report is against.
 
@@ -3507,4 +3507,4 @@ otherwise healthy, and no rate applied to a tenth produces a whole.
 The four investigations that followed this plan (survival, and three passes at
 making Boss reachable) grew longer than the plan itself and are findings rather
 than tasks. They now live in
-`docs/superpowers/findings/2026-08-20-survival-and-the-ladder.md`.
+`docs/findings/2026-08-20-survival-and-the-ladder.md`.

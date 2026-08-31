@@ -1,6 +1,6 @@
 # Handoff — Frontline
 
-Read this, then read `DIRECTOR.md` and `PLAYTEST.md`. This file is the state;
+Read this, then read `docs/DIRECTOR.md` and `docs/PLAYTEST.md`. This file is the state;
 those two are the rules.
 
 Project root: `C:\Users\cory\Desktop\mafia`. Not a git repo. Windows 11,
@@ -52,7 +52,7 @@ across 183 source files, counted 2026-08-22.
 - **Never playtest against the developer's saves.** Use `npm run playtest`.
 - **Never tell a blind tester mid-round to use a specific feature.**
 - **Never adjust a probe threshold to make it pass.** A failing pre-committed
-  condition is the finding. `DIRECTOR.md` §5 has a narrow repair clause; it
+  condition is the finding. `docs/DIRECTOR.md` §5 has a narrow repair clause; it
   needs the developer's call, with the evidence attached, every time.
 - **Write the test first. Watch it fail for the expected reason. Then
   implement.** Standing instruction, in memory.
@@ -312,7 +312,7 @@ instrument first.
 
 ## 4. Where the director loop stands
 
-`docs/superpowers/findings/director-log.md` is the full record. 1,044 lines.
+`docs/findings/director-log.md` is the full record. 1,044 lines.
 Read at least Iteration 3, the Round 11 repairs section and the Blind round 12
 entry before acting.
 
@@ -1211,7 +1211,7 @@ is the developer's call whether to split it.
    avoidable rather than legible. F10's fix made the refusal readable; if
    iteration 8 works, a blind round stops reporting the gate at all.
 
-**Read `DIRECTOR.md` §4's sizing rule before dispatching.** Full round, targeted
+**Read `docs/DIRECTOR.md` §4's sizing rule before dispatching.** Full round, targeted
 round, or not a round.
 
 **Owed regardless:**
@@ -1232,7 +1232,7 @@ Browser pane open before dispatch — a proven prerequisite, not a precaution.
 
 The rank-table target that used to live here **closed** when the ladder came
 out; a career reaches every rung of the job table on time now. Four assertions
-remain red on purpose. All four are pre-committed targets, and `DIRECTOR.md` §5
+remain red on purpose. All four are pre-committed targets, and `docs/DIRECTOR.md` §5
 forbids moving any of them to make the code pass.
 
 | where | reads | wants |

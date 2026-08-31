@@ -170,7 +170,7 @@ export function heatSeverity(heat: number): HeatSeverity {
  *
  * Chosen by plotting seven values against the resulting distribution rather
  * than by eye; see section 3.2 of
- * `docs/superpowers/specs/2026-08-23-heat-ratchet-design.md`. Below about 0.018
+ * `docs/specs/2026-08-23-heat-ratchet-design.md`. Below about 0.018
  * the top band still holds a sixth of every career; above about 0.030 the
  * bottom two bands hold a quarter and the law system goes decorative.
  */

@@ -305,7 +305,7 @@ it would have shipped looking fine.
 
 ## 5. How it gets measured
 
-Paired against the same seeds, participants only, per `HANDOFF.md` §3.
+Paired against the same seeds, participants only, per `docs/HANDOFF.md` §3.
 
 | question | instrument | bar |
 |---|---|---|

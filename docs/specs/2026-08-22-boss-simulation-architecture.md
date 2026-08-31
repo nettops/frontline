@@ -12,7 +12,7 @@ this document is for.
 
 ### 1. An earlier version of this brief has already been acted on
 
-`docs/superpowers/specs/2026-08-21-mafia-boss-blueprint.md` was written against the same
+`docs/specs/2026-08-21-mafia-boss-blueprint.md` was written against the same
 vision, merged as PR #1, and then — on an explicit instruction to build it — five
 systems were implemented across PRs #2 to #6. Those are: Influence supply, the civic
 favour network, whispers, legitimacy with career shapes, and the per-front pressure
@@ -30,7 +30,7 @@ plays the same narrow game"* — five times over. Their tests prove the code doe
 code says. They prove nothing about whether the game is better.
 
 Any roadmap that stacks a sixth system on top of five unmeasured ones is building on an
-unread instrument, which is this project's documented failure mode (`HANDOFF.md` §3,
+unread instrument, which is this project's documented failure mode (`docs/HANDOFF.md` §3,
 **25 recorded instances**). §5 therefore ranks measurement first, and says so in the
 roadmap rather than in a footnote.
 
@@ -57,7 +57,7 @@ only condition under which any of it means anything.
 
 # PHASE 1 — THE AUDIT
 
-57,833 lines across 173 source files, counted in this pass — `HANDOFF.md` still says
+57,833 lines across 173 source files, counted in this pass — `docs/HANDOFF.md` still says
 53,553 across 160 and is stale. 41 simulation modules, 32 config modules, 31 UI modules,
 60 test files carrying 687 tests.
 
@@ -691,7 +691,7 @@ Ordered by evidence. Every task carries the seven required fields.
   every ranking below is a guess.
 - **Dependencies:** none. This is the precondition for everything else.
 - **Files:** `scripts/playtest-run.mjs`, `src/sim/__tests__/ladder.probe.test.ts`,
-  `PLAYTEST.md` brief.
+  `docs/PLAYTEST.md` brief.
 - **Difficulty:** low. **Risk:** low — no source change.
 - **Impact:** decides the order of tasks 1 to 6. May invalidate several.
 - **Testing:** blind round 15 plus probe bots that actually spend a favour, read a
@@ -783,7 +783,7 @@ features because they sound cool* — applies to this document as much as to the
 
 # CONSTRAINTS EVERY TASK MUST SATISFY
 
-From `HANDOFF.md` §2, unchanged:
+From `docs/HANDOFF.md` §2, unchanged:
 
 - No jsdom. No `@types/node`. Tests are pure sim.
 - Config must not import sim.

@@ -141,7 +141,7 @@ Dispatch a blind scorer (§4). Read its report. That is your starting state.
 
 Dispatched fresh every round. It gets:
 
-- The tester-facing half of `PLAYTEST.md` only — everything from `## The game`
+- The tester-facing half of `docs/PLAYTEST.md` only — everything from `## The game`
   onward. Never the developer half, which names what changed and what to watch
   for.
 - The URL of an isolated instance from `npm run playtest --id round<N>`.
@@ -328,7 +328,7 @@ what is merely clever and harmless, and say which is which.
 
 ## 9. The log
 
-Append to `docs/superpowers/findings/director-log.md`. One entry per iteration,
+Append to `docs/findings/director-log.md`. One entry per iteration,
 and keep it short enough that somebody reads it:
 
     ## Iteration N — <date>

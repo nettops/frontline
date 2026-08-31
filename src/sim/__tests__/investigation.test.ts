@@ -735,7 +735,7 @@ const ORDINARY_HEAT = 50;
                            ------
        net                 +1.88
 
-   See `docs/superpowers/specs/2026-08-24-evidence-design.md`.
+   See `docs/specs/2026-08-24-evidence-design.md`.
 */
 describe('starving a case', () => {
   it('gives them nothing from ambient attention once the trail is cold', () => {
