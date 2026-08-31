@@ -564,46 +564,10 @@ export const OPERATIONS: OperationDef[] = [
     },
     tier: 4,
     risk: 'moderate',
-    /*
-       Five men and three weeks, and it used to be four men and eight days.
-
-       The case for it is the measurement, not the rule at the top of this
-       file — and that distinction is worth stating, because the first version
-       of this comment claimed the rule and the claim did not survive checking.
-       The header says the free job "ties up its crew longer than the paid jobs
-       of the same rank"; measured, the table has never done that at any rank
-       (t0 1 crew-day against 2, t1 2 against 9, t2 8 against 42, t3 18 against
-       60). It is design intent, not a property, and citing it here would have
-       been dressing a judgement up as a violation.
-
-       What is actually wrong is the size of the outlier. This was fifth-best
-       of twenty-three jobs on expected money per crew-day *with no stake at
-       all* — 32 crew-days against Port Operation's 112 and Financial Scheme's
-       108 — so it was the only high-value work a player without capital could
-       reach, and the obviously correct move forever once unlocked. It also put
-       a 3.6x cliff in the free ladder, which had climbed 246, 471, 481, 644
-       and then jumped to 2,341.
-
-       Round 16's tester found it exactly there: "Call In Tribute at day 92 is
-       four crew, eight days, no money up front, $74-140K — nothing else on the
-       board is within a factor of four, so the game solves itself." Their last
-       thirty days were one button.
-
-       The stake and the payout are untouched, deliberately. This file's own
-       note says the curve was built by moving stakes rather than payouts
-       because "a Port Operation that suddenly pays double is a different story
-       rather than a better-priced one" — and the same holds here, where the
-       payout is the fiction and the commitment is the price. Going round
-       everyone who owes you was never an eight-day errand.
-
-       115 crew-days clears both paid jobs at this rank, and puts the expected
-       money at $651 per crew-day against Sit-Down Fees at $644 — which is what
-       "capital buys efficiency" is supposed to mean.
-    */
-    crewRequired: 5,
+    crewRequired: 4,
     investment: 0,
     payout: [74_000, 140_000],
-    durationDays: 23,
+    durationDays: 8,
     baseSuccess: 0.70,
     heatOnSuccess: 20,
     heatOnFailure: 36,
@@ -644,22 +608,10 @@ export const OPERATIONS: OperationDef[] = [
     },
     tier: 5,
     risk: 'high',
-    /*
-       "Most of a month", which is what its own description already claimed.
-
-       The text said it takes no investment and most of a month; the number
-       said twelve days. Same fault as Call In Tribute one rank below — 72
-       crew-days against Citywide Distribution's 252 — so the free job at the
-       top of the ladder was also the efficient one, which inverts the whole
-       table.
-
-       256 crew-days, and $1,005 per crew-day against Citywide's $3,909. The
-       free ladder now rises the way the paid one does instead of jumping.
-    */
-    crewRequired: 8,
+    crewRequired: 6,
     investment: 0,
     payout: [270_000, 510_000],
-    durationDays: 32,
+    durationDays: 12,
     baseSuccess: 0.66,
     heatOnSuccess: 30,
     heatOnFailure: 50,
