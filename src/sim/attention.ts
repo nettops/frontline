@@ -31,6 +31,12 @@ import { totalFunds } from './economy';
 import { isLayingLow } from './heat';
 import { liveStanding, patternOn } from './standingOrders';
 import { territoryDef } from './territory';
+import { activeCases } from './investigation';
+import { ownedBusinesses, businessDef } from './business';
+import { promisesTo, daysLeft } from './promises';
+import { crewList } from './npc';
+import { PROMISE, PROMISES } from '../config/promises';
+import { ATTENTION } from '../config/attention';
 import { OPERATION_BY_ID } from '../config/operations';
 import { PATTERN } from '../config/standingOrders';
 
@@ -141,11 +147,135 @@ export function attention(state: GameState): Wanting[] {
     if (gap >= 20) {
       out.push({
         id: 'teaching',
-        text: 'Your best man is free, and so is somebody who could learn from him.',
+        /*
+           Said without deciding who either of them is.
+
+           The original line read "your best man ... could learn from him",
+           which the voice guard exists to catch and did not — it was shipped
+           in 5f6407f and sat here until an unrelated edit to this file moved
+           the parser's alignment and exposed it. Worth knowing that the guard
+           can miss as well as catch.
+        */
+        text: 'Your strongest hand is free, and so is somebody who could learn from them.',
         panel: 'crew',
       });
     }
   }
+
+  /*
+     ------------------------------------------------------------------ drama
+
+     Everything above this line is the recurring loop asking to be run — men
+     idle, groundwork waiting, a district with nobody in it. That is what this
+     file was built for and it is why a manual playthrough named moving
+     between panels as tedious.
+
+     What it never said was that anything was *going wrong*, so a career could
+     be quietly falling apart on four screens the player had no reason to open.
+
+     Two rules hold for every line below, and they are the reason there are
+     only four of them.
+
+     **It has to be something the organization can actually see.** A man's
+     loyalty, his grievance, whether he has started talking — none of that
+     belongs here. `perceive()` exists to blur exactly those, and a list that
+     announced them would switch the perception system off from a screen the
+     player reads first. The person-shaped half of this is `approaches.ts`,
+     where the licence is that the man is telling you. What is left for this
+     file is the paperwork: cases, books, ground, and things the player said
+     out loud.
+
+     **And it still names what would satisfy it.** The Rail's rule, which this
+     file was written to obey: a demand for attention with no statement of what
+     it wants is what left a playtester carrying the succession "!" for a
+     hundred days.
+  */
+
+  /*
+     A case that has moved, which is the one law-enforcement fact a family
+     would know before it is too late.
+
+     Gated on the stage having changed recently rather than on a case merely
+     existing, because a case exists for most of a career and a permanent line
+     saying so is the wallpaper this file's cap was written against. What is
+     news is that it moved.
+  */
+  for (const c of activeCases(state)) {
+    if (state.day - c.stageSince > ATTENTION.caseMovedWithin) continue;
+    out.push({
+      id: 'case',
+      text: 'A case against you has moved on a stage. There are people you could put between it and them.',
+      panel: 'law',
+    });
+    break;
+  }
+
+  /*
+     A front going under, which the books say and nothing else does.
+
+     `health` is the shop's own condition and the player owns the shop, so this
+     is a number they are entitled to. Named as the thing to do rather than as
+     a reading, because "Health: 22" is a stat and "it will close" is a
+     decision.
+  */
+  const failing = ownedBusinesses(state).filter((b) => b.health <= ATTENTION.frontFailingAt);
+  if (failing.length > 0) {
+    out.push({
+      id: 'front',
+      text:
+        failing.length === 1
+          ? `${businessDef(failing[0]).name} is going under. It closes if nobody does anything about it.`
+          : `${failing.length} of your fronts are going under.`,
+      panel: 'businesses',
+    });
+  }
+
+  /*
+     Something you said, about to become something you did not do.
+
+     The only line here that is about a person, and it is allowed because it
+     is about *the player's own words* rather than about the man's insides.
+     `config/promises.ts` sets the rule it serves: a promise the player forgot
+     about is a fair loss, a promise the player was never shown is a trick.
+  */
+  const dueSoon = crewList(state)
+    .flatMap((npc) =>
+      promisesTo(state, npc.id).map((pr) => ({ npc, pr, left: daysLeft(state, pr) })),
+    )
+    .filter((x) => x.left <= PROMISE.urgentWithin)
+    .sort((a, b) => a.left - b.left);
+  if (dueSoon.length > 0) {
+    const first = dueSoon[0];
+    out.push({
+      id: 'promise',
+      text:
+        dueSoon.length === 1
+          ? `${first.npc.name} ${PROMISES[first.pr.kind].outstanding.toLowerCase()}, and you have ${first.left} ${first.left === 1 ? 'day' : 'days'}.`
+          : `${dueSoon.length} things you said are about to stop being true.`,
+      panel: 'crew',
+    });
+  }
+
+  /*
+     NOT SHIPPED: ground being taken back.
+
+     Two versions were written and both measured as furniture. "Somebody is
+     ahead of you anywhere you have a foot in" fired on 286 of 300 days in one
+     career and 211 in another; narrowing it to `isContested` moved one career
+     to zero and pushed another *up* to 262, because in a career that spends
+     its life fighting over the same streets, contested is not news either.
+
+     The fault is not the threshold, it is the shape. Both versions asked a
+     question about a level, and this file's other lines are all about events
+     — a case that moved, a front that is going under, a promise coming due.
+     A district being contested is a condition the player lives in for years.
+
+     Saying it properly needs the one thing the state does not keep: who was
+     ahead here last week. That is a field and a tick, not a filter, and it
+     belongs in a change that can measure whether the answer is worth the
+     storage. Left out rather than left in and loud, on the same grounds
+     `events.ts` parked the partner offer.
+  */
 
   return out.slice(0, MOST);
 }
