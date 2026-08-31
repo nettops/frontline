@@ -3,8 +3,12 @@ dist
 *.local
 .DS_Store
 
-# Build artefacts
-tsconfig.tsbuildinfo
+# Build artefacts. `*.tsbuildinfo` rather than the root path alone — a
+# composite build or a subdirectory tsconfig writes its own, and one of those
+# getting committed is the kind of thing nobody notices for a month.
+*.tsbuildinfo
+coverage
+.vite
 
 # Local Claude Code state, if it ever appears
 .claude/settings.local.json
