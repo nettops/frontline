@@ -1,3 +1,4 @@
+import { rankNow, nextRank, whatItNeeds } from '../../sim/rank';
 import { useGame, mutate } from '../../store';
 import { buildRead, canSpendPoint, pointsLeft, spendPoint } from '../../sim/build';
 import { nicknameRead } from '../../sim/nicknames';
@@ -318,6 +319,22 @@ export default function PlayerPanel() {
             <p className="faint tiny" style={{ marginTop: 6, marginBottom: 0 }}>
               {goingHome.reason}
             </p>
+          )}
+          {/*
+             Rank above shape, because a tester read the shape as the rank.
+
+             "Shaping into: A Name On A Short List" is a reading of how the
+             career is being played and it changes back and forth; round 16
+             had a tester take it for their rank and conclude the game had
+             stopped tracking them. Printing the actual rung directly above it
+             is what tells the two apart.
+          */}
+          <KeyValue label="They call you" value={rankNow(state).name} tone="brass" />
+          {nextRank(state) && whatItNeeds(state).length > 0 && (
+            <KeyValue
+              label={`To be ${nextRank(state)!.name}`}
+              value={whatItNeeds(state).join(', ')}
+            />
           )}
           <KeyValue label="Shaping into" value={careerShape(state).name} tone="brass" />
           <KeyValue label="Operations completed" value={player.opsCompleted} tone="good" />

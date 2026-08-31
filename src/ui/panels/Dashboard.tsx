@@ -5,6 +5,7 @@ import type { PanelId } from '../Rail';
 import { crewList, availableCrew } from '../../sim/npc';
 import { attention } from '../../sim/attention';
 import { approaches } from '../../sim/approaches';
+import { rankNow, nextRank, whatItNeeds } from '../../sim/rank';
 import { openSitdown } from '../../sim/sitdown';
 import { payrollForecast, weeklyWageBill } from '../../sim/economy';
 import { isLayingLow, startLayLow } from '../../sim/heat';
@@ -206,6 +207,26 @@ export default function Dashboard({ onNavigate }: { onNavigate: (id: PanelId) =>
     <>
       <div className="page-head">
         <h1 className="page-title">Overview</h1>
+        {/*
+           What people call you, and what would change it.
+
+           The game refers to standing constantly — the whole locked-jobs table
+           is headed "ABOVE YOUR STANDING" — and until now the only screen that
+           printed the player's own rank was the save row. Three testers in
+           round 16 played past day 120 believing they had been promoted,
+           because their crew ceiling had tripled.
+
+           The second half is the Rail's rule: never a demand for attention
+           without a statement of what would satisfy it.
+        */}
+        <span className="tiny">
+          <span className="stamp cool">{rankNow(state).name}</span>
+          {whatItNeeds(state).length > 0 && (
+            <span className="faint">
+              {' '}· {nextRank(state)?.name} wants {whatItNeeds(state).join(', ')}
+            </span>
+          )}
+        </span>
       </div>
 
       {condition && (
