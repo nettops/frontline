@@ -31,7 +31,7 @@ import { canRecruit, recruit } from '../crew';
 import { timesPresent } from '../informants';
 import { addEvidence } from '../util';
 import type { GameState, Id } from '../types';
-import { answerCheaply, idle, runDaysSolvent } from './helpers';
+import { answerCheaply, idle, runDaysSolvent } from '../__tests__/helpers';
 
 function where(state: GameState): string {
   const options = operableTerritories(state);

@@ -20,7 +20,9 @@ npm run dev
 | Command | What it does |
 | --- | --- |
 | `npm run dev` | Play it at http://localhost:5173 |
-| `npm test` | 1,290 tests: determinism, invariants, a 365-day soak, AI behaviour, investigations, war and diplomacy, succession, the briefing, game modes, balance guards, faction beliefs and bonds, memory, failing fronts, the two trades, and a 24-world statistical harness with anomaly detection |
+| `npm test` | The gate — 1,211 tests in about thirty seconds: determinism, invariants, a 365-day soak, AI behaviour, investigations, war and diplomacy, succession, the briefing, game modes, balance guards, faction beliefs and bonds, memory, failing fronts, the two trades, and a 24-world statistical harness with anomaly detection |
+| `npm run probe` | The eight measuring files in `sim/probes/` — the ladder, the floor, the spread, and what a bot finds when it plays. Nine minutes, because they simulate thousands of careers to get their numbers |
+| `npm run test:all` | Both |
 | `npm run build` | Production build |
 | `PROBE=1 npx vitest run balance` | Print the full balance report when tuning |
 | `PROBE=1 npx vitest run statistics` | Print the distribution across 24 simulated cities |
@@ -299,6 +301,9 @@ src/
     trace.ts        decision recording. Diagnostic only, never read back.
     player.ts       attributes, standing, fear, rank advancement
     save.ts         localStorage slots, version check
+    probes/     The eight files that measure the game rather than test it.
+                They build their evidence at module scope — thousands of
+                simulated careers — so they are their own suite: `npm run probe`.
   store.ts    ~50 lines. The only place state changes.
   ui/         Panels. Presentation only.
     report.ts       the briefing — a pure reading of state, never saved

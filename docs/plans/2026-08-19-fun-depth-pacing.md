@@ -354,7 +354,7 @@ Open Territory, select a district you hold with no steward, and confirm the line
 ### Task 3: Measure the surplus before touching a single payout
 
 **Files:**
-- Modify: `src/sim/__tests__/floor.probe.test.ts`
+- Modify: `src/sim/probes/floor.probe.test.ts`
 
 **Interfaces:**
 - Consumes: the existing `play(seed, days)` runner in that file and its result object.
@@ -444,7 +444,7 @@ Add `surplusByCrew` and `crewLeaderDay` to **both** return objects — the `game
 - [ ] **Step 3: Run it**
 
 ```bash
-npx vitest run src/sim/__tests__/floor.probe.test.ts
+npx vitest run src/sim/probes/floor.probe.test.ts
 ```
 
 Expected: PASS, with a `surplus:` line printed. Read it.
@@ -465,7 +465,7 @@ npx tsc --noEmit && npx vitest run
 
 **Files:**
 - Modify (branch B only): `src/config/operations.ts` payouts, or `src/config/economy.ts` `ROLE_WAGE`
-- Test: `src/sim/__tests__/floor.probe.test.ts` (re-run, do not re-thresholds)
+- Test: `src/sim/probes/floor.probe.test.ts` (re-run, do not re-thresholds)
 
 **Interfaces:**
 - Consumes: the `surplus:` line recorded in Task 3, Step 4.
@@ -480,7 +480,7 @@ Structural. Change nothing here. Delegation (Tasks 1 and 2) is the fix, and the 
 The early game is underpaid. Raise the payouts of the four `minRank: 'street_criminal'` jobs, or cut `ROLE_WAGE.associate`, by the measured median shortfall — the actual figure from the probe line, not a round number. Change one of the two, not both, so the next run attributes the movement. Then:
 
 ```bash
-npx vitest run src/sim/__tests__/floor.probe.test.ts src/sim/__tests__/balance.test.ts
+npx vitest run src/sim/probes/floor.probe.test.ts src/sim/__tests__/balance.test.ts
 ```
 
 Expected: the `surplus:` line's early-size medians move to at least zero, and `balance.test.ts` still passes. If `balance.test.ts` fails, the adjustment broke a relationship the table depends on — read its failure message, it names the invariant.
@@ -1012,7 +1012,7 @@ Create `src/config/standing.ts`:
  * What carrying the work does to somebody, and what being left out of it does.
  *
  * Every number here is set by the `spread` probe rather than by feel — see
- * `src/sim/__tests__/spread.probe.test.ts`. The probe's whole job is to show
+ * `src/sim/probes/spread.probe.test.ts`. The probe's whole job is to show
  * whether a boss who always sends their best three ends up somewhere
  * different from one who rotates. If it does not, these numbers are wrong and
  * no amount of adjusting the prose above them will help.
@@ -1711,7 +1711,7 @@ npx tsc --noEmit && npx vitest run
 ### Task 13: The spread probe — does any of this bite?
 
 **Files:**
-- Create: `src/sim/__tests__/spread.probe.test.ts`
+- Create: `src/sim/probes/spread.probe.test.ts`
 
 **Interfaces:**
 - Consumes: everything from Tasks 5–12.
@@ -1720,7 +1720,7 @@ This is the honest check on Tasks 8–11. If a boss who always sends their best 
 
 - [ ] **Step 1: Write the probe**
 
-Copy `play()` from `src/sim/__tests__/floor.probe.test.ts` into the new file as the world runner — it already handles memos, recruiting, fronts and game-over, and copying it keeps the two probes independent so a change to one cannot silently move the other. Give it one extra parameter, the crew-picking policy, and replace whatever it currently does to choose crew with a call to it:
+Copy `play()` from `src/sim/probes/floor.probe.test.ts` into the new file as the world runner — it already handles memos, recruiting, fronts and game-over, and copying it keeps the two probes independent so a change to one cannot silently move the other. Give it one extra parameter, the crew-picking policy, and replace whatever it currently does to choose crew with a call to it:
 
 ```ts
 type Policy = 'best' | 'rotate';
@@ -1819,7 +1819,7 @@ Before either assertion, assert the probe actually played — worlds that surviv
 - [ ] **Step 5: Run it**
 
 ```bash
-npx vitest run src/sim/__tests__/spread.probe.test.ts
+npx vitest run src/sim/probes/spread.probe.test.ts
 ```
 
 If the separation assertion fails: **do not adjust `STANDING`'s thresholds to make it pass.** Record the result under `## Probe results`, and treat it as the finding — either the marks need to reach something with more consequence than grievance, or the mechanic does not work and should not ship. That decision goes back to the spec, not into a threshold.
@@ -1842,7 +1842,7 @@ npx tsc --noEmit && npx vitest run
 - [ ] **Step 1: Run all three probes and paste their lines verbatim**
 
 ```bash
-npx vitest run src/sim/__tests__/floor.probe.test.ts src/sim/__tests__/grok.probe.test.ts src/sim/__tests__/spread.probe.test.ts
+npx vitest run src/sim/probes/floor.probe.test.ts src/sim/probes/grok.probe.test.ts src/sim/probes/spread.probe.test.ts
 ```
 
 Paste the `surplus:`, `grok:` and `spread:` lines into `## Probe results` with the date. Verbatim — not summarised.
