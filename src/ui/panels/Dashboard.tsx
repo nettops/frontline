@@ -4,6 +4,8 @@ import { Panel, Empty, KeyValue, Bar, Gauge } from '../components';
 import type { PanelId } from '../Rail';
 import { crewList, availableCrew } from '../../sim/npc';
 import { attention } from '../../sim/attention';
+import { approaches } from '../../sim/approaches';
+import { openSitdown } from '../../sim/sitdown';
 import { payrollForecast, weeklyWageBill } from '../../sim/economy';
 import { isLayingLow, startLayLow } from '../../sim/heat';
 import { arrestRisk, weeklyLegalCost } from '../../sim/investigation';
@@ -192,6 +194,7 @@ export default function Dashboard({ onNavigate }: { onNavigate: (id: PanelId) =>
   const free = availableCrew(state);
   const ops = Object.values(state.activeOperations);
   const wanting = attention(state);
+  const waiting = approaches(state);
   const laying = isLayingLow(state);
   const payroll = payrollForecast(state);
   const risk = arrestRisk(state);
@@ -241,6 +244,39 @@ export default function Dashboard({ onNavigate }: { onNavigate: (id: PanelId) =>
                 onClick={() => onNavigate(w.panel as PanelId)}
               >
                 {w.text}
+              </button>
+            ))}
+          </div>
+        </Panel>
+      )}
+      {/*
+        People, as against chores.
+
+        Kept apart from "Wanting you" on purpose. That panel is the recurring
+        loop asking to be run — jobs to send men on, groundwork to start — and
+        this one is somebody standing in the doorway. Folding them together
+        would put "3 standing about, and 2 jobs you could send them on" beside
+        a man who is owed a promotion, at the same weight, and the second would
+        read as another errand.
+
+        Each row opens the room it is about. That is the whole feature: the
+        sit-down has existed for a long time and could only ever be reached by
+        the player deciding to go and find somebody.
+      */}
+      {waiting.length > 0 && (
+        <Panel title={waiting.length === 1 ? 'Somebody is waiting' : 'People are waiting'}>
+          <div className="stack">
+            {waiting.map((w) => (
+              <button
+                key={w.npcId}
+                className="btn small wide"
+                onClick={() => {
+                  mutate((s2) => { openSitdown(s2, 'crew', w.npcId, w.reasonId); });
+                  onNavigate('crew');
+                }}
+              >
+                <span className={w.urgency === 'now' ? 'warn' : undefined}>{w.name}</span>{' '}
+                <span className="faint">{w.text}</span>
               </button>
             ))}
           </div>
