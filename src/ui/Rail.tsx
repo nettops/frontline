@@ -7,6 +7,7 @@ import { playerIsAtWar } from '../sim/diplomacy';
 import { eligibleHeirs, heirOf } from '../sim/succession';
 import { crewList } from '../sim/npc';
 import { needsSteward } from '../sim/delegation';
+import { pointsLeft } from '../sim/build';
 
 export type PanelId =
   | 'dashboard'
@@ -107,6 +108,22 @@ export default function Rail({
   // game to hand a district over reached only players who held none.
   const handOver = needsSteward(state);
   const leaks = (state.leaks ?? []).length;
+  /*
+     Points nobody has been told about.
+
+     Round 16 had three testers out of three find the build screen by accident
+     — on days 8, 18 and 25 — and all three reported the same thing: sixteen
+     points had been sitting unspent since the first morning, raising nothing,
+     while they ran jobs at a deficit they did not know they were carrying.
+     One called it "the one thing in the game a player can be strictly wrong
+     about for free", which is exactly right and is why this belongs on the
+     rail rather than in a tip that fires once.
+
+     The badge system already existed and already had this rule written above
+     it — every badge says what it wants — and was simply never pointed at the
+     one screen the opening hour never mentions.
+  */
+  const unspent = pointsLeft(state);
   const watching = state.mode === 'simulation';
   const entries = watching ? BUILT.filter((e) => e.city) : BUILT;
 
@@ -140,6 +157,14 @@ export default function Rail({
           {entry.id === 'territory' && held > 0 && (
             <span className="rail-phase" title={`${held} district${held === 1 ? '' : 's'} under your control`}>
               {held}
+            </span>
+          )}
+          {entry.id === 'player' && unspent > 0 && (
+            <span
+              className="rail-badge"
+              title={`${unspent} point${unspent === 1 ? '' : 's'} to place. They raise your odds on every job until you do`}
+            >
+              {unspent}
             </span>
           )}
           {entry.id === 'rivals' && hostile && (

@@ -94,9 +94,24 @@ export default function CrewPanel() {
           {crew.length} of {maxCrew(state)} · recruiting costs {formatMoney(cost)}
         </span>
       </div>
+      {/*
+         The second sentence is the repair.
+
+         Rows have been `cursor: pointer` and nothing else, which is an
+         affordance only a mouse can find. Round 16 had three testers reach
+         days 32, 43 and 81 before clicking one, and all three called what is
+         behind it the best screen in the game — traits, grudges, the job
+         history, the sit-down. One wrote: "Nothing anywhere suggests the rows
+         are clickable."
+
+         Said here rather than as a tooltip, because a tooltip is the same
+         mistake one layer down.
+      */}
       <p className="page-sub">
         You cannot see what these people actually are. You see what you have had the
-        chance to notice, and that sharpens only by working alongside them.
+        chance to notice, and that sharpens only by working alongside them.{' '}
+        <span className="hot">Open somebody</span> to read what they are carrying, sit
+        down with them, or move them up.
       </p>
 
       {/*
