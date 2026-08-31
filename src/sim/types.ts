@@ -763,6 +763,15 @@ export interface Leak {
  * this shape and it does not carry the field.
  */
 export interface Whisper {
+  /**
+   * Stable handle, so a follow-up can name which rumour it is about.
+   *
+   * Optional because saves written before anyone could act on a whisper have
+   * none; `whisperId` derives the same string for those, so an old feed is
+   * addressable without a migration. Set from the day it arrived and never
+   * updated, which matters because corroboration moves `day`.
+   */
+  id?: string;
   day: number;
   kind: string;
   text: string;
@@ -774,6 +783,13 @@ export interface Whisper {
   truth: boolean;
   /** Set once a second whisper about the same subject has hardened it. */
   corroborated: boolean;
+  /**
+   * Who has already been asked about this, so one contact cannot be milked.
+   *
+   * A second opinion is worth having and a third from the same person is not
+   * — he has told you what he thinks. Absent on an untouched whisper.
+   */
+  checkedBy?: string[];
 }
 
 /** One person outside the family, and where you stand with them. */

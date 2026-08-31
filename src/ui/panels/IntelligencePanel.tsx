@@ -13,7 +13,9 @@ import {
   weeklyLegalCost,
 } from '../../sim/investigation';
 import { accuse, canAccuse, readLeaks, timesPresent } from '../../sim/informants';
-import { readWhispers } from '../../sim/whispers';
+import { readWhispers, canLookInto, lookInto } from '../../sim/whispers';
+import { civicRoster, canSpendFavour } from '../../sim/civic';
+import { CIVIC_BY_ID } from '../../config/civic';
 import { formatMoney, formatShortDay } from '../../sim/util';
 import { AGENCIES, LAWYERS, CONTACT } from '../../config/lawEnforcement';
 
@@ -26,6 +28,17 @@ export default function IntelligencePanel() {
   const present = timesPresent(state);
   const size = footprint(state);
   const whispers = readWhispers(state);
+  /*
+     Who could be sent to ask, most owed first.
+
+     The button offers one name rather than a picker, because the choice that
+     matters is whether to spend a favour at all — and the panel already has a
+     list of who owes you on the City screen if the player wants to pick.
+  */
+  const askable = civicRoster(state)
+    .filter((f) => canSpendFavour(state, f.id).ok)
+    .sort((a, b) => b.owed - a.owed)
+    .map((f) => f.id);
 
   return (
     <>
@@ -65,6 +78,7 @@ export default function IntelligencePanel() {
                   <th>Heard</th>
                   <th className="num">How sure</th>
                   <th>Reading</th>
+                  <th />
                 </tr>
               </thead>
               <tbody>
@@ -78,6 +92,34 @@ export default function IntelligencePanel() {
                     <td className="tiny faint">
                       {w.certainty}
                       {w.corroborated && ' · and heard again since'}
+                    </td>
+                    {/*
+                       The decision the feed never offered.
+
+                       Waiting for a second whisper was the only move against a
+                       rumour, so this panel was a thing that happened to the
+                       player. A favour buys a second opinion — and it is an
+                       opinion, not an answer: the contact is right three times
+                       in four, which is the same fallibility the feed already
+                       has on the way in.
+                    */}
+                    <td className="num">
+                      {askable.length > 0 && (
+                        <button
+                          className="btn tiny"
+                          disabled={!canLookInto(state, w.id, askable[0]).ok}
+                          title={canLookInto(state, w.id, askable[0]).reason ?? ''}
+                          onClick={() => {
+                            let said = '';
+                            mutate((s) => {
+                              said = lookInto(s, w.id, askable[0]).message;
+                            }, true);
+                            setMessage(said);
+                          }}
+                        >
+                          Ask {CIVIC_BY_ID[askable[0]]?.title ?? 'somebody'}
+                        </button>
+                      )}
                     </td>
                   </tr>
                 ))}
