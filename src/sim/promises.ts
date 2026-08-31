@@ -15,7 +15,6 @@
 import { clamp } from './rng';
 import type { GameState, Id, Promised } from './types';
 import { PROMISE, PROMISES, type PromiseKind } from '../config/promises';
-import type { MemoryKind } from '../config/memories';
 import { addLog } from './util';
 import { addNote } from './npc';
 import { remember } from './memory';
@@ -107,8 +106,6 @@ function settle(state: GameState, npcId: Id, kind: PromiseKind, kept: boolean): 
  * promises exist. It also keeps this module below the memory system rather than
  * tangled into it.
  */
-const COVER_BROKEN_BY: MemoryKind[] = ['took_a_charge', 'was_hurt', 'went_unpaid'];
-
 export function tickPromises(state: GameState): void {
   const all = list(state);
   if (all.length === 0) return;
@@ -118,9 +115,19 @@ export function tickPromises(state: GameState): void {
     const npc = state.npcs[promise.npcId];
     if (!npc || npc.status === 'dead' || npc.status === 'defected') continue;
 
+    /*
+       The promises kept by an absence, broken early by the thing happening.
+
+       `brokenBy` used to be a constant in this file naming three memory kinds,
+       which was right while `covered` was the only promise of its shape. It is
+       the table's business now: "you are covered" fails when something happens
+       to him, "I will handle it" fails when what he complained about happens
+       again, and this loop does not need to know the difference.
+    */
+    const breaks = PROMISES[promise.kind].brokenBy;
     if (
-      promise.kind === 'covered' &&
-      npc.memories.some((m) => m.day >= promise.madeDay && COVER_BROKEN_BY.includes(m.kind))
+      breaks &&
+      npc.memories.some((m) => m.day >= promise.madeDay && breaks.includes(m.kind))
     ) {
       settle(state, promise.npcId, promise.kind, false);
       continue;
