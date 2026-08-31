@@ -15,7 +15,9 @@ Vite 6, Vitest 2. The player starts broke and grows an organization through
 operations, crew, territory, rival families, and law enforcement.
 
     npm run dev        # play it
-    npm test           # vitest run
+    npm test           # the gate — 1,211 tests, ~30s
+    npm run probe      # the eight measuring files in sim/probes/, ~9min
+    npm run test:all   # both
     npx tsc -b         # types
     npm run playtest   # namespaced instance for blind testers
 

@@ -50,7 +50,7 @@ import { isLayingLow, startLayLow } from '../heat';
 import { retainLawyer } from '../investigation';
 import { BUSINESSES } from '../../config/businesses';
 import type { GameState } from '../types';
-import { median, runDaysSolvent } from './helpers';
+import { median, runDaysSolvent } from '../__tests__/helpers';
 
 /**
  * The kinds of move this game has.

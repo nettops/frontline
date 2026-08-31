@@ -39,7 +39,7 @@ import { BUSINESSES } from '../../config/businesses';
 import { ROLE_ORDER, rankIndex } from '../../config/economy';
 import { eligibleStewards, needsSteward, putInCharge } from '../delegation';
 import type { GameState, OperationDef } from '../types';
-import { answerCheaply, ev, idle, median } from './helpers';
+import { answerCheaply, ev, idle, median } from '../__tests__/helpers';
 
 function where(state: GameState): string | null {
   const options = operableTerritories(state);

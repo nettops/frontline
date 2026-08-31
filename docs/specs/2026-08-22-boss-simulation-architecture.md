@@ -690,7 +690,7 @@ Ordered by evidence. Every task carries the seven required fields.
 - **Purpose:** five systems have shipped with zero measurement. Until a round sees them,
   every ranking below is a guess.
 - **Dependencies:** none. This is the precondition for everything else.
-- **Files:** `scripts/playtest-run.mjs`, `src/sim/__tests__/ladder.probe.test.ts`,
+- **Files:** `scripts/playtest-run.mjs`, `src/sim/probes/ladder.probe.test.ts`,
   `docs/PLAYTEST.md` brief.
 - **Difficulty:** low. **Risk:** low — no source change.
 - **Impact:** decides the order of tasks 1 to 6. May invalidate several.

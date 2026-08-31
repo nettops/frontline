@@ -40,7 +40,7 @@ import { isLayingLow } from '../heat';
 import { OPERATIONS } from '../../config/operations';
 import { rankIndex } from '../../config/economy';
 import type { GameState, Id, Npc, OperationDef } from '../types';
-import { median } from './helpers';
+import { median } from '../__tests__/helpers';
 
 type Policy = 'best' | 'rotate';
 

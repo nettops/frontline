@@ -131,7 +131,7 @@ const WASH_RESERVE = 1;
 import { DRIFT, DRIFT_INTERVAL_DAYS } from '../../config/npcs';
 import { wageExpectation } from '../npc';
 import type { RankId } from '../types';
-import { answerCheaply, ev, idle, mean as meanOf, median, pairedGap, resolves } from './helpers';
+import { answerCheaply, ev, idle, mean as meanOf, median, pairedGap, resolves } from '../__tests__/helpers';
 import { borrow, canBorrow, priced } from '../market';
 import { readWhispers } from '../whispers';
 import { isGenerated } from '../eventgen';

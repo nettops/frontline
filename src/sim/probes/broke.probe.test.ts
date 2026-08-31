@@ -27,7 +27,7 @@ import {
 import { OPERATIONS } from '../../config/operations';
 import { UNPAID_MEMORY_THRESHOLD } from '../../config/economy';
 import type { GameState } from '../types';
-import { answerCheaply, ev, idle as freeIdle } from './helpers';
+import { answerCheaply, ev, idle as freeIdle } from '../__tests__/helpers';
 
 /**
  * Somewhere the player can actually work.
