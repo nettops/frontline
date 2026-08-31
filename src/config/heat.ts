@@ -4,7 +4,15 @@
  * Heat is deliberately sticky: it decays slowly, decays slower the higher it
  * is, and only decays at all after consecutive quiet days. You cannot idle
  * your way down from 80 — you have to actively change how you operate.
+ *
+ * The numbers live in `tuning/heat.json` so they can be changed without a
+ * TypeScript toolchain. Everything that explains them stays here — JSON cannot
+ * hold a comment, and most of this file is the record of what each figure was
+ * before, what it measured, and why it moved.
  */
+
+import { checkBands } from './tuning/check';
+import data from './tuning/heat.json';
 
 export interface HeatTier {
   min: number;
@@ -22,71 +30,23 @@ export interface HeatTier {
   description: string;
 }
 
-export const HEAT_TIERS: HeatTier[] = [
-  {
-    min: 0,
-    max: 10,
-    name: 'Quiet',
-    decayMultiplier: 1.0,
-    description: 'Nobody is looking at you.',
-  },
-  {
-    min: 11,
-    max: 25,
-    name: 'Suspicious',
-    decayMultiplier: 0.85,
-    description: 'A name in a file somewhere. Nothing more.',
-  },
-  {
-    min: 26,
-    max: 40,
-    name: 'Investigating',
-    decayMultiplier: 0.7,
-    description: 'Someone has been assigned to you.',
-  },
-  {
-    min: 41,
-    max: 60,
-    name: 'Major Investigation',
-    decayMultiplier: 0.55,
-    description: 'Resources are being spent. Your people are being watched.',
-  },
-  {
-    min: 61,
-    max: 80,
-    name: 'Intensive Task Force',
-    decayMultiplier: 0.42,
-    description: 'A dedicated unit. Surveillance. Pressure on your weakest links.',
-  },
-  {
-    min: 81,
-    max: 92,
-    name: 'Organization Under Siege',
-    decayMultiplier: 0.32,
-    description: 'They are coming. The only question is who talks first.',
-  },
-  /*
-     The last stretch reads differently, because it used to read the same.
+/*
+   The last stretch of the table reads differently, because it used to read
+   the same.
 
-     81 to 100 was one band with one name, one description and one decay rate,
-     and the number itself clamps at 100 — so a player at 96 saw exactly what a
-     player at 82 saw, and every further mistake changed nothing on screen. A
-     round-7 tester described heat as going inert near the top, which is what a
-     gauge with no travel left looks like from the outside.
+   81 to 100 was one band with one name, one description and one decay rate,
+   and the number itself clamps at 100 — so a player at 96 saw exactly what a
+   player at 82 saw, and every further mistake changed nothing on screen. A
+   round-7 tester described heat as going inert near the top, which is what a
+   gauge with no travel left looks like from the outside.
 
-     Splitting the band costs nothing mechanically at 81-92 and gives the last
-     eight points somewhere to say so. The decay is lower again, which is the
-     honest continuation of a curve that has been falling the whole way up.
-  */
-  {
-    min: 93,
-    max: 100,
-    name: 'Nothing Left To Watch',
-    decayMultiplier: 0.22,
-    description:
-      'Every room you use is known and every name on your payroll is written down. This does not get worse. It only ends.',
-  },
-];
+   Splitting the band costs nothing mechanically at 81-92 and gives the last
+   eight points somewhere to say so. The decay is lower again, which is the
+   honest continuation of a curve that has been falling the whole way up.
+*/
+export const HEAT_TIERS: HeatTier[] = data.tiers;
+
+checkBands('tuning/heat.json', HEAT_TIERS);
 
 /**
  * Which tier a reading falls in — by floor alone, because heat is not an integer.
@@ -174,10 +134,10 @@ export function heatSeverity(heat: number): HeatSeverity {
  * the top band still holds a sixth of every career; above about 0.030 the
  * bottom two bands hold a quarter and the law system goes decorative.
  */
-export const HEAT_DECAY_SHARE = 0.026;
+export const HEAT_DECAY_SHARE = data.decayShare;
 
 /** Days of no heat-generating activity before decay starts at all. */
-export const QUIET_DAYS_BEFORE_DECAY = 2;
+export const QUIET_DAYS_BEFORE_DECAY = data.quietDaysBeforeDecay;
 
 /**
  * What an organization makes go away on its own, every day, working or not.
@@ -214,7 +174,7 @@ export const HEAT_ABSORPTION = {
    * that you cannot idle your way out of trouble, which matters most when the
    * organization is small enough for one bad week to end it.
    */
-  fromCrew: 4,
+  fromCrew: data.absorption.fromCrew,
   /**
    * Per person on the payroll beyond that floor, per day.
    *
@@ -234,7 +194,7 @@ export const HEAT_ABSORPTION = {
    * So this is the first value for the absorption that has ever been measured
    * against heat behaving as the table describes.
    */
-  perCrew: 0.2,
+  perCrew: data.absorption.perCrew,
   /**
    * The most an organization can make go away by being large alone.
    *
@@ -258,7 +218,7 @@ export const HEAT_ABSORPTION = {
    * is already dangerous stays sticky, and it still does nothing at all about
    * an informant.
    */
-  max: 5.75,
+  max: data.absorption.max,
   /**
    * And it only works on the street.
    *
@@ -275,28 +235,27 @@ export const HEAT_ABSORPTION = {
 } as const;
 
 /** Laying low multiplies decay, but you cannot run operations while doing it. */
-const LAY_LOW_DECAY_MULTIPLIER = 4;
-export const LAY_LOW_DURATION_DAYS = 14;
+export const LAY_LOW_DURATION_DAYS = data.layLowDurationDays;
 /**
  * Laying low costs respect — the street notices you went quiet. Kept modest
  * because heat management is a repeated action: at a steep cost, a player who
  * correctly goes quiet several times ends up with less standing than one who
  * never manages heat at all, which inverts the whole point of the system.
  */
-export const LAY_LOW_RESPECT_COST = 4;
+export const LAY_LOW_RESPECT_COST = data.layLowRespectCost;
 
 /**
  * How much heat hurts operations. At heat 100 this removes 38 percentage
  * points of success chance, which is what makes the doom loop real:
  * high heat causes failures, failures cause more heat.
  */
-export const HEAT_SUCCESS_PENALTY_AT_MAX = 0.3;
+export const HEAT_SUCCESS_PENALTY_AT_MAX = data.successPenaltyAtMax;
 
 /** Dismissing an exposed crew member cuts a thread — and their loyalty to you. */
-export const DISMISS_HEAT_REDUCTION = 4;
+export const DISMISS_HEAT_REDUCTION = data.dismissHeatReduction;
 
 /** Heat added when an operation is cancelled mid-run (loose ends). */
-export const CANCEL_OPERATION_HEAT = 3;
+export const CANCEL_OPERATION_HEAT = data.cancelOperationHeat;
 
 // ------------------------------------------------------------- channels ---
 
@@ -374,16 +333,11 @@ export const CHANNEL_OF_SOURCE: Record<
  * it is a specific tool that does one thing very well and one thing not at all.
  * A player pinned by an informant has to deal with the informant.
  */
-export const LAY_LOW_BY_CHANNEL: Record<HeatChannel, number> = {
-  street: LAY_LOW_DECAY_MULTIPLIER,
-  money: 1,
-  inside: 0,
-};
+export const LAY_LOW_BY_CHANNEL: Record<HeatChannel, number> = data.layLowByChannel;
 
 /** Ordinary decay speed per channel, before tier and difficulty. */
-export const DECAY_BY_CHANNEL: Record<HeatChannel, number> = {
-  street: 1.25,
-  // Paper does not go away because you stopped. It goes away because it got old.
-  money: 0.8,
-  inside: 0.6,
-};
+/*
+   Paper does not go away because you stopped. It goes away because it got old,
+   which is why `money` is slower than `street` and `inside` slower again.
+*/
+export const DECAY_BY_CHANNEL: Record<HeatChannel, number> = data.decayByChannel;
