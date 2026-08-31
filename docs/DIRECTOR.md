@@ -228,9 +228,29 @@ scored 8.0 and round 5 scored 7.4 on a strictly better build, because one got
 solvent and one did not, and the scores moved with that rather than with any
 change.
 
-Three scorers dispatched at once cost the wall clock of one. So the default for
-anything worth measuring is three, and a single-tester round is what you run
-when you have a reason.
+Three scorers dispatched at once cost the wall clock of one. They do not cost
+the *tokens* of one, and that is what the first version of this section got
+wrong. Round 16 ran three and spent 851,000 tokens — 244k, 298k and 309k —
+against the 400k a single full round has historically cost. Parallel is free in
+time and a little over twice the price.
+
+**So one is the default, and three is an escalation with a reason.** Run one.
+If its coverage report is clear — it found the system, or it plainly did not
+and says which of the four kinds of not-finding that was — you have your answer
+for a third of the money.
+
+Escalate to three when the first report is ambiguous, or when the question is
+specifically whether something is **discoverable**. That is the question one
+player cannot answer: one tester missing a system tells you nothing, two of
+three tells you it is badly signposted, and three of three tells you it is
+invisible. Those are three different repairs and a single report cannot
+distinguish them.
+
+Round 16 is the case for keeping the escalation. All three missed the same
+system, and measurement afterwards put it on screen for between 21 and 77 days
+of every 122-day career — which no single report could have established.
+
+The developer signs off the spend before three go out. It is their money.
 
 The isolation this needs is already built. `scripts/playtest-run.mjs` asks the
 operating system for a free port and namespaces every key the game writes under
