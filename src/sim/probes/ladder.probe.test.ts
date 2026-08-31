@@ -788,6 +788,28 @@ interface Climb {
   /** Loans taken to reach a front. See `Policy.financeFronts`. */
   /** Jobs launched per era, and days the job loop launched nothing. */
   launchEra: number[];
+  /*
+     Reporting only, added to answer one question and asserted nowhere.
+
+     Round 16's tester said the game solved itself at day 92 because Call In
+     Tribute was the only thing they could reach. Measurement showed it is the
+     *worst* money at its own rank — the two jobs beating it ask $50,000 and
+     $54,000 — so the question is not whether it is overpriced but whether a
+     player ever has that much when the rank opens. Nothing in this file could
+     say, because the record counts jobs per era and never which ones.
+
+     A retiming built on the guess was measured by this probe and rejected: it
+     took "what the ground is for" to exactly 18 of 36, because both free jobs
+     at the top are district-gated and slowing them removed the payoff for
+     holding ground. So this time the reading comes first.
+  */
+  /** Every job the bot launched, by definition id. */
+  launchedBy: Record<string, number>;
+  /** Clean + dirty at the moment tier-4 work first became available. */
+  fundsAtTier4: number | null;
+  /** Day that happened, and the first day $50,000 was in hand after it. */
+  tier4Day: number | null;
+  couldAffordDay: number | null;
   deadDays: number;
   borrowed: number;
   /**
@@ -1583,6 +1605,12 @@ function climb(seed: number, days: number, policy: Policy = {}): Climb {
    * five and got quieter the better the board got.
    */
   const launchEra = [0, 0, 0];
+  const launchedBy: Record<string, number> = {};
+  let fundsAtTier4: number | null = null;
+  let tier4Day: number | null = null;
+  let couldAffordDay: number | null = null;
+  /** The cheapest paid tier-4 job, which is the bar a player has to clear. */
+  const TIER4_BAR = 50_000;
   let deadDays = 0;
   const rivalWatch = {
     weeks: 0,
@@ -2392,6 +2420,25 @@ function climb(seed: number, days: number, policy: Policy = {}): Climb {
          on the locked row for a player to read too.
       */
       const board = opsBoard(state);
+
+      /*
+         The capital wall, watched rather than assumed.
+
+         Tier 4 opens on ground and bodies and says nothing about money, so the
+         day it opens is the day the player is *allowed* to take work they may
+         not be able to pay for. What is recorded is the gap: funds the day it
+         opened, and the first day after that they could cover the cheapest
+         paid job at that rank.
+      */
+      if (tier4Day === null && OPERATIONS.some((o) => o.tier === 4 && (o.opens?.met(board) ?? true))) {
+        tier4Day = state.day;
+        fundsAtTier4 = state.org.cash + state.org.dirtyCash;
+      }
+      if (tier4Day !== null && couldAffordDay === null &&
+          state.org.cash + state.org.dirtyCash >= TIER4_BAR) {
+        couldAffordDay = state.day;
+      }
+
       const wanted = OPERATIONS.filter((o) => o.opens && !o.opens.met(board))
         .sort((a, b) => a.tier - b.tier)
         .reduce<number>((need, op) => {
@@ -2663,6 +2710,7 @@ function climb(seed: number, days: number, policy: Policy = {}): Climb {
             );
             if (out) {
               launchEra[state.day < 90 ? 0 : state.day < 180 ? 1 : 2] += 1;
+              launchedBy[def.id] = (launchedBy[def.id] ?? 0) + 1;
               matched.launched += 1;
               matched.oddsSum += out.successChance;
             }
@@ -2713,6 +2761,7 @@ function climb(seed: number, days: number, policy: Policy = {}): Climb {
           if (out) {
             if (heavyNow(def)) heavyRuns += 1;
             launchEra[state.day < 90 ? 0 : state.day < 180 ? 1 : 2] += 1;
+            launchedBy[def.id] = (launchedBy[def.id] ?? 0) + 1;
             // Recorded on every arm, not only the allocator's, or the two
             // columns would be quoted in different currencies.
             matched.launched += 1;
@@ -3897,6 +3946,10 @@ function climb(seed: number, days: number, policy: Policy = {}): Climb {
       dialWeeks: newSys.dialWeeks,
     },
     launchEra,
+    launchedBy,
+    fundsAtTier4,
+    tier4Day,
+    couldAffordDay,
     deadDays,
     borrowed,
     rivals: {
@@ -8126,6 +8179,61 @@ describe('a career that uses what the cycle built', () => {
    seeds, same twelve districts, same four stewards, with the yields paying
    nothing. Expansion appears in both and cancels.
 */
+/*
+   The capital wall at tier 4, read before anything is changed about it.
+
+   Round 16's tester stopped having decisions at day 92: Call In Tribute was
+   free, everything comparable asked $50,000, and they had $5,600. A retiming
+   built on that diagnosis was measured by this file and rejected — it took
+   "what the ground is for" to exactly 18 of 36 — so this reads the situation
+   instead of guessing at it again.
+
+   Reporting only. Nothing here asserts, because the question is what the
+   numbers are, and a bar invented before the reading is the mistake that
+   produced the reverted commit.
+*/
+describe('the wall at tier four', () => {
+  it('says what a career has when tier-4 work opens, and whether it can pay for any', () => {
+    const opened = RUNS_300.filter((r) => r.tier4Day !== null);
+    const funds = opened.map((r) => r.fundsAtTier4 ?? 0).sort((a, b) => a - b);
+    const afforded = opened.filter((r) => r.couldAffordDay !== null);
+    const wait = afforded
+      .map((r) => (r.couldAffordDay ?? 0) - (r.tier4Day ?? 0))
+      .sort((a, b) => a - b);
+
+    const census = new Map<string, number>();
+    for (const r of RUNS_300) {
+      for (const [id, n] of Object.entries(r.launchedBy)) {
+        census.set(id, (census.get(id) ?? 0) + n);
+      }
+    }
+    const top = [...census].sort((a, b) => b[1] - a[1]).slice(0, 8);
+    const paidTier4 = OPERATIONS.filter((o) => o.tier === 4 && o.investment > 0);
+
+    // eslint-disable-next-line no-console
+    console.log(
+      `wall: ${opened.length}/${RUNS_300.length} careers ever opened tier-4 work` +
+        `, median day ${opened.length ? median(opened.map((r) => r.tier4Day ?? 0)) : '-'}
+` +
+        `      funds the day it opened, 25th / median / 75th: ` +
+        `${pct(funds, 0.25)} / ${median(funds)} / ${pct(funds, 0.75)}   (bar is 50,000)
+` +
+        `      careers that ever reached the bar afterwards: ${afforded.length}/${opened.length}` +
+        `${wait.length ? `, median ${median(wait)} days later` : ''}
+` +
+        `      paid tier-4 jobs ever launched: ` +
+        paidTier4
+          .map((o) => `${o.name} ${census.get(o.id) ?? 0}`)
+          .join(', ') +
+        `
+      free tier-4: Call In Tribute ${census.get('call_in_tribute') ?? 0}
+` +
+        `      most-run jobs overall: ` +
+        top.map(([id, n]) => `${id} ${n}`).join(', '),
+    );
+  });
+});
+
 describe('what the ground is for', () => {
   it('says whether what a district gives is worth anything', () => {
     const at = (rs: typeof RUNS_GROUND, f: (r: (typeof RUNS_GROUND)[number]) => number) =>
