@@ -13,7 +13,10 @@ import { newGame } from '../state';
 import { Rng } from '../rng';
 import { advanceDay } from '../clock';
 import { crewList } from '../npc';
-import { canRaise, setWage, wageCeiling } from '../crew';
+import { canRaise, promote, setWage, wageCeiling } from '../crew';
+import { putInCharge } from '../delegation';
+import { nameHeir } from '../succession';
+import { territoryList, playerInfluence } from '../territory';
 import { keepPromise, makePromise, promisesTo, tickPromises } from '../promises';
 import { remember } from '../memory';
 import { informFromMemory } from '../memory';
@@ -230,5 +233,148 @@ describe('a game that has never made one', () => {
     void rng;
     runTo(state, state.day + 10);
     expect(state.promises === undefined || state.promises.length === 0).toBe(true);
+  });
+});
+
+/**
+ * The four kinds added when the vocabulary was widened.
+ *
+ * The point of these is not that four more entries exist in a table. It is
+ * that each of them is *kept by an act the player would have performed
+ * anyway* — which is the rule the first two established and the only thing
+ * stopping a promise from being a second, parallel way to move loyalty.
+ *
+ * So every test below performs the ordinary action through its own module's
+ * public entry point — `promote`, `putInCharge`, `nameHeir` — and asserts the
+ * promise settled as a side effect. A test that called `keepPromise` directly
+ * would prove the machine works and nothing about whether it is connected,
+ * which is exactly the defect the audit found in this system.
+ */
+describe('the wider vocabulary', () => {
+  it('keeps the rung when he is actually promoted', () => {
+    const state = game(9);
+    const npc = someone(state);
+    npc.stats.loyalty = 50;
+    makePromise(state, npc.id, 'promoted');
+    expect(promisesTo(state, npc.id)).toHaveLength(1);
+
+    // Through crew.ts's own door, not through keepPromise.
+    const before = npc.stats.loyalty;
+    const result = promote(state, npc.id);
+    expect(result.ok).toBe(true);
+    expect(promisesTo(state, npc.id)).toHaveLength(0);
+    expect(npc.stats.loyalty).toBeGreaterThan(before);
+    expect(npc.memories.some((m) => m.kind === 'word_kept')).toBe(true);
+  });
+
+  it('keeps the ground when he is put in charge of some', () => {
+    const state = game(11);
+    const npc = someone(state);
+    makePromise(state, npc.id, 'territory');
+
+    // Give him the seniority and the influence the appointment needs.
+    npc.role = 'capo';
+    const t = territoryList(state).find((x) => playerInfluence(x) > 0);
+    if (!t) throw new Error('a career starts with a foothold; this seed did not');
+
+    const check = putInCharge(state, npc.id, t.id);
+    expect(check.ok).toBe(true);
+    expect(promisesTo(state, npc.id)).toHaveLength(0);
+    expect(npc.memories.some((m) => m.kind === 'word_kept')).toBe(true);
+  });
+
+  it('keeps the line when he is actually named', () => {
+    const state = game(13);
+    const npc = someone(state);
+    npc.role = 'underboss';
+    npc.stats.loyalty = 70;
+    makePromise(state, npc.id, 'next_in_line');
+
+    const named = nameHeir(state, npc.id);
+    expect(named.ok).toBe(true);
+    expect(promisesTo(state, npc.id)).toHaveLength(0);
+    expect(npc.memories.some((m) => m.kind === 'word_kept')).toBe(true);
+  });
+
+  it('breaks the rung on silence, and he writes it down', () => {
+    const state = game(15);
+    const npc = someone(state);
+    makePromise(state, npc.id, 'promoted');
+    const before = npc.stats.grievance;
+
+    runTo(state, state.day + PROMISES.promoted.days + 1);
+
+    expect(promisesTo(state, npc.id)).toHaveLength(0);
+    expect(npc.stats.grievance).toBeGreaterThan(before);
+    expect(npc.memories.some((m) => m.kind === 'word_broken')).toBe(true);
+  });
+
+  /**
+   * "I will handle it" and "you are covered" fail on different silences.
+   *
+   * This is the whole reason `brokenBy` moved out of `sim/promises.ts` and
+   * into the table. Being passed over is not something that breaks a promise
+   * of protection, and being hurt is not something that breaks a promise to
+   * deal with a grudge — so the same memory must settle one and leave the
+   * other standing.
+   */
+  it('breaks the fix on the thing happening again, and not on any bad day', () => {
+    const state = game(17);
+    const npc = someone(state);
+    makePromise(state, npc.id, 'handled');
+    makePromise(state, npc.id, 'covered');
+
+    // A memory that is on `handled`'s list and not on `covered`'s.
+    remember(npc, state.day, 'passed_over');
+    tickPromises(state);
+
+    const left = promisesTo(state, npc.id).map((p) => p.kind);
+    expect(left).toContain('covered');
+    expect(left).not.toContain('handled');
+  });
+
+  it('keeps the fix by the thing simply not happening again', () => {
+    const state = game(19);
+    const npc = someone(state);
+    const before = npc.stats.loyalty;
+    makePromise(state, npc.id, 'handled');
+
+    runTo(state, state.day + PROMISES.handled.days + 1);
+
+    expect(promisesTo(state, npc.id)).toHaveLength(0);
+    expect(npc.stats.loyalty).toBeGreaterThanOrEqual(before);
+    expect(npc.memories.some((m) => m.kind === 'word_broken')).toBe(false);
+  });
+
+  it('has a register for every kind, so nothing is only reachable from code', () => {
+    const sayable = new Set(
+      CREW_REGISTERS.filter((r) => r.promises).map((r) => r.promises as string),
+    );
+    for (const kind of Object.keys(PROMISES)) {
+      expect(sayable).toContain(kind);
+    }
+  });
+
+  it('survives a save and a load', () => {
+    const state = game(21);
+    const npc = someone(state);
+    makePromise(state, npc.id, 'next_in_line');
+
+    const reloaded = JSON.parse(JSON.stringify(state)) as GameState;
+    const owed = promisesTo(reloaded, npc.id);
+    expect(owed).toHaveLength(1);
+    expect(owed[0].kind).toBe('next_in_line');
+    expect(owed[0].dueDay).toBe(state.day + PROMISES.next_in_line.days);
+  });
+
+  /**
+   * A save written before any of this existed has no `promises` array at all,
+   * and the tick must read that as "nothing was ever said" rather than throw.
+   */
+  it('loads a save from before promises existed', () => {
+    const state = game(23);
+    delete (state as { promises?: unknown }).promises;
+    expect(() => tickPromises(state)).not.toThrow();
+    expect(promisesTo(state, someone(state).id)).toHaveLength(0);
   });
 });

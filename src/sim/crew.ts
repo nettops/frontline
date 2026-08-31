@@ -18,6 +18,7 @@ import {
 } from './npc';
 import { passedOver } from './ties';
 import { remember } from './memory';
+import { keepPromise } from './promises';
 import { spend, totalFunds } from './economy';
 import { holdingShare } from './holdings';
 import { reduceHeat } from './heat';
@@ -215,6 +216,16 @@ export function promote(state: GameState, npcId: string): ActionResult {
 
   const check = canPromote(state, npc);
   if (!check.ok) return check;
+
+  /*
+     He was told this was coming, and now it has.
+
+     Kept here rather than inferred by the promise tick, because the act is the
+     promise and only the caller knows it took place — the same rule
+     `operations.ts` follows for "you have the next one". A promotion nobody
+     was promised simply finds nothing to settle.
+  */
+  keepPromise(state, npcId, 'promoted');
 
   /*
    * Everybody at or above the rung he just reached watched him reach it.

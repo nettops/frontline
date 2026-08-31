@@ -287,6 +287,100 @@ export const CREW_REGISTERS: RegisterDef[] = [
       'They say the right thing. They do not believe you will remember, and they are not sure they want it anyway.',
     trains: 'leadership',
   },
+  /*
+     Three more things a boss can say, and each one is a debt when he says it.
+
+     The register table had exactly two promises in it — the next job and
+     protection — so the strongest move in this conversation had two sentences.
+     A man who wants the rung above him, or ground of his own, or to know where
+     he stands when you are gone, could be told none of those things, and those
+     are the three things the crew sheet says people actually want.
+
+     All three are gated on `ambition` rather than on grievance, because that
+     is what is being answered: an aggrieved man wants the thing that happened
+     dealt with, an ambitious one wants to know where he is going. And all
+     three have thresholds above `promise`, because a bigger word is harder to
+     make land — saying "you are next" to somebody who has not thought about it
+     invites the question of why you brought it up.
+  */
+  {
+    id: 'promise_rung',
+    says: '“You are going up. Not today, but you are going up, and you know it.”',
+    label: 'Tell them the next rung is theirs',
+    hint: 'A promotion, and you would have to actually give it',
+    against: 'ambition',
+    wants: 'high',
+    threshold: 50,
+    needs: 'grievance',
+    reveals: 'owed',
+    promises: 'promoted',
+    landed:
+      'They do not smile. What they do instead is stop arguing about the other matter entirely.',
+    missed:
+      'They have heard it before, from you or from somebody. It goes where the last one went.',
+    trains: 'leadership',
+  },
+  {
+    id: 'promise_ground',
+    says: '“You will have your own. Somewhere that answers to you and not to me.”',
+    label: 'Tell them they will get ground of their own',
+    hint: 'A district to run. You would have to find them one',
+    against: 'ambition',
+    wants: 'high',
+    threshold: 55,
+    needs: 'grievance',
+    reveals: 'owed',
+    promises: 'territory',
+    landed:
+      'That is a different conversation and they know it. Somebody with their own streets is not somebody you send any more.',
+    missed:
+      'They ask which one. You have not thought about which one, and the pause says so.',
+    trains: 'negotiation',
+  },
+  {
+    id: 'promise_line',
+    /*
+       The heaviest sentence in the table, and the only one that costs the boss
+       something to say even when it lands.
+
+       Naming a successor out loud to one man is a statement about every other
+       man, and `succession.ts` already knows what that does to whoever was
+       there before. This register does not name him — it says the words, and
+       the promise comes due when the Succession screen does the deed.
+    */
+    says: '“When it is somebody else\'s, it is yours. I have not said that to anybody else.”',
+    label: 'Tell them they are next',
+    hint: 'The whole thing, eventually. Not a sentence to spend twice',
+    against: 'ambition',
+    wants: 'high',
+    threshold: 62,
+    needs: 'grievance',
+    reveals: 'owed',
+    promises: 'next_in_line',
+    landed:
+      'Something happens to the room. They were arguing about a job a minute ago and now they are not arguing about anything.',
+    missed:
+      'They look at you for a moment too long. Either they do not believe it or they have worked out what it would cost you to mean it.',
+    trains: 'leadership',
+  },
+  {
+    id: 'promise_fix',
+    says: '“Leave it with me. It stops.”',
+    label: 'Tell them you will deal with it',
+    hint: 'Takes the problem off them and puts it on you',
+    against: 'grievance',
+    wants: 'high',
+    threshold: 35,
+    needs: 'grievance',
+    reveals: 'settled',
+    promises: 'handled',
+    calms: 'grievance',
+    landed:
+      'They hand it over. That is the part people forget about this sentence — once it is said, it is genuinely not theirs any more.',
+    missed:
+      'They say they will leave it with you. They will not leave it with you.',
+    trains: 'leadership',
+  },
   {
     id: 'reassure',
     says:

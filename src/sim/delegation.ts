@@ -20,6 +20,7 @@
  */
 
 import { Rng, clamp } from './rng';
+import { keepPromise } from './promises';
 import type { GameState, Id, Npc, StewardEntry, Territory } from './types';
 import {
   DELEGATION,
@@ -97,6 +98,17 @@ export function putInCharge(state: GameState, npcId: Id, territoryId: string): C
   t.stewardId = npcId;
   t.stewardSince = state.day;
   t.ledger = [];
+
+  /*
+     Ground of his own is what he was promised, and this is him getting it.
+
+     Any district settles it. The promise is "you will have somewhere", not
+     "you will have the docks" — a boss who says the second and delivers the
+     first has kept his word by every measure the crew sheet can state, and a
+     promise that recorded a specific district would need the sit-down to name
+     one, which it cannot do while the man asking has no map in front of him.
+  */
+  keepPromise(state, npcId, 'territory');
 
   // Being trusted with something is worth more than being paid for it.
   npc.stats.loyalty = clamp(npc.stats.loyalty + DELEGATION.appointLoyalty, 0, 100);
