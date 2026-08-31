@@ -144,11 +144,18 @@ Dispatched fresh every round. It gets:
 - The tester-facing half of `docs/PLAYTEST.md` only — everything from `## The game`
   onward. Never the developer half, which names what changed and what to watch
   for.
-- The URL of an isolated instance from `npm run playtest --id round<N>`.
+- The URL of an isolated instance from `npm run playtest -- --id round<N>`, and
+  — when the round is seeded — which mode and start to pick, said as a
+  starting condition and never with a reason attached.
 - An instruction not to read source, tests, docs or config.
-- The two harness corrections earlier rounds paid for: find elements by visible
-  text rather than stored position, and screenshot before judging how anything
-  looks.
+- The three harness corrections earlier rounds paid for: find elements by
+  visible text rather than stored position; screenshot before judging how
+  anything looks; and while a memo is open, answer it from `read().modalChoices`
+  and never from `read().actions`, which is every control on the page and
+  begins with SOUND, HINTS and the navigation rail. The third was paid for
+  during the harness work rather than by a round — two measurement runs written
+  against `actions[0]` clicked SOUND several hundred times each and reported a
+  career stuck on day 8 as though the game had done it.
 - The reproduction gate: no MUST FIX item without steps, reproduced at least
   once by the tester.
 
@@ -171,6 +178,101 @@ So decide the shape before dispatching:
     not a round       anything countable, anything greppable, anything visible
                       in the first five minutes of looking at the screen.
                       Write the check instead — see §6.
+
+### Start where the question is
+
+A full round climbs from nothing, and the climb is most of the cost. When the
+question lives in the late systems, the climb is not the measurement — it is
+forty minutes of getting to the place where the measurement starts, and it
+routinely fails to arrive. Round 9 is the case: the tester reached day 150 and
+Crew Leader, so six of its nine scores describe the first third of a game whose
+top half had just been rebuilt.
+
+`config/modes.ts` already has the answer and no round has used it. Sandbox
+starts hand a tester a position instead of making them earn it:
+
+    nobody        the career opening, with the losing condition switched off.
+    established   a few good years behind you — a crew, a district, and enough
+                  to buy a front.
+    seated        "At the table". Three districts, $900k clean and $400k dirty,
+                  900 standing, and three families who already have opinions.
+                  Everything the late systems need, on day one.
+
+Choosing the start is a starting condition, not a hint — it says where the
+tester begins, never what to look at, so it does not break the rule below about
+narrowed briefs. Tell them which to pick and nothing about why.
+
+**What a seeded start is valid for, and what it silently invalidates.** A player
+who did not earn a position does not know the systems that built it, and that is
+a real difference, not a shortcut around one. So:
+
+    valid       laundering, succession, diplomacy, investigations, contraband,
+                the trades, war — anything whose question is "does this system
+                work when you are in a position to use it"
+    invalid     pacing, the first hour, the difficulty curve, the money floor,
+                signposting, and every question of the form "would a player
+                find this" — all of which are about the climb
+
+A round that starts seated must say so in its report, and must mark the axes in
+the second list **unscored** rather than guessing at them. The same discipline
+as an unreached rung.
+
+### Run the testers in parallel
+
+§0 asks for a blind scorer. It has never asked for exactly one, and running one
+at a time is what makes a round an anecdote.
+
+The project has known this for a while and treated it as a caveat rather than a
+fault. From `docs/PLAYTEST.md`: *one tester per build is not a signal* — round 4
+scored 8.0 and round 5 scored 7.4 on a strictly better build, because one got
+solvent and one did not, and the scores moved with that rather than with any
+change.
+
+Three scorers dispatched at once cost the wall clock of one. They do not cost
+the *tokens* of one, and that is what the first version of this section got
+wrong. Round 16 ran three and spent 851,000 tokens — 244k, 298k and 309k —
+against the 400k a single full round has historically cost. Parallel is free in
+time and a little over twice the price.
+
+**So one is the default, and three is an escalation with a reason.** Run one.
+If its coverage report is clear — it found the system, or it plainly did not
+and says which of the four kinds of not-finding that was — you have your answer
+for a third of the money.
+
+Escalate to three when the first report is ambiguous, or when the question is
+specifically whether something is **discoverable**. That is the question one
+player cannot answer: one tester missing a system tells you nothing, two of
+three tells you it is badly signposted, and three of three tells you it is
+invisible. Those are three different repairs and a single report cannot
+distinguish them.
+
+Round 16 is the case for keeping the escalation. All three missed the same
+system, and measurement afterwards put it on screen for between 21 and 77 days
+of every 122-day career — which no single report could have established.
+
+The developer signs off the spend before three go out. It is their money.
+
+The isolation this needs is already built. `scripts/playtest-run.mjs` asks the
+operating system for a free port and namespaces every key the game writes under
+`mafia:run-<id>:`, so three instances on one machine physically cannot see each
+other's saves or each other's careers:
+
+    npm run playtest -- --id r16a
+    npm run playtest -- --id r16b
+    npm run playtest -- --id r16c
+
+Each scorer gets its own url, the same brief, and no knowledge that the others
+exist. Read the three reports against each other before reading any of them as
+a result: a finding all three hit is a fault, a finding one hit is a lead, and
+three scores that disagree by more than a point are telling you the axis is
+measuring the career rather than the build.
+
+### The shapes, and what they cost
+
+    3 x targeted, seeded     20-30 min   the default for a named question
+    3 x full, from nothing   60-75 min   the arc, and the only way to score
+                                         pacing and the first hour
+    not a round              minutes     see §6
 
 A targeted round gets the same brief with the stopping rule changed and nothing
 else. It must never get a *narrowed* brief: the moment a tester is told which
