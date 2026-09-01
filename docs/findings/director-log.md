@@ -2419,14 +2419,33 @@ the copy it was meant to protect and watching it stay green. Once fixed it
 immediately found Territory and Operations as well, which no tester had
 reported and neither had I.
 
-### Not fixed, and why
+### And neither was the second one
 
-**The two stat systems** is the one genuine design decision of the three.
-`player.build` and `player.attributes` are different fields and the odds line
-reads the one the build screen does not write; somebody has to decide whether
-build should feed the odds at all, or whether the screen should say plainly
-that it buys verbs and world behaviour instead. Guessing would be a fifth
-attempt of the kind iteration 9 records four of.
+Filed as the one genuine design decision of the three, and that was wrong too.
+
+`successBreakdown` reads `player.attributes[def.attribute]`, which rises by
+doing the work from forty call sites. `spendPoint` writes `player.build`, which
+drives `hasVerb` and `worldPull`. Both alive, both coherent, different fields —
+so nine points placed moved nothing on the odds row, exactly as the scorer
+measured.
+
+**The attributes panel used to be on Yourself and was replaced by the build.**
+`PlayerPanel` records why in place: measured on how often each was read
+anywhere else, two of the eight were read by nothing at all. What nobody
+noticed when it went is that the odds row still points at the half that lost
+its screen, so the player meets a number they can neither find nor move.
+
+That is a repair, not a decision, and it is copy on both ends. The row names
+its attribute — "Your negotiation" is a thing a boss can believe grows by
+negotiating, where "your ability" is a thing he reasonably assumes he just
+bought — and the build screen says what points are for, which is verbs and how
+the city behaves rather than tonight's odds.
+
+**Two of three round-17 items filed here as needing a decision were not
+decisions.** Both were the same shape as everything else in this build: a
+working system saying something untrue about itself. That is worth noticing
+before the next round, because the instinct to escalate a finding to a design
+question is what nearly left both unfixed.
 
 **The late-game flatline** is the shelved dominant-job problem, seen from the
 player's side by all three.

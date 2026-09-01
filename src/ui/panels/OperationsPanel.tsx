@@ -57,7 +57,7 @@ import {
   type ApproachId,
 } from '../../config/operations';
 import { CONTROL_LABEL, SENTIMENT_HOSTILE_BELOW } from '../../config/territories';
-import { ROLE_LABEL } from '../../config/economy';
+import { ATTRIBUTE_LABEL, ROLE_LABEL } from '../../config/economy';
 import type { OperationDef } from '../../sim/types';
 
 export default function OperationsPanel() {
@@ -838,7 +838,35 @@ export default function OperationsPanel() {
                   </div>
                   <Term label="Base for this job" value={breakdown.base} />
                   <Term label="Crew you picked" value={breakdown.crew} signed />
-                  <Term label="Your ability" value={breakdown.attribute} signed />
+                  {/*
+                       Which ability, and it is not one you place points into.
+
+                       This row read "Your ability" and three round-17 scorers
+                       took it for the build screen's output. One measured it
+                       properly — same job, same crew, same day, nine points
+                       placed, no movement — and filed it as points doing
+                       nothing. They were right about the row and wrong about
+                       the cause: `successBreakdown` reads
+                       `player.attributes[def.attribute]`, and the build writes
+                       `player.build`. Different fields.
+
+                       That is not two rival systems. The attributes panel used
+                       to be on Yourself and was replaced by the build, for the
+                       reason recorded there — two of its eight were read by
+                       nothing. What nobody noticed is that this row still
+                       points at the half that lost its screen, so the player
+                       met a number they could neither find nor move.
+
+                       Naming the attribute is the whole repair. "Your
+                       negotiation" is a thing a boss can believe grows by
+                       negotiating; "your ability" is a thing he reasonably
+                       assumes he just bought.
+                    */}
+                  <Term
+                    label={`Your ${ATTRIBUTE_LABEL[def.attribute].toLowerCase()}`}
+                    value={breakdown.attribute}
+                    signed
+                  />
                   <Term label="Current heat" value={breakdown.heat} signed />
                   {breakdown.watched !== 0 && (
                     <Term label="Being watched" value={breakdown.watched} signed />

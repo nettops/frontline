@@ -406,9 +406,25 @@ export default function PlayerPanel() {
         )}
 
         <div className="row between" style={{ marginTop: 0, marginBottom: 8 }}>
+          {/*
+               And what they are not, which is the half that misled three
+               scorers.
+
+               All three read this screen as a stat allocation and expected the
+               odds on a job to move. One measured it: nine points placed, "Your
+               ability" unchanged on the same job the same day, filed as points
+               doing nothing. The odds row reads `player.attributes`, which
+               grows by doing the work and is a different field entirely — it is
+               the panel that used to live here and was replaced by this one.
+
+               Points buy verbs and how the world behaves toward you. Saying so
+               costs one sentence and is the difference between an irreversible
+               choice that feels arbitrary and one that feels deliberate.
+            */}
           <p className="dim" style={{ margin: 0 }}>
             Points are placed, not earned. What you leave at the bottom is a thing you
-            will never be able to do.
+            will never be able to do. They buy what you are <em>able</em> to do and how the
+            city treats you — not the odds on tonight's job, which come from doing the work.
           </p>
           <span className="mono brass" style={{ whiteSpace: 'nowrap' }}>
             {left} to place

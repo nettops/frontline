@@ -20,6 +20,7 @@ import { arcs } from '../arcs';
 import { canCase, caseJob } from '../verbs';
 import { canAcquire } from '../business';
 import { canSpendFavour, figure } from '../civic';
+import { spendPoint, worldPull } from '../build';
 import { home, homeRead, neglectRisk } from '../personal';
 import { HOME } from '../../config/personal';
 import { GEN_DEFS } from '../eventgen';
@@ -286,5 +287,68 @@ describe('being away from home says what it costs', () => {
     const state = game();
     home(state).neglect = 100;
     expect(homeRead(state).costing).not.toMatch(/\d/);
+  });
+});
+
+/**
+ * Two stat systems, one of which lost its screen.
+ *
+ * All three round-17 scorers reported that personal points produce no visible
+ * effect. One measured it properly — same job, same crew, same day, nine points
+ * placed, the odds row unchanged — and filed sixteen permanent irreversible
+ * points as arbitrary.
+ *
+ * They were right about the screen and wrong about the cause. `successBreakdown`
+ * reads `player.attributes[def.attribute]`, which rises by doing the work from
+ * forty call sites; `spendPoint` writes `player.build`, which drives `hasVerb`
+ * and `worldPull`. Different fields, and both alive.
+ *
+ * That is not a system needing a decision. The attributes panel used to be on
+ * Yourself and was replaced by the build — its own comment records why, two of
+ * eight attributes were read by nothing — and the odds row was left pointing at
+ * the half that no longer has a screen. So the player met a number they could
+ * not find and could not move.
+ *
+ * Guarded as facts about the two fields rather than about the copy, because the
+ * copy is the repair and the fields are what make it true.
+ */
+describe('the two progressions are different things', () => {
+  it('places points somewhere the odds do not read', () => {
+    const state = game();
+    const before = { ...state.player.attributes };
+    spendPoint(state, 'muscle');
+    spendPoint(state, 'instinct');
+    expect(
+      state.player.attributes,
+      'the build now writes attributes, so the odds row is double-counting',
+    ).toEqual(before);
+  });
+
+  /** And the points do buy something — just not that row. */
+  it('buys verbs and how the world behaves, which is what the screen now says', () => {
+    const state = game();
+    const before = worldPull(state, 'ledger');
+    for (let i = 0; i < 4; i++) spendPoint(state, 'ledger');
+    expect(worldPull(state, 'ledger')).toBeGreaterThan(before);
+  });
+
+  /**
+   * The odds row names its attribute, so it reads as something earned rather
+   * than something bought.
+   */
+  it('names which ability the odds row is about', async () => {
+    const src = (await import('../../ui/panels/OperationsPanel.tsx?raw')).default as string;
+    expect(src).toContain('ATTRIBUTE_LABEL[def.attribute]');
+    expect(
+      src.replace(/\/\*[\s\S]*?\*\//g, ' '),
+      'the row is back to the label three testers misread',
+    ).not.toMatch(/label="Your ability"/);
+  });
+
+  /** And the build screen says what it is not. */
+  it('says on the build screen that points are not the odds', async () => {
+    const src = (await import('../../ui/panels/PlayerPanel.tsx?raw')).default as string;
+    const prose = src.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/\{\/\*[\s\S]*?\*\/\}/g, ' ');
+    expect(prose.toLowerCase()).toContain('not the odds');
   });
 });
