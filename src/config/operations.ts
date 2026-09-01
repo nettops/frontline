@@ -787,10 +787,40 @@ export const HEAT_DISTANCE = {
    * So the finding is neither the size nor this contributor's shape. It is that
    * the cap is reachable by ordinary play inside two months and is a constant
    * thereafter, which is what "the cost side evaporates" means mechanically.
-   * Repairing that means moving `maxFromOrganization` or the seniority curve,
-   * which moves every baseline in `ladder.probe`, and it is deliberately not
-   * being attempted as a fifth guess — see `freeLadder.test.ts` for the four
-   * that were.
+   *
+   * ## And neither constant is the lever
+   *
+   * Both were then swept, twelve careers each, reading the heat multiplier on
+   * the best job available on the day:
+   *
+   *     maxFromOrganization       d30   d60  d120  d180  d240  d299
+   *       2.5 (shipped)          0.43  0.31  0.31  0.31  0.31  0.31
+   *       1.8                    0.42  0.42  0.42  0.42  0.42  0.42
+   *       1.2                    0.56  0.56  0.56  0.56  0.56  0.56
+   *       0.8                    0.68  0.68  0.68  0.68  0.68  0.68
+   *
+   *     perSeniority              d30   d60  d120  d180  d240  d299
+   *       0.35 (shipped)         0.43  0.31  0.31  0.31  0.31  0.31
+   *       0.20                   0.43  0.39  0.38  0.36  0.38  0.38
+   *       0.10                   0.52  0.52  0.49  0.49  0.52  0.50
+   *       0.05                   0.59  0.59  0.55  0.53  0.55  0.55
+   *
+   * **Lowering the cap makes it saturate sooner, not later.** Every value is
+   * flat from day 30, because the contributors exceed all of them immediately;
+   * the constant only sets the height of the line. `perSeniority` behaves the
+   * same way, with at best a 0.05 drift across ten months.
+   *
+   * There is therefore no tuning of these two that turns the organization term
+   * back into a decision. The flatness is structural — the contributors
+   * saturate inside the first month — and changing it means changing what
+   * contributes, not what it is capped at. Left alone, with the sweep recorded
+   * so nobody repeats it.
+   *
+   * A caveat on method, because the table invites a conclusion it cannot
+   * support: the sweep bot runs under `runDaysSolvent` with a $250,000 floor,
+   * so its economy is propped up by the instrument. The multiplier trajectory
+   * is a real reading. Any estate or income figure from that bot is not, and
+   * none is quoted here.
    */
   perCrew: 1 / 12,
   /**
