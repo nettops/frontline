@@ -2447,8 +2447,33 @@ working system saying something untrue about itself. That is worth noticing
 before the next round, because the instinct to escalate a finding to a design
 question is what nearly left both unfixed.
 
-**The late-game flatline** is the shelved dominant-job problem, seen from the
-player's side by all three.
+**The late-game flatline** was filed as the shelved dominant-job problem seen
+from the player's side. It is not, and all three scorers named the real
+mechanism without knowing it: *"holding districts drops per-job heat to about
+1"*, *"after day 140 nothing threatened me"*, *"nothing pushed back"*.
+
+`HEAT_DISTANCE` already carried the exact question and the exact condition for
+answering it — headcount is unconditional where seniority and a steward are
+earned, *"a fair criticism of the shape rather than the size, and it is left
+alone until there is a measurement that says the size was not the problem."*
+Round 17 is that measurement. Decomposed across twelve careers:
+
+    day                          30    60   120   180   240   299
+    heat multiplier            0.43  0.31  0.31  0.31  0.31  0.31
+      from the organization    1.18  2.50  2.50  2.50  2.50  2.50
+         of which headcount    0.75  0.75  0.83  0.83  0.83  0.83
+
+**The organization term reaches its cap on day 60 and is constant for the
+remaining eighty per cent of the career.** Headcount is 0.83 of 2.5, so the size
+repair could never have reached it. And the shape criticism is wrong too:
+dropping headcount from the term entirely was tried and made it *worse*, capping
+on day 30 instead of 60, because a senior man sent into a stewarded district
+already exceeds 2.5 without any headcount at all. Reverted.
+
+The fault is that the cap is reachable by ordinary play inside two months and
+constant thereafter. Repairing it means moving `maxFromOrganization` or the
+seniority curve, both of which move every baseline in `ladder.probe`. Recorded
+against the constant rather than attempted as a fifth guess.
 
 ### One more, and one deliberately left alone
 
@@ -2474,11 +2499,17 @@ once there is something to say — `neglectRisk` is flat at 1 until
 `HOME.depositionFrom`, so a boss who goes home occasionally still reads nothing.
 
 **The Businesses table's horizontal scroll**, reported by two scorers, is left
-as it is. Iteration 8 measured that overflow, found the table was already 49px
-over before the column that appeared to cause it, and recorded the wrap
-scrolling horizontally as the decision. Two testers disliking a recorded
-decision is a finding about the decision, not licence to reverse it blind —
-but it is now two rounds running, which is worth somebody looking at properly.
+as it is, and now with a number. Measured in Chromium at 1600x1000 on a fresh
+career: the panel's scroll width is 1477 against a client width of 1342 — **135px
+over** — while `document.body` is 1600/1600, so the page itself does not scroll
+sideways and only the wrap does. That is precisely the arrangement iteration 8
+recorded as the decision, after finding the table already 49px over before the
+column that appeared to have caused it.
+
+So the decision is being honoured and the testers are still unhappy, which makes
+this a finding about *which columns earn their place at 1600px* rather than
+about the scroll mechanism. That is a design call, it is two rounds running, and
+it wants somebody who can look at the screen.
 
 ### On method
 

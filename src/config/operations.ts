@@ -760,6 +760,37 @@ export const HEAT_DISTANCE = {
    * you to have actually used them. That asymmetry is a fair criticism of the
    * shape rather than the size, and it is left alone until there is a
    * measurement that says the size was not the problem.
+   *
+   * ## The measurement exists now, and the size was not the problem
+   *
+   * Round 17's three scorers all reported the same thing from the player's
+   * side — *"holding districts drops per-job heat to about 1"*, *"after day 140
+   * nothing threatened me"*, *"nothing pushed back"* — with the loop going flat
+   * at days 120, 130 and 180. Decomposed across twelve careers, on the best job
+   * available each day:
+   *
+   *     day                          30    60   120   180   240   299
+   *     heat multiplier            0.43  0.31  0.31  0.31  0.31  0.31
+   *       from the organization    1.18  2.50  2.50  2.50  2.50  2.50
+   *          of which headcount    0.75  0.75  0.83  0.83  0.83  0.83
+   *
+   * **The organization term reaches `maxFromOrganization` on day 60 and never
+   * moves again for the remaining eighty per cent of the career.** Headcount is
+   * 0.83 of that 2.5, so halving this number — the size repair recorded above —
+   * could never have reached it.
+   *
+   * Nor is headcount's shape the fault. Dropping it from the term entirely was
+   * tried and made things *worse*: the cap is then reached on day 30 instead of
+   * 60, because sending a senior man into a stewarded district already exceeds
+   * 2.5 on seniority and `stewarded` alone. Reverted.
+   *
+   * So the finding is neither the size nor this contributor's shape. It is that
+   * the cap is reachable by ordinary play inside two months and is a constant
+   * thereafter, which is what "the cost side evaporates" means mechanically.
+   * Repairing that means moving `maxFromOrganization` or the seniority curve,
+   * which moves every baseline in `ladder.probe`, and it is deliberately not
+   * being attempted as a fifth guess — see `freeLadder.test.ts` for the four
+   * that were.
    */
   perCrew: 1 / 12,
   /**
