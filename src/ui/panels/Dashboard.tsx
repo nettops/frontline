@@ -5,6 +5,7 @@ import type { PanelId } from '../Rail';
 import { crewList, availableCrew } from '../../sim/npc';
 import { attention } from '../../sim/attention';
 import { approaches } from '../../sim/approaches';
+import { arcs } from '../../sim/arcs';
 import { rankNow, nextRank, whatItNeeds } from '../../sim/rank';
 import { openSitdown } from '../../sim/sitdown';
 import { payrollForecast, weeklyWageBill } from '../../sim/economy';
@@ -219,6 +220,7 @@ export default function Dashboard({ onNavigate }: { onNavigate: (id: PanelId) =>
   const ops = Object.values(state.activeOperations);
   const wanting = attention(state);
   const waiting = approaches(state);
+  const running = arcs(state);
   const laying = isLayingLow(state);
   const payroll = payrollForecast(state);
   const risk = arrestRisk(state);
@@ -326,6 +328,44 @@ export default function Dashboard({ onNavigate }: { onNavigate: (id: PanelId) =>
           </div>
         </Panel>
       )}
+      {/*
+           What you started and have not finished.
+
+           The third of three lists and deliberately not folded into the other
+           two. "Wanting you" is the loop asking to be run and the doorway is a
+           person in it; this is the set of things already in motion, which is
+           a different question — not *what should I do today* but *what am I
+           carrying*.
+
+           The game turned out to be full of arcs and to have no way of seeing
+           them as arcs: a score lives on Operations, a promise and a mark on
+           the crew sheet, a case on Law, so a boss with four things running had
+           four screens to remember. See `sim/arcs.ts`, which asks each system
+           what it has open and does not score any of it.
+
+           Oldest first, because the thing that has been open longest is
+           usually the thing that has been forgotten, and no other screen can
+           answer that.
+        */}
+      {running.length > 0 && (
+        <Panel title="What you have running">
+          <div className="stack">
+            {running.map((a) => (
+              <button
+                key={a.id}
+                className="btn small wide"
+                onClick={() => onNavigate(a.panel)}
+              >
+                <span className={a.pressing ? 'warn' : undefined}>{a.title}</span>{' '}
+                <span className="faint">
+                  — {a.where}. {a.ends}.
+                </span>
+              </button>
+            ))}
+          </div>
+        </Panel>
+      )}
+
       <Panel
           title="Attention"
           action={!laying && <LayLow />}

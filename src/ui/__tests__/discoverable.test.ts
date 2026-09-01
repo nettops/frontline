@@ -256,3 +256,38 @@ describe('the way in to the family history', () => {
     expect(block, 'the history is built from the capped log').not.toContain('state.log');
   });
 });
+
+/**
+ * The three lists on the Overview, and why they are three.
+ *
+ * "Wanting you" is the loop asking to be run, the doorway is a person in it,
+ * and "What you have running" is the set of things already in motion. The last
+ * of those exists because the game turned out to be full of arcs with nowhere
+ * to see them as arcs: a score on Operations, a promise and a mark on the crew
+ * sheet, a case on Law, so a boss with four things going had four screens to
+ * remember to visit.
+ */
+describe('the way in to what you have running', () => {
+  it('is on the Overview with the other two lists', () => {
+    expect(DASHBOARD).toContain('arcs(state)');
+    expect(flat(DASHBOARD)).toContain('what you have running');
+  });
+
+  /** Every row goes somewhere. A line you cannot act on is a notification. */
+  it('sends you to the screen that owns each one', () => {
+    const at = DASHBOARD.indexOf('What you have running');
+    const block = DASHBOARD.slice(at, at + 900);
+    expect(block).toContain('onNavigate(a.panel)');
+  });
+
+  /**
+   * And says how each ends, which is the half a status line leaves out and the
+   * thing that makes it an arc rather than a row of state.
+   */
+  it('says where each stands and how it ends', () => {
+    const at = DASHBOARD.indexOf('What you have running');
+    const block = DASHBOARD.slice(at, at + 900);
+    expect(block).toContain('a.where');
+    expect(block).toContain('a.ends');
+  });
+});
