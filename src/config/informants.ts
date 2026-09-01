@@ -65,12 +65,20 @@ export const INFORMANT = {
    * as "the bar decides who talks". Raising it makes an already-rare mechanic
    * rarer and changes nothing else.
    *
-   * **The rate itself is unmeasured, and that is the open question.** These
-   * careers finished with one informant alive apiece, and nothing in the suite
-   * checks that: `informants.probe` plants its informant directly, because it
-   * exists to measure whether a player can read the record rather than whether
-   * the record ever gets written. If this number is ever revisited it should
-   * be against a probe of the natural flip rate, which does not yet exist.
+   * **And the rate is fine, which took a probe to establish.** Counting
+   * informants alive says nothing — `tickInformants` runs the flip loop only
+   * while nobody is talking, so one at a time is the designed ceiling and not
+   * a rate. Measured properly by *occupancy*, over 24 careers each with
+   * nothing planted:
+   *
+   *     boss who...          ever had one   days somebody was talking   first turned
+   *     grinds them daily          24/24                         65%         day 105
+   *     works them every 4th       21/24                         40%         day 182
+   *
+   * So the mechanic reaches nearly every career, occupies a large part of it,
+   * and answers strongly to how the crew is worked. It is not rare and it was
+   * never the thing that needed fixing. See `informants.probe`, which had only
+   * ever measured whether a *planted* informant could be read.
    */
   fearAbove: 55,
   loyaltyBelow: 38,
