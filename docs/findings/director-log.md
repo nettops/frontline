@@ -2391,14 +2391,42 @@ is a mechanic misbehaving, which is the shape of this whole build now.
   It is in `arcs()` now, which is exactly what that panel was built for and
   where it should have been from the start.
 
+### Diplomacy was not a design decision at all
+
+Filed here first as one, and that was wrong. `doDiplomacy`, `canDo` and
+`diplomaticCost` all exist; the panel has peace, tribute, an alliance and a
+sit-down with the man who runs the house; round 13's *"shows strengths and
+stances but I never found anything on it I could press"* was already answered
+inside `canDo`.
+
+**Every one of those verbs lives in a modal that opens by clicking a family's
+row, and the row's only affordance was a cursor.** All three scorers concluded
+the panel is read-only — one after 317 days with a rank requirement pointing
+straight at it.
+
+That is round 16's crew-dossier fault in a second place: *"one click inside a
+table row that is `cursor: pointer` and nothing else"*, found on days 32, 43 and
+81. It was repaired by saying so in the page-sub, and **nobody checked whether
+the pattern existed anywhere else.** It existed in five more panels. A guard now
+covers the class rather than the instances: a panel that renders `clickable`
+rows must say, in the text at the top of the page, that opening one does
+something.
+
+The guard itself was vacuous on its first run — the detector anchored on
+`className={...clickable` and every panel writes that as a ternary, so nothing
+matched and all six were skipped while it reported a pass. Caught by deleting
+the copy it was meant to protect and watching it stay green. Once fixed it
+immediately found Territory and Operations as well, which no tester had
+reported and neither had I.
+
 ### Not fixed, and why
 
-**Diplomacy's missing verbs** and **the two stat systems** are both three-of-three
-findings and both are design decisions rather than repairs. The first needs
-somebody to decide whether rival trust is meant to be pursued or only offered;
-the second needs somebody to decide whether the build screen should feed the
-odds at all, or merely say plainly that it does not. Guessing at either would be
-a fifth attempt of the kind iteration 9 records four of.
+**The two stat systems** is the one genuine design decision of the three.
+`player.build` and `player.attributes` are different fields and the odds line
+reads the one the build screen does not write; somebody has to decide whether
+build should feed the odds at all, or whether the screen should say plainly
+that it buys verbs and world behaviour instead. Guessing would be a fifth
+attempt of the kind iteration 9 records four of.
 
 **The late-game flatline** is the shelved dominant-job problem, seen from the
 player's side by all three.

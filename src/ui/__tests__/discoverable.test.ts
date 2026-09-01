@@ -43,6 +43,18 @@ const CITY = src('../panels/CityPanel.tsx');
  */
 const flat = (t: string): string => t.replace(/\s+/g, ' ').toLowerCase();
 
+/**
+ * The file with its commentary taken out.
+ *
+ * Every repair in this file is explained in a comment directly above the code
+ * that makes it, and those comments quote the copy they added — so a guard run
+ * against raw source would be satisfied by its own justification. That is the
+ * vacuous pass this project keeps catching in itself; the check below is only
+ * worth having if it reads what a player reads.
+ */
+const prose = (t: string): string =>
+  flat(t.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/^\s*\/\/.*$/gm, ' '));
+
 function game(seed = 4): GameState {
   return newGame({ name: 'Found', difficulty: 'normal', seed });
 }
@@ -322,5 +334,79 @@ describe('the favour buttons', () => {
   /** And the reason is still prose in the row, not a tooltip. */
   it('keep the refusal in body text', () => {
     expect(CITY).toContain('{p.blocked}');
+  });
+});
+
+/**
+ * Every table row that is secretly a button says so.
+ *
+ * Round 16 found this in the crew dossier: the best screen in the game was one
+ * click inside a `cursor: pointer` row with no other affordance, and three
+ * testers reached it on days 32, 43 and 81. It was repaired by saying so in the
+ * page-sub, and nobody checked whether the pattern existed anywhere else.
+ *
+ * It existed in three more places. All three round-17 scorers reported
+ * Diplomacy as a read-only table with no actions — *"Diplomacy has no verbs"*,
+ * *"it has never had a single clickable action in 184 days"* — while every verb
+ * the system owns sat in a modal behind the row, and one of them had a rank
+ * requirement pointing at it for 160 days.
+ *
+ * This guards the class rather than the three instances: a panel that renders
+ * `clickable` rows has to tell the player, in the text at the top of the page,
+ * that opening one does something.
+ */
+describe('rows that open something say so', () => {
+  const panels = [
+    'CrewPanel',
+    'DiplomacyPanel',
+    'RivalsPanel',
+    'LawPanel',
+    'TerritoryPanel',
+    'OperationsPanel',
+  ] as const;
+
+  it('is reading the panels it asserts about', () => {
+    for (const name of panels) {
+      expect(src(`../panels/${name}.tsx`), `${name} not found`).toBeTruthy();
+    }
+  });
+
+  /**
+   * "Open" is the word, in the page-sub, above the fold.
+   *
+   * Checked as a word rather than a sentence because the sentence is the
+   * panel's business — what must not happen again is a screen whose only
+   * statement of its own interactivity is a CSS cursor.
+   */
+  it('names the door in the text at the top of the page', () => {
+    const silent: string[] = [];
+    for (const name of panels) {
+      const file = src(`../panels/${name}.tsx`);
+      /*
+         Plainly, because the clever version matched nothing.
+
+         The first attempt anchored on `className={...clickable` and every one
+         of these panels writes it as a ternary — `selectedId ? 'clickable
+         selected' : 'clickable'` — so the character class stopped at the first
+         quote, no panel matched, and the guard skipped all six while reporting
+         a pass. Caught by deleting the copy it was supposed to protect and
+         watching it stay green.
+      */
+      if (!/'clickable/.test(file)) continue;
+
+      const at = file.indexOf('page-sub');
+      if (at === -1) {
+        silent.push(`${name}: rows open something and there is no page-sub at all`);
+        continue;
+      }
+      const sub = prose(file.slice(at, at + 900));
+      if (!/\bopen\b|\bclick\b/.test(sub)) {
+        silent.push(`${name}: rows open something and the page never says to open one`);
+      }
+    }
+    expect(
+      silent,
+      `these panels hide every verb they have behind a cursor:\n${silent.join('\n')}`,
+    ).toHaveLength(0);
   });
 });

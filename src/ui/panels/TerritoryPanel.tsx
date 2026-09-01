@@ -95,7 +95,9 @@ export default function TerritoryPanel() {
           {held} held · {working} worked · {TERRITORIES.length} districts
         </span>
       </div>
+      {/* Same door, same silence. See `DiplomacyPanel`. */}
       <p className="page-sub">
+        <strong>Open a district to work it or hand it over.</strong>{' '}
         Influence is not ownership. Four organizations can all be working the same
         streets, and control belongs to whoever has the most of them. You can only
         work a district you already hold or one next to it.

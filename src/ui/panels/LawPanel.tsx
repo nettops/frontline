@@ -41,7 +41,9 @@ export default function LawPanel() {
           {open.length} open · {state.law.casesOpened} ever
         </span>
       </div>
+      {/* Same door, same silence. See `DiplomacyPanel`. */}
       <p className="page-sub">
+        <strong>Open a case to see what they have.</strong>{' '}
         Nobody is watching a meter. Every case here was built out of something you
         actually left behind — a job that went wrong, somebody taken in, a front
         pushed too hard. Stop leaving things and a case runs out of road.
