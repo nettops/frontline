@@ -296,6 +296,26 @@ export default function PlayerPanel() {
             tone={houseNow.neglect >= 50 ? 'hot' : undefined}
           />
           {/*
+             And what it is costing, which the counter never said.
+
+             Round 15 got a button here because a rising counter with no way to
+             act on it is a demand with no answer. Round 17 found the other half
+             of the same fault: the counter had a way to act on it and still
+             never said why you would. One scorer played 137 days from home and
+             wrote that the family "never cost me anything" and was therefore
+             "set dressing" — while neglect was quietly multiplying the odds
+             their own people would remove them, up to 1.9.
+
+             Only when there is something to say. `neglectRisk` is flat at 1
+             until `HOME.depositionFrom`, so a boss who goes home occasionally
+             reads nothing here at all.
+          */}
+          {houseNow.costing && (
+            <p className="hot tiny" style={{ margin: '2px 14px 0' }}>
+              {houseNow.costing}
+            </p>
+          )}
+          {/*
              And a way to actually go.
 
              There was no button here at first, on the reasoning that a pull

@@ -2413,6 +2413,19 @@ other spending a favour *and* nine standing to sell it for cash. A disabled
 button promises nothing now, and the price is on the label. The reason stays in
 body text, which is iteration 5's F10 and is not undone.
 
+**The family at home.** One scorer clicked "Go home" once on day 26, was told
+on day 163 that their last evening at home was 137 days ago, and concluded the
+family was *"a lovely line attached to nothing… a family that cannot be
+neglected at a price is set dressing."* They were wrong about the price and
+right about the screen: `neglectRisk` multiplies the chance the player's own
+people depose him, up to 1.9, and `homeRead` reported the days, the label and
+the names and never mentioned it. Round 15 got a button on that panel because a
+rising counter with no way to act on it is a demand with no answer; this is the
+other half of the same fault, a counter that could be acted on and never said
+why you would. It says so now, in words rather than as a multiplier, and only
+once there is something to say — `neglectRisk` is flat at 1 until
+`HOME.depositionFrom`, so a boss who goes home occasionally still reads nothing.
+
 **The Businesses table's horizontal scroll**, reported by two scorers, is left
 as it is. Iteration 8 measured that overflow, found the table was already 49px
 over before the column that appeared to cause it, and recorded the wrap

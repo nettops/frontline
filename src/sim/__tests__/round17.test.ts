@@ -20,6 +20,8 @@ import { arcs } from '../arcs';
 import { canCase, caseJob } from '../verbs';
 import { canAcquire } from '../business';
 import { canSpendFavour, figure } from '../civic';
+import { home, homeRead, neglectRisk } from '../personal';
+import { HOME } from '../../config/personal';
 import { GEN_DEFS } from '../eventgen';
 import { AGENCIES } from '../../config/lawEnforcement';
 import { CIVIC_FIGURES, CIVIC } from '../../config/civic';
@@ -234,5 +236,55 @@ describe('a week spent watching a place is visible while it runs', () => {
     expect(again.ok).toBe(false);
     expect(again.message, 'still just "something"').not.toBe('You are already looking at something.');
     expect(again.message.length).toBeGreaterThan(30);
+  });
+});
+
+/**
+ * The family at home, and the price nobody was told about.
+ *
+ * A round-17 scorer clicked "Go home" once on day 26, was told on day 163 that
+ * their last evening at home was 137 days ago, and concluded the family was
+ * *"a lovely line attached to nothing… a family that cannot be neglected at a
+ * price is set dressing."*
+ *
+ * They were wrong about the price and right about the screen. `neglectRisk`
+ * multiplies the chance the player's own people depose him, up to
+ * `HOME.depositionAtWorst`, and `ladder.probe` measures careers ending at 1.9.
+ * `homeRead` reported the days, the label and the names and never mentioned it.
+ *
+ * Round 15 got a button on this panel because a rising counter with no way to
+ * act on it is a demand with no answer. This is the other half: a counter that
+ * could be acted on and never said why you would.
+ */
+describe('being away from home says what it costs', () => {
+  it('says nothing at all while it is costing nothing', () => {
+    const state = game();
+    const house = home(state);
+    house.neglect = HOME.depositionFrom - 1;
+    expect(neglectRisk(state)).toBe(1);
+    expect(
+      homeRead(state).costing,
+      'a penalty everybody carries is a tax, and this is not one',
+    ).toBeNull();
+  });
+
+  it('says so once it starts to bite', () => {
+    const state = game();
+    home(state).neglect = 100;
+    expect(neglectRisk(state)).toBeGreaterThan(1);
+    const line = homeRead(state).costing;
+    expect(line, 'the counter is back to being attached to nothing').toBeTruthy();
+    expect(line!.length).toBeGreaterThan(20);
+  });
+
+  /**
+   * In the register of the rest of the screen. The multiplier is a number the
+   * game shows nowhere else, and "x1.6" on a panel about a man's family would
+   * be the wrong voice entirely.
+   */
+  it('says it in words rather than as a multiplier', () => {
+    const state = game();
+    home(state).neglect = 100;
+    expect(homeRead(state).costing).not.toMatch(/\d/);
   });
 });
