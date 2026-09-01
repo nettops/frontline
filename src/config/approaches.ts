@@ -66,11 +66,55 @@ export const APPROACH = {
    * until `reassure` was added — heat has laying low, a grudge has the
    * conversation, being broke has the job board. This is the other half of
    * that repair: the register exists, and now the man it is for can ask.
+   *
+   * **A floor, and on its own it was the whole gate, which measurement said
+   * was wrong.** Across twelve careers this branch was 6,331 of 6,353
+   * approaches — 99.7% of everything the doorway ever said — and the list sat
+   * at its cap of three from day 90 onward. The file above states the property
+   * it is tuned against, and it was not holding: *most people, most weeks, are
+   * not at your door.* Somebody was, on 71% of days, saying the same sentence.
+   *
+   * The cause is not this number. Crew fear is a one-way ratchet — seventeen
+   * places add to it against a 1.5-a-week settle — so a career that sends
+   * anybody out at all arrives at a median crew fear of 94 by day 300, and a
+   * career that never works stays at 48. An absolute bar of 65 is therefore a
+   * bar on *having played the game*, which is not a thing a man would come and
+   * tell you about.
    */
   fearAsksAbove: 65,
 
+  /**
+   * ...and how far above his own nerve it has to have gone.
+   *
+   * `fearBase` is what this man was rolled at — `npc.ts` keeps it so his fear
+   * can settle back toward who he is, and it is the only thing in the game
+   * that knows the difference between a man who is frightened and a man who is
+   * jumpy. Read here for the same reason: a fixed bar says nothing about
+   * somebody rolled at 68, and everything about somebody rolled at 15.
+   *
+   * This is the rule the grievance branch already follows, stated as a number.
+   * A high stat is a level; this game speaks in events, so the question is
+   * whether something has *changed* for him.
+   */
+  fearRiseAbove: 25,
+
   /** How recent a memory has to be to still be the thing he leads with. */
   memoryFreshDays: 30,
+
+  /**
+   * The things that frighten a man, as against the things that aggrieve him.
+   *
+   * The fear branch used to accept any bad memory, which is how it came to be
+   * fired by a missed wage packet. Being short a week is a grudge and has its
+   * own line further down; what makes somebody frightened is watching what the
+   * work does to people — an arrest on a job you sent him on, an injury, a
+   * friend who did not come back, or being leaned on by you.
+   *
+   * Named here rather than derived from `tone`, because "bad" is a broad
+   * church and the whole repair is that a man arriving at your door should be
+   * able to say which thing he is arriving about.
+   */
+  frightenedBy: ['took_a_charge', 'was_hurt', 'lost_a_friend', 'was_leaned_on'] as const,
 
   /**
    * Days left on a promise at which he stops asking politely.
