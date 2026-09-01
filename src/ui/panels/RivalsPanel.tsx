@@ -66,7 +66,9 @@ export default function RivalsPanel() {
         <h1 className="page-title">Rivals</h1>
         <span className="tiny">{all.length} organizations</span>
       </div>
+      {/* Same door, same silence. See `DiplomacyPanel`. */}
       <p className="page-sub">
+        <strong>Open a family to see what you have on them.</strong>{' '}
         Three other families are working the same city, and they are not waiting for
         you. What you know about any of them depends entirely on how much ground you
         share — you learn about people by standing near them.

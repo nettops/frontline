@@ -224,7 +224,9 @@ export default function OperationsPanel() {
           {free.length} available · {formatMoney(totalFunds(state))} on hand
         </span>
       </div>
+      {/* Same door, same silence. See `DiplomacyPanel`. */}
       <p className="page-sub">
+        <strong>Open a job to put a crew on it.</strong>{' '}
         Every job takes people off the street for its duration and adds to what the
         world knows about you. The odds you are shown are the odds you get.
       </p>
