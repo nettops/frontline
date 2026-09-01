@@ -53,7 +53,12 @@ import {
   operationCost,
 } from './operations';
 import { totalFunds } from './economy';
-import { OPERATION_BY_ID, type ApproachId } from '../config/operations';
+import {
+  APPROACH_BY_ID,
+  DEFAULT_APPROACH,
+  OPERATION_BY_ID,
+  type ApproachId,
+} from '../config/operations';
 import { PATTERN } from '../config/standingOrders';
 import { territoryDef } from './territory';
 import type { SendPolicy } from './scores';
@@ -110,9 +115,19 @@ export function setStanding(
     status: 'standing',
   };
   standingList(state).push(order);
+  /*
+     The approach is named here because the order keeps it for life.
+
+     It is read once, off the picker, and never looked at again — so a boss who
+     later switches to Heavy for one score has not switched this. A round-16
+     tester did exactly that and spent the rest of the career wrong about how
+     their automated nights were going out. The log is where a decision is
+     recorded in this game, so it says which one was made.
+  */
   addLog(
     state,
-    `${def.name} in ${territoryDef(territoryId).name} runs itself now, until you say otherwise.`,
+    `${def.name} in ${territoryDef(territoryId).name} runs itself now — ` +
+      `${APPROACH_BY_ID[approach ?? DEFAULT_APPROACH].name.toLowerCase()}, until you say otherwise.`,
     'neutral',
   );
   return order;

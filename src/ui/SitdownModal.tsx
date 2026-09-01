@@ -80,11 +80,29 @@ export default function SitdownModal({ onDone }: { onDone: (days: number) => voi
     play(landed ? 'good' : 'tick');
   };
 
+  /*
+     It used to shake on nothing at all, and charge you a day for it.
+
+     `closeDeal` refuses when the money is not there — `acquireBusiness`
+     returns null and it comes back "It did not come off." — and this handler
+     threw that away. The button rendered enabled, the click did nothing
+     visible, the *success* cue played, and `onDone(1)` spent a day. Round
+     16's tester verified `disabled === false` in the DOM and filed it as a
+     button that eats the click; it was worse than that.
+
+     So the outcome is read now. A refusal keeps the room open, keeps the day,
+     and says why — and the button is disabled before it gets that far, with
+     the shortfall in its title, which is the rule every other refusal in this
+     game already follows.
+  */
   const shake = () => {
-    mutate((s) => closeDeal(s), true);
-    play('good');
-    // Buying premises is a day's work, the same as everything else the room does.
-    onDone(1);
+    let done = false;
+    mutate((s) => {
+      done = closeDeal(s).ok;
+    }, true);
+    play(done ? 'good' : 'tick');
+    // Buying premises is a day's work. Failing to is not.
+    if (done) onDone(1);
   };
 
   const walkOut = () => {
@@ -136,6 +154,17 @@ export default function SitdownModal({ onDone }: { onDone: (days: number) => voi
      survive the afternoon.
   */
   const deal = sit.deal ?? null;
+  /*
+     Money you actually have, on the terms `acquireBusiness` will settle on.
+
+     Holdings count, and that is deliberate rather than sloppy: `canAcquire`
+     includes them for the reason written there — a boss with his earnings put
+     away should not be told he cannot afford the thing that money is for.
+     Reading them the same way here means the button and the purchase agree.
+  */
+  const inHand = state.org.cash + state.org.dirtyCash + (state.org.holdings ?? 0);
+  const short = deal ? deal.ask - inHand : 0;
+
   const name = npc
     ? npc.name
     : deal
@@ -334,8 +363,19 @@ export default function SitdownModal({ onDone }: { onDone: (days: number) => voi
              sit-down has.
           */}
           {deal && !sit.walkedOut && (
-            <button className="room-shake" onClick={shake}>
+            <button
+              className="room-shake"
+              disabled={short > 0}
+              title={
+                short > 0
+                  ? `${formatMoney(deal.ask)} and you have ${formatMoney(inHand)} — ` +
+                    `${formatMoney(short)} short.`
+                  : ''
+              }
+              onClick={shake}
+            >
               shake on {formatMoney(deal.ask)}
+              {short > 0 && <span className="faint"> · {formatMoney(short)} short</span>}
             </button>
           )}
           <button className="room-leave" onClick={walkOut}>

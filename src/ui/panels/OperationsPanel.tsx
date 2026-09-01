@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { canCase, caseJob } from '../../sim/verbs';
 import { hasVerb } from '../../sim/build';
+import { STAT_BY_ID } from '../../config/build';
 import { useGame, mutate } from '../../store';
 import { Panel, Empty, Bar, StatRead } from '../components';
 import {
@@ -12,6 +13,7 @@ import {
   crewNeeded,
   heatScale,
   launchOperation,
+  approachOf,
   successBreakdown,
   sentimentOutlook,
 } from '../../sim/operations';
@@ -340,8 +342,23 @@ export default function OperationsPanel() {
               <div key={o.id} className="kv">
                 <span className="kv-key">
                   <span className="name-main">{d?.name ?? 'A job'}</span>{' '}
+                  {/*
+                     The approach it is running, which used to be the one thing
+                     about a standing order the player could not find out.
+
+                     It is recorded at set-time from the picker below and then
+                     kept for the life of the order — so changing the picker
+                     afterwards moves the next hand-run job and leaves this one
+                     where it was. A round-16 tester set an order while working
+                     quiet, later switched to Heavy for a score, and spent the
+                     rest of the career believing every automated night was
+                     going out loud. Nothing on screen could have told them
+                     otherwise. `approachOf` rather than `o.approach`, because
+                     orders written before the field existed have none.
+                  */}
                   <span className="faint tiny">
-                    in {territoryDef(o.territoryId)?.name} · {o.how === 'best' ? 'best people' : 'whoever is rested'} ·
+                    in {territoryDef(o.territoryId)?.name} · {APPROACH_BY_ID[approachOf(o)].name.toLowerCase()} ·{' '}
+                    {o.how === 'best' ? 'best people' : 'whoever is rested'} ·
                     fired {o.launched} {o.launched === 1 ? 'time' : 'times'} ·{' '}
                     {groove(patternOn(state, o.defId, o.territoryId))}
                   </span>
@@ -526,6 +543,14 @@ export default function OperationsPanel() {
                Offered on the assemble screen because that is where a boss is
                already deciding about this job in this district, and the verb is
                about this pair and no other.
+
+               Label and blurb are read from `config/build.ts` rather than
+               written here, and that is the fix rather than a tidy-up. The
+               Yourself panel sells this point as "Case a job"; this button
+               used to be called "Spend the week on it", and a round-16 tester
+               bought the point, searched five screens for the word "case",
+               and found the button on day 94 — 69 days of owning an ability
+               they could not locate. One ability, one name, in one place.
             */}
           {hasVerb(state, 'method') && (
             <p className="tiny" style={{ margin: '0 0 8px' }}>
@@ -535,11 +560,9 @@ export default function OperationsPanel() {
                 title={canCase(state, territoryId).message}
                 onClick={() => mutate((g) => caseJob(g, def.id, territoryId), false)}
               >
-                Spend the week on it
+                {STAT_BY_ID.method.verb}
               </button>{' '}
-              <span className="faint">
-                A week watching the place, and it runs like a planned job.
-              </span>
+              <span className="faint">{STAT_BY_ID.method.verbBlurb}</span>
             </p>
           )}
 

@@ -373,7 +373,10 @@ export function canCase(state: GameState, territoryId: string): Check {
   if (stop) return stop;
   if (state.org.cased) return no('You are already looking at something.');
   if (!state.territories[territoryId]) return no('No such district.');
-  return yes(`Spend the week on it`);
+  // Not a second name for the verb — the button reads its label from
+  // `config/build.ts`, which is where the point that sold it is written. This
+  // is the tooltip, and it says the constraint the label cannot.
+  return yes('A week on it, and you can only be looking at one thing at a time.');
 }
 
 export function caseJob(state: GameState, defId: string, territoryId: string): Check {
