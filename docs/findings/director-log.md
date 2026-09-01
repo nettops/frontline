@@ -2403,6 +2403,23 @@ a fifth attempt of the kind iteration 9 records four of.
 **The late-game flatline** is the shelved dominant-job problem, seen from the
 player's side by all three.
 
+### One more, and one deliberately left alone
+
+**The favour buttons.** Two scorers described one fault from opposite sides: the
+hover on "Ask for work" advertised *"Money now, and 9 standing off them"* on a
+button that would not press, directly above the row explaining why — and the
+pair look identical while doing opposite things, one spending a favour and the
+other spending a favour *and* nine standing to sell it for cash. A disabled
+button promises nothing now, and the price is on the label. The reason stays in
+body text, which is iteration 5's F10 and is not undone.
+
+**The Businesses table's horizontal scroll**, reported by two scorers, is left
+as it is. Iteration 8 measured that overflow, found the table was already 49px
+over before the column that appeared to cause it, and recorded the wrap
+scrolling horizontally as the decision. Two testers disliking a recorded
+decision is a finding about the decision, not licence to reverse it blind —
+but it is now two rounds running, which is worth somebody looking at properly.
+
 ### On method
 
 The harness had to be rebuilt for this round: the documented one assumes a

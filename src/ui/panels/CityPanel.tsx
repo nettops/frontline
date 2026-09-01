@@ -396,18 +396,38 @@ function Favours() {
                      screens: the choice is only legible if both prices are
                      visible at the moment of choosing.
                   */}
+                  {/*
+                     The price is on the label, and the tooltip goes quiet when
+                     the button is dead.
+
+                     Two round-17 scorers reported this pair, and between them
+                     they described one fault from both sides. The first said
+                     the hover advertised *"Money now, and 9 standing off them"*
+                     — the reward — on a button that would not press, directly
+                     above the row explaining why it would not. The second said
+                     the two buttons look like a pair and do opposite things:
+                     one spends a favour, and this one spends a favour *and*
+                     nine standing to sell it back for cash.
+
+                     The reason stays in body text below, which is iteration 5's
+                     F10 and is not being undone here. What changes is that a
+                     disabled button no longer promises anything, and that the
+                     standing price is visible without hovering at all — which
+                     is the only thing that makes the choice between the two
+                     legible at the moment of making it.
+                  */}
                   <button
                     className="btn"
                     disabled={!!p.blocked}
                     style={{ marginLeft: 6 }}
-                    title={`Money now, and ${CIVIC_WORK.standingCost} standing off them`}
+                    title={p.blocked ? undefined : 'Money now, and it costs you with them'}
                     onClick={() =>
                       mutate((s) => {
                         setNote(askForWork(s, p.id).message);
                       })
                     }
                   >
-                    Ask for work
+                    Ask for work · {CIVIC_WORK.standingCost} standing
                   </button>
                   {/*
                      The reason renders as a refusal, in body text, not as a
