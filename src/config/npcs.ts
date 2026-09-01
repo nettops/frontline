@@ -460,6 +460,30 @@ export const DRIFT = {
    * absolute bar. See `config/approaches.ts`.
    */
   fearSettlePerTick: 1.5,
+
+  /**
+   * The share of the distance back to himself that a man closes each week.
+   *
+   * A share rather than a flat step, and the argument is the one
+   * `HEAT_DECAY_SHARE` already makes in this codebase about the identical
+   * fault: *"a flat rate clears slowest exactly where it is worst."* Inflow
+   * scales with everything the player does and outflow scaled with nothing, so
+   * there was no equilibrium to find — only a ceiling to arrive at.
+   *
+   *     per man per week        in    off    net
+   *     grinds them daily     2.84   1.01   +1.84
+   *     works them every 3rd  2.20   0.97   +1.22
+   *     never sends anybody   1.11   0.49   +0.62
+   *
+   * A flat 1.5 cannot balance 2.84 however faithfully it is applied, and 43
+   * weeks of a 1.84 surplus is 80 points on a stat that starts at 43. With a
+   * share the resting point is `inflow / share`, so a crew settles where the
+   * boss's own conduct puts it instead of at 100 regardless.
+   *
+   * Swept against the distribution rather than picked — see the table in
+   * `DRIFT.fearSettlePerTick` above for what it replaced.
+   */
+  fearSettleShare: 0.14,
   /** Player leadership resists all decay. At leadership 20, ~+3 per tick. */
   leadershipResistFactor: 0.16,
   /** Ambition creeps up in people who taste success. */
