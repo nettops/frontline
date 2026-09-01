@@ -44,6 +44,34 @@ export const INFORMANT = {
    * could not check: somebody has to actually be building a case, because a man
    * with nothing to be frightened of has nobody to talk to.
    */
+  /**
+   * ...and the one of the three that decides nothing.
+   *
+   * Measured across twelve careers at the weekly check, as the share of
+   * man-weeks each gate lets through **on its own**:
+   *
+   *     boss who...          fear>55   loyalty<38   memory>=1   all three
+   *     grinds them daily        76%          18%         85%         15%
+   *     works them every 3rd     51%          15%         87%          8%
+   *
+   * **Loyalty is the binding gate and fear is nearly free.** Fear is the only
+   * thing stopping a man in 3% of man-weeks for the first boss and 7% for the
+   * second, so moving this number is close to a no-op: it cannot turn anybody
+   * who is not already disloyal and carrying something.
+   *
+   * That is written here because it looks like the opposite. Crew fear rests
+   * at a median of 71 for a working crew once `settleFear` is doing its job,
+   * which reads as "everybody clears the bar" — true, and not the same thing
+   * as "the bar decides who talks". Raising it makes an already-rare mechanic
+   * rarer and changes nothing else.
+   *
+   * **The rate itself is unmeasured, and that is the open question.** These
+   * careers finished with one informant alive apiece, and nothing in the suite
+   * checks that: `informants.probe` plants its informant directly, because it
+   * exists to measure whether a player can read the record rather than whether
+   * the record ever gets written. If this number is ever revisited it should
+   * be against a probe of the natural flip rate, which does not yet exist.
+   */
   fearAbove: 55,
   loyaltyBelow: 38,
   /** Weight from what he is carrying, via `informFromMemory`. */
