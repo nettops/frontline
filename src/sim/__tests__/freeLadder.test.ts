@@ -96,17 +96,50 @@
  * will do this, because the free job is the cheapest thing on the board to
  * keep running whatever currency you charge in.
  *
- * ## What that leaves
+ * ## And the fourth guess was wrong for the same reason as the third
  *
- * Three specific repairs have now been measured and rejected — retiming, more
- * capital, a second currency — and each failed by damaging something else the
- * job is load-bearing for. What has not been tried is limiting **repetition**
- * rather than pricing the job, and the game already has that mechanic:
- * `PATTERN` in `config/standingOrders.ts` wears a groove on a job-and-district
- * pair, charges it in heat and odds, and fades when nobody works the pair. It
- * reaches automated play only — `patternOn` sums over `state.standing`, so a
- * player who hand-runs the same crime forty times a career wears no groove at
- * all. That is the next thing to try and it is not a small change.
+ * Limit repetition rather than price the job. `PATTERN` already does exactly
+ * that — a groove worn on a job-and-district pair, charged in heat and odds,
+ * fading when nobody works the pair — and `config/standingOrders.ts` already
+ * claimed it applied here: *"charged to anybody working the pair, not only to
+ * the order; the police watch the pattern, not your minutes. Without that the
+ * play is to let the order wear the groove and hand-run the same job past it
+ * for free."* The accrual never left `tickStandingOrders`, so a player who set
+ * no order wore no groove at all, and the exploit the config names was open.
+ *
+ * It was moved onto a pair-keyed book charged by `launchOperation`, so a
+ * hand-run job, a standing order and the autopilot all wore it. The whole game
+ * deflated about thirty percent — jobs finished 291 to 200, the odds work
+ * actually ran at 57% to 43%, laundering capacity used 82% to 45%, the fronts
+ * arm's estate $2.65M to $1.09M — and it broke the decision `PATTERN` exists
+ * to create: moving a standing order stopped beating leaving it, 14 careers of
+ * 36 against a bar of 18.
+ *
+ * And on the thing it was for:
+ *
+ *                       Call In Tribute   paid tier-4   ratio
+ *     before                      1,392           711   1.96
+ *     grooves on hand play        1,110           214   5.19
+ *
+ * ## The finding, which is worth more than any of the four attempts
+ *
+ * **Call In Tribute is dominant because it is the most robust thing on the
+ * board, so any cost applied broadly removes its competitors before it
+ * removes it.** A second currency killed Port Operation outright (175 to 0)
+ * and left Tribute higher than it started. A repetition tax cut Tribute by
+ * 20% and the paid tier-4 jobs by 70%. Both made the imbalance the change was
+ * aimed at measurably worse, by the same mechanism, from opposite directions.
+ *
+ * The corollary is that the repair has to be **specific to this job** rather
+ * than a rule the whole board obeys — a cooldown on Tribute itself, or
+ * diminishing returns on running it again — and that anything shaped like a
+ * new system will fail here for a fifth time.
+ *
+ * A second corollary, about method rather than about the game: `PATTERN`'s
+ * numbers were swept against automated play, and the config says so — *"only
+ * the automated arms move"*. Applying them to all play without re-sweeping
+ * used a calibration outside the domain it was calibrated in. If the groove is
+ * ever extended, its four constants need their own sweep first.
  *
  * The tester is not contradicted by this. They had $5,600 at day 90, below the
  * 25th percentile of $10,914 at day 62 — a career in the bottom quartile, where
