@@ -66,6 +66,48 @@
  * dominance by risk-free-ness, and it is a different lever from anything tried
  * here.
  *
+ * ## And the third guess was wrong too, in a more useful way
+ *
+ * If the fault is risk-free-ness, charge it something that is not money. Call
+ * In Tribute's own description promises exactly that — *"You are spending
+ * standing rather than money, and standing spent this way is noticed"* — and
+ * it spends nothing; `CIVIC_WORK` charges nine standing for a $5,000 errand of
+ * the identical fiction, so the small version of leaning on the city was
+ * priced and the large one was free. An optional `standingCost` was built, set
+ * at 12 here and 20 on Enforce the Peace, and charged at launch beside the
+ * money so it was a stake rather than a bill.
+ *
+ * `ladder.probe` threw it out on three counts at once:
+ *
+ *     careers where any civic figure owes you    4/36, needs 18
+ *     careers reaching Boss                      0/36, needs 8
+ *     Call In Tribute launches                   1,392 -> 1,495
+ *
+ * **Standing is not a resource pool, it is a set of thresholds.** Favours are
+ * granted above `owesAbove` — 68 for the captain, 78 for the judge — and the
+ * rank ladder gates on `owedTotal`, so what the drain actually did was hold
+ * every figure permanently under every bar and delete the civic network from
+ * the game. Twelve every eight days against `CIVIC.driftPerWeek` of 6.2 is a
+ * net loss with no floor.
+ *
+ * And it did not even do the job it was for. Tribute went *up*, because Port
+ * Operation went from 175 launches to nought: the bot lost its alternatives
+ * before it lost the dominant one. Any cost that scales with what a job pays
+ * will do this, because the free job is the cheapest thing on the board to
+ * keep running whatever currency you charge in.
+ *
+ * ## What that leaves
+ *
+ * Three specific repairs have now been measured and rejected — retiming, more
+ * capital, a second currency — and each failed by damaging something else the
+ * job is load-bearing for. What has not been tried is limiting **repetition**
+ * rather than pricing the job, and the game already has that mechanic:
+ * `PATTERN` in `config/standingOrders.ts` wears a groove on a job-and-district
+ * pair, charges it in heat and odds, and fades when nobody works the pair. It
+ * reaches automated play only — `patternOn` sums over `state.standing`, so a
+ * player who hand-runs the same crime forty times a career wears no groove at
+ * all. That is the next thing to try and it is not a small change.
+ *
  * The tester is not contradicted by this. They had $5,600 at day 90, below the
  * 25th percentile of $10,914 at day 62 — a career in the bottom quartile, where
  * nine days is a long time. **The wall is real from where they sat and not real
