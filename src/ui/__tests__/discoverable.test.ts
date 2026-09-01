@@ -31,6 +31,7 @@ const RAIL = src('../Rail.tsx');
 const CREW = src('../panels/CrewPanel.tsx');
 const DASHBOARD = src('../panels/Dashboard.tsx');
 const SUCCESSION = src('../panels/SuccessionPanel.tsx');
+const CITY = src('../panels/CityPanel.tsx');
 
 /**
  * What a reader sees, not how JSX happened to wrap it.
@@ -289,5 +290,37 @@ describe('the way in to what you have running', () => {
     const block = DASHBOARD.slice(at, at + 900);
     expect(block).toContain('a.where');
     expect(block).toContain('a.ends');
+  });
+});
+
+/**
+ * A dead button that promises a reward.
+ *
+ * Two round-17 scorers described one fault from opposite sides: the hover on
+ * "Ask for work" advertised *"Money now, and 9 standing off them"* on a button
+ * that would not press, directly above the row saying why — and the two buttons
+ * on that row look like a pair while doing opposite things, one spending a
+ * favour and the other spending a favour *and* nine standing to sell it for
+ * cash.
+ *
+ * The reason stays in body text, which is iteration 5's F10 and is not undone
+ * here.
+ */
+describe('the favour buttons', () => {
+  it('say nothing on hover when they cannot be pressed', () => {
+    const at = CITY.indexOf('Ask for work');
+    expect(at, 'the button has moved or been renamed').toBeGreaterThan(-1);
+    const block = CITY.slice(Math.max(0, at - 900), at);
+    expect(block, 'a disabled button still advertises its reward').toContain('p.blocked ?');
+  });
+
+  it('put the price where it can be read without hovering', () => {
+    expect(flat(CITY)).toContain('ask for work ·');
+    expect(CITY).toContain('CIVIC_WORK.standingCost');
+  });
+
+  /** And the reason is still prose in the row, not a tooltip. */
+  it('keep the refusal in body text', () => {
+    expect(CITY).toContain('{p.blocked}');
   });
 });
