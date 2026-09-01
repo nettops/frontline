@@ -434,6 +434,30 @@ export const DRIFT = {
    * bad night should still be in a man weeks later, and gone by the season.
    * Symmetric, so a man talked down below his own baseline climbs back to it
    * as well — the number is who he is, not a floor on how bad it can get.
+   *
+   * **It did not hold, and the record above overstates what it bought.**
+   * Re-measured across twelve careers while fixing the doorway, with the crew
+   * median taken at six points:
+   *
+   *     day                    30   60   90  150  210  300
+   *     grinds them daily      49   64   89   99  100    -
+   *     works them every 3rd   48   48   50   64   94    -
+   *     never sends anybody    48   48   49   48   54    -
+   *
+   * So the settle holds a crew that is not being worked and loses to one that
+   * is. 1.5 a week is roughly one arrest every ten weeks; `ARREST_FEAR_INCREASE`
+   * alone is 15 and `STAGE_ADVANCE_FEAR` is 8. The ratchet is slower than it
+   * was and it is still a ratchet, and the "90 from then on" above should read
+   * "94 by day 300 for anybody who plays".
+   *
+   * Deliberately **not** raised here. Every stat-gated system downstream reads
+   * this — `heatFearLoyalty` scales on `fear / 100`, `BEHAVIOUR.informantFearAbove`
+   * gates who talks to the police — so the number is a balance change across
+   * several systems and belongs in its own measured piece of work rather than
+   * as a side effect of a UI repair. What was done instead is local: the one
+   * consumer that had turned into wallpaper because of this, the doorway's
+   * fear branch, now reads the *rise* off a man's own `fearBase` rather than an
+   * absolute bar. See `config/approaches.ts`.
    */
   fearSettlePerTick: 1.5,
   /** Player leadership resists all decay. At leadership 20, ~+3 per tick. */

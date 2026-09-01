@@ -8,6 +8,7 @@ import { eligibleHeirs, heirOf } from '../sim/succession';
 import { crewList } from '../sim/npc';
 import { needsSteward } from '../sim/delegation';
 import { pointsLeft } from '../sim/build';
+import { approaches } from '../sim/approaches';
 
 export type PanelId =
   | 'dashboard'
@@ -124,6 +125,40 @@ export default function Rail({
      one screen the opening hour never mentions.
   */
   const unspent = pointsLeft(state);
+  /*
+     Somebody standing in the doorway.
+
+     The engagement work built `approaches.ts` so that men with a reason come
+     to the boss instead of only the other way round, and it shipped rendering
+     in exactly one place: a panel on the Overview. All three round-16 testers
+     missed it for their entire careers.
+
+     A rail badge is the route, and it needed the read to be worth one first.
+     Measured before this was added, the doorway was lit on 71% of days with
+     the list at its cap — a badge on that is wallpaper, and the rule above
+     this block already says so. Worse, it was 71% for a boss who grinds his
+     crew and 76% for one who barely works them, so it said nothing about how
+     the player played.
+
+     With the fear branch reading the rise off a man's own nerve it does
+     (`__tests__/approaches.test.ts` runs these and guards the gap):
+
+         promotes, works them every third day     0%
+         promotes, grinds them daily              9%
+         never promotes, works them every third  40%
+         never promotes, grinds them daily       53%
+
+     A boss who never advances anybody should have a queue at his door, and
+     now he can see it without happening to be on the right screen.
+
+     `crew`'s own badge stays, and is a different sentence: it counts men who
+     are carrying something, which is a standing condition, where this is
+     somebody who has come to say it today. They do not double up in practice
+     — across the same careers the crew badge lit on 0% of days for every boss
+     but the one who refuses everybody, and 6% for him.
+  */
+  const waiting = approaches(state);
+  const urgent = waiting.some((a) => a.urgency === 'now');
   const watching = state.mode === 'simulation';
   const entries = watching ? BUILT.filter((e) => e.city) : BUILT;
 
@@ -222,6 +257,18 @@ export default function Rail({
           {entry.id === 'succession' && noHeir && (
             <span className="rail-badge" title="Nobody is named to take over. Name a successor.">
               !
+            </span>
+          )}
+          {entry.id === 'dashboard' && waiting.length > 0 && (
+            <span
+              className="rail-badge"
+              title={
+                `${waiting.length === 1 ? 'Somebody is' : `${waiting.length} people are`} ` +
+                `waiting to see you${urgent ? ', and one of them cannot wait' : ''}. ` +
+                `Open them from the Overview.`
+              }
+            >
+              {urgent ? `${waiting.length}!` : waiting.length}
             </span>
           )}
           {entry.id === 'dashboard' && pending > 0 && (

@@ -26,6 +26,11 @@ import { approaches } from '../approaches';
 import { makePromise } from '../promises';
 import { remember } from '../memory';
 import { openSitdown, endSitdown } from '../sitdown';
+import { availableOperations, launchOperation } from '../operations';
+import { canRecruit, canPromote, promote, recruit } from '../crew';
+import { operableTerritories } from '../territory';
+import { isLayingLow } from '../heat';
+import { runDaysSolvent, median } from './helpers';
 import { APPROACH } from '../../config/approaches';
 import { PROMISES } from '../../config/promises';
 import type { GameState, Npc } from '../types';
@@ -198,6 +203,75 @@ describe('who is waiting to see you', () => {
   });
 
   /**
+   * The branch that was ninety-nine point seven percent of the feature.
+   *
+   * Gated on `fear >= 65` and any bad memory, this fired for the whole crew
+   * from about day 90 of every career: crew fear is a one-way ratchet, so a
+   * boss who sends anybody out at all reaches a median crew fear of 94 by day
+   * 300 while one who never works stays at 48. The bar was measuring whether
+   * the player had played. The doorway was lit on 71% of days at its cap of
+   * three, saying one sentence.
+   */
+  it('does not come for a man who is frightened because he always was', () => {
+    const state = game();
+    calm(state);
+    const npc = someone(state);
+    // Rolled jumpy, and no more frightened now than the day he was hired.
+    npc.fearBase = APPROACH.fearAsksAbove + 5;
+    npc.stats.fear = APPROACH.fearAsksAbove + 5;
+    remember(npc, state.day, 'took_a_charge');
+    expect(approaches(state)).toHaveLength(0);
+
+    // The same man, after something moved him well off his own nerve.
+    npc.stats.fear = npc.fearBase + APPROACH.fearRiseAbove;
+    expect(approaches(state)).toHaveLength(1);
+  });
+
+  /**
+   * And it has to be a fright rather than any bad week.
+   *
+   * `tone: 'bad'` covers going unpaid and being passed over as readily as it
+   * covers an arrest, so the old gate had a man coming to be reassured about
+   * his wages. Those are grudges and have their own lines.
+   */
+  it('comes for a fright, not for a grudge', () => {
+    const state = game();
+    calm(state);
+    const npc = someone(state);
+    npc.fearBase = 20;
+    npc.stats.fear = Math.max(APPROACH.fearAsksAbove, 20 + APPROACH.fearRiseAbove) + 5;
+
+    // Aggrieved, and nothing has frightened him: the fear branch stays shut.
+    // (`went_unpaid` has its own line, which is why this asserts the text.)
+    remember(npc, state.day, 'passed_over');
+    expect(approaches(state)).toHaveLength(0);
+
+    remember(npc, state.day, 'was_hurt');
+    const waiting = approaches(state);
+    expect(waiting).toHaveLength(1);
+    expect(waiting[0].text).toContain('waiting outside');
+  });
+
+  /**
+   * Every kind named in config actually reaches him.
+   *
+   * The list is a design statement about what frightens somebody, and a
+   * memory kind renamed out from under it would silently narrow the branch
+   * rather than break anything.
+   */
+  it('is frightened by everything the config says frightens him', () => {
+    for (const kind of APPROACH.frightenedBy) {
+      const state = game();
+      calm(state);
+      const npc = someone(state);
+      npc.fearBase = 20;
+      npc.stats.fear = Math.max(APPROACH.fearAsksAbove, 20 + APPROACH.fearRiseAbove) + 5;
+      remember(npc, state.day, kind);
+      expect(approaches(state), `${kind} does not bring him`).toHaveLength(1);
+    }
+  });
+
+  /**
    * It reads hidden stats and must never print one.
    *
    * The licence for reading grievance is that the man is telling you, and
@@ -278,5 +352,156 @@ describe('the read changes nothing', () => {
     const state = game(9);
     delete (state as { promises?: unknown }).promises;
     expect(() => approaches(state)).not.toThrow();
+  });
+
+  /**
+   * And a crew written before anybody had a `fearBase`.
+   *
+   * The fear branch asks how far a man has moved off his own nerve, and an old
+   * save does not record what that was. Falling back to his *current* fear
+   * would read as a rise of zero and silently delete the branch for every
+   * pre-existing crew — so it falls back to the middle of the roll, which is
+   * the same guess `npc.ts` makes for the settle drift.
+   */
+  it('still opens the door for a crew that has no record of its own nerve', () => {
+    const state = game(13);
+    calm(state);
+    const npc = someone(state);
+    delete (npc as { fearBase?: number }).fearBase;
+    npc.stats.fear = 95;
+    remember(npc, state.day, 'took_a_charge');
+    expect(approaches(state)).toHaveLength(1);
+  });
+});
+
+/**
+ * And it is not wallpaper, which is the one property the file is tuned against.
+ *
+ * `config/approaches.ts` states it at the top — *most people, most weeks, are
+ * not at your door* — and it was not holding. Measured across twelve careers,
+ * the doorway was lit on **71% of days** with the list pinned at its cap of
+ * three, and 6,331 of 6,353 approaches were one sentence.
+ *
+ * The cause was the fear branch reading an absolute bar. Crew fear is a
+ * one-way ratchet — seventeen places add to it against a 1.5-a-week settle —
+ * so a career that sends anybody out reaches a median crew fear of 94 by day
+ * 300 while one that never works stays at 48. `fear >= 65` was a bar on having
+ * played the game, and the doorway was measuring the calendar.
+ *
+ * **What is guarded here is the discrimination rather than a threshold.** The
+ * old gate produced 71% for a boss who grinds his crew and 76% for one who
+ * barely works them — the signal did not depend on anything the player did,
+ * which is the whole of what was wrong with it. It now does:
+ *
+ *     promotes, works them every third day     0%
+ *     promotes, grinds them daily              9%
+ *     never promotes, works them every third  40%
+ *     never promotes, grinds them daily       53%
+ *
+ * The mechanism is not authored and is the better for it: a boss who moves
+ * people up sends better crews, better crews come home, and men who come home
+ * do not turn up frightened. A boss who never advances anybody should have a
+ * queue at his door.
+ *
+ * These run the days rather than setting stats, because that is the only way
+ * to catch it: every stat-level test in this file passed throughout the
+ * failure, and would again.
+ */
+describe('the doorway is not always full', () => {
+  /**
+   * A career, played two ways.
+   *
+   * `runDaysSolvent`'s default answer is `answerFirst`, which takes the first
+   * open choice — on a crew memo that is the generous one. Both bosses below
+   * are therefore generous in the memo queue, and the only thing separating
+   * them is whether they promote and how hard they work people. That is
+   * deliberate: it keeps the comparison to one lever rather than three.
+   */
+  function career(seed: number, everyDays: number, promotes: boolean): number {
+    const state = newGame({ name: 'Fill', difficulty: 'normal', seed });
+    let lit = 0;
+    let days = 0;
+    runDaysSolvent(state, 220, {
+      floor: 250_000,
+      onDay: (s, d) => {
+        days++;
+        if (approaches(s).length) lit++;
+        if (d % everyDays === 0 && !isLayingLow(s)) {
+          const free = crewList(s).filter((n) => n.status === 'active');
+          const def = availableOperations(s)
+            .filter((o) => o.crewRequired > 0 && o.crewRequired <= free.length)
+            .sort((a, b) => b.crewRequired - a.crewRequired)[0];
+          const where = operableTerritories(s)[0];
+          if (def && where) {
+            launchOperation(
+              s,
+              def.id,
+              free.slice(0, def.crewRequired).map((n) => n.id),
+              where.territory.id,
+            );
+          }
+        }
+        for (const id of Object.keys(s.recruits)) {
+          if (canRecruit(s, id).ok) {
+            recruit(s, id);
+            break;
+          }
+        }
+        if (promotes) {
+          for (const npc of crewList(s)) {
+            if (canPromote(s, npc).ok) {
+              promote(s, npc.id);
+              break;
+            }
+          }
+        }
+      },
+    });
+    return Math.round((lit / Math.max(1, days)) * 100);
+  }
+
+  const share = (everyDays: number, promotes: boolean) =>
+    median([1, 2, 3, 4, 5, 6].map((seed) => career(seed, everyDays, promotes)));
+
+  /**
+   * The boss the property is written about. Measured at 9%; the bar is set
+   * well above that and well under the 71% the broken gate produced, so this
+   * is a guard rather than a pin — red if the doorway becomes permanent again,
+   * quiet through ordinary tuning.
+   */
+  it('leaves most days quiet for a boss who looks after his people', () => {
+    const pct = share(1, true);
+    expect(
+      pct,
+      `somebody is at the door on ${pct}% of days of a career where people get ` +
+        `moved up; it was 71% when the fear branch read an absolute bar, and this ` +
+        `file is tuned on the opposite property`,
+    ).toBeLessThan(30);
+  });
+
+  /**
+   * And the signal depends on the player, which the old one did not.
+   *
+   * This is the test that would have caught the fault. The broken gate gave
+   * 71% and 76% for these two bosses — indistinguishable, and both wallpaper.
+   */
+  it('is louder for a boss who never advances anybody', () => {
+    const kind = share(1, true);
+    const hard = share(1, false);
+    expect(
+      hard - kind,
+      `a boss who promotes sees the door at ${kind}% and one who never does at ` +
+        `${hard}% — the doorway has stopped depending on how the player plays`,
+    ).toBeGreaterThan(15);
+  });
+
+  /**
+   * And it has not been shut off altogether.
+   *
+   * The failure mode of this repair is the mirror of the fault: a gate tight
+   * enough that nobody ever comes deletes the feature rather than fixing it.
+   */
+  it('still opens for somebody', () => {
+    expect(share(1, false)).toBeGreaterThan(0);
   });
 });

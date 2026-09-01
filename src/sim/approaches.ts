@@ -58,6 +58,7 @@ import { promisesTo, daysLeft } from './promises';
 import { PROMISE, PROMISES } from '../config/promises';
 import { APPROACH } from '../config/approaches';
 import { MEMORIES } from '../config/memories';
+import { STAT_RANGE } from '../config/npcs';
 
 /**
  * How badly he wants the room, which is a statement about his clock.
@@ -114,6 +115,23 @@ function couldAsk(state: GameState, npc: Npc): boolean {
 function freshlyAggrieved(state: GameState, npc: Npc): boolean {
   return npc.memories.some(
     (m) => MEMORIES[m.kind]?.tone === 'bad' && state.day - m.day <= APPROACH.memoryFreshDays,
+  );
+}
+
+/**
+ * And something specifically frightening, which is a narrower question.
+ *
+ * `tone: 'bad'` covers being passed over and going unpaid as readily as it
+ * covers an arrest, and a man does not come looking for reassurance because
+ * his wages were late. `APPROACH.frightenedBy` names the four that are about
+ * what the work does to people; the list lives in config so the answer to
+ * "what frightens somebody" is a design statement rather than a condition
+ * buried in a branch.
+ */
+function freshlyFrightened(state: GameState, npc: Npc): boolean {
+  const kinds: readonly string[] = APPROACH.frightenedBy;
+  return npc.memories.some(
+    (m) => kinds.includes(m.kind) && state.day - m.day <= APPROACH.memoryFreshDays,
   );
 }
 
@@ -193,8 +211,37 @@ function reasonToCome(state: GameState, npc: Npc): Omit<Approach, 'npcId' | 'nam
     };
   }
 
-  // Frightened, and recently given a reason to be. Same rule as the grudge.
-  if (npc.stats.fear >= APPROACH.fearAsksAbove && freshlyAggrieved(state, npc)) {
+  /*
+     Frightened, and recently given a reason to be — measured against his own
+     nerve rather than against a fixed line.
+
+     This branch was 99.7% of everything the doorway ever said. Gated on
+     `fear >= 65` and any bad memory, it fired for the whole crew from about
+     day 90 of every career, because crew fear is a one-way ratchet: seventeen
+     places add to it against a 1.5-a-week settle, so a career that sends
+     anybody out at all reaches a median crew fear of 94 by day 300 while one
+     that never works stays at 48. The bar was measuring whether the player had
+     played, and the list sat at its cap of three saying one sentence.
+
+     Three things now have to be true, and each is a different question.
+     He is frightened by the standards of the game (`fearAsksAbove`); he is
+     frightened by *his own* standards, which is what `fearBase` is kept for
+     and what separates a frightened man from a jumpy one; and something
+     specifically frightening happened to him lately, rather than merely
+     something bad. A missed wage packet is a grudge and has its own line
+     below.
+
+     A save written before `fearBase` existed has no record of who anybody was,
+     so it settles toward the middle of the roll — the same fallback `npc.ts`
+     uses for the same reason, and deliberately not `npc.stats.fear` itself,
+     which would read as a rise of zero and quietly delete this branch for
+     every old crew in the game.
+  */
+  const settled = npc.fearBase ?? (STAT_RANGE.fear[0] + STAT_RANGE.fear[1]) / 2;
+  const rattled =
+    npc.stats.fear >= APPROACH.fearAsksAbove &&
+    npc.stats.fear - settled >= APPROACH.fearRiseAbove;
+  if (rattled && freshlyFrightened(state, npc)) {
     return {
       text: 'has been waiting outside longer than somebody with nothing to say would.',
       reasonId: 'settle',

@@ -29,6 +29,7 @@ const src = (path: string): string =>
 
 const RAIL = src('../Rail.tsx');
 const CREW = src('../panels/CrewPanel.tsx');
+const DASHBOARD = src('../panels/Dashboard.tsx');
 
 /**
  * What a reader sees, not how JSX happened to wrap it.
@@ -112,5 +113,65 @@ describe('the way in to a person', () => {
 
   it('still marks the rows clickable for the people using a mouse', () => {
     expect(CREW).toContain("'clickable selected' : 'clickable'");
+  });
+});
+
+/**
+ * The third screen nobody was finding, and the one that came to them.
+ *
+ * `approaches.ts` exists so that a man with a reason turns up instead of the
+ * player having to go looking. It shipped rendering in exactly one place — a
+ * panel on the Overview — and all three round-16 testers missed it for their
+ * whole careers, which is the same fault as the two above with the extra sting
+ * that this one was *built* to solve discoverability.
+ *
+ * The badge could not go on until the read was worth one. Measured before it
+ * was added, the doorway was lit on 71% of days with the list pinned at its
+ * cap of three, and a badge on that is the wallpaper this rail already has a
+ * rule against. With the fear branch measured against a man's own nerve it
+ * discriminates: 2% of days for a boss who hears people out, 10% for one who
+ * grinds his crew, 59% for one who grinds them and refuses everybody.
+ */
+describe('the way in to the doorway', () => {
+  it('is reading the files it asserts about', () => {
+    expect(DASHBOARD).toBeTruthy();
+  });
+
+  it('still renders the doorway where the rail points', () => {
+    expect(DASHBOARD).toContain('approaches(state)');
+    expect(flat(DASHBOARD)).toContain('waiting');
+  });
+
+  it('puts a badge on the rail while anybody is standing there', () => {
+    expect(RAIL).toContain("approaches");
+    const at = RAIL.indexOf("entry.id === 'dashboard' && waiting.length > 0");
+    expect(at, 'the doorway badge is not on the rail').toBeGreaterThan(-1);
+  });
+
+  /**
+   * The Rail's own rule: a badge is a demand for attention with no statement
+   * of what would satisfy it. This one has to name the people and the route.
+   */
+  it('says who is waiting and where to answer them', () => {
+    const at = RAIL.indexOf("entry.id === 'dashboard' && waiting.length > 0");
+    const block = flat(RAIL.slice(at, at + 700));
+    expect(block).toContain('title=');
+    expect(block).toContain('waiting to see you');
+    expect(block).toContain('overview');
+  });
+
+  /**
+   * And it is a read, not a copy of one.
+   *
+   * A rail that re-derived "who is waiting" from stats would be a second
+   * answer to a question `approaches.ts` already answers, free to disagree
+   * with the panel it points at — which is the fault `rank.ts` was written to
+   * avoid and the one the duplicate memos were.
+   */
+  it('asks the same function the panel does', () => {
+    expect(RAIL).toContain("from '../sim/approaches'");
+    expect(RAIL, 'the rail re-derives the doorway instead of reading it').not.toMatch(
+      /stats\.fear >=/,
+    );
   });
 });
