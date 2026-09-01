@@ -175,3 +175,45 @@ describe('the way in to the doorway', () => {
     );
   });
 });
+
+/**
+ * The half of the crew dossier that pointed the wrong way.
+ *
+ * `readTies` has always shown what a man thinks of everybody else, and ties
+ * are stored on whoever's opinion changed — so that list could never say who
+ * would follow *him*. `followDeparture` reads exactly that, and `ties.ts`
+ * calls the compounding walkout one of the best consequences in the game and
+ * notes that it was invisible until the afternoon it landed. It was legible
+ * from every sheet except the one it is about.
+ *
+ * Guarded here rather than only in `whoFollows.test.ts` because the read
+ * existing is not the same as it being on screen, which is the failure this
+ * file was written for three times over.
+ */
+describe('the way in to who is behind somebody', () => {
+  it('is on the sheet of the man it is about', () => {
+    expect(CREW).toContain('whoWouldFollow');
+    expect(flat(CREW)).toContain('who is behind them');
+  });
+
+  /**
+   * With the count, which is the part a boss is deciding against. The names
+   * are men he knows; the number includes people he has not got the measure
+   * of, so they are separate claims and are said separately.
+   */
+  it('says how many would go, not only who', () => {
+    expect(CREW).toContain('followRisk');
+    expect(flat(CREW)).toContain('could go with them');
+  });
+
+  /**
+   * And it reads the simulation rather than re-deriving it. A panel that
+   * counted trust itself would be a second answer free to disagree with
+   * `followDeparture` — the fault `rank.ts` exists to avoid.
+   */
+  it('asks the same functions the departure does', () => {
+    expect(CREW, 'the panel re-derives the follow risk instead of reading it').not.toMatch(
+      /followTrustAbove/,
+    );
+  });
+});

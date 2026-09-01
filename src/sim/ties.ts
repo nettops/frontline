@@ -212,6 +212,90 @@ export interface TieRead {
 }
 
 /**
+ * And who is standing behind *him*, which is the direction that acts.
+ *
+ * **Ties are directional and only `readTies` had a view.** A tie lives on the
+ * man whose opinion changed — `passed_over` and `took_the_blame` are one-sided
+ * on purpose, and `recordTie` mirrors only the causes that are genuinely
+ * mutual. So a dossier built from `npc.ties` says who *he* would follow and
+ * cannot say who would follow him.
+ *
+ * That is the wrong way round for the one thing the tie system actually does
+ * to a career. `followDeparture` iterates everybody whose tie *to the leaver*
+ * clears `TIE_DEPARTURE.followTrustAbove`, so the compounding walkout — which
+ * this file calls one of the best consequences in the game — was readable from
+ * every sheet except the one it is about. A boss looking at the man he is
+ * thinking of dismissing saw nothing.
+ *
+ * Same familiarity gate as the outward read, and for the same reason: this is
+ * a thing you notice by being in a room with two people. Sorted by how firmly
+ * they would go, so the top of the list is the part that would actually leave.
+ */
+export function whoWouldFollow(state: GameState, npc: Npc): TieRead[] {
+  if (npc.familiarity < 40) return [];
+
+  const out: { read: TieRead; trust: number }[] = [];
+  for (const other of here(state)) {
+    if (other.id === npc.id || other.familiarity < 40) continue;
+    const tie = find(other, npc.id);
+    if (!tie) continue;
+
+    /*
+       Read off the constants rather than a second copy of the numbers, so a
+       warning cannot drift away from the behaviour it warns about — the rule
+       the outward read already sets for itself two functions down.
+    */
+    if (tie.trust >= TIE_DEPARTURE.followTrustAbove) {
+      out.push({
+        trust: tie.trust,
+        read: {
+          name: other.name,
+          text:
+            tie.trust > 60
+              ? `${other.name} would go wherever they went`
+              : `${other.name} would go with them`,
+          tone: 'good',
+        },
+      });
+    } else if (tie.resentment > 60) {
+      out.push({
+        trust: -tie.resentment,
+        read: {
+          name: other.name,
+          text: `${other.name} will not be in a room with them`,
+          tone: 'bad',
+        },
+      });
+    }
+  }
+
+  return out.sort((a, b) => b.trust - a.trust).slice(0, 4).map((x) => x.read);
+}
+
+/**
+ * How much of the organization one man could take out of the door with him.
+ *
+ * The ceiling rather than the likely number, and that is deliberate: it is the
+ * quantity a boss is deciding against when he thinks about dismissing somebody
+ * or letting their loyalty run down, and `followDeparture` rolls
+ * `TIE_DEPARTURE.followChance` on each of them. Naming a probable figure would
+ * be inventing a certainty the simulation does not have.
+ *
+ * Ungated by familiarity, because this is not a perception — it is the count
+ * behind the sentence, used by callers that have already decided how much of
+ * it to say.
+ */
+export function followRisk(state: GameState, npc: Npc): number {
+  const remaining = here(state).filter((n) => n.id !== npc.id);
+  const willing = remaining.filter((n) => {
+    const tie = find(n, npc.id);
+    return tie !== undefined && tie.trust >= TIE_DEPARTURE.followTrustAbove;
+  }).length;
+  // The same cap `followDeparture` applies, so the two cannot disagree.
+  return Math.min(willing, Math.max(1, Math.floor(remaining.length * TIE_DEPARTURE.followMaxShare)));
+}
+
+/**
  * What the player can tell about who gets on with whom.
  *
  * Gated on knowing *both* men, because this is a thing you notice by being in
