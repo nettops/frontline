@@ -21,7 +21,7 @@ import type {
 import { addEvidence, addLog, pushEvent, weightedPick, withArticle } from './util';
 import { askable, money, oneOf, payable, shortOf } from './memo';
 import { GEN_DEFS, isGenerated, resolveGenerated } from './eventgen';
-import { GEN_CHANCE_PER_DAY } from '../config/eventgen';
+import { GEN_CHANCE_PER_DAY, GEN_WHEN } from '../config/eventgen';
 import { addNote, creditOperation, crewList, generateNpc } from './npc';
 import { informFromMemory, remember } from './memory';
 import { recordTie } from './ties';
@@ -211,12 +211,46 @@ const EVENT_DEFS: EventDef[] = [
     }),
   },
 
+  /*
+     A grudge that comes out in front of everybody.
+
+     **This and `gen_wants_a_word` were one memo wearing two coats**, and round
+     16's tester said so: same man, same complaint, "Hear them out" as the
+     first option on both, one of them titled *wants a word* and the other
+     *is carrying something*.
+
+     They were also unequal in a way nobody could see. Round 15's second MUST
+     FIX was this exact situation becoming a subscription — a tester paid one
+     man on days 202, 215 and 225 against an option that read "and the matter
+     is closed" — and the repair was `GEN_WHEN.askedAgainAfterDays`, a
+     *per-person* cooldown. It was applied to the generated half only. The
+     authored twin kept its ten-day per-shape cooldown and no memory of the
+     person at all, so the fixed memo and the unfixed one sat side by side
+     drawing from two different halves of `tickEvents` and never blocking each
+     other.
+
+     So the two now share one guard: dealing with somebody deals with them,
+     whichever memo asked. And what is left is a real difference rather than a
+     reskin — **this one happened in front of the room.** The prose always said
+     so ("a comment in front of others", "going round the room before it came
+     to you") and nothing in the effects ever did. The crew who watched now
+     learn what the boss does when somebody says it out loud, in the idiom
+     `skim_discovered` already uses six blocks down.
+  */
   {
     id: 'grievance_raised',
     weight: 18,
     cooldownDays: 10,
     applies: (state, rng) =>
-      wrap(pickWhere(state, rng, (n) => n.stats.grievance > 40)),
+      wrap(
+        pickWhere(
+          state,
+          rng,
+          (n) =>
+            n.stats.grievance > 40 &&
+            state.day - (state.flags[`asked_${n.id}`] ?? -9999) >= GEN_WHEN.askedAgainAfterDays,
+        ),
+      ),
     build: (state, rng, { npc }) => ({
       defId: 'grievance_raised',
       title: oneOf(rng, [
@@ -242,9 +276,13 @@ const EVENT_DEFS: EventDef[] = [
       npcId: npc!.id,
       data: {},
       choices: [
-        { id: 'listen', label: 'Hear them out', hint: 'Costs nothing but time. Works better if you can lead' },
+        {
+          id: 'listen',
+          label: 'Answer it in front of them',
+          hint: 'Costs nothing but time. Works better if you can lead — and the room is watching',
+        },
         { id: 'pay', label: 'Make it right with money', ...payable(state, 3000, 'settles it, mostly') },
-        { id: 'ignore', label: 'Let it sit', hint: 'It will keep growing' },
+        { id: 'ignore', label: 'Let it sit', hint: 'It will keep growing, and it was said out loud' },
       ],
     }),
   },
@@ -1738,6 +1776,32 @@ export function resolveEvent(
 
     case 'grievance_raised': {
       if (!npc) return;
+      /*
+         Dealt with, on the same flag `gen_wants_a_word` writes.
+
+         Set before the branches for the reason that file records: a branch
+         added later cannot forget it, and forgetting it is how this became a
+         subscription. Shared rather than parallel so that hearing a man out
+         here also stops the other memo asking the same thing next week —
+         these are one situation, and it should take one answer.
+
+         Written even on the branch where the money was not there, because the
+         complaint was still made and still answered; being told no is being
+         dealt with, and the effects below charge for it.
+      */
+      state.flags[`asked_${npc.id}`] = state.day;
+
+      /*
+         Everybody who heard it, which is what makes this memo its own thing.
+
+         The prose has always said this happened in public and the effects
+         never did — the same fault `skim_discovered` avoids by moving the
+         onlookers when somebody is made to give money back. Small numbers on
+         purpose: the man himself is the event, and the room is the difference
+         between saying a thing out loud and saying it in a doorway.
+      */
+      const watched = crewList(state).filter((n) => n.id !== npc.id && n.status === 'active');
+
       if (choiceId === 'listen') {
         // Leadership decides whether talking actually works.
         const effect = 10 + state.player.attributes.leadership * 2;
@@ -1746,12 +1810,21 @@ export function resolveEvent(
         trainAttribute(state, 'leadership', 1.2);
         remember(npc, state.day, 'was_believed');
         addNote(npc, state.day, 'Was listened to.', 'good');
+        // They watched a complaint get an answer. That is worth something to
+        // people who are carrying one of their own.
+        for (const other of watched) {
+          other.stats.respectForBoss = clamp(other.stats.respectForBoss + 3, 0, 100);
+        }
       } else if (choiceId === 'pay') {
         if (spend(state, 3_000, 'world')) {
           npc.stats.grievance = clamp(npc.stats.grievance - 25, 0, 100);
           npc.stats.greed = clamp(npc.stats.greed + 3, 0, 100);
           addNote(npc, state.day, 'Was paid to let something go.', 'neutral');
           addLog(state, `${money(3_000)} to ${npc.name}, and the matter is closed. They will remember that it worked.`, 'money');
+          // And so will everybody who saw what closed it.
+          for (const other of watched) {
+            other.stats.greed = clamp(other.stats.greed + 2, 0, 100);
+          }
         } else {
           addLog(state, 'You did not have it to give.', 'failure');
           npc.stats.grievance = clamp(npc.stats.grievance + 8, 0, 100);
@@ -1759,6 +1832,11 @@ export function resolveEvent(
       } else {
         npc.stats.grievance = clamp(npc.stats.grievance + 12, 0, 100);
         npc.stats.loyalty = clamp(npc.stats.loyalty - 5, 0, 100);
+        // Letting it sit in private is a decision. Letting it sit after it has
+        // been said in front of the room is a statement about all of them.
+        for (const other of watched) {
+          other.stats.respectForBoss = clamp(other.stats.respectForBoss - 2, 0, 100);
+        }
       }
       return;
     }
