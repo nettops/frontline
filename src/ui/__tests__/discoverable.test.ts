@@ -30,6 +30,7 @@ const src = (path: string): string =>
 const RAIL = src('../Rail.tsx');
 const CREW = src('../panels/CrewPanel.tsx');
 const DASHBOARD = src('../panels/Dashboard.tsx');
+const SUCCESSION = src('../panels/SuccessionPanel.tsx');
 
 /**
  * What a reader sees, not how JSX happened to wrap it.
@@ -215,5 +216,43 @@ describe('the way in to who is behind somebody', () => {
     expect(CREW, 'the panel re-derives the follow risk instead of reading it').not.toMatch(
       /followTrustAbove/,
     );
+  });
+});
+
+/**
+ * The family's own past, and the screen it is on.
+ *
+ * `addLog` keeps 400 entries and a career writes far more, so a 300-day boss
+ * can see half his career and a 600-day boss a fifth of it — the founding of
+ * the family is the first thing the game throws away. `chronicle.ts` derives
+ * the whole of it from people the simulation keeps forever, and a derivation
+ * nobody can reach is the failure this file exists for.
+ */
+describe('the way in to the family history', () => {
+  it('is reading the file it asserts about', () => {
+    expect(SUCCESSION).toBeTruthy();
+  });
+
+  it('is on the screen about the family across time', () => {
+    expect(SUCCESSION).toContain('chronicle(state)');
+    expect(flat(SUCCESSION)).toContain('what happened to this family');
+  });
+
+  /**
+   * With the sentence before the list, because a bare column of dates does not
+   * say how many people a career has been through.
+   */
+  it('says the shape of it before the detail', () => {
+    expect(SUCCESSION).toContain('chronicleSummary');
+  });
+
+  /**
+   * And reads the simulation rather than the log it replaces. A panel built on
+   * `state.log` would inherit the cap this exists to escape.
+   */
+  it('does not rebuild it out of the feed it exists to outlive', () => {
+    const at = SUCCESSION.indexOf('What happened to this family');
+    const block = SUCCESSION.slice(at, at + 1600);
+    expect(block, 'the history is built from the capped log').not.toContain('state.log');
   });
 });

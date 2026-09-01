@@ -10,6 +10,7 @@ import {
   perceivedClaim,
 } from '../../sim/succession';
 import { formatShortDay } from '../../sim/util';
+import { chronicle, chronicleSummary } from '../../sim/chronicle';
 import { ROLE_LABEL, RANK_BY_ID } from '../../config/economy';
 import { CLAIM, HANDOVER } from '../../config/succession';
 
@@ -18,6 +19,8 @@ export default function SuccessionPanel() {
   const [message, setMessage] = useState<string | null>(null);
 
   const candidates = eligibleHeirs(state);
+  const history = chronicle(state);
+  const past = chronicleSummary(state);
   const heir = heirOf(state);
   /*
      Whether the room is restless, which is a fact about the player rather than
@@ -320,6 +323,50 @@ export default function SuccessionPanel() {
               </tbody>
             </table>
           </div>
+        )}
+      </Panel>
+
+      {/*
+         Everybody who was ever in this family.
+
+         Here rather than on the crew sheet because the crew sheet is who you
+         have, and this is who you had. It sits under the succession line for
+         the same reason: both are the family across time rather than the
+         family tonight.
+
+         The reason it needs to exist at all is that the log is capped at 400
+         entries and a career writes far more — measured, a 300-day boss can
+         see half his own career and a 600-day boss a fifth of it, so the
+         founding of the family is the first thing the game throws away. See
+         `sim/chronicle.ts`, which derives all of this from people the
+         simulation already keeps forever.
+
+         Oldest first, which is the opposite of the log and correct for a
+         record rather than a feed.
+      */}
+      <Panel title="What happened to this family">
+        {history.length === 0 ? (
+          <Empty>Nothing has happened to anybody yet.</Empty>
+        ) : (
+          <>
+            <p className="dim" style={{ marginTop: 0 }}>
+              {past.everJoined} {past.everJoined === 1 ? 'person has' : 'people have'} been
+              yours since {formatShortDay(past.since)}. {past.stillHere} still{' '}
+              {past.stillHere === 1 ? 'is' : 'are'}
+              {past.gone > 0 && `, and ${past.gone} ${past.gone === 1 ? 'is' : 'are'} not`}.
+            </p>
+            <div className="stack">
+              {history.map((c, i) => (
+                <p
+                  key={`${c.npcId}-${c.day}-${i}`}
+                  className={c.tone === 'bad' ? 'hot' : c.tone === 'good' ? 'good' : 'dim'}
+                  style={{ margin: '0 0 2px' }}
+                >
+                  <span className="mono faint">{formatShortDay(c.day)}</span> {c.text}
+                </p>
+              ))}
+            </div>
+          </>
         )}
       </Panel>
     </>
