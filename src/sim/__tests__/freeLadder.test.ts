@@ -41,14 +41,39 @@
  * the measurable value of controlling territory, which is a worse fault than
  * the one being fixed.
  *
- * So the change was reverted and the finding is recorded here instead. **The
- * cliff is real and the cause is upstream of these two jobs**: paid tier-4
- * work asks $50,000 and $54,000, and a player at $5,600 cannot reach any of
- * it. The free job is not too good — the paid alternatives beside it are
- * unreachable, which is a capital-wall problem and wants measuring as one.
+ * ## And the second guess was wrong too
  *
- * These tests therefore assert what is true today and pin the numbers, so the
- * next person starts from the reading rather than from the intuition.
+ * The revert came with a theory: the paid alternatives ask $50,000 and $54,000,
+ * the tester had $5,600, so the fault must be a capital wall. `ladder.probe`
+ * was instrumented to check it before anything else was touched, and it is not
+ * true either:
+ *
+ *     36/36 careers opened tier-4 work, median day 62
+ *     funds that day, 25th / median / 75th:  10,914 / 22,384 / 39,095
+ *     reached $50,000 afterwards:            36/36, median 9 days later
+ *     paid tier-4 launched:  Financial Scheme 536, Port Operation 175
+ *     free tier-4:           Call In Tribute 1,392
+ *
+ * Nine days is a speed bump, not a wall, and the bot runs the paid jobs. A
+ * mid-cost tier-4 job — the obvious third guess — would have fixed nothing.
+ *
+ * ## What is actually true
+ *
+ * Call In Tribute is run twice as often as both paid tier-4 jobs together, and
+ * affordability is not why. It is that it **risks nothing**. With $50,000 in
+ * hand you can afford Financial Scheme; running Tribute still costs no capital,
+ * so it wins whenever you would rather not put money on a roll. That is
+ * dominance by risk-free-ness, and it is a different lever from anything tried
+ * here.
+ *
+ * The tester is not contradicted by this. They had $5,600 at day 90, below the
+ * 25th percentile of $10,914 at day 62 — a career in the bottom quartile, where
+ * nine days is a long time. **The wall is real from where they sat and not real
+ * on average**, which is the kind of thing one career cannot tell you and
+ * thirty-six can.
+ *
+ * These tests assert what is true today and pin the numbers, so the next person
+ * starts from the reading rather than from a third intuition.
  */
 import { describe, expect, it } from 'vitest';
 import { OPERATIONS } from '../../config/operations';
@@ -104,13 +129,16 @@ describe('the way back in, at every rank', () => {
   });
 
   /**
-   * The capital wall, which is the actual cause.
+   * The shape of tier 4, pinned — and explicitly *not* a claim that it is a
+   * wall, because measurement says it is not.
    *
-   * At tier 4 the cheapest paid job asks $50,000. A player who has just
-   * unlocked the rank has nothing like it, so the free job is not competing
-   * with the paid ones — it is competing with nothing.
+   * One free job, and the cheapest paid one asking $50,000. A career arrives
+   * with a median of $22,384 and clears the bar nine days later, so what this
+   * guards is that the arrangement does not change without somebody noticing:
+   * if a mid-cost job appears, or the free one gains a rival, the reading in
+   * the header is stale and whoever did it has to come and say so.
    */
-  it('is the only tier-4 work a player without capital can reach', () => {
+  it('has one free job and nothing cheap beside it', () => {
     const cheapestPaid = Math.min(...paidAt(4).map((o) => o.investment));
     expect(cheapestPaid).toBeGreaterThan(20_000);
     expect(freeAt(4).length).toBe(1);
