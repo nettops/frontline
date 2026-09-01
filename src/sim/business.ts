@@ -58,7 +58,7 @@ import {
   WEALTH_REVENUE_RANGE,
   type BusinessDef,
 } from '../config/businesses';
-import { CONTROL_THRESHOLDS, SENTIMENT_HOSTILE_BELOW } from '../config/territories';
+import { CONTROL_THRESHOLDS, SENTIMENT_HOSTILE_BELOW, SLOTS_BY_CONTROL } from '../config/territories';
 import { PAYDAY_INTERVAL } from '../config/economy';
 import { termExposure, termRevenueShare } from './frontDeal';
 import { WORLD } from '../config/build';
@@ -395,9 +395,31 @@ export function canAcquire(
     };
   }
   if (usedSlots(state, t) >= businessSlots(t)) {
+    /*
+       Which of the two caps bound, because they have opposite answers.
+
+       `businessSlots` is the lesser of what your control allows and what the
+       district's own commercial density allows. This refusal said "Take more
+       of the district" for both, and all three round-17 testers hit it while
+       holding the place at dominance — one of them believed for a hundred and
+       eighty days that they were one job away from another front at home.
+
+       Density is not something a player can move. Telling somebody to take
+       more of a district they already hold at 100 is worse than saying nothing:
+       it is a refusal that names a remedy, which is the standard this game
+       holds itself to everywhere else, and the remedy does not exist.
+    */
+    const room = businessSlots(t);
+    // Density bound rather than control: the same reading `businessSlots`
+    // makes, asked the other way round so the sentence can name the cause.
+    const full = room < SLOTS_BY_CONTROL[level];
     return {
       ok: false,
-      reason: `No room for another front in ${territoryDef(t.id).name}. Take more of the district.`,
+      reason: full
+        ? `${territoryDef(t.id).name} only has room for ${room} ${room === 1 ? 'front' : 'fronts'}, ` +
+          `and ${room === 1 ? 'it is yours' : 'they are yours'}. It is not that kind of neighbourhood — ` +
+          `somewhere busier will hold more.`
+        : `No room for another front in ${territoryDef(t.id).name}. Take more of the district.`,
       cost,
     };
   }

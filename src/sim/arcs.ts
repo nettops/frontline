@@ -51,6 +51,7 @@ import { OPERATION_BY_ID } from '../config/operations';
 import { PROMISES } from '../config/promises';
 import { STAGE_BY_ID } from '../config/lawEnforcement';
 import { MARK } from '../config/silence';
+import { VERBS } from '../config/verbs';
 import { liveScores, setupsLeft } from './scores';
 import { daysLeft } from './promises';
 import { liveMarks } from './marks';
@@ -106,6 +107,40 @@ export function arcs(state: GameState): Arc[] {
       since: score.openedDay,
       panel: 'operations',
       pressing: days <= 7,
+    });
+  }
+
+  /*
+     A week spent looking at a job properly.
+
+     Left out of the first version of this file, and two of round 17's three
+     testers reported the consequence independently: they used the Method verb
+     on days 22 and 25, and neither could find any trace of it afterwards. One
+     wrote *"no completion line, no odds change I could attribute, no entry in
+     WHAT YOU HAVE RUNNING"*, which was exactly right and is the reason it is
+     here now.
+
+     The odds row exists — `successBreakdown` reports a `cased` term — but only
+     on the one job it was bought for and only once the week is up, so for the
+     first seven days the game holds a thing you spent a week on and says
+     nothing about it anywhere. That is the definition of what this panel is
+     for.
+  */
+  const cased = state.org.cased;
+  if (cased) {
+    const days = cased.readyDay - state.day;
+    out.push({
+      id: `cased:${cased.defId}:${cased.territoryId}`,
+      title: `Somebody is watching ${OPERATION_BY_ID[cased.defId]?.name ?? 'a job'} in ${territoryDef(cased.territoryId)?.name}`,
+      where: days > 0
+        ? `${days} ${days === 1 ? 'day' : 'days'} of the week left to run`
+        : 'they have seen what they need to',
+      ends: days > 0
+        ? 'run that job in that district once the week is up'
+        : 'run that job in that district, and it goes better',
+      since: cased.readyDay - VERBS.casingDays,
+      panel: 'operations',
+      pressing: false,
     });
   }
 

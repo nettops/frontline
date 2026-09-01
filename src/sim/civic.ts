@@ -309,6 +309,29 @@ export function canSpendFavour(state: GameState, id: string): FavourCheck {
     };
   }
   if (held.owed <= 0) {
+    /*
+       Two different refusals, because the old one named a condition the player
+       had already met.
+
+       A round-17 tester paid $9,000 to lift a police captain's standing from 49
+       to 71 against a stated bar of 68, came back, and read *"they start owing
+       above 68"* on a dead button. The bar was met. What was missing was the
+       clock: `tickCivic` grants at most one favour per figure per
+       `favourInterval`, so crossing the bar starts a wait nothing on the screen
+       mentioned. They filed the whole favour economy as unreachable, and they
+       were right to — a refusal that restates a satisfied condition reads as
+       broken, not as pending.
+    */
+    const wait = Math.ceil(favourInterval(state) - (state.day - held.lastFavourDay));
+    if (held.standing >= def.owesAbove && wait > 0) {
+      return {
+        ok: false,
+        reason:
+          `${def.title} thinks well enough of you — standing is ` +
+          `${Math.round(held.standing)}, against ${def.owesAbove}. These things are not ` +
+          `asked for twice in a month; give it ${wait} more ${wait === 1 ? 'day' : 'days'}.`,
+      };
+    }
     return {
       ok: false,
       reason:

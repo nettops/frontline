@@ -2300,3 +2300,124 @@ Not a full sweep of everything above. Two questions, and both are rates:
    screen now, and that is exactly the shape §4 warns about.
 
 Everything else in this iteration is a fact a single scorer can reproduce.
+
+---
+
+## Round 17 — 2026-09-01 — the first blind measurement of the overhaul
+
+Three scorers, dispatched fresh, no source access, one instance each. Careers of
+**184, 163 and 317 days**; all three reached Boss or Underboss and stopped
+voluntarily rather than being wiped out.
+
+    axis                   A    B    C
+    First hour             9    9    8
+    Clarity                9    8    8
+    Feedback               8    9    8
+    Depth                  8    8    8
+    Pacing                 6    7    6
+    Difficulty             8    8    7
+    Writing and tone      10   10    9
+    Interface              8    9    8
+    Standing in it         7    7    7
+    Fun                    7    8    7
+
+All three marked Depth as covering the job/crew/territory/heat loop only. None
+of them opened the Trade. **Standing in it came back 7, 7, 7**, and all three
+gave the same reason unprompted in question 7: *"a spreadsheet, plus two
+people"*, *"five laundromats, four coloured squares, $12,000, and Nico"*,
+*"twenty-two people I can name… but the districts and the fronts are rows in a
+table."*
+
+### The two questions the round was for, and they did not go well
+
+**Do players find the doorway now?** One of three. A found it on day 78 and used
+it for promotions and grievances. B and C never mention it in 163 and 317 days;
+both reached sit-downs by clicking a crew row instead. Round 16 was nought of
+three, so the rail badge moved it from *nobody* to *one, late* — a real change
+and not the one that was wanted.
+
+**Does the third list read as wallpaper?** One of three noticed it at all. A
+called it *"remarkable"* and quoted it back — *"Was told they are covered. 29
+days before they stop expecting it"*. B and C do not mention it once. That is
+not wallpaper; it is worse, and it is the same failure the panel was built to
+repair, one screen further in.
+
+**So the surfacing work is half-landing.** Three of three found the build screen
+and the crew dossier this time, which round 16 found by accident on days 8/18/25
+and 32/43/81 — those two repairs worked. The doorway and the running list did
+not, and a badge on the rail is evidently not enough on its own.
+
+### What three of three said
+
+1. **Diplomacy has no verbs, and a rank requires a rival family that trusts
+   you.** All three, independently, and two of them named it as the reason the
+   ladder terminates. B: *"the rank ladder currently terminates in a panel with
+   no buttons."*
+2. **The late game flatlines** — day 120, 120-130, 180. Income outgrows every
+   ask and heat collapses once you hold ground. This is the dominant-job finding
+   from iteration 9 arriving from the player's side.
+3. **Attribute points produce no observable feedback.** C measured it properly:
+   same job, same crew, same day, 9 points placed, *"Your ability"* unchanged.
+   They are right, and the cause is worse than they could see — `player.build`
+   and `player.attributes` are two different fields, and the odds line reads the
+   one the build screen does not write.
+4. **The front-slot refusal tells you to take more of a district you hold at
+   100.** Fixed.
+5. **The Trade is unreachable.** $252,772 a route, advertised at day 36.
+
+### Fixed, all five reproduced, all the same fault
+
+Every one of these is the game saying something the system does not do. Not one
+is a mechanic misbehaving, which is the shape of this whole build now.
+
+- **The grievance splice.** *"They have not forgotten it: they Was on the Fence
+  Stolen Goods. It went wrong.."* — `gen_wants_a_word` splices its reason into
+  `they {reason}.`, correct for a memory (a verb phrase with an implied subject)
+  and wrong for a note (a whole capitalised sentence). The comment above the
+  function states that rule; the fallback added underneath it broke it.
+- **The indictment promised a trial two of four agencies cannot hold.**
+  `state_taskforce` and financial crimes are `maxStage: 'indictment'`; only the
+  Bureau is `'trial'`. The hint is read off `maxStage` now.
+- **The favour refusal restated a condition the player had met.** A paid $9,000
+  to lift a captain from 49 to 71 against a bar of 68 and still read *"they
+  start owing above 68"*. The blocker was `favourIntervalDays`, which nothing
+  mentioned.
+- **The front-slot refusal named a remedy that does not exist.** `businessSlots`
+  is the lesser of control and the district's own density, and density cannot
+  be moved.
+- **Casing a job left no trace for a week** — and that one is ours. Two testers
+  used the Method verb on days 22 and 25 and found nothing anywhere. The odds
+  row only appears on the job it was bought for and only once the week is up.
+  It is in `arcs()` now, which is exactly what that panel was built for and
+  where it should have been from the start.
+
+### Not fixed, and why
+
+**Diplomacy's missing verbs** and **the two stat systems** are both three-of-three
+findings and both are design decisions rather than repairs. The first needs
+somebody to decide whether rival trust is meant to be pursued or only offered;
+the second needs somebody to decide whether the build screen should feed the
+odds at all, or merely say plainly that it does not. Guessing at either would be
+a fifth attempt of the kind iteration 9 records four of.
+
+**The late-game flatline** is the shelved dominant-job problem, seen from the
+player's side by all three.
+
+### On method
+
+The harness had to be rebuilt for this round: the documented one assumes a
+browser pane, and these scorers had a shell, where every call is a new process
+and a naive script closes the browser between commands. Chromium is launched
+once on a debugging port and reconnected over CDP, so a career survives.
+
+**Exercising it first caught a defect that would have been blamed on the game.**
+The first `click` matched by substring, and "Start with $2,500" is a substring of
+the Career card's own blurb — so asking for the start button pressed Career
+again. `PLAYTEST.md` records four such faults in the original harness's first
+hour; this is the fifth, and the rule holds: a harness nobody has run reports
+whatever it happens to find.
+
+One scorer lost six of seven attributes to their own tooling — all seven "Put a
+point in" buttons carry identical text, so their click helper could only ever
+reach the first. They said so plainly and marked those systems unscored, which
+is the reproduction gate working.
