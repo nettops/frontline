@@ -3,8 +3,9 @@
 Read this, then read `docs/DIRECTOR.md` and `docs/PLAYTEST.md`. This file is the state;
 those two are the rules.
 
-Project root: `C:\Users\cory\Desktop\mafia`. Not a git repo. Windows 11,
-PowerShell 5.1 (no `&&`, no `||`, no ternary — use `;` or `if ($?) { }`).
+A git repository, `nettops/frontline`. This line used to say the project lived
+at `C:\Users\cory\Desktop\mafia` and was not under version control, and was
+still saying it long after both had stopped being true.
 
 ---
 
@@ -15,23 +16,37 @@ Vite 6, Vitest 2. The player starts broke and grows an organization through
 operations, crew, territory, rival families, and law enforcement.
 
     npm run dev        # play it
-    npm test           # the gate — 1,211 tests, ~30s
-    npm run probe      # the eight measuring files in sim/probes/, ~9min
+    npm test           # the gate — 1,360 tests in 108 files, ~40s
+    npm run probe      # the eight measuring files in sim/probes/, ~11min
     npm run test:all   # both
     npx tsc -b         # types
     npm run playtest   # namespaced instance for blind testers
 
-**Current verified state: `tsc` clean, 740 tests, 63 files — 739 passing and
-one failing on purpose** — `ladder.probe`'s pre-committed pacing target, which
-the rank table has never met. Both pre-commits written during the Mafia-boss
-build are met, and `scorecard.probe`'s Pacing axis is back above its floor. Both are the same finding seen from two angles: the rank ladder
-is slow. `ladder.probe`'s pre-committed pacing target reads Capo in 13 careers
-of 36 against a target of 24, and `scorecard.probe`'s Pacing axis reads 2.7
-against a floor of 3 because a bot that has run every job kind, worked every
-district and stopped gaining rank has no firsts left. **The two pre-commits
-written during the Mafia-boss build are now met** — see section 6. `ladder.probe.test.ts` carries a pre-committed pacing
-target the rank table does not meet; see §9. 62,453 lines
-across 183 source files, counted 2026-08-22.
+**Current verified state, 2026-09-01: `tsc` clean. 1,360 unit tests across 108
+files and 85 probe assertions across 8 files, all green.**
+
+The suite is split into two vitest projects. `npm test` is the gate and runs the
+unit project only, in about forty seconds; `npm run probe` runs the eight
+measuring files in `src/sim/probes/` and takes about eleven minutes. Before the
+split the two ran together and the gate took 8m48, which is long enough that
+people stop running it.
+
+**Nothing fails on purpose any more, and the target it used to fail is still
+there.** `ladder.probe`'s pre-committed rank condition — *"gives a 300-day career
+more than three rungs"* — is unchanged and now passes, because the table was
+re-gated rather than the target moved: rank runs off `OpsBoard` (districts,
+fronts, crew, favours, rival trust) on the reasoning that *"rank is a clean-money
+threshold wearing a title"* and a board gated on rank alone stops moving around
+day 90. DIRECTOR §5 forbids moving a pre-commit to unblock a change and it was
+not moved; it is live, and it went red during a rejected experiment in iteration
+9, which is how it is known to still bite.
+
+`sim/rank.ts` derives what the player is *called* from that same board, so what
+you are called and what you are allowed to do cannot come apart.
+
+One probe bar was deliberately loosened in iteration 9 and is recorded there
+rather than here: `broke.probe`'s hiring-policy margin, from 1.5x to 1.2x, after
+the fear repair made crews easier to keep.
 
 ---
 

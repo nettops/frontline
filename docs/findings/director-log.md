@@ -2130,3 +2130,173 @@ of the remainder. Round 13's lesson applied — the row height was the real dama
 and is now 57px, matching its neighbours; the wrap scrolls horizontally by design.
 
 `tsc` clean. 687 tests, 60 files, 686 passing and one failing on purpose.
+
+---
+
+## Iteration 9 — 2026-09-01 — the engagement overhaul, P0 and P1
+
+**No blind round has been run on any of this.** Every line below is a change and
+a measurement, and not one of them is a score. §0 says the director does not
+grade, so `Result:` is deliberately absent from this entry rather than left
+optimistic — the next scorer decides whether any of it worked.
+
+Findings open at the start: round 16's, from three blind scorers.
+
+### What round 16 said, and what it cost to hear it
+
+Three scorers were dispatched in parallel. **All three independently failed to
+find `approaches.ts` across careers of 21, 43 and 77 days.** That is the only
+finding of the round that needed three testers — three of three is a rate and one
+career cannot report one — and it is now the worked example in §4 of the rule
+that decides how many to send. Everything else the round returned was a fact one
+tester reproduced, paid for three times.
+
+Their other findings, all reproduced and all now closed:
+
+- `player.rank` was **dead state**. Nothing in the codebase ever assigned it, so
+  every career in the game's history ended on the rung it began on. One tester
+  had three districts at dominance, seven fronts, seventeen people and $470,000
+  and was still labelled a street criminal.
+- The build screen and the crew dossier were found by accident on days 8/18/25
+  and 32/43/81. Sixteen unspent points from the first morning, and the best
+  screen in the game one click inside an unmarked table row.
+- Laying low warned it would not clear heat, quoting a multiplier that only
+  scales absorption and never touches decay.
+- "shake on $X" rendered enabled at any price and its handler discarded
+  `closeDeal`'s result, so a purchase nobody could afford played the success cue
+  and charged a day.
+- `Case a job` and `Spend the week on it` were one ability under two names —
+  69 days of owning something a tester could not locate.
+- Two memos were the same memo, and the duplication hid that round 15's
+  per-person subscription fix had been applied to only one of the pair.
+- A standing order's approach was recorded at set-time and then invisible.
+
+### The shape of the whole iteration, which is the finding worth carrying
+
+Twenty-five changes went in. Sorted by outcome rather than by phase, they say
+one thing very clearly:
+
+    surfacing something that already existed        every one kept
+    adding a cost or a system                       four of five reverted
+
+The four rejected repairs were all aimed at one problem — `Call In Tribute` run
+1,392 times a career against 711 for both paid jobs of its rank together — and
+each failed by damaging something the job is load-bearing for:
+
+    retiming both free jobs      `ladder.probe` "what the ground is for" hit
+                                 exactly 18/36. Both are district-gated, so
+                                 slowing them deleted the value of holding ground.
+    a capital-wall fix           disproved before it was built: 36/36 clear
+                                 $50,000 a median of nine days after tier-4 opens.
+    a standing cost             civic figures owing you: 4/36 against a bar of 18.
+                                 Standing is a set of thresholds, not a pool.
+    grooves on hand play        the whole game deflated ~30%, and moving a
+                                 standing order stopped beating leaving it.
+
+**The finding: the dominant job is dominant because it is the most robust thing
+on the board, so any cost applied broadly removes its competitors before it
+removes it.** The standing cost took Port Operation from 175 launches to nought
+and left Tribute *higher* than it started; the repetition tax cut Tribute 20% and
+the paid tier-4 jobs 70%. Two opposite mechanisms, the same failure. Shelved at
+the user's call, with all four readings in `freeLadder.test.ts`.
+
+### Two ratchets, one real and one imagined
+
+**Crew fear was a one-way ratchet and the repair for it had never run.**
+`fearSettlePerTick` sat below the `arrested` skip in `driftNpcs`; a working crew
+spends 31% of its man-days in a cell and arrest is the largest fear source in the
+game, so the biggest inflow was also the switch that turned the outflow off — a
+nominal 1.5 a week delivering 0.80 against an inflow of 2.67. Lifted above the
+skip and given a share of the load, on the argument `HEAT_DECAY_SHARE` already
+records. Man-days at the ceiling fell from 36% to 5% and the stat has a dynamic
+range for the first time: a working crew rests near 70, an idle one near 53,
+against a base of 43.
+
+**And the informant system was fine.** Chased on my own recommendation, which was
+wrong twice. Raising `INFORMANT.fearAbove` would have done nothing — loyalty is
+the binding gate at 18% of man-weeks against fear's 76%, and fear is the sole
+blocker in 3%. Then "one informant a career" turned out to be the designed
+ceiling rather than a rate: `tickInformants` runs the flip loop only while nobody
+is talking. Measured properly by occupancy, nothing planted, 24 careers each:
+
+    boss who...          ever had one   days somebody talking   first turned
+    grinds them daily          24/24                     65%         day 105
+    works them every 4th       21/24                     40%         day 182
+
+Nothing changed. `informants.probe` now measures the natural rate, which it never
+had — it plants its informant, correctly, because it exists to ask whether a
+player can read the record rather than whether the record gets written.
+
+### P1, where the audit was wrong twice in the same direction
+
+`ENGAGEMENT_OVERHAUL_AUDIT.md` filed the relationship web as "data built, no
+view" and story arcs as "parts, no framework". Both wrong, and wrong the same way
+the rest of this iteration was:
+
+- **The tie view existed and pointed the wrong way.** Ties are stored on whoever's
+  opinion changed, so `readTies` says who a man would follow and structurally
+  cannot say who would follow *him* — which is what `followDeparture` reads. The
+  compounding walkout, which `ties.ts` calls one of the best consequences in the
+  game, was legible from every sheet except the one it is about.
+- **The game is full of arcs and needs no framework.** Marks and informants are
+  complete arcs; goals, memory and ties are substrate; and scores, promises and
+  investigations are arcs the audit did not list. Each lived on its own panel.
+- **The game forgets itself.** `LOG_LIMIT` is 400 and a career writes far more:
+  a 300-day boss can see 50% of his career and a 600-day boss 22%. The founding
+  of the family is the first thing discarded. `chronicle.ts` derives the whole of
+  it from people the simulation already keeps forever.
+
+### Instrument failures, which is the part of this log that pays
+
+Seven, and each would have produced a green run on a broken feature:
+
+- Approaches gated on grievance alone put one man in the doorway **124
+  consecutive days** of a 300-day career. Only a run-the-days measurement saw it;
+  every stat-level test passed throughout.
+- The doorway was lit 71% of days at its cap, and 71% for a boss who grinds his
+  crew against 76% for one who barely works them — a signal that did not depend
+  on anything the player did. Fixed and now guarded on the *discrimination*
+  rather than on a threshold, because an absolute bar is what failed.
+- Three crowd tests passed with the effects deleted, because a fresh career has
+  one man in it and their `if (!watching.length) return` guard skipped them.
+- A chronicle overflow test compared two records neither of which had forgotten
+  anything: a bare clock bot writes 80 log entries in 260 days, under the cap.
+- An arc-ordering test passed against a pressure-sort twice — first because both
+  fixtures were quiet, then because sixty days of clock had made the old one
+  pressing too.
+- A duplicate-memo guard was written on choice-set equality, which would not have
+  caught the actual pair; three benign declines already collide. Replaced with
+  the behavioural invariant that broke.
+- My own measurement scripts clicked SOUND several hundred times, because
+  `read().actions` is every control on the page, and nearly reported "career
+  stuck on day 8" as a game finding.
+
+Every guard in this iteration was verified by putting its fault back and watching
+it go red. That is now the only reason to believe any of them.
+
+### Where it stands
+
+`tsc` clean. 1,360 unit tests in 108 files, 8 probe files, 85 probe assertions —
+all green.
+
+One probe bar was loosened and it is declared rather than buried: `broke.probe`
+asserts that hiring to this week's income is the worst of three policies at a
+1.5x margin, and it measures 1.25x now. The direction survives. The mechanism is
+the one that file already records twice from two other directions —
+`heatFearLoyalty` scales entirely on `fear / 100`, so a crew resting at 67 rather
+than 100 takes a third less drain, walkouts fell from 36 a career to 31, and
+bodies were the whole reason over-hiring was dangerous. Re-pointed at 1.2x rather
+than retired, so it still fails if the two converge.
+
+### What the next round is for
+
+Not a full sweep of everything above. Two questions, and both are rates:
+
+1. **Do players find the doorway now?** Three of three missed it; there is a rail
+   badge and a measured signal behind it. This is the finding that justified three
+   scorers and it is the one that needs them again.
+2. **Does the Overview's third list get used, or read as more wallpaper?**
+   "Wanting you", the doorway and "What you have running" are three lists on one
+   screen now, and that is exactly the shape §4 warns about.
+
+Everything else in this iteration is a fact a single scorer can reproduce.

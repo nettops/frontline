@@ -177,6 +177,30 @@ else. It must never get a *narrowed* brief: the moment a tester is told which
 part of the game to concentrate on, under-use stops being a measurement, which
 is the same rule as not naming a feature mid-round.
 
+### How many scorers, and the honest reason for more than one
+
+**One, unless you can say what the second is measuring that the first cannot.**
+
+Round 16 was dispatched to three scorers in parallel and the justification
+given at the time was that one career is a noisy sample. That is true and it was
+not the real reason, which was that three reports feel more thorough than one.
+The three did produce a genuine result the reproduction gate could not have
+reached alone — all three independently failed to find `approaches.ts`, and
+*three of three* is a different finding from *one tester missed it* — but that
+was the only one, and it cost roughly three times the tokens and three times the
+wall clock of a single round.
+
+So the test before dispatching more than one is a question about the finding
+rather than about confidence: **is the thing being measured a rate?** Whether
+players find a screen, whether a system gets used, how long the loop holds —
+those are rates and one career cannot report one. Whether a button lies, whether
+a price is wrong, whether a memo repeats itself — those are facts, and the
+second and third tester are paying full price to confirm what the first one
+reproduced.
+
+When the answer is a rate, say so in the round's own write-up, and say what the
+rate turned out to be. When it is not, dispatch one.
+
 **How far it plays, in a full round: to Capo, or day 300, whichever comes
 first.**
 
