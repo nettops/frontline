@@ -17,7 +17,7 @@ import {
   visibleTraits,
 } from '../../sim/npc';
 import { CrewPortrait } from '../CrewPortrait';
-import { readTies } from '../../sim/ties';
+import { followRisk, readTies, whoWouldFollow } from '../../sim/ties';
 import { canSilence, silence } from '../../sim/silence';
 import { callOffMark, liveMarks } from '../../sim/marks';
 import { Rng } from '../../sim/rng';
@@ -429,6 +429,8 @@ function CrewDetail({ npc, onClose }: { npc: Npc; onClose: () => void }) {
   // Read through both men: how somebody is with a person you have never met is
   // not something you would have noticed.
   const ties = readTies(state, npc);
+  const behind = whoWouldFollow(state, npc);
+  const wouldGo = followRisk(state, npc);
   // The most intimate thing this sheet shows: not what he is like, but what
   // has been done to him. Gated highest of anything here for that reason.
   const memories = readMemories(npc, state.day);
@@ -566,6 +568,43 @@ function CrewDetail({ npc, onClose }: { npc: Npc; onClose: () => void }) {
                   {tie.text}
                 </p>
               ))}
+            </div>
+          )}
+
+          {/*
+               And the other direction, which is the one that costs you people.
+
+               `readTies` above is what this man thinks of everybody else. Ties
+               are stored on whoever's opinion changed, so that list could never
+               answer the question a boss is actually asking when he looks at
+               somebody he is thinking of dismissing: who comes out of the door
+               behind him. `followDeparture` reads exactly that and it was
+               readable from every sheet except this one.
+
+               The count is stated separately from the names because they are
+               different claims: the names are men you know well enough to have
+               noticed, and the number is everybody who would go, including
+               people you have not got the measure of.
+            */}
+          {(behind.length > 0 || wouldGo > 1) && (
+            <div style={{ marginTop: 10 }}>
+              <div className="tiny" style={{ marginBottom: 4 }}>
+                Who is behind them
+              </div>
+              {behind.map((tie) => (
+                <p
+                  key={tie.name}
+                  className={tie.tone === 'bad' ? 'hot' : tie.tone === 'good' ? 'good' : 'dim'}
+                  style={{ margin: '0 0 2px' }}
+                >
+                  {tie.text}
+                </p>
+              ))}
+              {wouldGo > 1 && (
+                <p className="hot tiny" style={{ margin: '2px 0 0' }}>
+                  If they walked, as many as {wouldGo} could go with them.
+                </p>
+              )}
             </div>
           )}
 
