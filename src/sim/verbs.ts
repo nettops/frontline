@@ -23,6 +23,7 @@ import { clamp } from './rng';
 import { addLog } from './util';
 import { crewList } from './npc';
 import { hasVerb } from './build';
+import { OPERATION_BY_ID } from '../config/operations';
 import { VERBS } from '../config/verbs';
 import { PAYDAY_INTERVAL } from '../config/economy';
 import { controlledTerritories, territoryDef, adjustSentiment } from './territory';
@@ -371,7 +372,23 @@ export function tickInside(state: GameState): void {
 export function canCase(state: GameState, territoryId: string): Check {
   const stop = gate(state, 'method', 'works like that');
   if (stop) return stop;
-  if (state.org.cased) return no('You are already looking at something.');
+  /*
+     And say what, because "something" was the whole of what a player got.
+
+     Two round-17 testers used this verb and could not afterwards tell whether
+     it had done anything; the only acknowledgement either of them found was
+     this refusal, which names neither the job nor the clock. It now names both,
+     and the Overview lists it beside everything else running.
+  */
+  if (state.org.cased) {
+    const on = state.org.cased;
+    const days = on.readyDay - state.day;
+    return no(
+      `Somebody is already watching ${OPERATION_BY_ID[on.defId]?.name ?? 'a job'} in ` +
+        `${territoryDef(on.territoryId).name}` +
+        (days > 0 ? `, ${days} ${days === 1 ? 'day' : 'days'} to go.` : ', and they are done.'),
+    );
+  }
   if (!state.territories[territoryId]) return no('No such district.');
   // Not a second name for the verb — the button reads its label from
   // `config/build.ts`, which is where the point that sold it is written. This

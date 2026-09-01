@@ -86,8 +86,29 @@ function grievanceOf(npc: Npc, day: number): string | null {
     (m) => MEMORIES[m.kind]?.tone === 'bad' && day - m.day <= GEN_WHEN.grievanceStaleAfterDays,
   );
   if (bad) return MEMORIES[bad.kind].text;
-  const note = npc.notes.find((n) => n.kind === 'bad' && day - n.day <= GEN_WHEN.grievanceStaleAfterDays);
-  return note ? note.text : null;
+
+  /*
+     And nothing else, which is a correction rather than a narrowing.
+
+     This used to fall back to `npc.notes`, and notes do not have the shape the
+     comment above describes. A memory's text is a verb phrase with an implied
+     subject — "were not paid, and remember the week" — and a note is a whole
+     capitalised sentence with its own full stop. Spliced into the same slot it
+     produced, verbatim, in front of two round-17 testers:
+
+         "They have not forgotten it: they Was on the Fence Stolen Goods. It
+          went wrong.. Soldier, 61 days with you."
+
+     Reproduced twice by one of them, and the same defect reported independently
+     by a second as a "broken template string". In a game whose testers scored
+     the writing 10, 10 and 9, a garbled sentence inside a character-drama modal
+     is worth more than the sentence it was covering for.
+
+     The caller already handles null — it says "They will not say what it is
+     about, which is its own answer", which is a better line than any note would
+     have produced anyway.
+  */
+  return null;
 }
 
 // ------------------------------------------------------------- the shapes ---

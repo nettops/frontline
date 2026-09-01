@@ -585,8 +585,31 @@ function applyStageEffect(
         severity: 'danger',
         npcId: null,
         data: { caseId: investigation.id },
+        /*
+           And what actually happens next, which depends on who indicted you.
+
+           This hint was the flat string "The trial begins" for every agency,
+           and two of the four cannot hold one: `state_taskforce` and financial
+           crimes are both `maxStage: 'indictment'`, and only the Bureau reads
+           `maxStage: 'trial'`. A round-17 tester was indicted by the Task Force,
+           pressed the one button under a promise of a trial, and found the case
+           sitting at Indictment indefinitely — with the Law Enforcement panel
+           three inches away correctly saying the Task Force can take it no
+           further. They reproduced it twice and filed it as the moment the
+           whole law-enforcement arc stopped paying off.
+
+           Read off `maxStage` rather than restated, so an agency whose reach
+           changes cannot leave this sentence behind.
+        */
         choices: [
-          { id: 'acknowledge', label: 'There is nothing else to say', hint: 'The trial begins' },
+          {
+            id: 'acknowledge',
+            label: 'There is nothing else to say',
+            hint:
+              agency.maxStage === 'trial'
+                ? 'The trial begins'
+                : `${agency.shortName} take it no further than this. Somebody else would have to.`,
+          },
         ],
       });
       return;
