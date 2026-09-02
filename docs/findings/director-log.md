@@ -2590,3 +2590,45 @@ One scorer lost six of seven attributes to their own tooling — all seven "Put 
 point in" buttons carry identical text, so their click helper could only ever
 reach the first. They said so plainly and marked those systems unscored, which
 is the reproduction gate working.
+
+---
+
+## P2 and P3 — 2026-09-02
+
+Five phases. Four were already finished and one was the fault.
+
+**Phase 8, the dynasty chronicle, is complete between two views.**
+`succession.line` renders the reigns and `chronicle.ts` renders the people;
+`state.npcs` survives a handover — `removePlayer` marks the winner `boss` and
+deletes nobody — so the chronicle carries across reigns and excludes only
+predecessors, which the line covers. **Phase 10, player identity, was already on
+screen during play**: `careerShape` and `legitimacy` are both on the Yourself
+panel, not held back for the post-mortem. **Phase 12 was complete.** **Phase 11
+is three scenario starts and extending it is content, not a system.**
+
+**Phase 9 was the gap, and it is the session's usual shape.** Nine world
+conditions with real effects across payouts, odds, heat, front revenue and rival
+aggression — and every one of them arrived with one button:
+
+    { id: 'acknowledge', label: 'Note it',
+      hint: 'Nothing to decide. Only to work around' }
+
+Honest about most weather and wrong about some of it. `WorldConditionDef.endEarly`
+is now on the five a boss could actually reach — the crackdown, the dock strike,
+federal interest, blood in the water, audit season — and absent on the four he
+could not, because a recession is not bought off and a good summer does not want
+ending. Priced through `payable`, so it is never clickable at a price the player
+cannot cover, which `priced.test.ts` enforces across the catalogue. The spending
+and the clearing live in `world.ts`, which is the only other place `conditionId`
+is written.
+
+**It does not move the flatline instrument, and will not.** The scorecard reads
+byte-identical — 20 firsts, longest quiet stretch 375 days, nothing new after day
+939 — because that bot answers every memo with its first choice, and the first
+choice is still "Note it". This is a decision that exists only in front of a
+person, and round 18 is the first time anyone will meet it.
+
+The audit table this came from was wrong in one direction five times, and that
+is recorded in `ENGAGEMENT_OVERHAUL_AUDIT.md`: an audit written from the outside
+reads *"I cannot find the seam"* as *"the seam is not there"*. Six of the eight
+phases needed a route, a direction or a view rather than a system.

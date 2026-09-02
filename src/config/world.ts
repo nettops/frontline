@@ -40,6 +40,31 @@ export interface WorldConditionDef {
   cooldownDays: number;
   effects: Partial<Record<WorldEffectKey, number>>;
   /**
+   * What a boss with money can do about it, where there is anything.
+   *
+   * Every condition shipped with one button reading *"Note it — nothing to
+   * decide. Only to work around."* That is honest about most weather and wrong
+   * about some of it: a crackdown is people who can be reached, a strike is a
+   * union that takes money, federal interest is a bigger name they would rather
+   * have. Round 17's three scorers all reported the late game as having nothing
+   * left to decide, and the city's largest events were the clearest case —
+   * they arrive, they cost you for weeks, and the game asks nothing of you.
+   *
+   * Absent on the conditions where there genuinely is nothing to be done. A
+   * recession is not a thing you buy your way out of, and a good summer does
+   * not want ending.
+   *
+   * The price is the decision, and `payable` keeps it unclickable when the
+   * money is not there — which `priced.test.ts` enforces across the whole memo
+   * catalogue.
+   */
+  endEarly?: {
+    cost: number;
+    label: string;
+    /** What buying it out actually buys, in the words a boss would use. */
+    hint: string;
+  };
+  /**
    * What has to be true for this to be possible. Read from a small summary of
    * the board rather than GameState, so this file stays free of simulation
    * imports and stays a config file.
@@ -104,6 +129,11 @@ export const WORLD_CONDITIONS: WorldConditionDef[] = [
      * being loud has to be expressed somewhere without a ceiling.
      */
     effects: { heatGain: 1.2, successDelta: -0.04, agencyWork: 1.2 },
+    endEarly: {
+      cost: 28_000,
+      label: 'Find out who needs paying',
+      hint: 'A commissioner under pressure is still a man with a price',
+    },
     requires: (b) => b.heat >= 45 || b.openCases > 0,
   },
 
@@ -123,6 +153,11 @@ export const WORLD_CONDITIONS: WorldConditionDef[] = [
     durationDays: [21, 40],
     cooldownDays: 200,
     effects: { payout: 1.22, businessRevenue: 0.93, successDelta: -0.03 },
+    endEarly: {
+      cost: 18_000,
+      label: 'Settle it with the union',
+      hint: 'Somebody has to blink, and it can be you',
+    },
   },
 
   {
@@ -189,6 +224,11 @@ export const WORLD_CONDITIONS: WorldConditionDef[] = [
     durationDays: [28, 50],
     cooldownDays: 220,
     effects: { agencyWork: 1.3, heatGain: 1.1 },
+    endEarly: {
+      cost: 45_000,
+      label: 'Give them something else to look at',
+      hint: 'A bigger name, handed over quietly',
+    },
     requires: (b) => b.worstCaseStage >= 3,
   },
 
@@ -207,6 +247,11 @@ export const WORLD_CONDITIONS: WorldConditionDef[] = [
     durationDays: [18, 30],
     cooldownDays: 140,
     effects: { rivalAggression: 1.5, heatGain: 1.1 },
+    endEarly: {
+      cost: 22_000,
+      label: 'Put the word out that it is over',
+      hint: 'Say it loudly enough and it stops being true',
+    },
     requires: (b) => b.bleedingRival,
   },
 
@@ -224,6 +269,11 @@ export const WORLD_CONDITIONS: WorldConditionDef[] = [
     durationDays: [21, 35],
     cooldownDays: 170,
     effects: { launderCapacity: 0.72, agencyWork: 1.1 },
+    endEarly: {
+      cost: 26_000,
+      label: 'Have the paperwork made correct',
+      hint: 'Somebody who knows which forms matter',
+    },
     requires: (b) => b.businesses >= 2,
   },
 

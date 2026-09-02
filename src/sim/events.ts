@@ -22,6 +22,7 @@ import { addEvidence, addLog, pushEvent, weightedPick, withArticle } from './uti
 import { askable, money, oneOf, payable, shortOf } from './memo';
 import { GEN_DEFS, isGenerated, resolveGenerated } from './eventgen';
 import { GEN_CHANCE_PER_DAY, GEN_WHEN } from '../config/eventgen';
+import { endConditionEarly } from './world';
 import { addNote, creditOperation, crewList, generateNpc } from './npc';
 import { informFromMemory, remember } from './memory';
 import { recordTie } from './ties';
@@ -1747,6 +1748,20 @@ export function resolveEvent(
   }
 
   switch (event.defId) {
+    /*
+       The city's weather, and the one thing that can be done about it.
+
+       Every world condition used to carry a single button saying there was
+       nothing to decide, and for most of them that is true. Five can be
+       reached by a boss with money — see `WorldConditionDef.endEarly` — and
+       the spending, the clearing and the log line all belong to `world.ts`,
+       which is the only other place `conditionId` is written.
+    */
+    case 'world_condition': {
+      if (choiceId === 'end_early') endConditionEarly(state);
+      return;
+    }
+
     // ----------------------------------------------------- crew pressure --
     case 'promotion_demand': {
       if (!npc) return;
