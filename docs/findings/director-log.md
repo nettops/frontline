@@ -2447,9 +2447,24 @@ working system saying something untrue about itself. That is worth noticing
 before the next round, because the instinct to escalate a finding to a design
 question is what nearly left both unfixed.
 
-**The late-game flatline** was filed as the shelved dominant-job problem seen
-from the player's side. It is not, and all three scorers named the real
-mechanism without knowing it: *"holding districts drops per-job heat to about
+**The dominant job is fixed, on the fifth attempt.** Four repairs were rejected
+because each applied a cost the whole board obeys, and the dominant job is the
+most robust thing on the board — so each removed its competitors first, twice
+making the imbalance measurably worse. Taking that corollary literally,
+`cooldownDays: 14` on `call_in_tribute` and on nothing else:
+
+    over 36 careers          Tribute   paid tier-4   ratio
+    shipped                    1,392           711    1.96
+    a standing cost            1,495           214    5.19
+    grooves on hand play       1,110           214    5.19
+    a 14-day cooldown            429           664    0.65
+
+Tribute falls 69% and its competitors do not follow — Port Operation rises 175
+to 212. The ratio inverts, which is what the job table's own header says should
+be true. `ladder.probe` green throughout, so nothing pre-committed was moved.
+
+**The late-game flatline** is a separate thing, and all three scorers named its
+real mechanism without knowing it: *"holding districts drops per-job heat to about
 1"*, *"after day 140 nothing threatened me"*, *"nothing pushed back"*.
 
 `HEAT_DISTANCE` already carried the exact question and the exact condition for

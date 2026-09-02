@@ -576,6 +576,24 @@ export interface OperationDef {
   baseSuccess: number;
   heatOnSuccess: number;
   heatOnFailure: number;
+  /**
+   * Days before this exact job can be run again, if it is a thing you can only
+   * do so often.
+   *
+   * Absent on all but one job, and that is the point. Four attempts to price
+   * `call_in_tribute` down are recorded in `__tests__/freeLadder.test.ts`, and
+   * every one failed the same way: any cost the whole board obeys removes the
+   * dominant job's competitors before it removes the dominant job, because the
+   * dominant job is the most robust thing on the board. A second currency took
+   * Port Operation from 175 launches to nought and left Tribute higher than it
+   * started; a repetition tax cut Tribute 20% and the paid tier-4 jobs 70%.
+   *
+   * So this is deliberately not a mechanic. It is one number on one definition,
+   * enforced in `canLaunch`, and it says the thing that job's own description
+   * has always said: you cannot go round everyone who owes you and ask for it
+   * all again next week.
+   */
+  cooldownDays?: number;
   /** Player attribute that helps this kind of work. */
   attribute: AttributeId;
   respect: number;

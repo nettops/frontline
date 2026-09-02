@@ -566,6 +566,7 @@ export const OPERATIONS: OperationDef[] = [
     risk: 'moderate',
     crewRequired: 4,
     investment: 0,
+    cooldownDays: 14,
     payout: [74_000, 140_000],
     durationDays: 8,
     baseSuccess: 0.70,
