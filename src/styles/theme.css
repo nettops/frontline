@@ -739,12 +739,28 @@ table.data tr.clickable {
   color: var(--text);
 }
 
+/*
+   The name does not wrap. What is said about it may.
+
+   `.name-cell` is `nowrap` because a name broken across two lines reads as two
+   people, and that is right. The sub-line inherited it, and the sub-line is not
+   always a name: on the launderers table it carries a whole sentence of blurb,
+   which nowrap then forced onto one line. Measured at 1600x1000, that made the
+   "Arrangement" column **1076px of a 1463px table** — 74% of the width — beside
+   three columns of 33 to 41px, and put the panel 121px into horizontal scroll.
+
+   Two round-17 scorers reported that overflow. Iteration 8's decision that the
+   wrap scrolls horizontally stands and is untouched; it was made about a
+   pressure column, not about one cell eating the table.
+*/
 .name-sub {
   font-family: var(--font-mono);
   font-size: 10px;
   letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--text-faint);
+  white-space: normal;
+  max-width: 42ch;
 }
 
 /* --------------------------------------------------------------- buttons --- */

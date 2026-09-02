@@ -2506,10 +2506,22 @@ sideways and only the wrap does. That is precisely the arrangement iteration 8
 recorded as the decision, after finding the table already 49px over before the
 column that appeared to have caused it.
 
-So the decision is being honoured and the testers are still unhappy, which makes
-this a finding about *which columns earn their place at 1600px* rather than
-about the scroll mechanism. That is a design call, it is two rounds running, and
-it wants somebody who can look at the screen.
+So the decision is being honoured and the testers were still unhappy, which was
+filed here as a question about which columns earn their place. Looked at
+properly, it was neither.
+
+Per-column widths at 1600x1000: **"Arrangement" was 1076px of a 1463px table** —
+74% of the width — beside "Takes now" at 41, "At best" at 33 and "They walk" at
+33. One cell was eating the table. `.name-cell` is `white-space: nowrap` because
+a name broken over two lines reads as two people; the sub-line inside it
+inherited that, and on this table the sub-line is a whole sentence of blurb, so
+the column could only ever be as wide as the longest one.
+
+Letting the sub-line wrap took the table to 790px, gave the crushed numeric
+columns their width back — "Takes now" 41 to 72, "They walk" 33 to 72 — and put
+all fourteen panels at zero overflow, from 135px on Businesses and zero
+everywhere else before. Iteration 8's decision is untouched: it was made about a
+pressure column, not about this.
 
 ### On method
 
