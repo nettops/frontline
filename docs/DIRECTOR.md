@@ -171,11 +171,51 @@ So decide the shape before dispatching:
     not a round       anything countable, anything greppable, anything visible
                       in the first five minutes of looking at the screen.
                       Write the check instead — see §6.
+    directed round    a system three blind rounds agreed was never reached.
+                      Name it, and ask whether it is worth its price when used.
+                      Not blind, and its numbers are not comparable.
 
 A targeted round gets the same brief with the stopping rule changed and nothing
 else. It must never get a *narrowed* brief: the moment a tester is told which
 part of the game to concentrate on, under-use stops being a measurement, which
 is the same rule as not naming a feature mid-round.
+
+### The directed round, and the one condition that makes it legal
+
+A blind round answers *is this found?* It cannot answer *is this any good?*,
+because a system nobody reaches produces no evidence about itself either way.
+Those are two questions and the second one needs directing.
+
+So there is a third shape, and it is allowed only after the first question has
+already been answered:
+
+**A system may be named in a brief only once the under-use finding is already
+recorded, from blind rounds, with the four-way split.** Round 17 reported the
+trade, the card game and executing your own man as unreached by three testers of
+three, each classified. That measurement is spent — running a fourth blind
+career to watch a fourth tester not find the trade buys nothing. What is still
+unknown is whether the trade repays $40,000 and a district, and only somebody
+told to go and get it can say.
+
+What the directed round gives up, and must say it gave up:
+
+- **Discovery is unscorable.** A tester told where to look cannot report whether
+  it is findable. First hour, Pacing and the coverage split are all void.
+- **Its scores are not comparable to a blind round's** and must never be put in
+  the same table as one. The write-up says so at the top, and so does the brief.
+- **It is one career, so it reports facts, not rates** — the §4 test above
+  applies unchanged. Whether the card game's rooms are interesting is a fact one
+  tester can establish. How often a player reaches them is not, and that was the
+  blind round's job.
+
+Everything else holds: no reading source, no invented results, the reproduction
+gate, and play the career for real. A system used from a state the tester cheated
+into tells you nothing about its price, and its price is the whole question.
+
+This does not license naming a feature to a tester who is mid-round. That
+prohibition is about overwriting a measurement in flight. A directed round is
+dispatched directed, from the start, with the measurement it would have
+overwritten already in the log.
 
 ### How many scorers, and the honest reason for more than one
 
