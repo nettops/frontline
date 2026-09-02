@@ -496,6 +496,38 @@ describe('the scorecard', () => {
   const pacing = (scale(firsts, 6, 24) + scale(longestGap, 500, 90)) / 2;
 
   /*
+     And when the last new thing happened, which is the flatline itself.
+
+     `longestGap` finds the worst silence anywhere in a career; this finds where
+     the silences stop being interruptions and become the rest of it. Round 17's
+     three scorers all reported the same shape without being able to name it —
+     decisions stopped changing at days 120, 130 and 180 — and the axis above
+     could not distinguish a long gap in the middle from a career that simply
+     ran out.
+
+     The pool of firsts is finite by construction: a job kind, a district, a
+     rank, each counted once. So a career that has run everything it can reach
+     has nothing left that can be new, and the number below is the day that
+     happened. Reported rather than scored, because what to do about it is a
+     question about how much game there is rather than about tuning.
+  */
+  const lastFirst = mean(
+    runs.map((r) => (r.firstsByDay.length ? Math.max(...r.firstsByDay) : 0)),
+  );
+  const flatShare = mean(
+    runs.map((r) => {
+      const last = r.firstsByDay.length ? Math.max(...r.firstsByDay) : 0;
+      /*
+         Against the full span rather than a per-run one, because `Run` does not
+         record where it stopped and a career that ended early has a short flat
+         tail for the opposite reason — it died, it did not run dry. Careers
+         that end early are already the Difficulty axis's business.
+      */
+      return (DAYS - last) / DAYS;
+    }),
+  );
+
+  /*
      Difficulty — a spread of outcomes rather than one outcome.
 
      A game everybody survives is not fair, it is inert; one nobody survives is
@@ -588,6 +620,7 @@ describe('the scorecard', () => {
         `         Feedback ........................... ${one(feedback)}   ${pc(coverage)} of weeks a number moved also said why`,
         `         Depth .............................. ${one(depth)}   best job changed ${pc(churn)} of weeks, ${Math.round(breadth)} kinds used`,
         `         Pacing ............................. ${one(pacing)}   ${Math.round(firsts)} firsts, longest quiet stretch ${Math.round(longestGap)} days`,
+        `                                                    nothing was new after day ${Math.round(lastFirst)} — ${pc(flatShare)} of the career`,
         `         Difficulty ......................... ${one(difficulty)}   ${pc(endedEarly)} ended early, ${distinctEnds} different ranks reached`,
         `         Writing and tone ................... not scored   ${pc(repetition)} of lines were ones you had read before`,
         `                                                          the loudest single sentence is ${pc(loudestShare)} of everything read`,
