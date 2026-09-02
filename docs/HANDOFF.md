@@ -16,13 +16,13 @@ Vite 6, Vitest 2. The player starts broke and grows an organization through
 operations, crew, territory, rival families, and law enforcement.
 
     npm run dev        # play it
-    npm test           # the gate — 1,386 tests in 110 files, ~50s
+    npm test           # the gate — 1,392 tests in 111 files, ~50s
     npm run probe      # the eight measuring files in sim/probes/, ~11min
     npm run test:all   # both
     npx tsc -b         # types
     npm run playtest   # namespaced instance for blind testers
 
-**Current verified state, 2026-09-02: `tsc` clean. 1,386 unit tests across 110
+**Current verified state, 2026-09-02: `tsc` clean. 1,392 unit tests across 111
 files and 85 probe assertions across 8 files, all green.** Last blind
 measurement: round 17, three scorers, days 184/163/317 — see the director log.
 

@@ -135,6 +135,30 @@
  * diminishing returns on running it again — and that anything shaped like a
  * new system will fail here for a fifth time.
  *
+ * ## And the fifth attempt, which took the corollary literally and worked
+ *
+ * `OperationDef.cooldownDays`, set to 14 on `call_in_tribute` and absent on
+ * every other definition in the game. One number, one job, enforced in
+ * `canLaunch`, saying what that job's own description always said: you cannot
+ * go round everyone who owes you and ask again next week.
+ *
+ *     over 36 careers          Tribute   paid tier-4   ratio
+ *     shipped                    1,392           711    1.96
+ *     a standing cost            1,495           214    5.19
+ *     grooves on hand play       1,110           214    5.19
+ *     a 14-day cooldown            429           664    0.65
+ *
+ * **Tribute falls 69% and its competitors do not follow.** Port Operation goes
+ * the other way, 175 launches to 212, and Financial Scheme holds at 452 against
+ * 536. The ratio inverts: the free job at that rank is now run less often than
+ * the paid ones, which is what the header's own rule says should be true.
+ *
+ * `ladder.probe` stayed green throughout, so no pre-committed figure was moved
+ * to reach it, and the eight probe files and 1,392 unit tests are unchanged.
+ * The reading that made it work is the one the four failures produced, and it
+ * is the reason this file exists: a broad cost could never have done this,
+ * because the thing being taxed is the most robust thing on the board.
+ *
  * A second corollary, about method rather than about the game: `PATTERN`'s
  * numbers were swept against automated play, and the config says so — *"only
  * the automated arms move"*. Applying them to all play without re-sweeping

@@ -588,6 +588,26 @@ export function canLaunch(
   if (totalFunds(state) < operationCost(state, def)) {
     return { ok: false, reason: 'You cannot cover the up-front cost.' };
   }
+  /*
+     And the one job you cannot simply keep doing.
+
+     Kept on a flag rather than a field so `SAVE_VERSION` does not move and a
+     save written before this loads with nothing on cooldown. See
+     `OperationDef.cooldownDays` for why this is one number on one definition
+     rather than a rule the whole board obeys.
+  */
+  if (def.cooldownDays) {
+    const since = state.day - (state.flags[`ran_${def.id}`] ?? -9999);
+    if (since < def.cooldownDays) {
+      const left = def.cooldownDays - since;
+      return {
+        ok: false,
+        reason:
+          `You went round them all ${since} ${since === 1 ? 'day' : 'days'} ago. ` +
+          `Give it ${left} more ${left === 1 ? 'day' : 'days'} before asking again.`,
+      };
+    }
+  }
   return { ok: true, reason: null };
 }
 
@@ -678,6 +698,9 @@ export function launchOperation(
     if (!setup) score.status = 'running';
   }
   state.activeOperations[op.id] = op;
+  // Stamped on launch rather than on resolution, so the clock runs from asking
+  // rather than from being answered. See `OperationDef.cooldownDays`.
+  if (def.cooldownDays) state.flags[`ran_${defId}`] = state.day;
 
   addLog(
     state,
