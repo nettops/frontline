@@ -22,6 +22,15 @@ export default defineWorkspace([
     extends: './vite.config.ts',
     test: {
       name: 'unit',
+      /*
+         So a test can read the stylesheet.
+
+         Vitest stubs every CSS import to an empty string by default, `?raw`
+         included, and `ui/__tests__/tableWidth.test.ts` needs the real text —
+         it guards a rule that set a whole table's width. Measured at about 1.7
+         seconds on the gate.
+      */
+      css: true,
       include: ['src/**/*.test.ts', 'src/**/*.test.tsx'],
       exclude: ['src/sim/probes/**'],
     },

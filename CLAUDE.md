@@ -3,7 +3,7 @@
 Rules are in `docs/DIRECTOR.md` (the loop, and §0: you never score your own
 work) and `docs/PLAYTEST.md`. Current state is `docs/HANDOFF.md`.
 
-    npm test           # the gate, ~40s
+    npm test           # the gate, ~50s
     npm run probe      # the eight measuring files, ~11min
     npx tsc -b         # types
 
