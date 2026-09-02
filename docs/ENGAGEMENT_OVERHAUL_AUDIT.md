@@ -227,6 +227,30 @@ so they come before the agenda widens.
 
 ---
 
+### What P2 and P3 turned out to be, once built
+
+This table was wrong in the same direction five times, and it is worth writing
+down which way. Every phase filed as *"parts"* or *"partly built"* was in fact
+finished and unreachable, or finished and unrecognised:
+
+| phase | filed as | actually |
+| --- | --- | --- |
+| 5. Story arcs | parts, no framework | three substrate modules, two complete arcs, and four more arcs not listed. No framework needed; they had no shared view. |
+| 6. Relationship web | data built, no view | the view existed and **pointed the wrong way** — ties are directional and it read the outward half only. |
+| 7. Family history | parts, no chronicle | the parts were durable and unaggregated; the log was throwing away half a 300-day career and four fifths of a 600-day one. |
+| 8. Dynasty chronicle | no cross-reign record | `succession.line` renders in `SuccessionPanel`, and `state.npcs` survives a handover — so `chronicle.ts` carries across reigns. Complete between the two. |
+| 9. Major crisis | ingredients, no crisis tier | **the one real gap.** Nine conditions with real effects, every one shipping a single button reading *"nothing to decide"*. |
+| 10. Player identity | partly built | `careerShape` and `legitimacy` are both on the Yourself panel during play, not only at death. Done. |
+| 11. Scenario starts | three built | three built. Extending is content, not a system. |
+| 12. Challenge seeds | determinism complete | complete. |
+
+The lesson is about the audit rather than the game: **an audit written from the
+outside reads "I cannot find the seam" as "the seam is not there."** Six of
+these eight needed a route, a direction or a view rather than a system, and the
+two attempts in this project that added systems instead were both reverted.
+
+---
+
 ## 7. Risks
 
 1. **Memo starvation** (§2). Mitigated by building the agenda as a derived read.
