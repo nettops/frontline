@@ -2463,8 +2463,42 @@ Tribute falls 69% and its competitors do not follow — Port Operation rises 175
 to 212. The ratio inverts, which is what the job table's own header says should
 be true. `ladder.probe` green throughout, so nothing pre-committed was moved.
 
-**The late-game flatline** is a separate thing, and all three scorers named its
-real mechanism without knowing it: *"holding districts drops per-job heat to about
+**The late-game flatline now has a permanent instrument, and no fix.**
+`scorecard.probe` reports where the last new thing happened, beside the quiet
+stretch it already measured — the two are different questions, and the old axis
+could not tell a long silence in the middle from a career that had simply run
+out. Measured after the tribute cooldown: **nothing was new after day 939 of
+1,460, 36% of the career**, with 20 firsts and a longest quiet stretch of 375
+days.
+
+The cooldown moved three of the four axes and made this one slightly worse:
+
+    axis          before   after
+    Depth            8.1     8.6    9 kinds used -> 11
+    Difficulty       5.1     6.5    65% ended early -> 48%
+    Pacing           6.1     5.9    quiet stretch 316d -> 375d
+
+More kinds tried, more careers surviving, and the gap between novelties longer.
+That is coherent: forcing variety early exhausts the pool of firsts sooner, and
+the pool is finite by construction — a job kind, a district, a rank, each
+counted once. A career that has run everything it can reach has nothing left
+that *can* be new.
+
+So this is not a tuning fault and there is nothing to turn. It is a question
+about how much game there is after the ladder ends, which is P2 and P3 of the
+engagement brief — the dynasty chronicle, the crisis tier, scenario starts — and
+it is recorded rather than guessed at.
+
+**A caveat on how nearly this went wrong.** A purpose-built bot was written to
+find the day the firsts stop, and it reported "nothing new after day 51, 94% of
+the career flat, 6 job kinds, 1 district, peak funds $24,655". Every one of
+those numbers is a fact about a bot that never left its home district and never
+got rich, and none of them is about the game. It was discarded rather than
+reported, and the reading above comes from `scorecard.probe`, whose bot reaches
+three ranks and eleven job kinds.
+
+**The heat-distance saturation** is a separate thing, and all three scorers
+named its mechanism without knowing it: *"holding districts drops per-job heat to about
 1"*, *"after day 140 nothing threatened me"*, *"nothing pushed back"*.
 
 `HEAT_DISTANCE` already carried the exact question and the exact condition for
