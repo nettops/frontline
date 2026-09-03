@@ -235,6 +235,52 @@ export const HEAT_ABSORPTION = {
    * against heat behaving as the table describes.
    */
   perCrew: 0.2,
+  /*
+     ...and the ceiling this does not have, which is measured and not fixed.
+
+     The figures above are absolute — a flat subsidy per head per day — and
+     nothing compares them to what the organization is actually producing. A
+     blind tester ran product and arms through five districts at $177,143 a
+     week for 348 days and finished a 481-day career at a total heat of 7 out
+     of 100, three of it from the street. The trade generated 2.4 a week; his
+     sixteen men absorbed 16.8, seven times more, every week, before the
+     proportional decay ran at all. `heatApparatus.test.ts` reproduces it: with
+     a standing trade running, street heat settles at exactly **0.0** for any
+     payroll of twelve or more, and at 13.3 for a payroll of four. The largest
+     families in the game are the quietest, and hiring is a way to make a
+     standing operation invisible.
+
+     The ratio is structural rather than a number set wrong. Trade throughput
+     is capped by *ground* — the routes a family holds — while the apparatus
+     grows with the *payroll*, so past a certain size every man hired removes
+     more than the trade he enables can produce. Raising `heatPerUnit` does not
+     touch it; that would punish the small outfits, who are the fragile ones,
+     and leave the large ones where they are.
+
+     A repair was built and backed out. It capped the apparatus at a share of a
+     rolling week of arrivals, so it could never remove more than it was given,
+     and three values were measured against the full probe:
+
+         0.7    5 of 53 probe bars fail · Boss 7/36 in a human career
+         0.9    all 53 pass · Boss 27/36 to 29/36 · fails the unit gate, where
+                the doorway property in `approaches.test.ts` narrows from over
+                15 points to 12
+         0.95   3 of 53 fail · Boss 25/36 · unit gate green
+
+     No value clears both gates, and the result is not monotonic: a *weaker*
+     setting made the ladder worse, while the weekly heat distribution barely
+     moved across all three (mean 41 before, then 52, 51, 51). Almost the whole
+     effect is in stopping the apparatus zeroing a continuous source at all and
+     almost none of it is in how much it may then take — so the bars are
+     flipping on where a handful of 36 careers fall against a threshold rather
+     than resolving the figure. `ladder.probe` cannot currently size this
+     change, and picking the value whose noise draw happens to come out green
+     would be choosing a number and calling it a measurement.
+
+     So the fault stands, recorded and instrumented, and the next attempt needs
+     an instrument that can tell two settings of this apart before it needs a
+     setting.
+  */
   /**
    * The most an organization can make go away by being large alone.
    *

@@ -180,24 +180,32 @@ export default function ContrabandPanel() {
                 value={Math.min(100, read.affordable)}
                 tone={read.affordable < Math.min(read.capacity.routes, read.capacity.crew) ? 'hot' : 'ok'}
               />
+              {/*
+                 The fourth bar, and the one that was never here.
+
+                 A supply arrangement is the first thing this trade needs and
+                 the panel had no word for it. A tester read "Money is the
+                 short end" on two separate days while holding the money, the
+                 ground and the people, and found the retainer by clicking a
+                 greyed-out button. It is a yes/no rather than a quantity, so
+                 it is a line rather than a bar.
+              */}
+              <div className="row between" style={{ margin: '10px 0 0' }}>
+                <span className="tiny">Somebody supplying you</span>
+                <span className={read.sourced ? 'tiny mono' : 'tiny mono hot'}>
+                  {read.sourced ? 'yes' : 'no'}
+                </span>
+              </div>
               <p className="faint" style={{ marginTop: 10, marginBottom: 0 }}>
-                {read.capacity.total <= 0
-                  ? read.eligible.length === 0
-                    ? // Naming the threshold, not gesturing at it. The table below
-                      // lists only districts that qualify, so a player who does not
-                      // hold one deeply enough sees an empty table and no reason —
-                      // which reads as a broken screen rather than a requirement.
-                      `Nothing can move. This needs a district at ${CONTROL_LABEL[
-                        def.minControl
-                      ].toLowerCase()} or better, and you do not hold one that far yet.`
-                    : 'Nothing can move. Open a route in one of the districts below.'
-                  : read.affordable < Math.min(read.capacity.routes, read.capacity.crew)
-                    ? read.affordable === 0
-                      ? `Nothing is moving because nothing was bought. A load costs ${formatMoney(read.cost)} and there is no money to buy one.`
-                      : `Money is the short end. You can stock ${read.affordable} at ${formatMoney(read.cost)} each; the streets and the people could carry more.`
-                    : read.capacity.crew < read.capacity.routes
-                      ? 'You have more ground than people. Anybody on a job is not on this.'
-                      : 'You have more people than ground. Take more of the city.'}
+                {/*
+                   Resolved in `readTrade`, against the state each clause is
+                   about. This used to be three nested ternaries over
+                   `capacity.total`, which is the minimum of two unrelated
+                   numbers — so a crew of nobody reported as a shortage of
+                   streets and told a tester to open a route he already had
+                   open.
+                */}
+                {read.blocker?.sentence ?? 'Nothing is holding it up.'}
               </p>
             </Panel>
           </div>
