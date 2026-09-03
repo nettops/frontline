@@ -1586,13 +1586,16 @@ export interface EventChoice {
   cost?: number;
 }
 
+/** How loudly a memo asks. See `sim/pace.ts` for what the clock does with it. */
+export type EventSeverity = 'info' | 'opportunity' | 'warning' | 'danger';
+
 export interface PendingEvent {
   id: Id;
   defId: string;
   day: number;
   title: string;
   body: string;
-  severity: 'info' | 'opportunity' | 'warning' | 'danger';
+  severity: EventSeverity;
   choices: EventChoice[];
   /** NPC the event is about, when there is one. */
   npcId: Id | null;

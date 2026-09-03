@@ -156,6 +156,20 @@ export interface Presence {
   leaks: number;
   /** Nights he worked at all, over the same window. */
   jobs: number;
+  /**
+   * Dead, defected, or otherwise no longer anybody's problem.
+   *
+   * The window this table reads is longer than a man lasts, so the people you
+   * have already dealt with keep appearing in it — and they appear at the top,
+   * because it sorts on the leak count and a man who stopped working still has
+   * his old nights. A blind tester finished a 481-day career with 6 of the 16
+   * rows belonging to men who were gone, two of them killed by him, listed as
+   * "2 nights / 0 worked" and "5 / 0". `canAccuse` refuses them, so nothing
+   * was exploitable; what they did was make the one comparison this whole
+   * screen exists for unreadable, with a zero denominator, at the top of the
+   * table.
+   */
+  gone: boolean;
 }
 
 export function timesPresent(state: GameState): Presence[] {
@@ -169,15 +183,24 @@ export function timesPresent(state: GameState): Presence[] {
     for (const id of job.crewIds) jobs.set(id, (jobs.get(id) ?? 0) + 1);
   }
 
+  const isGone = (id: Id) => {
+    const npc = state.npcs[id];
+    return !npc || npc.status === 'dead' || npc.status === 'defected';
+  };
+
   return [...new Set([...leaks.keys(), ...jobs.keys()])]
     .map((id) => ({
       id,
       name: state.npcs[id]?.name ?? 'somebody since gone',
       leaks: leaks.get(id) ?? 0,
       jobs: jobs.get(id) ?? 0,
+      gone: isGone(id),
     }))
     .filter((row) => row.leaks > 0)
-    .sort((a, b) => b.leaks - a.leaks);
+    // Men who are gone still belong on the page — a night they were on is a
+    // night they were on — but never above the men you can still do something
+    // about. They sort under, whatever their count.
+    .sort((a, b) => Number(a.gone) - Number(b.gone) || b.leaks - a.leaks);
 }
 
 // ------------------------------------------------------------------- tick ---

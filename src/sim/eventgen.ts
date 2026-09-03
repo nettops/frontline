@@ -517,6 +517,19 @@ const askedForYou: EventDef = {
  * inside carries it for years, and an investigator sitting across from him
  * later is having a very different conversation because of it.
  */
+/**
+ * What a lawyer at a desk takes off what is left of a sentence.
+ *
+ * Read rather than stored, and floored at a day so paying is never a purchase
+ * of nothing — a man picked up yesterday with four days to serve still gets
+ * somebody sent, and still gets out sooner for it.
+ */
+function bailDaysOff(state: GameState, npc: Npc): number {
+  const left = (npc.unavailableUntilDay ?? state.day) - state.day;
+  if (left <= 1) return 0;
+  return Math.max(1, Math.round(left * GEN_EFFECT.insideBailShortens));
+}
+
 const somebodyInside: EventDef = {
   id: 'gen_somebody_inside',
   ...shape('gen_somebody_inside'),
@@ -527,6 +540,10 @@ const somebodyInside: EventDef = {
   build(state, rng, ctx) {
     const npc = ctx.npc!;
     const bail = Math.max(1_500, Math.round(npc.wage * GEN_EFFECT.insideBailWeeks));
+    // Decided here and carried on the memo, so the sentence the choice quotes
+    // is the sentence the resolver serves. Computing it twice would let the
+    // two drift by however many days the player took to answer.
+    const daysOff = bailDaysOff(state, npc);
     return {
       defId: 'gen_somebody_inside',
       title: `${npc.name} is inside`,
@@ -539,12 +556,16 @@ const somebodyInside: EventDef = {
       ]),
       severity: 'danger',
       npcId: npc.id,
-      data: {},
+      data: { daysOff },
       choices: [
         {
           id: 'bail',
           label: 'Get somebody down there',
-          ...payable(state, bail, 'and they know who sent them'),
+          ...payable(
+            state,
+            bail,
+            `out ${daysOff} ${daysOff === 1 ? 'day' : 'days'} sooner, and they know who sent them`,
+          ),
         },
         {
           id: 'wait',
@@ -1132,7 +1153,26 @@ export function resolveGenerated(
         }
         npc.stats.loyalty = clamp(npc.stats.loyalty + GEN_EFFECT.insideLoyalty, 0, 100);
         remember(npc, state.day, 'looked_after');
-        addLog(state, `${money(bail)} and somebody who knows the desk sergeant. ${npc.name} was seen to.`, 'money');
+        /*
+           And the half that is visible the same afternoon.
+
+           The loyalty and the memory are the durable effects and both are
+           invisible for months — the memory changes a deposition years later.
+           A tester paid this seven times, checked the roster each time, and
+           could not tell what he had bought. The days come off the sentence
+           the choice quoted, the note goes on the file, and the roster moves.
+        */
+        const daysOff = Math.max(0, Math.round(Number(event.data.daysOff ?? 0)));
+        if (daysOff > 0 && npc.unavailableUntilDay !== null) {
+          npc.unavailableUntilDay = Math.max(state.day + 1, npc.unavailableUntilDay - daysOff);
+        }
+        addNote(npc, state.day, 'Somebody was sent down there for them.', 'good');
+        addLog(
+          state,
+          `${money(bail)} and somebody who knows the desk sergeant. ${npc.name} was seen to` +
+            (daysOff > 0 ? `, and is out ${daysOff} ${daysOff === 1 ? 'day' : 'days'} sooner.` : '.'),
+          'money',
+        );
         return;
       }
       npc.stats.loyalty = clamp(npc.stats.loyalty + GEN_EFFECT.insideAbandonedLoyalty, 0, 100);

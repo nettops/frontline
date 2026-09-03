@@ -290,6 +290,52 @@ describe('an accusation', () => {
  * A quiet page and a solved problem looked the same, and so did a page that
  * had started filling up again.
  */
+describe('the men on the list who are already gone', () => {
+  /*
+   * The window this table reads is longer than a man lasts, so people you have
+   * already dealt with keep turning up in it — and at the top, because it
+   * sorts on leaks and a man who stopped working keeps his old nights while
+   * his denominator goes to nothing. A blind tester finished a 481-day career
+   * with 6 of 16 rows belonging to the dead, two of them killed by him,
+   * reading "5 nights / 0 worked".
+   */
+  function withACorpse(seed: number) {
+    const state = game(seed);
+    const men = staff(state, 6);
+    const j1 = job(state, 'op1', men.slice(0, 4));
+    const j2 = job(state, 'op2', [men[5]]);
+    state.leaks = [
+      { day: state.day, opId: j1.id, opName: j1.name, territoryId: j1.territoryId, knewIds: j1.crewIds, sourceId: null },
+      { day: state.day, opId: j1.id, opName: j1.name, territoryId: j1.territoryId, knewIds: j1.crewIds, sourceId: null },
+      { day: state.day, opId: j1.id, opName: j1.name, territoryId: j1.territoryId, knewIds: j1.crewIds, sourceId: null },
+      { day: state.day, opId: j2.id, opName: j2.name, territoryId: j2.territoryId, knewIds: j2.crewIds, sourceId: null },
+    ];
+    // The most-leaked man of the lot, and dead.
+    men[0].status = 'dead';
+    return { state, men };
+  }
+
+  it('says they are gone rather than showing a ratio out of nothing', () => {
+    const { state, men } = withACorpse(41);
+    const row = timesPresent(state).find((r) => r.id === men[0].id)!;
+    expect(row.gone).toBe(true);
+    expect(timesPresent(state).find((r) => r.id === men[1].id)!.gone).toBe(false);
+  });
+
+  it('never puts one above a man you can still do something about', () => {
+    const { state, men } = withACorpse(42);
+    const rows = timesPresent(state);
+    // He has the joint-highest count and would have sorted first.
+    const dead = rows.findIndex((r) => r.id === men[0].id);
+    const live = rows.findIndex((r) => !r.gone);
+    expect(rows.length).toBeGreaterThan(1);
+    expect(live).toBeLessThan(dead);
+    expect(rows.filter((r) => !r.gone).every((r, i, all) => i === 0 || all[i - 1].leaks >= r.leaks)).toBe(
+      true,
+    );
+  });
+});
+
 describe('afterwards', () => {
   function killed(seed: number, guilty: boolean) {
     const state = game(seed);
