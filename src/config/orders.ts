@@ -63,10 +63,24 @@ export interface GangDef {
    * What their neighbourhood thinks of you, per unit supplied.
    *
    * Heavier than running the trade there yourself — `TRADES.product` charges
-   * 0.11 a unit — because it is not your people doing it and you have no say
+   * 0.88 a unit — because it is not your people doing it and you have no say
    * in how they do it. This is the whole price of the transaction. A player
    * who fills every order the river asks for will find the river will not hold
    * a business, and nothing will have said so at the time.
+   *
+   * These moved with `TRADES.product`, which was corrected from 0.11 after it
+   * turned out to lose its race with the district recovery every week. They
+   * had to: the invariant this pays for is that supplying somebody else is
+   * dearer per unit than doing it yourself, and leaving these where they were
+   * would have made the gangs the *cheap* way to move product on a street —
+   * exactly backwards, and the sort of inversion a corrected number causes
+   * quietly two files away.
+   *
+   * They stay flat where the trade's own cost now settles against the
+   * district's recovery, and the difference in shape is deliberate. A route is
+   * a standing thing the street gets used to. An order is somebody else's
+   * twelve-to-thirty units landing on that corner over a few weeks, and it
+   * lands where it lands.
    */
   sentimentPerUnit: number;
   /** Attention, per unit. Somebody else's arrests still name your streets. */
@@ -90,7 +104,7 @@ export const GANGS: GangDef[] = [
     territoryId: 'riverside',
     wants: 'product',
     pays: 1.75,
-    sentimentPerUnit: -0.3,
+    sentimentPerUnit: -0.95,
     heatPerUnit: 0.2,
     influencePerUnit: -0.09,
   },
@@ -102,7 +116,7 @@ export const GANGS: GangDef[] = [
     territoryId: 'rail_yards',
     wants: 'arms',
     pays: 1.9,
-    sentimentPerUnit: -0.55,
+    sentimentPerUnit: -1.9,
     heatPerUnit: 0.5,
     influencePerUnit: -0.22,
   },
@@ -114,7 +128,7 @@ export const GANGS: GangDef[] = [
     territoryId: 'southport',
     wants: 'product',
     pays: 1.72,
-    sentimentPerUnit: -0.22,
+    sentimentPerUnit: -0.92,
     heatPerUnit: 0.14,
     influencePerUnit: -0.06,
   },

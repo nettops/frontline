@@ -116,10 +116,51 @@ export const TRADES: Record<TradeId, TradeDef> = {
     populationWeight: 0.65,
 
     heatPerUnit: 0.16,
-    // The reason this is not simply the best thing in the game. A district you
-    // run product through turns on you, and sentiment gates businesses,
-    // operation success and eventually whether anybody will sell to you at all.
-    sentimentPerUnit: -0.11,
+    /*
+     * The reason this is not simply the best thing in the game. A district you
+     * run product through turns on you, and sentiment gates businesses,
+     * operation success and eventually whether anybody will sell to you at all.
+     *
+     * That was the claim. It was false for the life of the feature, and it was
+     * false by an order of magnitude.
+     *
+     * A district recovers `SENTIMENT_RECOVERY_PER_WEEK` = 2.0 a week toward
+     * indifference. Downtown — the largest district on the board — held at
+     * dominance and saturated with product carries 6.6 units a week, which at
+     * -0.11 is 0.73. Every street in the city therefore got *happier*, at
+     * +1.27 a week net, while narcotics ran through it. The four biggest
+     * districts, at their ceilings:
+     *
+     *     Downtown     6.6 units/wk   -0.73   net +1.27
+     *     Northside    5.2            -0.57   net +1.43
+     *     The Heights  5.1            -0.57   net +1.43
+     *     Old Quarter  4.7            -0.51   net +1.49
+     *
+     * A blind tester ran product through his own neighbourhood for 348 days,
+     * at $101,099 a week, and reported its feeling at 50 out of 100 — the
+     * value it started at. Meanwhile a single standing-order Protection Racket
+     * had taken another district to 2. The trade was the most profitable thing
+     * in the game and also the safest, and its own blurb said the opposite.
+     *
+     * -0.88, and the drain settles rather than racing, which is the other half
+     * of the repair. The first attempt was a flat -0.45 against a flat +2.0,
+     * and a flat cost against a flat recovery has no equilibrium in it — it is
+     * a linear race, so the loser bottoms out. Measured over 36 trading
+     * careers: worst feeling in a district they ran through, **median 1**, and
+     * 36 of 36 took one below `SENTIMENT_HOSTILE_BELOW`. That is a cliff, not
+     * a price, and it is the same failure as the original in the other
+     * direction — the district's state stopped mattering.
+     *
+     * So the cost scales by how much room is left above `TRADE_SENTIMENT_FLOOR`
+     * (see there), which gives every district an equilibrium instead: the
+     * biggest, most saturated ground settles lowest, a trickle through a small
+     * district never turns it at all, and *which street you run it through*
+     * becomes the decision it was always described as. Downtown at dominance
+     * settles near 27 — under the bar that stops people selling you premises.
+     * Stopping still heals at +2.0, which the second half of the guard in
+     * `deep.test.ts` holds.
+     */
+    sentimentPerUnit: -0.88,
     evidence: 'operation',
     evidencePerUnit: 0.22,
 
@@ -149,8 +190,18 @@ export const TRADES: Record<TradeId, TradeDef> = {
     populationWeight: 0.4,
 
     heatPerUnit: 0.34,
-    // Nobody on the street can see it happening, which is most of the appeal.
-    sentimentPerUnit: -0.02,
+    /*
+     * Nobody on the street can see it happening, which is most of the appeal.
+     *
+     * Raised with product and by the same factor, so the 5.5x contrast between
+     * the two — the whole reason a boss picks one over the other — is the
+     * thing that survives rather than a number. At a district ceiling of 2.3
+     * crates this is 0.37 a week against a 2.0 recovery, which never turns a
+     * street on its own: arms stays a problem with the law, priced in
+     * `heatPerUnit` and `evidencePerUnit`, not a problem with the
+     * neighbourhood.
+     */
+    sentimentPerUnit: -0.16,
     evidence: 'violence',
     evidencePerUnit: 0.5,
 
@@ -158,6 +209,28 @@ export const TRADES: Record<TradeId, TradeDef> = {
     stockCap: 120,
   },
 };
+
+/**
+ * How low the trade alone will take a street.
+ *
+ * `sentimentPerUnit` is scaled by the room left above this, so the drain
+ * weakens as a district sours and stops at the floor. Two reasons it is here
+ * rather than at zero.
+ *
+ * The first is measurement. A flat drain against the flat
+ * `SENTIMENT_RECOVERY_PER_WEEK` is a race with no equilibrium, and 36 careers
+ * of it put the median worst district at 1 out of 100 with every career taking
+ * one below the hostile bar. Nothing in the game was left to decide.
+ *
+ * The second is what it says. A neighbourhood that resents what you move
+ * through it is not a neighbourhood in revolt; it is one that will not sell
+ * you premises and will not help when something goes wrong. Getting past that
+ * takes something the trade does not do on its own — a job that goes badly, a
+ * body, a standing order grinding the same corner. Those still push below it.
+ * The floor is what *this* cause is worth, not a limit on how bad a street can
+ * get.
+ */
+export const TRADE_SENTIMENT_FLOOR = 15;
 
 export const TRADE_IDS: TradeId[] = ['product', 'arms'];
 

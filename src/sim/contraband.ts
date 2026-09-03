@@ -39,13 +39,18 @@ import {
   SUPPLY_TRUST,
   TRADES,
   TRADE_IDS,
+  TRADE_SENTIMENT_FLOOR,
   UNITS_PER_CREW,
   WORKSHOP,
   type TradeId,
 } from '../config/contraband';
 import { ownedBusinesses } from './business';
 import { PAYDAY_INTERVAL } from '../config/economy';
-import { CONTROL_THRESHOLDS, type ControlLevel } from '../config/territories';
+import {
+  CONTROL_THRESHOLDS,
+  SENTIMENT_START,
+  type ControlLevel,
+} from '../config/territories';
 import { RIVAL_IDS, type FactionId } from '../config/factions';
 import { houseShort } from './houses';
 import { note } from './ledger';
@@ -850,9 +855,22 @@ export function tickContraband(state: GameState, rng: Rng): void {
 
       earned += here * unitValue(state, trade) * (0.7 + (prosperity(state, t.id) / 100) * 0.6);
 
-      // What it costs the street. This is the whole reason product is not
-      // simply the best thing in the game.
-      t.sentiment = clamp(t.sentiment + here * def.sentimentPerUnit, 0, 100);
+      /*
+         What it costs the street. This is the whole reason product is not
+         simply the best thing in the game.
+
+         Scaled by the room left above `TRADE_SENTIMENT_FLOOR`, so the drain
+         weakens as a district sours and the street finds an equilibrium
+         against the weekly recovery instead of racing it to zero. See the note
+         on the constant for why a flat figure could not work here in either
+         direction.
+      */
+      const room = clamp(
+        (t.sentiment - TRADE_SENTIMENT_FLOOR) / (SENTIMENT_START - TRADE_SENTIMENT_FLOOR),
+        0,
+        1,
+      );
+      t.sentiment = clamp(t.sentiment + here * def.sentimentPerUnit * room, 0, 100);
     });
 
     c.stock[trade] -= moved;
