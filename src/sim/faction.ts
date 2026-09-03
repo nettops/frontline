@@ -504,13 +504,25 @@ function record(
   faction: Faction,
   action: Omit<FactionAction, 'day' | 'observed'>,
   observed: boolean,
+  /**
+   * The caller has already written a log line for this.
+   *
+   * `declareWar` and `endWar` in `diplomacy.ts` each log the event themselves,
+   * and both of the diplomacy branches below then recorded it a second time
+   * with `observed: true` — so every AI war and every AI peace reached the
+   * player's log twice, in two different phrasings, on the same day. That is
+   * two of the three lines in the triple a blind tester reported six times.
+   * The history entry is still wanted, and `observed` still means what it
+   * meant; this only suppresses the duplicate line.
+   */
+  alreadyLogged = false,
 ): void {
   const entry: FactionAction = { ...action, day: state.day, observed };
   faction.history.unshift(entry);
   if (faction.history.length > 40) faction.history.length = 40;
 
   // The player only hears about what happens where they have people.
-  if (observed) {
+  if (observed && !alreadyLogged) {
     addLog(state, entry.detail, 'crew');
   }
 }
@@ -712,6 +724,7 @@ function executeDiplomacy(state: GameState, faction: Faction, option: Option): v
         detail: `${def.shortName} and ${houseShort(state, target)} have made peace.`,
         },
       factionIntel(state, faction.id) >= FACTION_INTEL_ROUGH_ABOVE,
+      true,
     );
     return;
   }
@@ -729,6 +742,7 @@ function executeDiplomacy(state: GameState, faction: Faction, option: Option): v
           ? `${def.shortName} have declared war on you.`
           : `${def.shortName} have declared war on ${houseShort(state, target)}.`,
     },
+    true,
     true,
   );
 }

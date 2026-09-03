@@ -14,6 +14,7 @@ import { Rng } from '../rng';
 import {
   accuse,
   canAccuse,
+  readAftermath,
   readLeaks,
   tickInformants,
   timesPresent,
@@ -276,6 +277,93 @@ describe('an accusation', () => {
     accuse(state, talker.id);
     expect(talker.informingSince).toBeUndefined();
     expect(talker.status).toBe('dead');
+  });
+});
+
+/*
+ * And whether either outcome is visible from outside.
+ *
+ * The right/wrong branch has always been real, and a blind tester who used it
+ * twice on a 481-day career reported it as a screen with no consequence
+ * behind it — because the only confirmation this system offers is the record
+ * going quiet, and nothing tracked the record from the day of the accusation.
+ * A quiet page and a solved problem looked the same, and so did a page that
+ * had started filling up again.
+ */
+describe('afterwards', () => {
+  function killed(seed: number, guilty: boolean) {
+    const state = game(seed);
+    const men = staff(state, 6);
+    const talker = men[2];
+    talker.informingSince = state.day - 40;
+    const j = job(state, 'op1', men.slice(0, 4));
+    state.leaks = [
+      {
+        day: state.day,
+        opId: j.id,
+        opName: j.name,
+        territoryId: j.territoryId,
+        knewIds: j.crewIds,
+        sourceId: talker.id,
+      },
+    ];
+    const target = guilty ? talker : men[4];
+    accuse(state, target.id);
+    return { state, men, talker, target };
+  }
+
+  it('says nothing at all until somebody has been decided on', () => {
+    const state = game(31);
+    staff(state, 4);
+    expect(readAftermath(state)).toBeNull();
+  });
+
+  it('counts the nights that came back after, and dates the decision', () => {
+    const { state, target } = killed(32, true);
+    const at = state.day;
+    const after = readAftermath(state)!;
+    expect(after.name).toBe(target.name);
+    expect(after.day).toBe(at);
+    expect(after.sinceCount).toBe(0);
+
+    // Two months on, with the record still shut.
+    state.day = at + 60;
+    expect(readAftermath(state)!.daysSince).toBe(60);
+    expect(readAftermath(state)!.sinceCount).toBe(0);
+  });
+
+  it('reads the page filling up again when it was the wrong man', () => {
+    const { state, men, talker } = killed(33, false);
+    const at = state.day;
+    expect(readAftermath(state)!.sinceCount).toBe(0);
+
+    // Past the window the real one goes careful for, and with nights for him
+    // to describe: `recentJobs` has a window of its own, so a fixture that
+    // advances two months without working would test nothing.
+    underInvestigation(state);
+    state.day = at + INFORMANT.cautiousDays + 1;
+    state.day += 7 - (state.day % 7);
+    for (let w = 0; w < 60 && readAftermath(state)!.sinceCount === 0; w++) {
+      state.day += 7;
+      job(state, `after${w}`, men.slice(0, 3));
+      tickInformants(state, new Rng(state.rng));
+    }
+    const after = readAftermath(state)!;
+    expect(after.sinceCount, 'the record never reopened, so nothing was measured').toBeGreaterThan(0);
+    expect(after.lastDay).toBeGreaterThan(at);
+    void talker;
+  });
+
+  it('still refuses to say which one it was', () => {
+    // The whole point. The count is the same read either way; it is the
+    // player's problem what it means, and a night after a correct call is
+    // possible because somebody else can always start.
+    const right = killed(34, true);
+    const wrong = killed(34, false);
+    expect(Object.keys(readAftermath(right.state)!).sort()).toEqual(
+      Object.keys(readAftermath(wrong.state)!).sort(),
+    );
+    expect(JSON.stringify(readAftermath(right.state))).not.toMatch(/talking|guilty|right|wrong/i);
   });
 });
 

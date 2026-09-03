@@ -32,6 +32,7 @@ import {
   PORT,
   SEIZURE,
   ARMED,
+  ARMS_SUPPLIERS,
   ARMS_SUPPLIER_BY_ID,
   type SupplierDef,
   SUPPLIERS,
@@ -47,6 +48,7 @@ import {
 import { ownedBusinesses } from './business';
 import { PAYDAY_INTERVAL } from '../config/economy';
 import {
+  CONTROL_LABEL,
   CONTROL_THRESHOLDS,
   SENTIMENT_START,
   type ControlLevel,
@@ -1081,6 +1083,42 @@ export interface TradeRead {
   affordable: number;
   lastEarned: number;
   lastMoved: number;
+  /**
+   * The one thing to fix, and the sentence that says so.
+   *
+   * The panel used to decide this itself, out of `capacity.total <= 0` and
+   * three nested ternaries, and it got it wrong in both directions on a live
+   * career. A blind tester on day 45 held an open route in Little Sicily and
+   * was told *"Nothing can move. Open a route in one of the districts below"*
+   * — because every one of his people was on a standing order, `capacity.crew`
+   * was 0, and a zero on the people side made `total` zero and the message
+   * blamed the streets. On days 138 and 140 he was told *"Money is the short
+   * end"* while holding the money, the ground and the people: what he did not
+   * have was a supply arrangement, which the panel had no word for at all. He
+   * found the $40,314 retainer by clicking a greyed-out button and reading the
+   * refusal, and put roughly ninety days of play into a screen that had been
+   * naming the wrong blocker the whole time.
+   *
+   * So it is resolved here, in order, against the state each clause actually
+   * reads — and `sourced` is first, because nothing else matters without it.
+   */
+  blocker: TradeBlocker | null;
+  /** Whether anything is in a position to sell or make units at all. */
+  sourced: boolean;
+}
+
+export type TradeBlockerId =
+  | 'locked'
+  | 'source'
+  | 'ground'
+  | 'route'
+  | 'people'
+  | 'money'
+  | 'streets';
+
+export interface TradeBlocker {
+  id: TradeBlockerId;
+  sentence: string;
 }
 
 export function readTrade(state: GameState, trade: TradeId): TradeRead {
@@ -1099,7 +1137,112 @@ export function readTrade(state: GameState, trade: TradeId): TradeRead {
     ),
     lastEarned: c?.lastRun?.[trade].earned ?? 0,
     lastMoved: c?.lastRun?.[trade].moved ?? 0,
+    ...blockerOf(state, trade),
   };
+}
+
+/** Whether anything is in a position to sell or make units of this. */
+export function sourced(state: GameState, trade: TradeId): boolean {
+  const c = state.contraband;
+  if (!c) return false;
+  return trade === 'product'
+    ? Boolean(c.supplierId) || plantList(state).length > 0
+    : Boolean(armsSupplier(state)) || c.workshops.length > 0;
+}
+
+/**
+ * What is stopping you, in the order the answers actually gate each other.
+ *
+ * Each clause reads the state it is about and nothing else. The old version
+ * inferred the whole answer from `capacity.total`, which is the minimum of two
+ * unrelated numbers, so a zero anywhere reported as a shortage of streets.
+ */
+function blockerOf(
+  state: GameState,
+  trade: TradeId,
+): { blocker: TradeBlocker | null; sourced: boolean } {
+  const def = TRADES[trade];
+  const has = sourced(state, trade);
+  const capacity = throughput(state, trade);
+  const open = (state.contraband?.routes[trade] ?? []).length;
+  const eligible = eligibleDistricts(state, trade);
+  const cost = unitCost(state, trade);
+  const affordable = Math.floor((state.org.cash + state.org.dirtyCash) / Math.max(1, cost));
+
+  const say = (id: TradeBlockerId, sentence: string) => ({
+    blocker: { id, sentence },
+    sourced: has,
+  });
+
+  if (!tradeUnlocked(state, trade)) return say('locked', needsFronts(state, trade));
+
+  // First, and it was missing entirely. Everything below is a detail until
+  // somebody is willing to hand you units.
+  if (!has) return say('source', needsSource(state, trade));
+
+  if (eligible.length === 0) {
+    return say(
+      'ground',
+      `Nothing can move. This needs a district at ${CONTROL_LABEL[def.minControl].toLowerCase()} or ` +
+        `better, and you do not hold one that far yet.`,
+    );
+  }
+  // Read from the routes themselves rather than from a capacity that folds in
+  // the crew. This is the clause that told a tester to open a route he had
+  // already opened.
+  if (open === 0) return say('route', 'Nothing can move. Open a route in one of the districts below.');
+  if (capacity.crew <= 0) {
+    return say(
+      'people',
+      'Nobody is free to carry it. Everybody you have is on a job or a standing order.',
+    );
+  }
+  if (affordable <= 0) {
+    return say(
+      'money',
+      `Nothing is moving because nothing was bought. A load costs ${formatMoney(cost)} and ` +
+        `there is no money to buy one.`,
+    );
+  }
+
+  const binding = Math.min(capacity.routes, capacity.crew, affordable);
+  if (affordable === binding && affordable < Math.min(capacity.routes, capacity.crew)) {
+    return say(
+      'money',
+      `Money is the short end. You can stock ${affordable} at ${formatMoney(cost)} each; the ` +
+        `streets and the people could carry more.`,
+    );
+  }
+  if (capacity.crew < capacity.routes) {
+    return say('people', 'You have more ground than people. Anybody on a job is not on this.');
+  }
+  if (capacity.routes < capacity.crew) {
+    return say('streets', 'You have more people than ground. Take more of the city.');
+  }
+  return { blocker: null, sourced: has };
+}
+
+/**
+ * The sentence that names the retainer, which nothing on the screen ever did.
+ *
+ * The cheapest way in, with its figure, so the number a player has to save
+ * toward is on the panel that is telling them they cannot move anything —
+ * rather than only inside the refusal of a button they have to think to press.
+ */
+function needsSource(state: GameState, trade: TradeId): string {
+  if (trade === 'product') {
+    const cheapest = SUPPLIERS.map((s) => priced(state, s.retainer)).sort((a, b) => a - b)[0];
+    return (
+      'Nothing can move because nobody is supplying you. An arrangement starts at ' +
+      `${formatMoney(cheapest)} for the retainer, or you can build a plant of your own.`
+    );
+  }
+  const cheapest = ARMS_SUPPLIERS.map((s) => priced(state, s.retainer)).sort((a, b) => a - b)[0];
+  return (
+    'Nothing can move because nothing is making them and nobody is selling them. ' +
+    `A freight agent starts at ${formatMoney(cheapest)} for the retainer; a workshop is ` +
+    `${formatMoney(priced(state, WORKSHOP.cost))} to build.`
+  );
 }
 
 /** Every supplier, with what the player can currently tell about the price. */

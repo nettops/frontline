@@ -12,7 +12,7 @@ import {
   legalCostAt,
   weeklyLegalCost,
 } from '../../sim/investigation';
-import { accuse, canAccuse, readLeaks, timesPresent } from '../../sim/informants';
+import { accuse, canAccuse, readAftermath, readLeaks, timesPresent } from '../../sim/informants';
 import { readWhispers, canLookInto, lookInto } from '../../sim/whispers';
 import { civicRoster, canSpendFavour } from '../../sim/civic';
 import { CIVIC_BY_ID } from '../../config/civic';
@@ -26,6 +26,7 @@ export default function IntelligencePanel() {
   const open = activeCases(state);
   const leaks = readLeaks(state);
   const present = timesPresent(state);
+  const after = readAftermath(state);
   const size = footprint(state);
   const whispers = readWhispers(state);
   /*
@@ -247,6 +248,39 @@ export default function IntelligencePanel() {
         <p className="dim" style={{ marginTop: 12 }}>
           {message}
         </p>
+      )}
+
+      {/*
+         What has happened since the last time you decided it was somebody.
+
+         The record going quiet is the only confirmation this system offers —
+         INFORMANT.cautiousDays makes the real informant stop for eight weeks
+         rather than stop — and until this line existed nothing tracked the
+         page from the day of the accusation, so a quiet page and a solved
+         problem looked identical, and so did a page that had started filling
+         up again. A blind tester killed two men and reported that neither
+         outcome was observable.
+
+         It counts and it does not adjudicate. A night coming back after a
+         correct call is possible; somebody else can always start.
+      */}
+      {after && (
+        <Panel title={`Since you decided it was ${after.name}`}>
+          <KeyValue
+            label="Days"
+            value={`${after.daysSince}`}
+          />
+          <KeyValue
+            label="Nights that have come back"
+            value={after.sinceCount === 0 ? 'none' : `${after.sinceCount}`}
+            tone={after.sinceCount === 0 ? 'good' : 'hot'}
+          />
+          <p className="faint tiny" style={{ margin: '10px 0 0' }}>
+            {after.sinceCount === 0
+              ? 'Nothing has come back since. That is the only answer you are going to get, and it is not one.'
+              : 'It has not stopped. Which means either you were wrong, or somebody else has started.'}
+          </p>
+        </Panel>
       )}
 
       {leaks.length > 0 && (
