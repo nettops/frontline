@@ -333,10 +333,25 @@ export default function IntelligencePanel() {
                 {present.map((row) => {
                   const check = canAccuse(state, row.id);
                   return (
-                    <tr key={row.id}>
-                      <td className="name-main">{row.name}</td>
-                      <td className="num mono hot">{row.leaks}</td>
-                      <td className="num mono dim">{row.jobs}</td>
+                    <tr key={row.id} className={row.gone ? 'faint' : undefined}>
+                      <td>
+                        <div className="name-cell">
+                          <span className="name-main">{row.name}</span>
+                          {/*
+                             Gone men stay on the page — a night they were on
+                             is a night they were on — but they are labelled
+                             and sorted under everybody you can still do
+                             something about. A tester ended a career with 6 of
+                             16 rows belonging to the dead, at the top, two of
+                             them killed by him and reading "5 nights / 0
+                             worked": a zero denominator on the one comparison
+                             this screen exists for.
+                          */}
+                          {row.gone && <span className="name-sub">no longer with you</span>}
+                        </div>
+                      </td>
+                      <td className={row.gone ? 'num mono dim' : 'num mono hot'}>{row.leaks}</td>
+                      <td className="num mono dim">{row.gone ? '—' : row.jobs}</td>
                       <td>
                         {accusing === row.id ? (
                           <button

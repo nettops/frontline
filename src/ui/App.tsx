@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useOptionalGame, getState, mutate, setGame } from '../store';
 import { advanceDay, advanceDays } from '../sim/clock';
+import { carriesOn } from '../sim/pace';
 import { careerShape, postMortem } from '../sim/legacy';
 import { buildReport, snapshot, type DayReport } from './report';
 import { play } from './audio';
@@ -47,6 +48,17 @@ export default function App() {
      what you were in the middle of doing, not about the organization.
   */
   const [remaining, setRemaining] = useState(0);
+  /*
+     What it stopped for, and where the span began.
+
+     Answering a memo should not also cancel what you were doing. `carriesOn`
+     decides which severities are news and which are trouble; news resumes the
+     rest of the span by itself, trouble stops dead and leaves the button.
+     `spanFrom` keeps the snapshot the span opened with, so the bulletin at the
+     end describes the month rather than its last four days.
+  */
+  const stoppedFor = useRef<ReturnType<typeof carriesOn> | null>(null);
+  const spanFrom = useRef<ReturnType<typeof snapshot> | null>(null);
 
   /**
    * The only place time moves.
@@ -65,7 +77,10 @@ export default function App() {
     // does: it is a question, and answering it after a week has passed would
     // be answering a different question.
     if (s.sitdown) return;
-    const before = snapshot(s);
+    // The span keeps its opening snapshot across resumes, so a month that was
+    // interrupted three times still reports as a month.
+    const before = spanFrom.current ?? snapshot(s);
+    spanFrom.current = before;
     let moved = 1;
     mutate((g) => {
       if (days === 1) advanceDay(g);
@@ -73,12 +88,33 @@ export default function App() {
     }, true);
     // What is left of what was asked for. `advanceDays` returns how far it
     // actually got, so this is the remainder and nothing has to be inferred.
-    setRemaining(Math.max(0, days - moved));
+    const left = Math.max(0, days - moved);
+    setRemaining(left);
+    const raised = getState()?.pendingEvents ?? [];
+    stoppedFor.current = raised.length ? carriesOn(raised[raised.length - 1].severity) : null;
+    if (left === 0) spanFrom.current = null;
     const next = buildReport(before, s);
     setReport(next);
     // A quiet day gets the small dry click; a day with news gets its own noise.
     play(next ? next.cue : days === 1 ? 'tick' : 'week');
   }, []);
+
+  /*
+     Pick the month back up once the question is answered.
+
+     Only for the severities `carriesOn` calls news, only when the desk is
+     actually clear, and only while something is left of what was asked for.
+     Trouble — a warning or a danger — leaves the button instead, because a
+     player whose man has just been arrested may well want to do something
+     before another three weeks go past.
+  */
+  useEffect(() => {
+    if (!state || state.gameOver || state.sitdown) return;
+    if (remaining <= 0 || state.pendingEvents.length > 0) return;
+    if (stoppedFor.current !== true) return;
+    stoppedFor.current = null;
+    step(remaining);
+  }, [state, remaining, step]);
 
   const goto = useCallback((id: PanelId) => {
     setPanel(id);
@@ -212,7 +248,14 @@ export default function App() {
             >
               Carry on — {remaining} more {remaining === 1 ? 'day' : 'days'}
             </button>
-            <button className="btn small" onClick={() => setRemaining(0)}>
+            <button
+              className="btn small"
+              onClick={() => {
+                setRemaining(0);
+                spanFrom.current = null;
+                stoppedFor.current = null;
+              }}
+            >
               Leave it
             </button>
           </div>
