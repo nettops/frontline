@@ -27,6 +27,7 @@ import { withFronts } from './helpers';
 import {
   buildWorkshop,
   canSellArms,
+  closeRoute,
   openRoute,
   canOpenSupply,
   openSupply,
@@ -37,7 +38,7 @@ import {
   tradeUnlocked,
   unitCost,
 } from '../contraband';
-import { TRADES } from '../../config/contraband';
+import { TRADES, TRADE_SENTIMENT_FLOOR } from '../../config/contraband';
 import { recordTie, followDeparture, tieDrift, readTies } from '../ties';
 import { reviewGoal, goalBoard, goalEffect } from '../goals';
 import { cover, tickPerception, readCity, buyPatron } from '../perception';
@@ -72,6 +73,7 @@ import {
   prosperity,
   territoryDef,
   territoryList,
+  tickTerritory,
 } from '../territory';
 import { DAYS_PER_YEAR, FEAR } from '../../config/economy';
 import { DEFAULT_TERMS, PRICE_BOUNDS } from '../../config/market';
@@ -84,7 +86,12 @@ import { HEALTH } from '../../config/businesses';
 import { CITY, PATRON } from '../../config/perception';
 import { AGING } from '../../config/succession';
 import { RIVAL_IDS } from '../../config/factions';
-import { DISTRICT_LIFE, HOME_TERRITORY, TERRITORY_BY_ID } from '../../config/territories';
+import {
+  DISTRICT_LIFE,
+  HOME_TERRITORY,
+  SENTIMENT_START,
+  TERRITORY_BY_ID,
+} from '../../config/territories';
 import { ATTRIBUTION } from '../../config/beliefs';
 import { BOND } from '../../config/diplomacy';
 import {
@@ -1178,21 +1185,88 @@ describe('the two trades', () => {
     expect(state.contraband.lastRun!.product.moved).toBeGreaterThan(0);
   });
 
-  /* The reason product is not simply the best thing in the game. */
-  it('costs the neighbourhood the thing that gates everything else', () => {
-    const { state, t } = running(164, 'product');
-    state.org.cash = 500_000;
-    openSupply(state, 'dockside');
-    const before = t.sentiment;
-    for (let w = 1; w <= 6; w++) {
+  /*
+   * The reason product is not simply the best thing in the game.
+   *
+   * This test used to tick contraband and nothing else, and it passed for a
+   * year against a game where the effect it asserts could not happen. A
+   * district recovers `SENTIMENT_RECOVERY_PER_WEEK` = 2.0 a week toward
+   * indifference, and at `sentimentPerUnit` = -0.11 the largest district on
+   * the board, held at dominance and saturated, lost 0.73 — so every street in
+   * the city got *happier* while product ran through it, and the panel, the
+   * config comment and the trade's own blurb all said otherwise. A blind
+   * tester ran narcotics through his own neighbourhood for 348 days and
+   * reported its feeling at 50 out of 100, the value it started at.
+   *
+   * The fixture ticks the recovery too, because the recovery is the thing the
+   * cost has to beat. Anything that measures only one side of a race is not
+   * measuring the race.
+   */
+  function weeks(state: GameState, count: number): void {
+    for (let w = 1; w <= count; w++) {
       state.day = w * 7;
       // A supplier can fall over on any given week, and this test is not about
       // that. Re-opening is what a player does, and without it the assertion
       // is a bet on a 5% roll not landing six times — which it eventually did.
       if (!state.contraband.supplierId) openSupply(state, 'dockside');
       tickContraband(state, new Rng(state.rng));
+      tickTerritory(state);
     }
+  }
+
+  it('costs the neighbourhood faster than the neighbourhood forgets', () => {
+    const { state, t } = running(164, 'product');
+    state.org.cash = 500_000;
+    openSupply(state, 'dockside');
+    const before = t.sentiment;
+    weeks(state, 12);
+    expect(state.contraband.lastRun!.product.moved).toBeGreaterThan(0);
     expect(t.sentiment).toBeLessThan(before);
+  });
+
+  /*
+   * And the other half, which is what stops the fix above from being a
+   * one-way ratchet: a street you stop working comes back. Without this the
+   * cheapest way to pass the test above is a number so large that one season
+   * of trading ruins a district permanently, and no player would ever open a
+   * second route.
+   */
+  it('and comes back when you stop', () => {
+    const { state, t } = running(168, 'product');
+    state.org.cash = 500_000;
+    openSupply(state, 'dockside');
+    weeks(state, 12);
+    const worked = t.sentiment;
+
+    closeRoute(state, 'product', t.id);
+    for (let w = 13; w <= 24; w++) {
+      state.day = w * 7;
+      tickContraband(state, new Rng(state.rng));
+      tickTerritory(state);
+    }
+    expect(t.sentiment).toBeGreaterThan(worked);
+  });
+
+  /*
+   * And the shape of it, which is the part a number alone cannot hold.
+   *
+   * The first repair of `sentimentPerUnit` was flat, and flat against a flat
+   * recovery is a race rather than a price: 36 careers put the median worst
+   * district at 1 out of 100 and every one of them took a street below the
+   * hostile bar. The cost now weakens as the district sours, so what a route
+   * buys is an equilibrium — bad enough to matter, and not the end of the
+   * neighbourhood.
+   */
+  it('sours a street without emptying it', () => {
+    const { state, t } = running(169, 'product');
+    state.org.cash = 2_000_000;
+    openSupply(state, 'dockside');
+    weeks(state, 80);
+    expect(t.sentiment).toBeLessThan(SENTIMENT_START);
+    expect(
+      t.sentiment,
+      'the trade alone took a district past what the trade alone is worth',
+    ).toBeGreaterThanOrEqual(TRADE_SENTIMENT_FLOOR - 1);
   });
 
   it('prices the water by who holds the docks', () => {

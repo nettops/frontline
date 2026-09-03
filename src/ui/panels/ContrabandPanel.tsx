@@ -32,7 +32,7 @@ import {
   readOrders,
   refuseOrder,
 } from '../../sim/orders';
-import { people, prosperity, territoryDef } from '../../sim/territory';
+import { people, territoryDef } from '../../sim/territory';
 import { formatMoney } from '../../sim/util';
 import { rivals } from '../../sim/faction';
 import {
@@ -41,11 +41,17 @@ import {
   PLANT,
   TRADES,
   TRADE_IDS,
+  TRADE_SENTIMENT_FLOOR,
   WORKSHOP,
   type TradeId,
 } from '../../config/contraband';
+import { districtCapacity } from '../../sim/contraband';
 import { priced } from '../../sim/market';
-import { CONTROL_LABEL } from '../../config/territories';
+import {
+  CONTROL_LABEL,
+  SENTIMENT_RECOVERY_PER_WEEK,
+  SENTIMENT_START,
+} from '../../config/territories';
 import { houseName, houseShort } from '../../sim/houses';
 
 /**
@@ -261,6 +267,21 @@ export default function ContrabandPanel() {
                       <td>
                         <div style={{ minWidth: 90 }}>
                           <Bar value={t.sentiment} tone={t.sentiment < 30 ? 'hot' : undefined} />
+                          {/*
+                             The rate, not just the level.
+
+                             The per-unit cost lived in a button tooltip, which
+                             is invisible to anybody who is not hovering, and a
+                             per-unit figure is the wrong unit anyway: what
+                             decides whether a street turns is that number
+                             against the district's own recovery, and nothing
+                             on the screen had ever named the recovery at all.
+                             A blind tester ran product through one
+                             neighbourhood for 348 days and could not say what
+                             it had cost him, because it had cost him nothing
+                             and the screen could not have told him either way.
+                          */}
+                          <span className="name-sub">{feelingRate(state, tab, t)}</span>
                         </div>
                       </td>
                       <td>
@@ -425,7 +446,15 @@ function Orders() {
   );
 }
 
-/** What one district would take, for the table. */
+/**
+ * What one district would take, for the table.
+ *
+ * Reads the simulation's own function rather than restating the formula. The
+ * copy that used to live here had drifted: it left out `CONTROL_THROUGHPUT`,
+ * so a district held at a foothold advertised nearly three times what it would
+ * actually carry, on the same screen as a blockers panel a tester reported for
+ * naming the wrong blocker.
+ */
 function districtShare(
   state: ReturnType<typeof useGame>,
   trade: TradeId,
@@ -433,12 +462,36 @@ function districtShare(
 ): number {
   const t = state.territories[territoryId];
   if (!t) return 0;
-  // Recomputed here rather than threaded through: it is one multiplication and
-  // the panel wants it per row.
-  const def = TRADES[trade];
-  const wealth = (prosperity(state, territoryId) / 100) * def.wealthWeight;
-  const folk = (people(state, territoryId) / 62_000) * def.populationWeight;
-  return def.districtCapacity * (wealth + folk);
+  return districtCapacity(state, trade, t);
+}
+
+/**
+ * What running it here does to the street, per week, against the recovery.
+ *
+ * The per-unit figure on its own is not the decision — a district climbs
+ * `SENTIMENT_RECOVERY_PER_WEEK` back toward indifference every week regardless
+ * — so this states the net, in the direction feeling is actually going.
+ */
+function feelingRate(
+  state: ReturnType<typeof useGame>,
+  trade: TradeId,
+  t: { id: string; sentiment: number },
+): string {
+  const carried = districtShare(state, trade, t.id);
+  const room = Math.max(
+    0,
+    Math.min(
+      1,
+      (t.sentiment - TRADE_SENTIMENT_FLOOR) / (SENTIMENT_START - TRADE_SENTIMENT_FLOOR),
+    ),
+  );
+  const cost = carried * Math.abs(TRADES[trade].sentimentPerUnit) * room;
+  const recovery = t.sentiment < SENTIMENT_START ? SENTIMENT_RECOVERY_PER_WEEK : 0;
+  const net = recovery - cost;
+  if (Math.abs(net) < 0.05) return 'settled where it is';
+  return net < 0
+    ? `−${Math.abs(net).toFixed(1)} a week while it runs`
+    : `+${net.toFixed(1)} a week`;
 }
 
 /** Where product comes from, and what the waterfront is doing to the price. */

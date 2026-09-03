@@ -527,6 +527,34 @@ interface Climb {
     unitsToGangs: number;
     /** The lowest public feeling ever seen in a district a gang was supplied in. */
     worstGangSentiment: number;
+    /**
+     * And the same for the player's own routes, which nothing measured.
+     *
+     * This file has run the trade for thirty-six careers at a time since the
+     * trade existed and never once looked at what it did to the streets it ran
+     * through. That is why `sentimentPerUnit` sat at a tenth of the figure it
+     * needed for the whole life of the feature: the cost was in the config,
+     * the comment claimed it bit, and no instrument pointed at it.
+     */
+    worstRouteSentiment: number;
+    /** Careers that took one of their own districts below the hostile bar. */
+    routeWentHostile: boolean;
+    /**
+     * The paired reading, which is the one that can attribute anything.
+     *
+     * `worstRouteSentiment` above answers "how bad did it get on a street the
+     * trade ran through", and that turned out to be unattributable: the bot
+     * works jobs and standing orders in the same districts, and a career of
+     * either alone bottoms a neighbourhood out. Correcting `sentimentPerUnit`
+     * by a factor of eight moved that statistic not at all — median 1 before
+     * and after — because it was never measuring the trade.
+     *
+     * These are the mean end-of-career feeling in the districts a career ran
+     * through against the districts it held and did not, within the same
+     * career, so what is left when you subtract them is the route.
+     */
+    routedFeeling: number | null;
+    unroutedFeeling: number | null;
   };
   newSystems: {
     whispers: {
@@ -1747,6 +1775,12 @@ function climb(seed: number, days: number, policy: Policy = {}): Climb {
     refused: 0,
     unitsToGangs: 0,
     worstGangSentiment: 100,
+    worstRouteSentiment: 100,
+    routeWentHostile: false,
+    routedFeeling: null as number | null,
+    unroutedFeeling: null as number | null,
+    /** Districts a route was ever open in, for the paired reading at the end. */
+    routedIds: new Set<string>(),
   };
   const firstFront = {
     day: null as number | null,
@@ -3270,6 +3304,16 @@ function climb(seed: number, days: number, policy: Policy = {}): Climb {
         if (where) trade.worstGangSentiment = Math.min(trade.worstGangSentiment, where.sentiment);
       }
 
+      for (const trade_ of TRADE_IDS) {
+        for (const id of state.contraband?.routes[trade_] ?? []) {
+          const where = state.territories[id];
+          if (!where) continue;
+          trade.routedIds.add(id);
+          trade.worstRouteSentiment = Math.min(trade.worstRouteSentiment, where.sentiment);
+          if (where.sentiment < SENTIMENT_HOSTILE_BELOW) trade.routeWentHostile = true;
+        }
+      }
+
       const feed = readWhispers(state);
       if (feed.length) newSys.weeksWithAny += 1;
       for (const w of feed) {
@@ -3820,6 +3864,25 @@ function climb(seed: number, days: number, policy: Policy = {}): Climb {
         .filter((o) => o.buyerKind === 'gang')
         .reduce((sum, o) => sum + o.delivered, 0),
       worstGangSentiment: trade.worstGangSentiment,
+      worstRouteSentiment: trade.worstRouteSentiment,
+      routeWentHostile: trade.routeWentHostile,
+      ...(() => {
+        // Held districts, split by whether anything was ever run through them.
+        // Both sides come from the same career, so the ordinary business of
+        // being a family — jobs, orders, the standing orders that grind a
+        // corner — is on both sides of the subtraction.
+        const held = territoryList(state).filter((t) => playerInfluence(t) >= 10);
+        const mean_ = (xs: number[]) =>
+          xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null;
+        return {
+          routedFeeling: mean_(
+            held.filter((t) => trade.routedIds.has(t.id)).map((t) => t.sentiment),
+          ),
+          unroutedFeeling: mean_(
+            held.filter((t) => !trade.routedIds.has(t.id)).map((t) => t.sentiment),
+          ),
+        };
+      })(),
     },
     newSystems: {
       whispers: {
@@ -7197,6 +7260,16 @@ describe('the trades, and the two things built on top of them', () => {
     const income = RUNS_TRADING.map((r) => r.trade.income);
     const opened = RUNS_TRADING.filter((r) => r.trade.productOpenedOn !== null);
     const armed = RUNS_TRADING.filter((r) => r.trade.armsOpenedOn !== null);
+    // Only the careers that actually ran something. A career that never opened
+    // a route has a `worstRouteSentiment` of 100 and would drag the median up
+    // into a pass no matter what the trade did to anybody.
+    const ran = RUNS_TRADING.filter((r) => r.trade.worstRouteSentiment < 100);
+    // Careers that held ground on both sides of the comparison. A career with
+    // a route in everything it owns has no control in it and belongs in
+    // neither column.
+    const paired = RUNS_TRADING.filter(
+      (r) => r.trade.routedFeeling !== null && r.trade.unroutedFeeling !== null,
+    );
 
     // eslint-disable-next-line no-console
     console.log(
@@ -7214,15 +7287,32 @@ describe('the trades, and the two things built on top of them', () => {
         `        trade income over the career: p10 ${Math.round(pct(income, 0.1))} ` +
         `median ${Math.round(median(income))} p75 ${Math.round(pct(income, 0.75))}\n` +
         `        best estate, not trading vs trading: ` +
-        `${Math.round(median(base))} vs ${Math.round(median(trading))}`,
+        `${Math.round(median(base))} vs ${Math.round(median(trading))}\n` +
+        `        worst feeling in a district they ran through: median ` +
+        `${Math.round(median(ran.map((r) => r.trade.worstRouteSentiment)))}, ` +
+        `p10 ${Math.round(pct(ran.map((r) => r.trade.worstRouteSentiment), 0.1))} · ` +
+        `took one below ${SENTIMENT_HOSTILE_BELOW}: ` +
+        `${ran.filter((r) => r.trade.routeWentHostile).length}/${ran.length}\n` +
+        `        feeling at the end, paired within each career: ran through ` +
+        `${Math.round(median(paired.map((r) => r.trade.routedFeeling!)))} vs held and left ` +
+        `alone ${Math.round(median(paired.map((r) => r.trade.unroutedFeeling!)))} ` +
+        `(${paired.length} careers held both)`,
     );
 
     /*
-       Two conditions, and they are about whether the trade is a real option
-       rather than about how much it pays.
+       Three conditions now, and they are about whether the trade is a real
+       option rather than about how much it pays.
 
        A trade most careers cannot get into is content nobody sees. A trade
        that leaves a family no better off is a button that costs a retainer.
+
+       And the third, which is here because its absence is what let the fault
+       ship: a trade the street never notices is not the dangerous half of this
+       game's economy, whatever its blurb says. `SENTIMENT_START` is 50 and the
+       recovery is 2.0 a week, so a district that ends a career of trading at
+       50 was never touched at all — the drain lost the race to the recovery
+       every single week. The bar is deliberately loose: it asks that the trade
+       leaves a mark, not that it ruins anybody.
     */
     expect(
       opened.length,
@@ -7232,6 +7322,18 @@ describe('the trades, and the two things built on top of them', () => {
       median(trading),
       'running both trades for 300 days leaves a family no better off',
     ).toBeGreaterThan(median(base));
+    /*
+       Paired, because the unpaired version could not attribute anything. The
+       bot works jobs and standing orders in the districts it runs product
+       through, and either of those alone bottoms a neighbourhood out — so
+       "worst feeling on a routed street" read a median of 1 both before and
+       after `sentimentPerUnit` was corrected by a factor of eight. It was
+       never measuring the trade. This is.
+    */
+    expect(
+      median(paired.map((r) => r.trade.routedFeeling!)),
+      'the streets a career ran product through end no worse than the ones it left alone',
+    ).toBeLessThan(median(paired.map((r) => r.trade.unroutedFeeling!)));
   });
 
   it('says what a plant does for the careers that build one', () => {
