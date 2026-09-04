@@ -37,6 +37,7 @@
 
 import type { EvidenceSource } from './lawEnforcement';
 import type { ControlLevel } from './territories';
+import type { HeatChannel } from './heat';
 
 export type TradeId = 'product' | 'arms';
 
@@ -66,6 +67,32 @@ export interface TradeDef {
 
   /** Heat per unit moved. */
   heatPerUnit: number;
+  /**
+   * Where that attention lands, and it is not the street.
+   *
+   * `HEAT_ABSORPTION` removes street heat at a flat rate per head per day and
+   * grows with the payroll, while a trade's throughput is capped by ground. So
+   * a family of sixteen absorbed seven times what a full narcotics operation
+   * generated and street heat settled at exactly zero — a blind tester ran
+   * both trades through five districts at $177,143 a week for 348 days and
+   * finished at a total heat of 7 out of 100.
+   *
+   * Capping the apparatus was measured and costs a third of the Boss careers
+   * in a human-length career, which is a worse defect than the one it fixes.
+   * The attention has to arrive somewhere the apparatus does not reach, and
+   * `money` is not a workaround for that — it is the correct channel. What the
+   * law sees in a standing trade is not a body in a street; it is a great deal
+   * of cash that cannot say where it came from, which is the channel's own
+   * description. It decays slower than the street (0.8 against 1.25), laying
+   * low does nothing for it, and the counterplay is fronts and launderers,
+   * which is a system the player already has and the tester was already under
+   * pressure from: $936,000 of dirty money against $121,000 a week of
+   * capacity.
+   *
+   * What product costs the neighbourhood is `sentimentPerUnit`, which is a
+   * different price paid to a different party.
+   */
+  heatChannel: HeatChannel;
   /** What it does to the neighbourhood, per unit moved there. */
   sentimentPerUnit: number;
   /** Which agencies will care about the traces it leaves. */
@@ -116,6 +143,7 @@ export const TRADES: Record<TradeId, TradeDef> = {
     populationWeight: 0.65,
 
     heatPerUnit: 0.16,
+    heatChannel: 'money',
     /*
      * The reason this is not simply the best thing in the game. A district you
      * run product through turns on you, and sentiment gates businesses,
@@ -190,6 +218,7 @@ export const TRADES: Record<TradeId, TradeDef> = {
     populationWeight: 0.4,
 
     heatPerUnit: 0.34,
+    heatChannel: 'money',
     /*
      * Nobody on the street can see it happening, which is most of the appeal.
      *

@@ -180,6 +180,7 @@ import {
   PLANT,
   SUPPLIERS,
   TRADE_IDS,
+  TRADES,
 } from '../../config/contraband';
 import { acceptOrder, liveOrders, orderList, refuseOrder } from '../orders';
 import { GANGS } from '../../config/orders';
@@ -8974,6 +8975,81 @@ describe('sizing the apparatus cap', () => {
       APPARATUS_CAP.ofIntake = was;
     }
   }
+
+  /**
+   * And the repair that did go in, measured the same way.
+   *
+   * The trades pay into `money` rather than `street`, so their attention lands
+   * where the apparatus does not reach. That is a change to the game and it
+   * gets the same paired reading the cap got, against the same seeds — the
+   * whole point of building this was to stop choosing between two settings on
+   * an unpaired count.
+   */
+  it('says what moving the trades off the street channel costs', () => {
+    /*
+       A hundred rather than thirty-six, because the collect dominates this
+       file and the careers themselves are seconds. The first reading of this
+       change moved seven seeds, five down and two up, which is a coin at that
+       size — and the whole reason this block exists is that a reading inside
+       its own noise was quoted as a decision once already.
+    */
+    const seeds = Array.from({ length: 100 }, (_, i) => 700 + i);
+    const shipped = seeds.map((seed) => climb(seed, HUMAN_DAYS, { trades: true }));
+
+    const wasProduct = TRADES.product.heatChannel;
+    const wasArms = TRADES.arms.heatChannel;
+    let asBefore: Climb[];
+    try {
+      TRADES.product.heatChannel = 'street';
+      TRADES.arms.heatChannel = 'street';
+      asBefore = seeds.map((seed) => climb(seed, HUMAN_DAYS, { trades: true }));
+    } finally {
+      TRADES.product.heatChannel = wasProduct;
+      TRADES.arms.heatChannel = wasArms;
+    }
+
+    let lost = 0;
+    let gained = 0;
+    for (let i = 0; i < seeds.length; i++) {
+      const before = asBefore[i].reachedOn.has('boss');
+      const now = shipped[i].reachedOn.has('boss');
+      if (before && !now) lost += 1;
+      if (!before && now) gained += 1;
+    }
+    const heatGap = meanOf(shipped.map((r, i) => r.trade.meanHeat - asBefore[i].trade.meanHeat));
+    const estateGap = meanOf(shipped.map((r, i) => r.bestEstate - asBefore[i].bestEstate));
+
+    // eslint-disable-next-line no-console
+    console.log(
+      `the trades on the books instead of the street, ${seeds.length} paired seeds\n` +
+        `        Boss ${shipped.filter((r) => r.reachedOn.has('boss')).length}/${seeds.length} ` +
+        `(on the street: ${asBefore.filter((r) => r.reachedOn.has('boss')).length}/${seeds.length}) · ` +
+        `${lost} lost it, ${gained} gained it\n` +
+        `        weekly heat ${heatGap >= 0 ? '+' : ''}${heatGap.toFixed(1)} · ` +
+        `estate ${estateGap >= 0 ? '+' : ''}${Math.round(estateGap).toLocaleString('en-US')}` +
+        `\n        ${lost + gained} seeds moved — ` +
+        (Math.abs(lost - gained) >= Math.max(3, (lost + gained) * 0.6)
+          ? 'resolves'
+          : 'does not resolve: the split is inside its own noise'),
+    );
+
+    /*
+       The change has to do something and must not do what the cap did.
+
+       The cap took twelve seeds of thirty-six off their Boss career, twelve
+       down against one to three up, at every setting. That is the shape this
+       must not have: a repair that costs a third of the ladder is worse than
+       the fault it closes.
+    */
+    expect(
+      heatGap,
+      'moving the trades to the books did not raise the attention they draw',
+    ).toBeGreaterThan(0);
+    expect(
+      lost - gained,
+      'the repair costs as much of the ladder as the apparatus cap did, which is too much',
+    ).toBeLessThan(seeds.length / 6);
+  });
 
   it('says whether a setting can be told apart from shipping it off', () => {
     const seeds = Array.from({ length: 36 }, (_, i) => 700 + i);

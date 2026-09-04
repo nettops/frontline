@@ -877,7 +877,7 @@ export function tickContraband(state: GameState, rng: Rng): void {
 
     c.stock[trade] -= moved;
     earn(state, Math.round(earned));
-    addHeat(state, moved * def.heatPerUnit, 'street', def.name);
+    addHeat(state, moved * def.heatPerUnit, def.heatChannel, def.name);
     addEvidence(state, {
       day: state.day,
       source: def.evidence,
