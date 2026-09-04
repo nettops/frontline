@@ -418,3 +418,37 @@ export function resolves(
   }
   return { ok: true, why: '' };
 }
+
+/**
+ * A population that is not built until somebody reads it.
+ *
+ * `ladder.probe` declares twenty-eight of these at module scope — about 1,834
+ * careers — and a module's top level runs during *collect*, before vitest has
+ * decided which tests to run. So `-t "one test"` skipped every test body and
+ * skipped none of the cost: filtering to a single assertion took 500 to 870
+ * seconds, about as long as running the entire measuring layer. Seven filtered
+ * runs in one session spent roughly seventy-five minutes building careers that
+ * nothing read.
+ *
+ * A proxy rather than a thunk, and that is the whole reason it is worth having:
+ * `RUNS.filter(...)` keeps working at four hundred and thirty call sites. The
+ * array is built on the first property access and memoised, so a population no
+ * test touches is never built at all, and one that several tests share is built
+ * once.
+ *
+ * `Reflect.get` is called without a receiver on purpose. Passing the proxy
+ * through would hand `Array.prototype` getters a receiver that traps back into
+ * here; as written, the *method* is fetched through the proxy and then invoked
+ * with the proxy as `this`, which is what makes `map`, `filter` and the
+ * iterator read the built array one index at a time.
+ */
+export function lazyRuns<T>(build: () => T[]): T[] {
+  let made: T[] | null = null;
+  const at = (): T[] => (made ??= build());
+  return new Proxy([] as T[], {
+    get: (_t, prop) => Reflect.get(at(), prop),
+    has: (_t, prop) => Reflect.has(at(), prop),
+    ownKeys: () => Reflect.ownKeys(at()),
+    getOwnPropertyDescriptor: (_t, prop) => Reflect.getOwnPropertyDescriptor(at(), prop),
+  });
+}

@@ -131,7 +131,16 @@ const WASH_RESERVE = 1;
 import { DRIFT, DRIFT_INTERVAL_DAYS } from '../../config/npcs';
 import { wageExpectation } from '../npc';
 import type { RankId } from '../types';
-import { answerCheaply, ev, idle, mean as meanOf, median, pairedGap, resolves } from '../__tests__/helpers';
+import {
+  answerCheaply,
+  ev,
+  idle,
+  lazyRuns,
+  mean as meanOf,
+  median,
+  pairedGap,
+  resolves,
+} from '../__tests__/helpers';
 import { borrow, canBorrow, priced } from '../market';
 import { readWhispers } from '../whispers';
 import { isGenerated } from '../eventgen';
@@ -4090,7 +4099,7 @@ const DAYS = 1460;
    8/12, and at twelve seeds there was no way to tell that from the world
    simply diverging. Three times the sample costs about six seconds.
 */
-const RUNS = Array.from({ length: 36 }, (_, i) => climb(700 + i, DAYS));
+const RUNS = lazyRuns(() => Array.from({ length: 36 }, (_, i) => climb(700 + i, DAYS)));
 
 describe('the ladder', () => {
   it('played long careers', () => {
@@ -4539,7 +4548,7 @@ describe('the ladder', () => {
 const TRAIN_BENCH = 4;
 
 const HUMAN_DAYS = 300;
-const RUNS_300 = Array.from({ length: 36 }, (_, i) => climb(700 + i, HUMAN_DAYS));
+const RUNS_300 = lazyRuns(() => Array.from({ length: 36 }, (_, i) => climb(700 + i, HUMAN_DAYS)));
 
 /*
    A wider sample, for the one question below that thirty-six cannot answer.
@@ -4591,7 +4600,7 @@ const RUNS_300 = Array.from({ length: 36 }, (_, i) => climb(700 + i, HUMAN_DAYS)
    288, which is the largest of the three. Renamed off `WIDE` because a
    name that says "memo" would be wrong for a population three bars read.
 */
-const WIDE = Array.from({ length: 288 }, (_, i) => climb(700 + i, HUMAN_DAYS));
+const WIDE = lazyRuns(() => Array.from({ length: 288 }, (_, i) => climb(700 + i, HUMAN_DAYS)));
 
 /** Nearest-rank percentile. Small samples, so no interpolation to argue about. */
 function pct(xs: number[], p: number): number {
@@ -5225,7 +5234,7 @@ describe('the systems nobody had measured', () => {
    any change reshuffles the stream and a single-run diff here would be noise
    with a decimal point on it.
 */
-const RUNS_ACTIVE = Array.from({ length: 36 }, (_, i) => climb(700 + i, HUMAN_DAYS, { active: true }));
+const RUNS_ACTIVE = lazyRuns(() => Array.from({ length: 36 }, (_, i) => climb(700 + i, HUMAN_DAYS, { active: true })));
 
 /*
    F15's arm: the same bot, allowed to borrow its way to a front.
@@ -5237,9 +5246,9 @@ const RUNS_ACTIVE = Array.from({ length: 36 }, (_, i) => climb(700 + i, HUMAN_DA
    respect requirement and no business requirement, reachable on the first
    morning of the game.
 */
-const RUNS_FINANCED = Array.from({ length: 36 }, (_, i) =>
+const RUNS_FINANCED = lazyRuns(() => Array.from({ length: 36 }, (_, i) =>
   climb(700 + i, HUMAN_DAYS, { financeFronts: true }),
-);
+));
 
 /*
    The contraband arm, in two halves, and why there are two.
@@ -5257,12 +5266,12 @@ const RUNS_FINANCED = Array.from({ length: 36 }, (_, i) =>
    would report the entire contraband economy as the effect of two features
    added in one afternoon.
 */
-const RUNS_TRADING = Array.from({ length: 36 }, (_, i) =>
+const RUNS_TRADING = lazyRuns(() => Array.from({ length: 36 }, (_, i) =>
   climb(700 + i, HUMAN_DAYS, { trades: true }),
-);
-const RUNS_OWNED = Array.from({ length: 36 }, (_, i) =>
+));
+const RUNS_OWNED = lazyRuns(() => Array.from({ length: 36 }, (_, i) =>
   climb(700 + i, HUMAN_DAYS, { trades: true, ownSupply: true }),
-);
+));
 
 /*
    The third arm: the same trading bot, willing to lean on its premises.
@@ -5272,9 +5281,9 @@ const RUNS_OWNED = Array.from({ length: 36 }, (_, i) =>
    else, so the question this arm answers is whether the door the player was
    given is worth walking through — and what it costs them when they do.
 */
-const RUNS_LEANING = Array.from({ length: 36 }, (_, i) =>
+const RUNS_LEANING = lazyRuns(() => Array.from({ length: 36 }, (_, i) =>
   climb(700 + i, HUMAN_DAYS, { trades: true, lean: true }),
-);
+));
 
 /*
    The fourth arm: the same trading bot, with somebody keeping its books.
@@ -5284,9 +5293,9 @@ const RUNS_LEANING = Array.from({ length: 36 }, (_, i) =>
    cut, the only charge in this game that buys nothing. 24% is what a stranger
    charges now, and this measures what the alternative is worth.
 */
-const RUNS_BOOKS = Array.from({ length: 36 }, (_, i) =>
+const RUNS_BOOKS = lazyRuns(() => Array.from({ length: 36 }, (_, i) =>
   climb(700 + i, HUMAN_DAYS, { trades: true, books: true }),
-);
+));
 
 
 /*
@@ -5299,9 +5308,9 @@ const RUNS_BOOKS = Array.from({ length: 36 }, (_, i) =>
    nothing ever touches. The precedent is the money-sink tier, whose first
    pricing was wrong in a way only its own arm could show.
 */
-const RUNS_SCORES = Array.from({ length: 36 }, (_, i) =>
+const RUNS_SCORES = lazyRuns(() => Array.from({ length: 36 }, (_, i) =>
   climb(700 + i, HUMAN_DAYS, { scores: true }),
-);
+));
 
 /*
    And the same population wide, for the one bar that pairs.
@@ -5314,9 +5323,9 @@ const RUNS_SCORES = Array.from({ length: 36 }, (_, i) =>
    Paired against `WIDE`, which is the same seeds in the same order with the
    policy off, so the rule about arms being separate worlds still holds.
 */
-const WIDE_SCORES = Array.from({ length: 288 }, (_, i) =>
+const WIDE_SCORES = lazyRuns(() => Array.from({ length: 288 }, (_, i) =>
   climb(700 + i, HUMAN_DAYS, { scores: true }),
-);
+));
 
 /*
    A bot that puts its green men with its good ones, against the same bot that
@@ -5327,9 +5336,9 @@ const WIDE_SCORES = Array.from({ length: 288 }, (_, i) =>
    decision: two men off the board for twelve days against what the student
    comes back with.
 */
-const RUNS_TRAINS = Array.from({ length: 36 }, (_, i) =>
+const RUNS_TRAINS = lazyRuns(() => Array.from({ length: 36 }, (_, i) =>
   climb(700 + i, HUMAN_DAYS, { trains: true }),
-);
+));
 
 /*
    A bot that hands the job loop over and stops choosing.
@@ -5339,9 +5348,9 @@ const RUNS_TRAINS = Array.from({ length: 36 }, (_, i) =>
    solving itself, and the whole of `standingOrders.ts` is built around one
    property meant to stop that: a standing order does not read the room.
 */
-const RUNS_AUTO = Array.from({ length: 36 }, (_, i) =>
+const RUNS_AUTO = lazyRuns(() => Array.from({ length: 36 }, (_, i) =>
   climb(700 + i, HUMAN_DAYS, { auto: true }),
-);
+));
 
 /*
    And the realistic use: an order grinding the street job while the player
@@ -5351,9 +5360,9 @@ const RUNS_AUTO = Array.from({ length: 36 }, (_, i) =>
    measures walking away, which nobody sensible does; this measures the
    convenience, which everybody would.
 */
-const RUNS_AUTO_PLUS = Array.from({ length: 36 }, (_, i) =>
+const RUNS_AUTO_PLUS = lazyRuns(() => Array.from({ length: 36 }, (_, i) =>
   climb(700 + i, HUMAN_DAYS, { autoPlus: true }),
-);
+));
 
 /*
    And the same order again, moved every three weeks instead of left.
@@ -5367,9 +5376,9 @@ const RUNS_AUTO_PLUS = Array.from({ length: 36 }, (_, i) =>
    this reads *now* is the confound, priced separately and for nothing, and
    what it reads afterwards minus that is what the pattern actually bought.
 */
-const RUNS_AUTO_CYCLED = Array.from({ length: 36 }, (_, i) =>
+const RUNS_AUTO_CYCLED = lazyRuns(() => Array.from({ length: 36 }, (_, i) =>
   climb(700 + i, HUMAN_DAYS, { autoCycled: true }),
-);
+));
 
 /*
    A bot that deals with the people who keep costing it money.
@@ -5394,9 +5403,9 @@ const RUNS_AUTO_CYCLED = Array.from({ length: 36 }, (_, i) =>
    lapse. A zero in either direction is the mechanic failing in a way no
    estate figure would show.
 */
-const RUNS_CUTS = Array.from({ length: 36 }, (_, i) =>
+const RUNS_CUTS = lazyRuns(() => Array.from({ length: 36 }, (_, i) =>
   climb(700 + i, HUMAN_DAYS, { cuts: true }),
-);
+));
 
 /*
    The same decision, taken the way a person would take it.
@@ -5404,9 +5413,9 @@ const RUNS_CUTS = Array.from({ length: 36 }, (_, i) =>
    Paired against the same seeds and the same baseline as the arm above, so the
    only thing between the two populations is how freely the thing is used.
 */
-const RUNS_CUTS_RARE = Array.from({ length: 36 }, (_, i) =>
+const RUNS_CUTS_RARE = lazyRuns(() => Array.from({ length: 36 }, (_, i) =>
   climb(700 + i, HUMAN_DAYS, { cutsRarely: true }),
-);
+));
 
 /*
    The allocator with the judgement call it was deliberately denied.
@@ -5415,9 +5424,9 @@ const RUNS_CUTS_RARE = Array.from({ length: 36 }, (_, i) =>
    and against `RUNS_300`, which is the bar that actually matters: automation
    must not beat playing.
 */
-const RUNS_AUTO_SMART = Array.from({ length: 36 }, (_, i) =>
+const RUNS_AUTO_SMART = lazyRuns(() => Array.from({ length: 36 }, (_, i) =>
   climb(700 + i, HUMAN_DAYS, { matchOpsSmart: true }),
-);
+));
 
 /*
    The operations loop handed to something that allocates properly.
@@ -5428,9 +5437,9 @@ const RUNS_AUTO_SMART = Array.from({ length: 36 }, (_, i) =>
    the rule a player would actually want, which is the only way to ask whether
    an operations autopilot would be strictly better than the hand it replaces.
 */
-const RUNS_MATCHED = Array.from({ length: 36 }, (_, i) =>
+const RUNS_MATCHED = lazyRuns(() => Array.from({ length: 36 }, (_, i) =>
   climb(700 + i, HUMAN_DAYS, { matchOps: true }),
-);
+));
 
 /*
    The allocator again, in a family that also develops its people.
@@ -5444,9 +5453,9 @@ const RUNS_MATCHED = Array.from({ length: 36 }, (_, i) =>
    Paired against `RUNS_TRAINS`, which trains identically and assigns by hand,
    so the only thing between the two populations is still the assignment.
 */
-const RUNS_MATCHED_TRAINED = Array.from({ length: 36 }, (_, i) =>
+const RUNS_MATCHED_TRAINED = lazyRuns(() => Array.from({ length: 36 }, (_, i) =>
   climb(700 + i, HUMAN_DAYS, { matchOps: true, trains: true }),
-);
+));
 
 /*
    A boss who wants what the ground gives, against one who wants ground.
@@ -5462,9 +5471,9 @@ const RUNS_MATCHED_TRAINED = Array.from({ length: 36 }, (_, i) =>
    purest form: the mechanic was invisible to the measurement, and the honest
    response is to build the eye rather than to argue about the number.
 */
-const RUNS_GROUND = Array.from({ length: 36 }, (_, i) =>
+const RUNS_GROUND = lazyRuns(() => Array.from({ length: 36 }, (_, i) =>
   climb(700 + i, HUMAN_DAYS, { chasesGround: true }),
-);
+));
 
 /*
    A family that lets the street see who took it.
@@ -5473,9 +5482,9 @@ const RUNS_GROUND = Array.from({ length: 36 }, (_, i) =>
    straight. The only difference is the approach on every job, and the approach
    is the only deliberate source of fear in the game.
 */
-const RUNS_HEAVY = Array.from({ length: 36 }, (_, i) =>
+const RUNS_HEAVY = lazyRuns(() => Array.from({ length: 36 }, (_, i) =>
   climb(700 + i, HUMAN_DAYS, { heavy: true }),
-);
+));
 
 /*
    The same thing done where it pays, which is how anybody would do it.
@@ -5483,9 +5492,9 @@ const RUNS_HEAVY = Array.from({ length: 36 }, (_, i) =>
    Same seeds, same baseline. The only thing between this population and the
    one above is how freely the approach is used.
 */
-const RUNS_HEAVY_SMART = Array.from({ length: 36 }, (_, i) =>
+const RUNS_HEAVY_SMART = lazyRuns(() => Array.from({ length: 36 }, (_, i) =>
   climb(700 + i, HUMAN_DAYS, { heavyWhenItPays: true }),
-);
+));
 
 /*
    Spending fear instead of only earning it.
@@ -5496,9 +5505,9 @@ const RUNS_HEAVY_SMART = Array.from({ length: 36 }, (_, i) =>
    which is the only way a family ever has fear to spend — and the difference
    between them is what being feared is actually worth.
 */
-const RUNS_LEAN = Array.from({ length: 36 }, (_, i) =>
+const RUNS_LEAN = lazyRuns(() => Array.from({ length: 36 }, (_, i) =>
   climb(700 + i, HUMAN_DAYS, { leansOnWitnesses: true }),
-);
+));
 /*
    The feared half of the pair, and the policy matters more than it looks.
 
@@ -5513,9 +5522,9 @@ const RUNS_LEAN = Array.from({ length: 36 }, (_, i) =>
    its own bar two blocks up — this pair is about whether the witness lands,
    and for that the arm has to have the thing being tested.
 */
-const RUNS_LEAN_FEARED = Array.from({ length: 36 }, (_, i) =>
+const RUNS_LEAN_FEARED = lazyRuns(() => Array.from({ length: 36 }, (_, i) =>
   climb(700 + i, HUMAN_DAYS, { leansOnWitnesses: true, heavy: true }),
-);
+));
 
 /*
    Two families shopping for two different things, against one shopping by price.
@@ -5525,12 +5534,12 @@ const RUNS_LEAN_FEARED = Array.from({ length: 36 }, (_, i) =>
    check, which is exactly the decision the catalogue re-cost created and
    exactly the decision nothing in this project has ever made.
 */
-const RUNS_WASHERS = Array.from({ length: 36 }, (_, i) =>
+const RUNS_WASHERS = lazyRuns(() => Array.from({ length: 36 }, (_, i) =>
   climb(700 + i, HUMAN_DAYS, { frontTaste: 'washing' }),
-);
-const RUNS_EARNERS = Array.from({ length: 36 }, (_, i) =>
+));
+const RUNS_EARNERS = lazyRuns(() => Array.from({ length: 36 }, (_, i) =>
   climb(700 + i, HUMAN_DAYS, { frontTaste: 'earning' }),
-);
+));
 
 /*
    ...and the same boss, on a map where holding things gives nothing.
@@ -5564,9 +5573,9 @@ const RUNS_EARNERS = Array.from({ length: 36 }, (_, i) =>
    First time anything in this project has turned `setAutopilot` on outside its
    own unit tests.
 */
-const RUNS_GROUND_AUTO = Array.from({ length: 36 }, (_, i) =>
+const RUNS_GROUND_AUTO = lazyRuns(() => Array.from({ length: 36 }, (_, i) =>
   climb(700 + i, HUMAN_DAYS, { chasesGround: true, handsOver: true }),
-);
+));
 
 const RUNS_GROUND_DEAD = (() => {
   const was = HOLDING.share;
