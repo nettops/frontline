@@ -1,0 +1,354 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Falcone, twice — one character at two fidelities</title>
+<style>
+/* =========================================================================
+   PIXEL PORTRAIT — the same man at two scales, on purpose.
+
+   This file exists because of a correction. Several notes in this folder
+   argued that pieces had to be held to one pixel grid, and that a scene's
+   fidelity "could not both be right" alongside a panel sprite's. That was
+   uniformity being enforced and called rigour. ART-DIRECTION.md is the
+   standing answer; this is the demonstration.
+
+   LEFT   32 x 40, shown at 4x — the cast sprite from pixel-cast.html,
+          composed from parts, flat colour, strong silhouette. Correct for a
+          list row: it has to read at 1x beside a name.
+
+   RIGHT  64 x 80, shown at 2x — the same character at the same DISPLAY size
+          and four times the information. Sphere-shaded face, a hard brim
+          shadow across the eyes, a cool sky fill on the shadow side, and the
+          cigar working as a second warm source under the jaw.
+
+   Same man, same palette family, same period. Different jobs, so different
+   grids. Neither is the other done badly.
+   ========================================================================= */
+html, body { margin:0; min-height:100%; background:#0b0a09; color:#e6ddcd;
+  font-family: ui-monospace,'Cascadia Mono',Consolas,Menlo,monospace; }
+body { display:flex; align-items:center; justify-content:center; padding:32px; }
+.row { display:flex; gap:38px; align-items:flex-start; }
+figure { margin:0; display:flex; flex-direction:column; gap:10px; align-items:center; }
+canvas { image-rendering:pixelated; display:block; box-shadow:0 0 0 1px #2a231c; }
+figcaption { font-size:11px; color:#9c9083; text-align:center; line-height:1.6; }
+figcaption b { display:block; color:#c9a227; font-weight:400; letter-spacing:.1em; text-transform:uppercase; }
+figcaption span { color:#6b6157; }
+</style>
+</head>
+<body>
+<div class="row">
+  <figure><canvas id="a"></canvas>
+    <figcaption><b>32 &times; 40, at 4&times;</b>parts-composed, flat colour<br>
+      <span>reads at 1&times; beside a name</span></figcaption></figure>
+  <figure><canvas id="b"></canvas>
+    <figcaption><b>64 &times; 80, at 2&times;</b>modelled, three light sources<br>
+      <span>same display size, four times the pixels</span></figcaption></figure>
+</div>
+<script>
+const Z = Number(new URLSearchParams(location.search).get('z')) || 1;
+const hx = (s) => [parseInt(s.slice(1,3),16), parseInt(s.slice(3,5),16), parseInt(s.slice(5,7),16)];
+const R = (...s) => s.map(hx);
+const BAYER = [[0,8,2,10],[12,4,14,6],[3,11,1,9],[15,7,13,5]];
+const thr = (x,y) => (BAYER[y&3][x&3] + 0.5) / 16;
+let seed = 0x2545f491;
+const rnd = () => { seed ^= seed<<13; seed ^= seed>>>17; seed ^= seed<<5; return ((seed>>>0)%100000)/100000; };
+const mix = (a,b,t) => [a[0]+(b[0]-a[0])*t, a[1]+(b[1]-a[1])*t, a[2]+(b[2]-a[2])*t];
+
+/* --------------------------------------------------------- the portrait --- */
+const PW = 64, PH = 80;
+const buf = new Uint8ClampedArray(PW * PH * 4);
+function put(x,y,c){ if(x<0||y<0||x>=PW||y>=PH||!c) return; const i=(y*PW+x)*4;
+  buf[i]=c[0]; buf[i+1]=c[1]; buf[i+2]=c[2]; buf[i+3]=255; }
+function get(x,y){ const i=(y*PW+x)*4; return [buf[i],buf[i+1],buf[i+2]]; }
+function rect(x0,y0,x1,y1,c){ for(let y=y0;y<=y1;y++) for(let x=x0;x<=x1;x++) put(x,y,c); }
+function ramp(x,y,cols,t){ t=Math.max(0,Math.min(0.9999,t))*(cols.length-1);
+  const i=Math.floor(t); return (t-i)>thr(x,y) ? cols[Math.min(i+1,cols.length-1)] : cols[i]; }
+function mul(x0,y0,x1,y1,f,mask){ for(let y=y0;y<=y1;y++) for(let x=x0;x<=x1;x++){
+  if(mask && !mask(x,y)) continue; const c=get(x,y); put(x,y,[c[0]*f,c[1]*f,c[2]*f]); } }
+/* An ellipse with a shading callback — the primitive a face needs and a
+   parts-composed sprite never has room for. */
+function ell(cx,cy,rx,ry,fn){
+  for(let y=Math.floor(cy-ry); y<=Math.ceil(cy+ry); y++)
+    for(let x=Math.floor(cx-rx); x<=Math.ceil(cx+rx); x++){
+      const u=(x-cx)/rx, v=(y-cy)/ry, d=u*u+v*v;
+      if(d>1) continue;
+      const c=fn(x,y,u,v,Math.sqrt(Math.max(0,1-d)));
+      if(c) put(x,y,c);
+    }
+}
+
+const SKIN = R('#231409','#38210f','#4f3117','#684323','#845a33','#a17546','#bd925f','#d6b184');
+const FELT = R('#100c0a','#1c1613','#29211b','#382d25','#483a30');
+const SUIT = R('#0d0c0b','#161513','#22201d','#302d29','#403c37');
+const SHRT = R('#6b6558','#948d7c','#bfb6a0','#e6ddcd');
+const TIE  = R('#3a0f0c','#5e1a13','#8c281d','#b53a29');
+const HAIR = R('#141210','#221e19','#332d25','#4a4239');
+const EMB  = R('#7a2a12','#b8501f','#e0842f','#f6c266');
+const BG   = R('#0d0b0a','#151110','#201915','#2d241e','#3d3128','#4d3f33');
+
+/* Three sources, and the piece obeys all three:
+     key   warm, upper left, hard
+     fill  cool sky, right, weak
+     ember warm, lower right, tiny and local  */
+const KEY = [-0.55, -0.60, 0.58];
+function lambert(nx, ny, nz, L){ return Math.max(0, nx*L[0] + ny*L[1] + nz*L[2]); }
+
+// backdrop: a lit patch behind the near shoulder so he is not floating in ink
+for (let y = 0; y < PH; y++) for (let x = 0; x < PW; x++) {
+  const d = Math.hypot((x - 26) / 30, (y - 26) / 34);
+  put(x, y, ramp(x, y, BG, 1.02 - d * 0.72));
+}
+seed = 99;
+for (let y = 0; y < PH; y++) for (let x = 0; x < PW; x++)
+  if (rnd() < 0.006) { const c = get(x, y); put(x, y, mix(c, BG[4], 0.25)); }
+/* Everything above is backdrop. Keeping a copy makes the silhouette exact,
+   which the rim pass needs — testing brightness alone lights interior edges
+   and puts spikes on the crown. */
+const BG0 = buf.slice();
+const onSubject = (x, y) => {
+  if (x < 0 || y < 0 || x >= PW || y >= PH) return false;
+  const i = (y * PW + x) * 4;
+  return BG0[i] !== buf[i] || BG0[i+1] !== buf[i+1] || BG0[i+2] !== buf[i+2];
+};
+
+/* --- shoulders first, so the head sits on them ------------------------- */
+ell(32, 92, 33, 36, (x, y, u, v, z) =>
+  ramp(x, y, SUIT, 0.14 + lambert(u * 0.9, -0.30, z * 0.5, KEY) * 0.80));
+// lapels: two planes meeting at the tie, which is what makes a suit a suit
+for (let y = 58; y < PH; y++) {
+  const spread = (y - 58) * 0.62;
+  for (let x = Math.round(32 - 7 - spread); x < Math.round(32 - 2 - spread * 0.4); x++)
+    put(x, y, ramp(x, y, SUIT, 0.62 - (y - 58) * 0.006));
+  for (let x = Math.round(32 + 2 + spread * 0.4); x < Math.round(32 + 7 + spread); x++)
+    put(x, y, ramp(x, y, SUIT, 0.30 - (y - 58) * 0.004));
+}
+// shirt and tie
+for (let y = 57; y < PH; y++) {
+  const w = 3 + Math.round((y - 57) * 0.30);
+  for (let x = 32 - w; x <= 32 + w; x++) put(x, y, ramp(x, y, SHRT, 0.62 - (32 - x) * 0.02));
+}
+for (let y = 60; y < PH; y++) {
+  const w = 2 + Math.round((y - 60) * 0.12);
+  for (let x = 32 - w; x <= 32 + w; x++) put(x, y, ramp(x, y, TIE, 0.34 + (32 - x) * 0.10 - (y - 60) * 0.008));
+}
+// collar points, sitting over the lapels
+for (let i = 0; i < 8; i++) {
+  put(28 - i, 57 + i, SHRT[2]); put(29 - i, 57 + i, SHRT[1]);
+  put(36 + i, 57 + i, SHRT[1]); put(37 + i, 57 + i, SHRT[0]);
+}
+mul(20, 54, 44, 62, 0.86);
+
+/* --- neck, in the head's shadow ---------------------------------------- */
+for (let y = 46; y < 60; y++) for (let x = 26; x <= 38; x++)
+  put(x, y, ramp(x, y, SKIN, 0.16 + (32 - x) / 60));
+mul(26, 46, 38, 58, 0.60);                         // the head throws this
+
+/* --- the head ----------------------------------------------------------
+   One shaded solid, then a small number of deliberate marks. The first
+   attempt stacked four ellipses with four different shading functions and
+   the face turned to mush; a portrait wants one form and then decisions. */
+ell(32, 34, 11.5, 13.5, (x, y, u, v, z) => {
+  let t = 0.10 + lambert(u, v, z, KEY) * 0.92;     // key, warm, upper left
+  t += Math.max(0, u) * z * 0.14;                   // sky fill on the shadow side
+  t += Math.max(0, 1 - Math.hypot(x - 46, y - 47) / 18) * 0.14;   // ember, below right
+  return ramp(x, y, SKIN, t);
+});
+// jaw: square the lower face off so it is not an egg
+for (let y = 38; y <= 46; y++) {
+  const w = 11 - Math.round((y - 38) * 0.9);
+  for (let x = 32 - w; x <= 32 + w; x++) {
+    const t = 0.14 + (32 - x) / 40 + (46 - y) / 60;
+    put(x, y, ramp(x, y, SKIN, Math.max(0.06, t)));
+  }
+}
+// ears
+for (let y = 32; y <= 39; y++) { put(20, y, ramp(20, y, SKIN, 0.42)); put(21, y, ramp(21, y, SKIN, 0.30)); }
+for (let y = 32; y <= 39; y++) { put(43, y, ramp(43, y, SKIN, 0.16)); put(44, y, ramp(44, y, SKIN, 0.10)); }
+
+/* --- the features, few and deliberate ---------------------------------- */
+// brow ridge, and the plane change under it
+for (let x = 22; x <= 42; x++) {
+  const y = 27 + Math.round(Math.abs(x - 32) * 0.10);
+  put(x, y, ramp(x, y, SKIN, 0.72 - (x - 22) * 0.014));      // lit top of the ridge
+  for (let k = 1; k <= 2; k++) { const c = get(x, y + k); put(x, y + k, [c[0]*0.66, c[1]*0.66, c[2]*0.70]); }
+}
+// eye sockets
+for (let x = 24; x <= 29; x++) for (let y = 29; y <= 32; y++) { const c=get(x,y); put(x,y,[c[0]*0.70,c[1]*0.70,c[2]*0.74]); }
+for (let x = 35; x <= 40; x++) for (let y = 29; y <= 32; y++) { const c=get(x,y); put(x,y,[c[0]*0.58,c[1]*0.58,c[2]*0.64]); }
+// eyes: dark, two pixels of iris, one catchlight each. Any more is a cartoon.
+rect(25, 30, 28, 31, [22, 16, 13]); rect(36, 30, 39, 31, [18, 13, 11]);
+put(26, 30, [10, 8, 8]); put(37, 30, [9, 7, 7]);
+put(25, 30, SKIN[6]); put(36, 30, SKIN[4]);
+// brows, heavier on the key side
+for (let x = 23; x <= 30; x++) put(x, 28 - Math.round((x - 23) * 0.2), HAIR[1]);
+for (let x = 34; x <= 41; x++) put(x, 26 + Math.round((x - 34) * 0.2), HAIR[0]);
+// nose: a lit ridge and a shadow thrown to the right, no outline
+for (let y = 30; y <= 39; y++) {
+  const w = 1 + Math.round((y - 30) * 0.30);
+  for (let x = 31 - w; x <= 31 + w; x++)
+    put(x, y, ramp(x, y, SKIN, Math.max(0.10, 0.44 + (31 - x) / 18 - (y - 30) * 0.012)));
+  for (let x = 32 + w; x <= 33 + w; x++) { const c = get(x, y); put(x, y, [c[0]*0.68, c[1]*0.68, c[2]*0.72]); }
+}
+put(29, 38, [34, 22, 16]); put(34, 38, [28, 18, 14]);          // nostrils
+for (let x = 28; x <= 35; x++) put(x, 39, ramp(x, 39, SKIN, 0.26));
+// moustache — trimmed, not a bar
+for (let y = 40; y <= 42; y++) for (let x = 26; x <= 38; x++) {
+  const drop = Math.abs(x - 32) > 4 ? 1 : 0;
+  if (y - drop > 42) continue;
+  put(x, y, ramp(x, y, HAIR, 0.66 - Math.abs(x - 32) * 0.04 - (y - 40) * 0.14));
+}
+// mouth and lower lip
+for (let x = 28; x <= 36; x++) put(x, 43, [30, 20, 15]);
+for (let x = 28; x <= 36; x++) put(x, 44, ramp(x, 44, SKIN, 0.50 - Math.abs(x - 31) * 0.03));
+// chin, and the shadow under it
+for (let x = 28; x <= 36; x++) put(x, 46, ramp(x, 46, SKIN, 0.34));
+mul(27, 47, 38, 49, 0.72);
+
+/* --- the hat: crown, pinch, band, brim ---------------------------------- */
+// crown, with a rounded cap — a flat top and stray pinch pixels above it
+// read as three prongs, which is what the first pass produced
+const CROWN = [6, 8, 9, 10, 10, 11, 11, 11, 11, 11, 11, 11, 11, 11];
+for (let i = 0; i < CROWN.length; i++) {
+  const y = 6 + i, w = CROWN[i];
+  for (let x = 32 - w; x <= 32 + w; x++)
+    put(x, y, ramp(x, y, FELT, 0.32 + Math.max(0, (32 - x) / 26) * 0.55 - i * 0.010));
+  put(32 - w, y, FELT[1]); put(32 + w, y, FELT[0]);
+}
+for (let x = 26; x <= 38; x++) put(x, 6, ramp(x, 6, FELT, 0.70 - (x - 26) * 0.022));  // lit crown top
+// the pinch: two dents and a centre crease, all inside the crown
+for (let y = 8; y <= 13; y++) { put(26, y, FELT[0]); put(27, y, FELT[1]); put(38, y, FELT[0]); put(37, y, FELT[1]); }
+for (let y = 7; y <= 12; y++) { put(31, y, FELT[1]); put(32, y, FELT[0]); put(33, y, FELT[1]); }
+// band
+for (let y = 17; y <= 20; y++) for (let x = 20; x <= 44; x++)
+  put(x, y, ramp(x, y, FELT, 0.10 + Math.max(0, (32 - x) / 40) * 0.22));
+for (let x = 20; x <= 44; x++) put(x, 17, ramp(x, 17, FELT, 0.46));
+// brim: wide, thin, dipping at the front
+for (let x = 11; x <= 53; x++) {
+  const t = (x - 32) / 21;
+  const y0 = 20 + Math.round(t * t * 3.2);
+  for (let y = y0; y <= y0 + 3; y++)
+    put(x, y, ramp(x, y, FELT, 0.52 - (x - 11) * 0.008 - (y - y0) * 0.14));
+  put(x, y0, ramp(x, y0, FELT, 0.80 - (x - 11) * 0.011));       // lit leading edge
+  put(x, y0 + 4, FELT[0]);                                       // the underside
+}
+
+/* --- THE shadow. This is why the portrait wants the bigger grid: at
+   32 x 40 the brim shadow is one dark row and cannot fall across an eye. */
+for (let x = 21; x <= 43; x++) {
+  const t = (x - 32) / 21;
+  const edge = 32 + Math.round(t * t * 3.0);
+  for (let y = 22; y <= edge; y++) {
+    const c = get(x, y);
+    const f = 0.46 + (edge - y) * 0.012;
+    put(x, y, [c[0] * f, c[1] * f + 1, c[2] * f + 7]);           // shadow goes cool
+  }
+}
+// but the eyes still have to read, so the catchlights are put back on top
+put(25, 30, mix(SKIN[5], [120, 130, 150], 0.35));
+put(36, 30, mix(SKIN[3], [110, 120, 140], 0.35));
+
+/* --- the cigar, in his mouth, doing real work as a light ---------------- */
+for (let i = 0; i < 15; i++) {
+  const x = 37 + i, y = 43 + Math.round(i * 0.30);
+  for (let k = 0; k <= 2; k++)
+    put(x, y + k, ramp(x, y + k, R('#2a1c0e','#4a3317','#6b4b21','#8a6530'), 0.72 - k * 0.24 - i * 0.012));
+}
+rect(51, 47, 53, 49, EMB[0]); rect(52, 47, 53, 48, EMB[2]); put(53, 47, EMB[3]);
+// its glow, on the jaw and the collar
+for (let y = 38; y < 70; y++) for (let x = 30; x < PW; x++) {
+  const d = Math.hypot(x - 53, y - 48);
+  if (d > 18) continue;
+  const c = get(x, y);
+  if (thr(x, y) > 0.8) continue;
+  put(x, y, mix(c, EMB[2], Math.max(0, 1 - d / 18) * 0.15));
+}
+// smoke, thinning as it goes
+seed = 4242;
+for (let i = 0; i < 30; i++) {
+  const t = i / 30;
+  const x = 53 - Math.round(t * 5) + Math.round(Math.sin(t * 6.5) * 2.4);
+  const y = 45 - Math.round(t * 40);
+  if (rnd() < 0.55) put(x, y, mix(get(x, y), [150, 143, 129], 0.24 - t * 0.20));
+}
+
+/* --- rim: the key clips the left edge of hat, cheek and shoulder -------- */
+for (let y = 4; y < PH; y++) for (let x = 1; x < 40; x++)
+  if (onSubject(x, y) && !onSubject(x - 1, y))
+    put(x, y, mix(get(x, y), EMB[2], 0.32 - y / 400));
+// vignette
+for (let y = 0; y < PH; y++) for (let x = 0; x < PW; x++) {
+  const d = Math.hypot((x - 30) / 40, (y - 40) / 48), c = get(x, y);
+  const f = 1 - Math.max(0, d - 0.60) * 0.75;
+  put(x, y, [c[0] * f, c[1] * f, c[2] * f]);
+}
+
+/* ------------------------------------------------- the panel sprite ------ */
+const CAST = [
+    '................................',
+    '................................',
+    '............00000000............',
+    '...........0111111110...........',
+    '..........012112211210..........',
+    '..........012112211210..........',
+    '..........011111111110..........',
+    '.........0hhhhhhhhhhhh0.........',
+    '......0111111111111111110.......',
+    '.......000000000000000000.......',
+    '...........cccccccccc...........',
+    '...........cc0dccd0cc...........',
+    '...........cdddccdddc...........',
+    '...........cdeddcdedc...........',
+    '...........cded00dedc...........',
+    '..........ccd555555dcc..........',
+    '..........ccddd00dddcc..........',
+    '..........ccddeeeeddcc..........',
+    '...........cddddddddc...........',
+    '............cddddddc............',
+    '.............cccccc.............',
+    '.............cccccc.............',
+    '.........3333cccccc3333.........',
+    '.......3333337cccc7333333.......',
+    '.....333333347bbbb74333333......',
+    '...03333333347bbbb743333333330..',
+    '..022333333347bbbb743333333220..',
+    '..a22333333347bbbb743333333220..',
+    '..022333333347bbbb743333333220..',
+    '.a022333333347bbbb743333333220..',
+    '..022333333347b99b743333333220..',
+    '.a022333333347bbbb743333333220..',
+    '..0223dd333347bbbb743333333220..',
+    'b888ded9333347bbbb743333333220..',
+    '..02cccc333347bbbb743333333220..',
+    '..0223333333433333343333333220..',
+    '..0223333333433333343333333220..',
+    '..0223333333433333343333333220..',
+    '..0223333333433333343333333220..',
+    '..0000000000000000000000000000..'
+];
+const SKINS={olive:['#5c3a26','#8a5c3c','#b3835a']}, SUITS={charcoal:['#14120f','#2b2723','#443e38']},
+      HAIRS={pepper:['#3b352e','#7a7168']};
+const CPAL={'0':'#0c0a09','1':'#15110e','h':'#14120f','2':'#14120f','3':'#2b2723','4':'#443e38',
+  '7':'#e6ddcd','b':'#c2352b','9':'#c9a227','5':'#3b352e','6':'#7a7168',
+  'c':'#5c3a26','d':'#8a5c3c','e':'#b3835a','8':'#7d6720','a':'#9c9083'};
+
+function blit(id, draw, w, h, scale){
+  const cv=document.getElementById(id); cv.width=w*scale; cv.height=h*scale;
+  const ctx=cv.getContext('2d'); ctx.imageSmoothingEnabled=false; draw(ctx, scale);
+}
+blit('a', (ctx,s)=>{
+  ctx.fillStyle='#181413'; ctx.fillRect(0,0,32*s,40*s);
+  for(let y=0;y<CAST.length;y++) for(let x=0;x<CAST[y].length;x++){
+    const k=CAST[y][x]; if(k==='.') continue;
+    ctx.fillStyle=CPAL[k]||'#f0f'; ctx.fillRect(x*s,y*s,s,s);
+  }
+}, 32, 40, Z * 4);
+blit('b', (ctx,s)=>{
+  const src=document.createElement('canvas'); src.width=PW; src.height=PH;
+  src.getContext('2d').putImageData(new ImageData(buf,PW,PH),0,0);
+  ctx.drawImage(src,0,0,PW,PH,0,0,PW*s,PH*s);
+}, PW, PH, Z * 2);
+</script>
+</body>
+</html>

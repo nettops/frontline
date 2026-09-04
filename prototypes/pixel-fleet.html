@@ -1,0 +1,816 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Pixel fleet — cars that belong and cars that do not</title>
+<style>
+/* =========================================================================
+   PIXEL FLEET — disposable. Nothing in src/ is touched.
+
+   Nineteen vehicles, side-on, in a fixed 64 x 24 cell, front left. Same
+   method as pixel-arms.html: shared anchors, one outline, three values of
+   paint, and colour separated from shape — which is why fourteen paints cost
+   fourteen lines rather than fourteen sheets, and why every one of them is
+   available to every car here.
+
+   The reason this file exists at all is that the game is already full of
+   cars and none of them have ever been drawn:
+
+     lawEnforcement.ts:61   the SURVEILLANCE stage, in full —
+                            "Cars that do not belong. Your people are being
+                             followed and photographed."
+     businesses.ts:78       the freight front —
+                            "Freight, routes and a fleet that explains a lot
+                             of movement."
+     operations.ts:89       an operation called "Boost Cars"
+     world.ts:91            "There are cars on corners that never had cars."
+     events.ts:365          "Cars parked where cars are not usually parked."
+
+   So unlike the armoury, most of this sheet is not art waiting for a system.
+   Three of the four groups below are already load-bearing prose in the
+   simulation, and one sprite — the unmarked — is an existing mechanic that
+   the interface currently has no way to show.
+
+   Everything stands on one ground line and rolls on one wheel, for the same
+   reason the cast shares a face box: parts that do not share an anchor stop
+   being parts.
+   ========================================================================= */
+
+:root {
+  --ink-900:#0c0a09; --ink-800:#15110e; --ink-700:#1c1713; --ink-600:#241d18;
+  --line:#332a22; --text:#e6ddcd; --text-dim:#9c9083; --text-faint:#6b6157;
+  --brass:#c9a227; --brass-dim:#7d6720; --stamp:#c2352b; --paper:#ded3bc;
+  --carbon:#7593a8; --carbon-dim:#3d5464;
+  --font-display: Bahnschrift,'Avenir Next Condensed','Arial Narrow','Segoe UI',system-ui,sans-serif;
+  --font-mono: ui-monospace,'Cascadia Mono',Consolas,'SF Mono',Menlo,monospace;
+}
+* { box-sizing:border-box; }
+body { margin:0; padding:28px 32px 64px; background:var(--ink-900); color:var(--text);
+       font-family:var(--font-mono); font-size:12px; line-height:1.55; }
+h1 { font-family:var(--font-display); font-size:22px; letter-spacing:.14em; text-transform:uppercase; margin:0 0 4px; }
+.sub { color:var(--text-dim); max-width:82ch; margin:0 0 20px; }
+h3 { font-family:var(--font-display); font-size:13px; letter-spacing:.14em; text-transform:uppercase;
+     color:var(--text-dim); margin:30px 0 4px; }
+.lede { color:var(--text-faint); margin:0 0 14px; max-width:84ch; }
+.controls { display:flex; flex-wrap:wrap; gap:18px; align-items:center; padding:10px 14px;
+            margin-bottom:20px; background:var(--ink-800); border:1px solid var(--line); }
+.controls label { color:var(--text-dim); text-transform:uppercase; letter-spacing:.1em; font-size:10px; }
+.seg { display:inline-flex; border:1px solid var(--line); }
+.seg button { background:var(--ink-700); color:var(--text-dim); border:0; border-right:1px solid var(--line);
+              padding:4px 10px; font:inherit; font-size:11px; cursor:pointer; }
+.seg button:last-child { border-right:0; }
+.seg button[aria-pressed="true"] { background:var(--brass-dim); color:var(--ink-900); }
+.rack { border:1px solid var(--line); background:var(--ink-800); margin-bottom:14px; }
+.rack > .head { padding:7px 12px; border-bottom:1px solid var(--line); display:flex; justify-content:space-between; gap:20px; }
+.rack > .head b { font-family:var(--font-display); font-weight:400; letter-spacing:.12em; text-transform:uppercase; }
+.rack > .head span { color:var(--text-faint); }
+.item { display:flex; align-items:center; gap:14px; padding:2px 12px; border-bottom:1px solid #241e18; }
+.item:last-child { border-bottom:0; }
+.item .nm { width:120px; }
+.item .note { color:var(--text-faint); flex:1; }
+canvas { image-rendering:pixelated; display:block; }
+.strip { display:flex; flex-wrap:wrap; gap:10px; }
+.opt { background:var(--ink-800); border:1px solid var(--line); padding:6px; text-align:center; }
+.opt span { color:var(--text-faint); font-size:10px; }
+.call { border:1px solid var(--carbon-dim); background:#0f1418; padding:14px 16px; max-width:84ch; }
+.call b { color:var(--carbon); font-weight:400; }
+.call code { color:var(--text-dim); }
+.ramp { display:flex; gap:22px; flex-wrap:wrap; }
+.ramp div b { display:block; color:var(--text-dim); font-weight:400; margin-bottom:4px; font-size:11px; }
+.ramp i { width:26px; height:18px; display:inline-block; }
+</style>
+</head>
+<body>
+
+<h1>Pixel fleet — cars that belong and cars that do not</h1>
+<p class="sub">
+  Nineteen vehicles, side-on in a fixed 64 × 24 cell, front left, in fourteen
+  paints — every colour available to every car on the sheet. Unlike the armoury, most of this sheet is not art waiting for
+  a system — the simulation is already full of cars and has simply never shown
+  one. Three of the four groups below are load-bearing prose in
+  <code>src/</code> today.
+</p>
+
+<div class="controls">
+  <label for="scale">Scale</label>
+  <span class="seg" id="scale">
+    <button data-v="1">1x</button><button data-v="2" aria-pressed="true">2x</button>
+    <button data-v="3">3x</button><button data-v="4">4x</button>
+  </span>
+  <label for="paint">Paint</label>
+  <span class="seg" id="paint">
+    <button data-v="black" aria-pressed="true">black</button>
+    <button data-v="maroon">maroon</button>
+    <button data-v="candy">candy</button>
+    <button data-v="copper">copper</button>
+    <button data-v="gold">gold</button>
+    <button data-v="cream">cream</button>
+    <button data-v="white">white</button>
+    <button data-v="silver">silver</button>
+    <button data-v="primer">primer</button>
+    <button data-v="olive">olive</button>
+    <button data-v="jade">jade</button>
+    <button data-v="teal">teal</button>
+    <button data-v="blue">blue</button>
+    <button data-v="plum">plum</button>
+  </span>
+  <label for="livery">Livery</label>
+  <span class="seg" id="livery">
+    <button data-v="on" aria-pressed="true">respect it</button>
+    <button data-v="off">repaint all</button>
+  </span>
+</div>
+
+<div id="racks"></div>
+
+<h3>The one that already exists</h3>
+<div class="call">
+  <p style="margin:0 0 8px"><b>The unmarked is not a proposal.</b> It is
+  <code>lawEnforcement.ts:61</code>, which describes the surveillance stage as
+  <i>“Cars that do not belong. Your people are being followed and
+  photographed.”</i> — and <code>world.ts:91</code> and
+  <code>events.ts:365</code>, which both say the same thing again in the
+  player's ear: <i>“cars on corners that never had cars”</i>,
+  <i>“parked where cars are not usually parked.”</i></p>
+  <p style="margin:0;color:var(--text-dim)">The game already tells you a car is
+  outside. It has no way to let you see it. One sprite, one row in the district
+  panel when the investigation is at that stage, and a mechanic that currently
+  only exists as a sentence becomes a thing on a street. That is the cheapest
+  real win on any of these sheets.</p>
+</div>
+
+<h3>One shape, six paints</h3>
+<p class="lede">
+  Nothing here is redrawn. Paint is three hexes; glass, chrome, rubber and
+  lamps are fixed. The plates the game would need are not drawn on purpose —
+  a legible number on a car is a detail the simulation would then have to keep
+  consistent, and it does not track one.
+</p>
+<div class="strip" id="paints"></div>
+
+<h3>Palette</h3>
+<div class="ramp" id="ramp"></div>
+
+<script>
+/* ======================================================================
+   1. PALETTE
+   'a''b''c' paint dark/mid/lit · 'd''e' glass · 'f''F' chrome
+   't''T' rubber and rim · 'r' lamps · 'i' light bar · 'w''W' white panel
+   'p' primer · 'q' burnt · 'k' shadow
+   ====================================================================== */
+/* Fourteen, and every one of them available to every car on the sheet.
+   Kept desaturated on purpose: a 1978 street is not a toy aisle, and paint
+   that shouts louder than the tail lamps stops reading as metal. */
+const PAINT = {
+  black:  ['#0f0f11', '#1c1c20', '#2e2e34'],
+  maroon: ['#2a0f0e', '#4a1a17', '#6d2622'],
+  candy:  ['#3d0b09', '#6b1310', '#a5251b'],
+  copper: ['#2c1608', '#4d2a10', '#7a441c'],
+  gold:   ['#2e2109', '#544012', '#8a6a22'],
+  cream:  ['#5c5443', '#8a7f66', '#b3a68a'],
+  white:  ['#4a4741', '#7a766d', '#b3ada0'],
+  silver: ['#2b2e31', '#4a4f54', '#787f86'],
+  primer: ['#2a2724', '#3d3934', '#524d46'],
+  olive:  ['#1e2417', '#333d24', '#4f6337'],
+  jade:   ['#0d2019', '#173a2c', '#255a44'],
+  teal:   ['#0c2027', '#143741', '#1f5561'],
+  blue:   ['#131b26', '#22303f', '#37485c'],
+  plum:   ['#22101f', '#3b1a34', '#5a2a4e'],
+};
+const FIXED = {
+  '0': '#0c0a09',
+  'd': '#232c38', 'e': '#7593a8',
+  'f': '#9c9083', 'F': '#ded3bc',
+  't': '#15110e', 'T': '#3d3d42',
+  'r': '#c2352b', 'i': '#332a22',
+  'w': '#ded3bc', 'W': '#9c9083',
+  'p': '#524d46', 'q': '#1c1713', 'k': '#0c0a09',
+  'W': '#8a8578',   // whitewall — its own key; 'q' is the charred shell
+  'n': '#3b2519', 'm': '#5f3d27', 'M': '#855838',
+};
+function palette(name) {
+  const p = PAINT[name];
+  return Object.assign({}, FIXED, { 'a': p[0], 'b': p[1], 'c': p[2] });
+}
+
+/* ======================================================================
+   2. THE FLEET
+   ====================================================================== */
+const FLEET = {
+  sedan: { name: 'Sedan', role: 'yours', note: "Nobody looks at it twice, which is the entire specification.", rows: [
+    '................................................................',
+    '................................................................',
+    '................................................................',
+    '................................................................',
+    '.....................0000000000000000000000.....................',
+    '....................0cccccccccccccccccccccc0....................',
+    '...................0cdddddbbdddddddddddddddc0...................',
+    '..................0cddddddbbdddddddddddddddb0...................',
+    '..................0bddddddbbdddddddddddddddb0...................',
+    '..................0bddddddbbdddddddddddddddb0...................',
+    '......0000000000000bbbbbbbbbbbbbbbbbbbbbbbbb0000000000000.......',
+    '.....0ccccccccccccccccccccccccccccccccccccccccccccccccccc0......',
+    '....0ffbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbff0.....',
+    '....0ffFbbbbb0000000bbbbbbbbbbbbbbbbbbbbbbb0000000bbbbbrff0.....',
+    '....0ffFbbbb00ttttt00bbbbbbbbbbbbbbbbbbbbb00ttttt00bbbbrff0.....',
+    '....0ffffff00ttttttt00fffffffffffffffffff00ttttttt00ffffff0.....',
+    '.....0aaaaa0ttttftttt0aaaaaaaaaaaaaaaaaaa0ttttftttt0aaaaa0......',
+    '.....0aaaaa0tttfffttt0aaaaaaaaaaaaaaaaaaa0tttfffttt0aaaaa0......',
+    '......000000ttffFfftt000000000000000000000ttffFfftt000000.......',
+    '...........0tttfffttt0...................0tttfffttt0............',
+    '...........0ttttftttt0...................0ttttftttt0............',
+    '...........00ttttttt00...................00ttttttt00............',
+    '........000000ttttt0000000000000000000000000ttttt000000.........',
+    '.......0kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk0........',
+  ] },
+  towncar: { name: 'Town car', role: 'yours', note: "Says who you are before you are out of it. Standing, and a bill for it.", rows: [
+    '................................................................',
+    '................................................................',
+    '................................................................',
+    '......................00000000000000000000000000................',
+    '.....................0ccccccccbbcccccccbbccccccc0...............',
+    '....................0cddddddddbbdddddddbbdddddddc0..............',
+    '...................0cdddddddddbbdddddddbbdddddddb0..............',
+    '...................0bdddddddddbbdddddddbbdddddddb0..............',
+    '...................0bdddddddddbbdddddddbbdddddddb0..............',
+    '..000000000000000000bbbbbbbbbbbbbbbbbbbbbbbbbbbbb0000000000000..',
+    '.0cFFFFFFFFFFccccccccccccccccccccccccccccccccccccccccccccccccc0.',
+    '0ffbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbff0',
+    '0ffFbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbrff0',
+    '0ffFbbbbbbb0000000bbbbbbbbbbbbbbbbbbbbbbbbbbbbb0000000bbbbbbrff0',
+    '0fffffffff00ttttt00fffffffffffffffffffffffffff00ttttt00ffffffff0',
+    '.0bbbbbbb00ttttttt00bbbbbbbbbbbbbbbbbbbbbbbbb00ttttttt00bbbbbb0.',
+    '.0aaaaaaa0ttttftttt0aaaaaaaaaaaaaaaaaaaaaaaaa0ttttftttt0aaaaaa0.',
+    '.0aaaaaaa0tttfffttt0aaaaaaaaaaaaaaaaaaaaaaaaa0tttfffttt0aaaaaa0.',
+    '..00000000ttffFfftt000000000000000000000000000ttffFfftt0000000..',
+    '.........0tttfffttt0.........................0tttfffttt0........',
+    '.........0ttttftttt0.........................0ttttftttt0........',
+    '.........00ttttttt00.........................00ttttttt00........',
+    '....00000000ttttt0000000000000000000000000000000ttttt0000000....',
+    '...0kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk0...',
+  ] },
+  coupe: { name: 'Coupe', role: 'yours', note: "A young man\u2019s car, and the reason people remember where he was.", rows: [
+    '................................................................',
+    '................................................................',
+    '................................................................',
+    '................................................................',
+    '............................0000000000000000....................',
+    '...........................0cccccccccccccccc0...................',
+    '..........................0cddddddddddddddddc0..................',
+    '.........................0cdddddddddddddddddb0..................',
+    '.........................0bdddddddddddddddddb0..................',
+    '.........................0bdddddddddddddddddb0..................',
+    '.......0000000000000000000bbbbbbbbbbbbbbbbbbb00000000000........',
+    '......0ccccccccccccccccccccccccccccccccccccccccccccccccc0.......',
+    '.....0ffcccccccccccccccccbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbff0......',
+    '.....0ffFbbbb0000000bbbbbbbbbbbbbbbbbbbbbb0000000bbbbbrff0......',
+    '.....0ffFfff00ttttt00ffffffffffffffffffff00ttttt00ffffrff0......',
+    '.....0ffbbb00ttttttt00bbbbbbbbbbbbbbbbbb00ttttttt00bbbbff0......',
+    '......0aaaa0ttttftttt0aaaaaaaaaaaaaaaaaa0ttttftttt0aaaaa0.......',
+    '......0aaaa0tttfffttt0aaaaaaaaaaaaaaaaaa0tttfffttt0aaaaa0.......',
+    '.......00000ttffFfftt00000000000000000000ttffFfftt000000........',
+    '...........0tttfffttt0..................0tttfffttt0.............',
+    '...........0ttttftttt0..................0ttttftttt0.............',
+    '...........00ttttttt00..................00ttttttt00.............',
+    '.........00000ttttt000000000000000000000000ttttt000000..........',
+    '........0kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk0.........',
+  ] },
+  wagon: { name: 'Wagon', role: 'yours', note: "Four men and whatever they are carrying, and it looks like a family.", rows: [
+    '................................................................',
+    '................................................................',
+    '................................................................',
+    '................................................................',
+    '.....................0000000000000000000000000000000............',
+    '....................0ccccccbbcccccccccbbcccccccccccc0...........',
+    '...................0cddddddbbdddddddddbbddddddddddddc0..........',
+    '..................0cdddddddbbdddddddddbbddddddddddddb0..........',
+    '..................0bdddddddbbdddddddddbbddddddddddddb0..........',
+    '..................0bdddddddbbdddddddddbbddddddddddddb0..........',
+    '......0000000000000bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb00000......',
+    '.....0cccccccccccccccccccccccccccccccccccccccccccccccccccc0.....',
+    '....0ffbbbbbbbbbbbbbfffffffffffffffffffffffffffffffffbbbbff0....',
+    '....0ffFbbbbb0000000ffffffffffffffffffffffff0000000ffbbbrff0....',
+    '....0ffFbbbb00ttttt00bbbbbbbbbbbbbbbbbbbbbb00ttttt00bbbbrff0....',
+    '....0ffffff00ttttttt00ffffffffffffffffffff00ttttttt00ffffff0....',
+    '.....0aaaaa0ttttftttt0aaaaaaaaaaaaaaaaaaaa0ttttftttt0aaaaa0.....',
+    '.....0aaaaa0tttfffttt0aaaaaaaaaaaaaaaaaaaa0tttfffttt0aaaaa0.....',
+    '......000000ttffFfftt0000000000000000000000ttffFfftt000000......',
+    '...........0tttfffttt0....................0tttfffttt0...........',
+    '...........0ttttftttt0....................0ttttftttt0...........',
+    '...........00ttttttt00....................00ttttttt00...........',
+    '........000000ttttt00000000000000000000000000ttttt000000........',
+    '.......0kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk0.......',
+  ] },
+  beater: { name: 'The beater', role: 'yours', note: "Bought for cash under a name nobody checked.", rows: [
+    '................................................................',
+    '................................................................',
+    '................................................................',
+    '................................................................',
+    '.....................0000000000000000000000.....................',
+    '....................0cccccbbccccccccccccccc0....................',
+    '...................0ddddddbbdddddddddddddddc0...................',
+    '..................0cddddddbbdddddddddddddddb0...................',
+    '..................0bddddddbbdddddddddddddddb0...................',
+    '..................0bddddddbbdddddddddddddddb0...................',
+    '......0000000000000bbbbbbbbbbbbbbbbbbbbbbbbb0000000000000.......',
+    '.....0ccccccccccccccccacccccccccccccccccccccccccccccccccc0......',
+    '....0ffbbbbbbbbbbbbbbbbabbbbbbppppppppbbbbbbbbbbbbbbbbbbff0.....',
+    '....0ffFbbbbb0000000bbbbbbbbbbppppppppbbbbb0000000bbbbbrff0.....',
+    '....0ffFbbbb00ttttt00bbbbbbbbbppppppppbbbb00ttttt00bbbbrff0.....',
+    '....0ffbbbb00ttttttt00bbbbbbbbbbbbbbbbbbb00ttttttt00bbbbff0.....',
+    '.....0aaaaa0ttttftttt0aaaaaaaaaaaaaaaaaaa0ttttftttt0aaaaa0......',
+    '.....0aaaaa0tttfffttt0aaaaaaaaaaaaaaaaaaa0tttfffttt0aaaaa0......',
+    '......000000ttffFfftt000000000000000000000ttffFfftt000000.......',
+    '...........0tttfffttt0...................0tttfffttt0............',
+    '...........0ttttftttt0...................0ttttftttt0............',
+    '...........00ttttttt00...................00ttttttt00............',
+    '........000000ttttt0000000000000000000000000ttttt000000.........',
+    '.......0kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk0........',
+  ] },
+  wedge: { name: 'The wedge', role: 'showpiece', note: "Doors that open the wrong way. Nobody who sees it forgets where.", rows: [
+    '................................................................',
+    '................................................................',
+    '................................................................',
+    '................................................................',
+    '................................................................',
+    '................................................................',
+    '...............................00000000000......................',
+    '.............................00ccccccccccc000...................',
+    '...........................00ccdddddddddddccc0..................',
+    '.........................00ccddddddddddddddddc000...............',
+    '.......................00ccdddddddddddddddddddccc0000000000.....',
+    '...000..........0000000ccddddddddddddddddddddddddcccccccccc0....',
+    '..0aaa0..000...0cccccccbbbbbbbbbbbbbbbbbbbb000000000acacarr0....',
+    '..0aaa000ccc0000000bbbbbbbbbbbbbbbbbaaaaaa00ttttttt00babarr0....',
+    '..0acccccbb00ttttt00bbbbbbbbbbbbbbbbajjjj00ttttttttt00ababb0....',
+    '..0bbbbbbb00ttttttt00bbbbbbbbbbbbbbbaaaaa0ttttttttttt0bbbbb0....',
+    '..0bbbbbbb0ttttftttt0bbbbbbbbbbbbbbbaaaaa0tttttfttttt0bbbbb0....',
+    '..0aaaaaaa0tttfffttt0aaaaaaaaaaaaaaaaaaaa0ttttffftttt0aaaaa0....',
+    '..0aaaaaaa0ttffFfftt0aaaaaaaaaaaaaaaaaaaa0tttffFffttt0aaaaa0....',
+    '...00000000tttfffttt0000000000000000000000ttttffftttt000000.....',
+    '..........0ttttftttt0....................0tttttfttttt0..........',
+    '..........00ttttttt00....................0ttttttttttt0..........',
+    '.....00000000ttttt0000000000000000000000000ttttttttt00000.......',
+    '....0kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk0......',
+  ] },
+  berlinetta: { name: 'The berlinetta', role: 'showpiece', note: "Two seats, twelve cylinders and nowhere to put anything.", rows: [
+    '................................................................',
+    '................................................................',
+    '................................................................',
+    '................................................................',
+    '................................................................',
+    '................................................................',
+    '................................................................',
+    '...........................000000000000000......................',
+    '..........................0ccccccccccccccc000...................',
+    '.......................000cdddddddddddddddccc000................',
+    '......................0cccdddddddddddddddddddccc000.............',
+    '..000.............0000cdddddddddddddddddddddddddccc0..0000000...',
+    '.0aaa000000......0ccccbbbbbbbbbbbbbbbbbbbbbbb000000000cccccrr0..',
+    '.0aaacccccc0000000bbbbbbbbbbbbbbbbaaaaaaaaaa00ttttttt00ccccrr0..',
+    '.0acbbbbbb00ttttt00bbbbbbbbbbbbbbbajjjjjjjj00ttttttttt00bbbbb0..',
+    '.0bbbbbbb00ttttttt00bbbbbbbbbbbbbbaaaaaaaaa0ttttttttttt0bbbbb0..',
+    '.0bbbbbbb0ttttftttt0bbbbbbbbbbbbbbbbbbbbbbb0tttttfttttt0bbbbb0..',
+    '.0aaaaaaa0tttfffttt0aaaaaaaaaaaaaaaaaaaaaaa0ttttffftttt0aaaaa0..',
+    '.0aaaaaaa0ttffFfftt0aaaaaaaaaaaaaaaaaaaaaaa0tttffFffttt0aaaaa0..',
+    '..00000000tttfffttt0000000000000000000000000ttttffftttt000000...',
+    '.........0ttttftttt0.......................0tttttfttttt0........',
+    '.........00ttttttt00.......................0ttttttttttt0........',
+    '....00000000ttttt0000000000000000000000000000ttttttttt00000.....',
+    '...0kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk0....',
+  ] },
+  luxcoupe: { name: 'Personal luxury', role: 'showpiece', note: "A two-door the length of a hallway. This is what respect looked like in 1978.", rows: [
+    '................................................................',
+    '................................................................',
+    '................................................................',
+    '................................000000000000000000..............',
+    '..............................00caaaaaaaaaaaaaaaaa0.............',
+    '.............................0ccda222222222222222ac00...........',
+    '.............................0dddaaaaaaaaaaaaaaaaadcc0..........',
+    '.............................0dddddddddddddadddaddddd0..........',
+    '.............................0dddddddddddddadddaddddd0..........',
+    '.00000000000000000000000000000dddddddddddddadddaddddd0000000000.',
+    '0cccccccccccccccccccccccccccccdddddddddddddaaaaadddddcccccccccc0',
+    'ffbcccccccccccccccccccccccccccdddddddddddddddddddddddbbbbbbbbbff',
+    'ffFffbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbffrff',
+    'ffFffbbbbbb0000000bbbbbbbbbbbbbbbbbbbbbbbbbbbbb0000000bbbbbffrff',
+    'ffffffffff00ttttt00fffffffffffffffffffffffffff00ttttt00fffffffff',
+    '0ffffbbbb00tWtttWt00bbbbbbbbbbbbbbbbbbbbbbbbb00tWtttWt00bbbffff0',
+    '0aaaaaaaa0ttWtftWtt0aaaaaaaaaaaaaaaaaaaaaaaaa0ttWtftWtt0aaaaaaa0',
+    '0aaaaaaaa0tWtffftWt0aaaaaaaaaaaaaaaaaaaaaaaaa0tWtffftWt0aaaaaaa0',
+    '.000000000tWffFffWt000000000000000000000000000tWffFffWt00000000.',
+    '.........0tWtffftWt0.........................0tWtffftWt0........',
+    '.........0ttWtftWtt0.........................0ttWtftWtt0........',
+    '.........00tWtttWt00.........................00tWtttWt00........',
+    '...000000000ttttt0000000000000000000000000000000ttttt00000000...',
+    '..0kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk0..',
+  ] },
+  limo: { name: 'Limousine', role: 'showpiece', note: "Somebody else drives. The back window is blind on purpose.", rows: [
+    '................................................................',
+    '................................................................',
+    '................................................................',
+    '................00000000000000000000000000000000000000..........',
+    '..............00ccccccccccccccaaacccccccccccaaaccccccc0.........',
+    '.............0ccddddddddddddddaaadddddddddddaaaaaaaaadc00.......',
+    '.............0ddddddddddddddddaaadddddddddddaaaa2222addcc0......',
+    '.............0ddddddddddddddddaaadddddddddddaaaa2222adddd0......',
+    '.............0ddddddddddddddddaaadddddddddddaaaa2222adddd0......',
+    '00000000000000ddddddddddddddddaaadddddddddddaaaa2222adddd0000000',
+    'ccccccccccccccddddddddddddddddaaadddddddddddaaaaaaaaaddddccccccc',
+    'fbbbbbbbbbbbbbddddddddddddddddaaadddddddddddaaaddddddddddbbbbbbf',
+    'fFffbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbffrf',
+    'fFffbbbbb0000000bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb0000000bbbbffrf',
+    'ffffffff00ttttt00fffffffffffffffffffffffffffffff00ttttt00fffffff',
+    'ffffbbb00tWtttWt00bbbbbbbbbbbbbbbbbbbbbbbbbbbbb00tWtttWt00bbffff',
+    'aaaaaaa0ttWtftWtt0aaaaaaaaaaaaaaaaaaaaaaaaaaaaa0ttWtftWtt0aaaaaa',
+    'aaaaaaa0tWtffftWt0aaaaaaaaaaaaaaaaaaaaaaaaaaaaa0tWtffftWt0aaaaaa',
+    '00000000tWffFffWt0000000000000000000000000000000tWffFffWt0000000',
+    '.......0tWtffftWt0.............................0tWtffftWt0......',
+    '.......0ttWtftWtt0.............................0ttWtftWtt0......',
+    '.......00tWtttWt00.............................00tWtttWt00......',
+    '..00000000ttttt00000000000000000000000000000000000ttttt0000000..',
+    '.0kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk0.',
+  ] },
+  convertible: { name: 'Convertible', role: 'showpiece', note: "Seen from three streets away, which is either the point or the problem.", rows: [
+    '................................................................',
+    '................................................................',
+    '................................................................',
+    '................................................................',
+    '................................................................',
+    '..........................00....................................',
+    '.........................0ff00..................................',
+    '.........................0ddff00.000000..0000000..0000000.......',
+    '.........................0ddddff022222200222222200bcccccb0......',
+    '..000000000000000000000000dddddda222222aa2222222aabbbbbbb0000...',
+    '.0ccccccccccccccccccccccccccccccaaaaaaaaaaaaaaaaaabbbbbbbcccc0..',
+    '0ffbcccccccccccccccccccccccbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbff0.',
+    '0ffFbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbrff0.',
+    '0ffFbbbbbbb0000000bbbbbbbbbbbbbbbbbbbbbbbbbbb0000000bbbbbbbrff0.',
+    '0ffbffffff00ttttt00fffffffffffffffffffffffff00ttttt00ffffffbff0.',
+    '.0bbbbbbb00tWtttWt00bbbbbbbbbbbbbbbbbbbbbbb00tWtttWt00bbbbbbb0..',
+    '.0aaaaaaa0ttWtftWtt0aaaaaaaaaaaaaaaaaaaaaaa0ttWtftWtt0aaaaaaa0..',
+    '.0aaaaaaa0tWtffftWt0aaaaaaaaaaaaaaaaaaaaaaa0tWtffftWt0aaaaaaa0..',
+    '..00000000tWffFffWt0000000000000000000000000tWffFffWt00000000...',
+    '.........0tWtffftWt0.......................0tWtffftWt0..........',
+    '.........0ttWtftWtt0.......................0ttWtftWtt0..........',
+    '.........00tWtttWt00.......................00tWtttWt00..........',
+    '....00000000ttttt00000000000000000000000000000ttttt00000000.....',
+    '...0kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk0....',
+  ] },
+  van: { name: 'Panel van', role: 'business', note: "No windows worth the name, which is either useful or the first thing noticed.", rows: [
+    '................................................................',
+    '................................................................',
+    '................................................................',
+    '........00000000000000000000000000000000000000000000000000......',
+    '.......0cccccccccccccccccccccccccccccccccccccccccccccccccc0.....',
+    '.......0bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb0.....',
+    '.......0bddddddddddbaaabbbbbbbbbbbbbbbbbaabbbbbbbbbbbbbbbb0.....',
+    '.......0bddddddddddbaaabbbbbbbbbbbbbbbbbaabbbbbbbbbbbbbbbb0.....',
+    '.......0bddddddddddbaaabbbbbbbbbbbbbbbbbaabbbbbbbbbbbbbbbb0.....',
+    '.......0bddddddddddbaaabbbbbbbbbbbbbbbbbaabbbbbbbbbbbbbbbb0.....',
+    '.......0bddddddddddbaaabbbbbbbbbbbbbbbbbaabbbbbbbbbbbbbbbb0.....',
+    '......0ffddddddddddbaaabbbbbbbbbbbbbbbbbaabbbbbbbbbbbbbbbff0....',
+    '......0ffFbbbbbbbbbbaaabbbbbbbbbbbbbbbbbaabbbbbbbbbbbbbbrff0....',
+    '......0ffFbbb0000000aaabbbbbbbbbbbbbbbbbaabb0000000bbbbbrff0....',
+    '......0fffff00ttttt00ffffffffffffffffffffff00ttttt00fffffff0....',
+    '.......0bbb00ttttttt00abbbbbbbbbbbbbbbbbaa00ttttttt00bbbbb0.....',
+    '.......0aaa0ttttftttt0aaaaaaaaaaaaaaaaaaaa0ttttftttt0aaaaa0.....',
+    '.......0aaa0tttfffttt0aaaaaaaaaaaaaaaaaaaa0tttfffttt0aaaaa0.....',
+    '........0000ttffFfftt0000000000000000000000ttffFfftt000000......',
+    '...........0tttfffttt0....................0tttfffttt0...........',
+    '...........0ttttftttt0....................0ttttftttt0...........',
+    '...........00ttttttt00....................00ttttttt00...........',
+    '..........0000ttttt00000000000000000000000000ttttt000000........',
+    '.........0kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk0.......',
+  ] },
+  pickup: { name: 'Pickup', role: 'business', note: "Belongs everywhere. Explains itself before anyone asks.", rows: [
+    '................................................................',
+    '................................................................',
+    '................................................................',
+    '................................................................',
+    '................00000000000000..................................',
+    '...............0cccccccccccccc0.................................',
+    '..............0cddddddddddddddc0................................',
+    '.............0cdddddddddddddddb0................................',
+    '.............0bdddddddddddddddb000000000000000000000000000......',
+    '.............0bdddddddddddddddb0aaaaaaaaaaaaaaaaaaaaaaaaaa0.....',
+    '......00000000bbbbbbbbbbbbbbbbb0aaaaaaaaaaaaaaaaaaaaaaaaaa0.....',
+    '.....0cccccccccccccccccccccccccccappppppppppppppppppppppac0.....',
+    '....0ffbbbbbbbbbbbbbbbbbbbbbbbbbbappppppppppppppppppppppaff0....',
+    '....0ffFbbbb0000000bbbbbbbbbbbbbbapppppppppp0000000ppppprff0....',
+    '....0ffFbbb00ttttt00bbbbbbbbbbbbbappppppppp00ttttt00pppprff0....',
+    '....0fffff00ttttttt00fffffffffffbaaaaaaaaa00ttttttt00aaaaff0....',
+    '.....0aaaa0ttttftttt0aaaaaaaaaaaaaaaaaaaaa0ttttftttt0aaaaa0.....',
+    '.....0aaaa0tttfffttt0aaaaaaaaaaaaaaaaaaaaa0tttfffttt0aaaaa0.....',
+    '......00000ttffFfftt00000000000000000000000ttffFfftt000000......',
+    '..........0tttfffttt0.....................0tttfffttt0...........',
+    '..........0ttttftttt0.....................0ttttftttt0...........',
+    '..........00ttttttt00.....................00ttttttt00...........',
+    '........00000ttttt000000000000000000000000000ttttt000000........',
+    '.......0kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk0.......',
+  ] },
+  boxtruck: { name: 'Box truck', role: 'business', note: "The freight front, drawn. \"A fleet that explains a lot of movement.\"", rows: [
+    '................................................................',
+    '......................000000000000000000000000000000000000000...',
+    '.....................0ccccccccccccccccccccccccccccccccccccccc0..',
+    '.....................0baaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaab0..',
+    '.....................0baaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaab0..',
+    '.....................0baabbbbbbbbbbbbbbbaabbbbbbbbbbbbbbbbaab0..',
+    '.....................0baabbbbbbbbbbbbbbbaabbbbbbbbbbbbbbbbaab0..',
+    '......0000000000000000baabbbbbbbbbbbbbbbaabbbbbbbbbbbbbbbbaab0..',
+    '.....0ccccccccccccccccbaabbbbbbbbbbbbbbbaabbbbbbbbbbbbbbbbaab0..',
+    '.....0bdddddddddddbbbbbaabbbbbbbbbbbbbbbaabbbbbbbbbbbbbbbbaab0..',
+    '.....0bdddddddddddbbbbbaabbbbbbbbbbbbbbbaabbbbbbbbbbbbbbbbaab0..',
+    '.....0bdddddddddddbbbbbaabbbbbbbbbbbbbbbaabbbbbbbbbbbbbbbbaab0..',
+    '....0ffdddddddddddbbbbbaabbbbbbbbbbbbbbbaabbbbbbbbbbbbbbbbaaff0.',
+    '....0ffFdddd0000000bbbbaabbbbbbbbbbbbbbbaabb0000000b0000000rff0.',
+    '....0ffFbbb00ttttt00bbbaabbbbbbbbbbbbbbbaab00ttttt000ttttt00ff0.',
+    '....0ffbbb00ttttttt00bbaaaaaaaaaaaaaaaaaaa00tttttt00ttttttt00f0.',
+    '.....0aaaa0ttttftttt0aaaaaaaaaaaaaaaaaaaaa0ttttftt0ttttftttt00..',
+    '.....0aaaa0tttfffttt0aaaaaaaaaaaaaaaaaaaaa0tttffft0tttfffttt0...',
+    '......00000ttffFfftt00000000000000000000000ttffFff0ttffFfftt0...',
+    '..........0tttfffttt0.....................0tttffft0tttfffttt0...',
+    '..........0ttttftttt0.....................0ttttftt0ttttftttt0...',
+    '..........00ttttttt00.....................00tttttt00ttttttt00...',
+    '........00000ttttt000000000000000000000000000ttttt000ttttt00....',
+    '.......0kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk0....',
+  ] },
+  flatbed: { name: 'Flatbed', role: 'business', note: "Stock, in the open, in a district that has to be held to carry it.", rows: [
+    '................................................................',
+    '................................................................',
+    '................................................................',
+    '................................................................',
+    '...........................0000000000.0000000000.0000000000.....',
+    '..........................0MMMMMMMMMM0MMMMMMMMMM0MMMMMMMMMM0....',
+    '..........................0nmmmmmmmmn0nmmmmmmmmn0nmmmmmmmmn0....',
+    '......00000000000000000...0nmmmmmmmmn0nmmmmmmmmn0nmmmmmmmmn0....',
+    '.....0ccccccccccccccccc0..0nnnnnnnnnn0nnnnnnnnnn0nnnnnnnnnn0....',
+    '.....0bdddddddddddbbbbb0..0nmmmmmmmmn0nmmmmmmmmn0nmmmmmmmmn0....',
+    '.....0bdddddddddddbbbbb0..0nmmmmmmmmn0nmmmmmmmmn0nmmmmmmmmn0....',
+    '.....0bdddddddddddbbbbb0..0nnnnnnnnnn0nnnnnnnnnn0nnnnnnnnnn000..',
+    '....0ffdddddddddddbbbbb0000nmmmmmmmmn0nmmmmmmmmn0nmmmmmmmmn0ff0.',
+    '....0ffFdddd0000000bbbaaaaannnnnnnnnnannnnnn0000000n0000000rff0.',
+    '....0ffFbbb00ttttt00bbaaaaaaaaaaaaaaaaaaaaa00ttttt000ttttt00ff0.',
+    '....0ffbbb00ttttttt00baaaaaaaaaaaaaaaaaaaa00tttttt00ttttttt00f0.',
+    '.....0bbbb0ttttftttt0baaaaaaaaaaaaaaaaaaaa0ttttftt0ttttftttt00..',
+    '.....0bbbb0tttfffttt0baaaaaaaaaaaaaaaaaaaa0tttffft0tttfffttt0...',
+    '......00000ttffFfftt00000000000000000000000ttffFff0ttffFfftt0...',
+    '..........0tttfffttt0.....................0tttffft0tttfffttt0...',
+    '..........0ttttftttt0.....................0ttttftt0ttttftttt0...',
+    '..........00ttttttt00.....................00tttttt00ttttttt00...',
+    '........00000ttttt000000000000000000000000000ttttt000ttttt00....',
+    '.......0kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk0....',
+  ] },
+  stripped: { name: 'Stripped', role: 'taken', note: "What \"Boost Cars\" leaves behind when the night goes normally.", rows: [
+    '................................................................',
+    '................................................................',
+    '................................................................',
+    '................................................................',
+    '............................0000000000000000....................',
+    '..........................00cccccccccccccccc0...................',
+    '.........................0aaaaaaaaaaaaaaaaaac0..................',
+    '.........................0aaaaaaaaaaaaaaaaaab0..................',
+    '.........................0aaaaaaaaaaaaaaaaaab0..................',
+    '.........................0aaaaaaaaaaaaaaaaaab0..................',
+    '.......0000000000000000000bbbbbbbbbbbbbbbbbbb00000000000........',
+    '......0ccccccccccccccccccccccc00000000000ccccccccccccccc0.......',
+    '.....0ffcccccccccccccccccbbbbb0.........0bbbbbbbbbbbbbbff0......',
+    '.....0ffFbbbbbbbbbbbbbbbbbbbbb0.........0bbbbbbbbbbbbbrff0......',
+    '.....0ffFbbbbbbbbbbbbbbbbbbbbb0.........0bbbbbbbbbbbbbrff0......',
+    '.....0ffbbbbbbbbbbbbbbbbbbbbbb0.........0bbbbbbbbbbbbbbff0......',
+    '......0aaaaaaaaaaaaaaaaaaaaaaa0.........0aaaaaaaaaaaaaaa0.......',
+    '......0aaaaaaaaaaaaaaaaaaaaaaa0.........0aaaaaaaaaaaaaaa0.......',
+    '.......00000000000000000000000...........000000000000000........',
+    '.............0000000......................0000000...............',
+    '............0ppppppp0....................0ppppppp0..............',
+    '............0paaaaap0....................0paaaaap0..............',
+    '.........0000ppppppp0000000000000000000000ppppppp00000..........',
+    '........0kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk0.........',
+  ] },
+  burned: { name: 'Burned out', role: 'taken', note: "A consequence with an address, sitting there for a week.", fixed: 'black', rows: [
+    '................................................................',
+    '................................................................',
+    '................................................................',
+    '................................................................',
+    '................................................................',
+    '....................0000000000000000000000000...................',
+    '...................0qqqqqqqqqqqqqqqqqqqqqqqqq0..................',
+    '...................0qkkkkkkkkkkkkkkkkkkkkkkkq0..................',
+    '...................0qkkkkkkkkkkkkkkkkkkkkkkkq0..................',
+    '...................0qkkkkkkkkkkkkkkkkkkkkkkkq0..................',
+    '.......0000000000000qqqqqqqqqqqqqqqqqqqqqqqqq00000000000........',
+    '......0qqqqqqqqqqqqqqqqqqqqqqqpqqqqqqqqqqqqqqqqqqqqqqqqq0.......',
+    '......0qqqkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkqqq0.......',
+    '......0qqqkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkqqq0.......',
+    '......0qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqpqqqqqqqqqqqqq0.......',
+    '......0qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq0.......',
+    '......0qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq0.......',
+    '......0qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq0.......',
+    '.......0000000000000000000000000000000000000000000000000........',
+    '............000000000....................000000000..............',
+    '...........0kkkkkkkkk0..................0kkkkkkkkk0.............',
+    '...........0kkkkkkkkk0..................0kkkkkkkkk0.............',
+    '.........000kkkkkkkkk00000000000000000000kkkkkkkkk0000..........',
+    '........0kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk0.........',
+  ] },
+  cruiser: { name: 'Cruiser', role: 'theirs', note: "Marked, and therefore the least of your problems.", fixed: 'black', rows: [
+    '................................................................',
+    '................................................................',
+    '..........................000000000000..........................',
+    '.........................0rrrrriieeeee0.........................',
+    '.....................00000rrrrffffeeee000000....................',
+    '....................0ccccccbbccccccccccccccc0...................',
+    '...................0cddddddbbdddddddddddddddc0..................',
+    '..................0cdddddddbbdddddddddddddddb0..................',
+    '..................0bdddddddbbdddddddddddddddb0..................',
+    '..................0bdddddddbbdddddddddddddddb0..................',
+    '......0000000000000bbbbbbbbbbbbbbbbbbbbbbbbbb0000000000000......',
+    '.....0ccccccccccccccWWWWWWWWWWWWWWWWWWWWWWWWcccccccccccccc0.....',
+    '....0ffbbbbbbbbbbbbbWWWWwwwwwwwwwwwwwwwwWWWWbbbbbbbbbbbbbff0....',
+    '....0ffFbbbbb0000000WWWWwwwwwwwwwwwwwwwwWWWW0000000bbbbbrff0....',
+    '....0ffFbbbb00ttttt00WWWwwwwwwwwwwwwwwwwWWW00ttttt00bbbbrff0....',
+    '....0ffffff00ttttttt00ffffffffffffffffffff00ttttttt00ffffff0....',
+    '.....0aaaaa0ttttftttt0aaaaaaaaaaaaaaaaaaaa0ttttftttt0aaaaa0.....',
+    '.....0aaaaa0tttfffttt0aaaaaaaaaaaaaaaaaaaa0tttfffttt0aaaaa0.....',
+    '......000000ttffFfftt0000000000000000000000ttffFfftt000000......',
+    '...........0tttfffttt0....................0tttfffttt0...........',
+    '...........0ttttftttt0....................0ttttftttt0...........',
+    '...........00ttttttt00....................00ttttttt00...........',
+    '........000000ttttt00000000000000000000000000ttttt000000........',
+    '.......0kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk0.......',
+  ] },
+  unmarked: { name: 'The unmarked', role: 'theirs', note: "Already in the game: \"Cars that do not belong.\" This is the surveillance stage.", fixed: 'primer', rows: [
+    '................................................................',
+    '................................................................',
+    '................................................................',
+    '................................................................',
+    '.....................0000000000000000000000.....................',
+    '....................0cccccbbccccccccccccccc0.........0..........',
+    '...................0cdddddbbdddddddddddddddc0....0..0f0.........',
+    '..................0cddddddbbdddddddddddddddb0...0f0.0f0.........',
+    '..............00..0bddddddbbdddddddddddddddb0..0f0.0f0..........',
+    '.............0ff0.0bddddddbbdddddddddddddddb0..0f00f0...........',
+    '......0000000Fff000bbbbbbbbbbbbbbbbbbbbbbbbb0000f0f000000.......',
+    '.....0ccccccccffccccccccccccccccccccccccccccccccccccccccc0......',
+    '....0ffbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbff0.....',
+    '....0ffFbbbbb0000000bbbbbbbbbbbbbbbbbbbbbbb0000000bbbbbrff0.....',
+    '....0ffFbbbb00ttttt00bbbbbbbbbbbbbbbbbbbbb00ttttt00bbbbrff0.....',
+    '....0ffbbbb00ttttttt00bbbbbbbbbbbbbbbbbbb00ttttttt00bbbbff0.....',
+    '.....0aaaaa0ttttftttt0aaaaaaaaaaaaaaaaaaa0ttttftttt0aaaaa0......',
+    '.....0aaaaa0tttfffttt0aaaaaaaaaaaaaaaaaaa0tttfffttt0aaaaa0......',
+    '......000000ttffFfftt000000000000000000000ttffFfftt000000.......',
+    '...........0tttfffttt0...................0tttfffttt0............',
+    '...........0ttttftttt0...................0ttttftttt0............',
+    '...........00ttttttt00...................00ttttttt00............',
+    '........000000ttttt0000000000000000000000000ttttt000000.........',
+    '.......0kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk0........',
+  ] },
+  hearse: { name: 'Hearse', role: 'theirs', note: "Succession, arriving. The game already ages people out.", fixed: 'black', rows: [
+    '................................................................',
+    '................................................................',
+    '................................................................',
+    '..................0000000000000000000000000000000000000.........',
+    '.................0ccccccccccccccccccccccccccccccccccccc0........',
+    '................0cddddddbfbbbbbbbbbbbbbbbbbbbbbbbbbbbfb0........',
+    '...............0cdddddddbfddddaaaaaaaaaaaaaaaaaaaddddfb0........',
+    '...............0bdddddddbfddddaaaaaaaaaaaaaaaaaaaddddfb0........',
+    '...............0bdddddddbfddddaaaaaaaaaaaaaaaaaaaddddfb0........',
+    '...............0bdddddddbfdddddddddddddddddddddddddddfb0........',
+    '...0000000000000bbbbbbbbbfbbbbbbbbbbbbbbbbbbbbbbbbbbbfb000000...',
+    '..0ffccccccccccccccccccccccccccccccccccccccccccccccccccccccff0..',
+    '..0ffFbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbrff0..',
+    '..0ffFbbbbb0000000bbbbbbbbbbbbbbbbbbbbbbbbbbbbb0000000bbbbrff0..',
+    '..0fffffff00ttttt00fffffffffffffffffffffffffff00ttttt00ffffff0..',
+    '...0bbbbb00ttttttt00bbbbbbbbbbbbbbbbbbbbbbbbb00ttttttt00bbbb0...',
+    '...0aaaaa0ttttftttt0aaaaaaaaaaaaaaaaaaaaaaaaa0ttttftttt0aaaa0...',
+    '...0aaaaa0tttfffttt0aaaaaaaaaaaaaaaaaaaaaaaaa0tttfffttt0aaaa0...',
+    '....000000ttffFfftt000000000000000000000000000ttffFfftt00000....',
+    '.........0tttfffttt0.........................0tttfffttt0........',
+    '.........0ttttftttt0.........................0ttttftttt0........',
+    '.........00ttttttt00.........................00ttttttt00........',
+    '......000000ttttt0000000000000000000000000000000ttttt00000......',
+    '.....0kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk0.....',
+  ] },
+};
+
+const ROLES = [
+  ['yours',    'Yours',          'What the organization is seen in. Standing on one side, heat on the other.'],
+  ['showpiece','Showpieces',     'Bought because somebody will see it. standing.ts pays for that and lawEnforcement.ts charges for it.'],
+  ['business', 'The business',   'Fronts and freight. businesses.ts already sells "a fleet that explains a lot of movement".'],
+  ['taken',    'Taken',          'operations.ts has an operation called Boost Cars. This is both ends of it.'],
+  ['theirs',   'Not yours',      'The two that arrive whatever you do, and the one that arrives once.'],
+];
+
+/* ======================================================================
+   3. RENDER
+   ====================================================================== */
+const params = new URLSearchParams(location.search);
+let scale = Number(params.get('scale')) || 2;
+let paint = params.get('paint') || 'black';
+let livery = params.get('livery') || 'on';
+
+function draw(canvas, rows, s, pal) {
+  canvas.width = 64 * s; canvas.height = 24 * s;
+  const ctx = canvas.getContext('2d');
+  ctx.imageSmoothingEnabled = false;
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  for (let y = 0; y < rows.length; y++) {
+    for (let x = 0; x < rows[y].length; x++) {
+      const k = rows[y][x];
+      if (k === '.') continue;
+      const hex = pal[k];
+      if (!hex) { console.warn('no colour for', k); continue; }
+      ctx.fillStyle = hex;
+      ctx.fillRect(x * s, y * s, s, s);
+    }
+  }
+}
+
+/* A cream police cruiser is a joke rather than a mockup, so vehicles with a
+   livery of their own keep it unless the control says otherwise. */
+function palFor(v) {
+  return palette(livery === 'on' && v.fixed ? v.fixed : paint);
+}
+
+function buildRacks() {
+  const wrap = document.getElementById('racks');
+  wrap.innerHTML = '';
+  ROLES.forEach(([role, label, note]) => {
+    const items = Object.values(FLEET).filter((v) => v.role === role);
+    const rack = document.createElement('div');
+    rack.className = 'rack';
+    rack.innerHTML = '<div class="head"><b>' + label + ' <span style="opacity:.5">' +
+      items.length + '</span></b><span>' + note + '</span></div>';
+    items.forEach((v) => {
+      const row = document.createElement('div');
+      row.className = 'item';
+      const c = document.createElement('canvas');
+      draw(c, v.rows, scale, palFor(v));
+      row.appendChild(c);
+      const n = document.createElement('span'); n.className = 'nm'; n.textContent = v.name;
+      row.appendChild(n);
+      const t = document.createElement('span'); t.className = 'note'; t.textContent = v.note;
+      row.appendChild(t);
+      rack.appendChild(row);
+    });
+    wrap.appendChild(rack);
+  });
+}
+
+function buildPaints() {
+  const wrap = document.getElementById('paints');
+  wrap.innerHTML = '';
+  Object.keys(PAINT).forEach((p) => {
+    const box = document.createElement('div');
+    box.className = 'opt';
+    const c = document.createElement('canvas');
+    draw(c, FLEET.luxcoupe.rows, Math.max(2, scale), palette(p));
+    box.appendChild(c);
+    const s = document.createElement('span'); s.textContent = p; box.appendChild(s);
+    wrap.appendChild(box);
+  });
+}
+
+function buildRamp() {
+  const wrap = document.getElementById('ramp');
+  wrap.innerHTML = '';
+  const sets = [['Paint — ' + paint, PAINT[paint]],
+                ['Glass', ['#232c38', '#7593a8']],
+                ['Chrome', ['#9c9083', '#ded3bc']],
+                ['Rubber', ['#15110e', '#3d3d42']],
+                ['Other', ['#c2352b', '#524d46', '#1c1713']]];
+  sets.forEach(([label, hexes]) => {
+    const d = document.createElement('div');
+    d.innerHTML = '<b>' + label + '</b>' + hexes.map((h) => '<i style="background:' + h + '"></i>').join('');
+    wrap.appendChild(d);
+  });
+}
+
+function wire(id, apply) {
+  const box = document.getElementById(id);
+  box.addEventListener('click', (e) => {
+    const btn = e.target.closest('button');
+    if (!btn) return;
+    [...box.querySelectorAll('button')].forEach((b) => b.setAttribute('aria-pressed', String(b === btn)));
+    apply(btn.dataset.v);
+  });
+}
+wire('scale', (v) => { scale = Number(v); everything(); });
+wire('paint', (v) => { paint = v; everything(); });
+wire('livery', (v) => { livery = v; everything(); });
+
+function syncControls() {
+  [['scale', String(scale)], ['paint', paint], ['livery', livery]].forEach(([id, v]) => {
+    [...document.getElementById(id).querySelectorAll('button')].forEach((b) =>
+      b.setAttribute('aria-pressed', String(b.dataset.v === v)));
+  });
+}
+function everything() { buildRacks(); buildPaints(); buildRamp(); }
+syncControls();
+everything();
+const _scroll = params.get('y');   // for capturing a still of a lower rack
+if (_scroll) requestAnimationFrame(() => requestAnimationFrame(() => window.scrollTo(0, Number(_scroll))));
+</script>
+</body>
+</html>

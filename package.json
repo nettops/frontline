@@ -2,8 +2,6 @@
   "name": "frontline",
   "private": true,
   "version": "0.1.0",
-  "license": "MIT",
-  "author": "Cory Williams",
   "type": "module",
   "scripts": {
     "dev": "vite",

@@ -1,0 +1,951 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Pixel rooms — the other side of the ten fronts</title>
+<style>
+/* =========================================================================
+   PIXEL ROOMS — disposable. Nothing in src/ is touched.
+
+   The inside of every front in pixel-fronts.html, which is the inside of
+   every entry in config/businesses.ts. 96 x 56, flat elevation, one wall and
+   one floor line, composed from parts like everything else on this branch.
+
+   THE REASON THE CELL IS THIS SIZE
+
+   sitdown.ts calls the sit-down "the second verb" and "a conversation you act
+   through" — the one screen in the game that stops and looks at a person. The
+   cast in pixel-cast.html is 32 x 40 and cut off at the waist, which has
+   always been the obvious complaint about it. It stops being a complaint the
+   moment there is a table: these rooms put the floor line at y=46 and the
+   furniture top at y=36-38, so a cast figure dropped in at y=6 is cut exactly
+   where a man sitting at a table is cut.
+
+   That is what the last section of this page shows, and it is the whole
+   argument for interiors: the character sheet and the building sheet were
+   drawn six commits apart and they compose without either of them moving.
+
+   Rooms are drawn back-to-front — wall, fittings, furniture — and the sit-down
+   composite re-stamps the room's own front rows over the figures afterwards,
+   so nobody has to draw a table twice.
+   ========================================================================= */
+
+:root {
+  --ink-900:#0c0a09; --ink-800:#15110e; --ink-700:#1c1713; --ink-600:#241d18;
+  --line:#332a22; --text:#e6ddcd; --text-dim:#9c9083; --text-faint:#6b6157;
+  --brass:#c9a227; --brass-dim:#7d6720; --stamp:#c2352b; --paper:#ded3bc;
+  --carbon:#7593a8; --carbon-dim:#3d5464;
+  --font-display: Bahnschrift,'Avenir Next Condensed','Arial Narrow','Segoe UI',system-ui,sans-serif;
+  --font-mono: ui-monospace,'Cascadia Mono',Consolas,'SF Mono',Menlo,monospace;
+}
+* { box-sizing:border-box; }
+body { margin:0; padding:28px 32px 64px; background:var(--ink-900); color:var(--text);
+       font-family:var(--font-mono); font-size:12px; line-height:1.55; }
+h1 { font-family:var(--font-display); font-size:22px; letter-spacing:.14em; text-transform:uppercase; margin:0 0 4px; }
+.sub { color:var(--text-dim); max-width:82ch; margin:0 0 20px; }
+h3 { font-family:var(--font-display); font-size:13px; letter-spacing:.14em; text-transform:uppercase;
+     color:var(--text-dim); margin:30px 0 4px; }
+.lede { color:var(--text-faint); margin:0 0 14px; max-width:84ch; }
+.controls { display:flex; flex-wrap:wrap; gap:18px; align-items:center; padding:10px 14px;
+            margin-bottom:20px; background:var(--ink-800); border:1px solid var(--line); }
+.controls label { color:var(--text-dim); text-transform:uppercase; letter-spacing:.1em; font-size:10px; }
+.seg { display:inline-flex; border:1px solid var(--line); }
+.seg button { background:var(--ink-700); color:var(--text-dim); border:0; border-right:1px solid var(--line);
+              padding:4px 10px; font:inherit; font-size:11px; cursor:pointer; }
+.seg button:last-child { border-right:0; }
+.seg button[aria-pressed="true"] { background:var(--brass-dim); color:var(--ink-900); }
+.grid { display:flex; flex-wrap:wrap; gap:14px; }
+.cell { background:var(--ink-800); border:1px solid var(--line); padding:10px 11px 11px;
+        display:flex; flex-direction:column; gap:6px; }
+.cell .nm { font-family:var(--font-display); letter-spacing:.09em; text-transform:uppercase; font-size:12px;
+            display:flex; justify-content:space-between; gap:10px; }
+.cell .nm i { font-style:normal; color:var(--brass); font-size:11px; }
+.cell .note { color:var(--text-faint); max-width:44ch; }
+canvas { image-rendering:pixelated; display:block; }
+.sitdown { display:flex; gap:20px; flex-wrap:wrap; align-items:flex-start; }
+.sitdown .frame { border:1px solid var(--line); background:var(--ink-900); padding:0; }
+.modal { background:var(--ink-800); border:1px solid var(--line); padding:0; width:420px; }
+.modal .art { border-bottom:1px solid var(--line); }
+.modal .body { padding:12px 14px; }
+.modal .who { font-family:var(--font-display); letter-spacing:.1em; text-transform:uppercase; }
+.modal .said { color:var(--text-dim); margin:8px 0 12px; }
+.modal .reg { display:flex; gap:6px; flex-wrap:wrap; }
+.modal .reg span { border:1px solid var(--line); padding:3px 9px; color:var(--text-dim); font-size:11px; }
+.ramp { display:flex; gap:20px; flex-wrap:wrap; }
+.ramp div b { display:block; color:var(--text-dim); font-weight:400; margin-bottom:4px; font-size:11px; }
+.ramp i { width:22px; height:16px; display:inline-block; }
+</style>
+</head>
+<body>
+
+<h1>Pixel rooms — the other side of the ten fronts</h1>
+<p class="sub">
+  The inside of every facade in <code>pixel-fronts.html</code>, which is the
+  inside of every entry in <code>config/businesses.ts</code>. 96 × 56, flat
+  elevation, one wall and one floor line. The cell is that size for a specific
+  reason, and the last section is it.
+</p>
+
+<div class="controls">
+  <label for="scale">Scale</label>
+  <span class="seg" id="scale">
+    <button data-v="1">1x</button><button data-v="2" aria-pressed="true">2x</button>
+    <button data-v="3">3x</button><button data-v="4">4x</button>
+  </span>
+  <label for="light">Light</label>
+  <span class="seg" id="light">
+    <button data-v="on" aria-pressed="true">lit</button>
+    <button data-v="off">after hours</button>
+  </span>
+</div>
+
+<div class="grid" id="grid"></div>
+
+<h3>The sit-down</h3>
+<p class="lede">
+  Nothing was redrawn to make this. The room is the social club above and the
+  two figures are <code>compose()</code> output from
+  <code>pixel-cast.html</code>, dropped in at y=8 — which puts the bottom of a
+  32 × 40 half-figure exactly where the table is. The character sheet and the
+  building sheet were drawn six commits apart and they fit without either
+  moving, because both of them were built to an anchor rather than to taste.
+</p>
+<div class="sitdown">
+  <div class="frame"><canvas id="scene"></canvas></div>
+  <div class="modal">
+    <div class="art"><canvas id="scene2"></canvas></div>
+    <div class="body">
+      <div class="who">Salvatore Falcone</div>
+      <div class="said">“You came a long way to ask me something you already know the answer to.”</div>
+      <div class="reg"><span>Press</span><span>Offer</span><span>Listen</span><span>Tell the truth</span></div>
+    </div>
+  </div>
+</div>
+
+<h3>Palette</h3>
+<div class="ramp" id="ramp"></div>
+
+<script>
+/* ======================================================================
+   1. PALETTE
+   ====================================================================== */
+const PAL = {
+  '0': '#0c0a09',
+  'a': '#15110e', 'b': '#241d18', 'c': '#332a22',
+  'd': '#0f0d0b', 'e': '#1c1713', 'f': '#241d18',
+  'g': '#3b2519', 'h': '#5f3d27', 'i': '#855838',
+  'j': '#2a2d31', 'k': '#3d5464', 'l': '#7593a8',
+  'm': '#ded3bc', 'n': '#9c9083', 'N': '#6b6157',
+  'o': '#7d6720', 'p': '#c9a227', 'P': '#f0dc9a',
+  'r': '#c2352b', 'R': '#6d1b16',
+  's': '#2b3122', 'S': '#4f6337',
+  't': '#44582f', 'u': '#7d6720', 'v': '#dd5347', 'x': '#0f0f11',
+};
+/* After hours is the same room with the power off — the two warm keys go
+   cold and everything else drops a step. */
+const DARK = Object.assign({}, PAL, {
+  'P': '#4a4130', 'p': '#5c4a1c', 'o': '#3d3318', 'v': '#5a2a26',
+  'c': '#241d18', 'b': '#1c1713', 'm': '#6b6157', 'n': '#4a443a',
+  'i': '#4a2f1e', 'h': '#3b2519', 'S': '#2b3122', 'l': '#3d5464',
+  't': '#2b3122', 'u': '#4a3d18', 'N': '#4a443a',
+});
+function pal() { return light === 'on' ? PAL : DARK; }
+
+/* Cast figures keep their own palette — this page borrows the sprites, not
+   the colour model, so the mapping is spelled out rather than imported. */
+const SKINS = { deep:['#2e1c14','#4a2f21','#6b452f'], brown:['#3b2519','#5f3d27','#855838'],
+                olive:['#5c3a26','#8a5c3c','#b3835a'], tan:['#6b4a33','#9c6f4c','#c2926a'],
+                fair:['#7a5744','#b08462','#d6ae8a'] };
+const SUITS = { charcoal:['#14120f','#2b2723','#443e38'], brown:['#1a130d','#332a22','#4a3d31'],
+                navy:['#10141a','#232c38','#3a4756'], olive:['#14170f','#2b3122','#434a33'],
+                bone:['#2a2620','#4a443a','#6b6355'] };
+const HAIRS = { black:['#17130f','#2a231c'], brown:['#2e2118','#4a382a'], pepper:['#3b352e','#7a7168'],
+                grey:['#6b6157','#9c9083'], white:['#9c9083','#ded3bc'] };
+const SHIRTS = { white:'#e6ddcd', cream:'#ded3bc', grey:'#b0a89c' };
+const TIES = { blood:'#c2352b', brass:'#c9a227', carbon:'#4a6f7a', olive:'#6b7f4a',
+               deep:'#6d1b16', bone:'#ded3bc' };
+const HATFELT = { black:'#15110e', brown:'#241d18', ash:'#332a22', bone:'#6b6157' };
+function figPalette(p) {
+  const sk = SKINS[p.skin], su = SUITS[p.suit], ha = HAIRS[p.hair];
+  return { '0':'#0c0a09', '1':HATFELT[p.felt||'black'], 'h':su[0],
+           '2':su[0], '3':su[1], '4':su[2], '7':SHIRTS[p.shirt||'white'],
+           'b':TIES[p.tie||'blood'], '9':'#c9a227', '5':ha[0], '6':ha[1],
+           'c':sk[0], 'd':sk[1], 'e':sk[2], '8':'#7d6720', 'a':'#9c9083' };
+}
+
+/* ======================================================================
+   2. THE ROOMS
+   ====================================================================== */
+const ROOMS = {
+  real_estate: { name: 'Real Estate Office', legit: 80, note: "Two desks, blinds and a plan of somewhere. Legitimacy 80 indoors too.", rows: [
+    '000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000',
+    '0aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa0',
+    '0aaaaaaaaaaaaaaaaaaanmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmnaaaaaaaaaaaaaaaaaa0',
+    '0cccccccccccccccccccnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnncccccccccccccccccc0',
+    '0bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb0',
+    '0bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb0',
+    '0bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb0',
+    '0bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb0',
+    '0bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbgggggggbbb0',
+    '0bbbbbgggggggggggggggggggggggbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbggggggggggggggggggggggggmmmmmgbbb0',
+    '0bbbbbgnnnnnnnnnnnnnnnnnnnnngbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbgnnnnnnnnnnnnnnnnnnnnnggmmammgbbb0',
+    '0bbbbbgaaaaaaaaaaaaaaaaaaaaagbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbgaaaaaaaaaaaaaaaaaaaaaggmmaamgbbb0',
+    '0bbbbbgnnnnnnnnnnnnnnnnnnnnngbbbbbbbbbbbgggggggggggggggbbbbbbbgnnnnnnnnnnnnnnnnnnnnnggmmmmmgbbb0',
+    '0bbbbbgaaaaaaaaaaaaaaaaaaaaagbbbbbbbbbbbgnnnnnnnnnnnnngbbbbbbbgaaaaaaaaaaaaaaaaaaaaaggmmmmmgbbb0',
+    '0bbbbbgnnnnnnnnnnnnnnnnnnnnngbbbbbbbbbbbgnnnnnnnnnnnnngbbbbbbbgnnnnnnnnnnnnnnnnnnnnnggggggggbbb0',
+    '0bbbbbgaaaaaaaaaaaaaaaaaaaaagbbbbbbbbbbbgnnnnnnnnnnnnngbbbbbbbgaaaaaaaaaaaaaaaaaaaaagbbbbbbbbbb0',
+    '0bbbbbgnnnnnnnnnnnnnnnnnnnnngbbbbbbbbbbbgnnnnnnnnnnnnngbbbbbbbgnnnnnnnnnnnnnnnnnnnnngbbbbbbbbbb0',
+    '0bbbbbgaaaaaaaaaaaaaaaaaaaaagbbbbbbbbbbbgnnnnnnnnnnnnngbbbbbbbgaaaaaaaaaaaaaaaaaaaaagbbbbbbbbbb0',
+    '0bbbbbgnnnnnnnnnnnnnnnnnnnnngbbbbbbbbbbbgnnnnnnnnnnnnngbbbbbbbgnnnnnnnnnnnnnnnnnnnnngbbbbbbbbbb0',
+    '0bbbbbgaaaaaaaaaaaaaaaaaaaaagbbbbbbbbbbbgnnnnnnnnnnnnngbbbbbbbgaaaaaaaaaaaaaaaaaaaaagbbbbbbbbbb0',
+    '0bbbbbgnnnnnnnnnnnnnnnnnnnnngbbbbbbbbbbbgnnnnnnnnnnnnngbbbbbbbgnnnnnnnnnnnnnnnnnnnnngbbbbbbbbbb0',
+    '0bbbbbgaaaaaaaaaaaaaaaaaaaaagbbbbbbbbbbbgnnnnnnnnnnnnngbbbbbbbgaaaaaaaaaaaaaaaaaaaaagbbbbbbbbbb0',
+    '0bbbbbgnnnnnnnnnnnnnnnnnnnnngbbbbbbbbbbbgggggggggggggggbbbbbbbgnnnnnnnnnnnnnnnnnnnnngbbbbbbbbbb0',
+    '0bbbbbgaaaaaaaaaaaaaaaaaaaaagbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbgaaaaaaaaaaaaaaaaaaaaagbbbbbbbbbb0',
+    '0bbbbbgnnnnnnnnnnnnnnnnnnnnngbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbgnnnnnnnnnnnnnnnnnnnnngbbbbbbbbbb0',
+    '0bbbbbgggggggggggggggggggggggbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbgggggggggggggggggggggggbbbbbbbbbb0',
+    '0bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb0',
+    '0bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb0',
+    '0bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb0',
+    '0bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb0',
+    '0bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb0',
+    '0bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb0',
+    '0bbbbbbbbbbbbbbbbbbbbbbbbbbbbbmmmmmmmmmmmmmmmbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb0',
+    '0bbbbbbbbbbbbbbbbbbbbbbbbbbbbbmmmmmmmmmmmmmmmbbbbbbbmmmmmmmmmbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb0',
+    '0bbbbbbbbbbbbbbbbbbbbbbbbbbbbbmmmmmmmmmmmmmmmbbbbbbbmmmmmmmmmbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb0',
+    '0bbbbbbbbbbbbbbbbbbbbbbbbbbbbbmmmmmmmmmmmmmmmbbbbbbbmmmmmmmmmbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb0',
+    '0bbbbbbbbbbbbbbbbbbbbbbbiiiiiimmmmmmmmmmmmmmmiiiiiiimmmmmmmmmiiiiiiiiiibbbbbbbbbbbbbbbbbbbbbbbb0',
+    '0bbbbbbbbbbbbbbbbbbbbbbbiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiibbbbbbbbbbbbbbbbbbbbbbbb0',
+    '0bbbbbbbbbbbbbbbbbbbbbbbgggggggggggggggggggggggggggggggggggggggggggggggbbbbbbbbbbbbbbbbbbbbbbbb0',
+    '0bbbbbbbbbbbbbbbbbbbbbbbggggaggggggggaggggggggaggggggggaggggggggaggggggbbbbbbbbbbbbbbbbbbbbbbbb0',
+    '0bbbbbbbbbbbbbbbbbbbbbbbggggaggggggggaggggggggaggggggggaggggggggaggggggbbbbbbbbbbbbbbbbbbbbbbbb0',
+    '0bbbbbbbbbbbbbbbbbbbbbbbggggaggggggggaggggggggaggggggggaggggggggaggggggbbbbbbbbbbbbbbbbbbbbbbbb0',
+    '0bbbbbbbbbbbbbbbbbbbbbbbggggaggggggggaggggggggaggggggggaggggggggaggggggbbbbbbbbbbbbbbbbbbbbbbbb0',
+    '0bbbbbbbbbbbbbbbbbbbbbbbggggaggggggggaggggggggaggggggggaggggggggaggggggbbbbbbbbbbbbbbbbbbbbbbbb0',
+    '0aaaaaaaaaaaaaaaaaaaaaaaggggaggggggggaggggggggaggggggggaggggggggaggggggaaaaaaaaaaaaaaaaaaaaaaaa0',
+    '0aaaaaaaaaaaaaaaaaaaaaaagggggggggggggggggggggggggggggggggggggggggggggggaaaaaaaaaaaaaaaaaaaaaaaa0',
+    '0RRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR0',
+    '0RRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR0',
+    '0RRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR0',
+    '0RRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR0',
+    '0RRrRRRRRrRRRRRrRRRRRrRRRRRrRRRRRrRRRRRrRRRRRrRRRRRrRRRRRrRRRRRrRRRRRrRRRRRrRRRRRrRRRRRrRRRRRrR0',
+    '0RRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR0',
+    '0RRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR0',
+    '0RRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR0',
+    '0RRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR0',
+    '000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000',
+  ] },
+  restaurant: { name: 'Restaurant', legit: 75, note: "Cloth on the table, bottles behind the bar, three lamps low over it.", rows: [
+    '000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000',
+    '0aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa0',
+    '0aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa0',
+    '0cccccccccccccccccccacccccccccccccccccccccccccccacccccccccccccccccccccccccccacccccccccccccccccc0',
+    '0bcbbbbbbcbbbbbbcbbbabbcbbbbbbcbbbbbbcbbbbbbcbbbabbcbbbbbbcbbbbbbcbbbbbbcbbbabbcbbbbbbcbbbbbbcb0',
+    '0bcbbbbbbcbbbbbbcbbbabbcbbbbbbcbbbbbbcbbbbbbcbbbabbcbbbbbbcbbbbbbcbbbbbbcbbbabbcbbbbbbcbbbbbbcb0',
+    '0bcbbbbbbcbbbbbbcooooooobbbbbbcbbbbbbcbbbbbbcooooooobbbbbbcbbbbbbcbbbbbbcooooooobbbbbbcbbbbbbcb0',
+    '0bcbbbbbbcbbbbbbcooooooobbbbbbcbbbbbbcbbbbbbcooooooobbbbbbcbbbbbbcbbbbbbcooooooobbbbbbcbbbbbbcb0',
+    '0bcbbbbbbcbbbbbbcbPPPPPcbbbbbbcbbbbbbcbbbbbbcbPPPPPcbbbbbbcbbbbbbcbbbbbbcbPPPPPcbbbbbbcbbbbbbcb0',
+    '0bcbbbbbbcbbbbbcccccccccccbbbbcbbbbbbcbbbbbcccccccccccbbbbcbbbbbbcbbbbbcccccccccccbbbbcbbbbbbcb0',
+    '0bcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcb0',
+    '0bcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcb0',
+    '0bcbbbbbggggggggggbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbggggggggggbcb0',
+    '0bcbbbbbgiiiiiiiigbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbgiiiiiiiigbcb0',
+    '0bcbbbbbgiiiiiiiigbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbgiiiiiiiigbcb0',
+    '0bcbbbbbgiiiiiiiigbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbgiiiiiiiigbcb0',
+    '0bcbbbbbgiiiiiiiigbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbghhhhhhhhhhhhhhhhhhhhhhhhhhhggbcb0',
+    '0bcbbbbbgiiiiiiiigbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbggggggggggggggggggggggggggggggbcb0',
+    '0bcbbbbbgiiiiiiiigbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbggttggttggttggttggttggttggggggbcb0',
+    '0bcbbbbbggggggggggbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbggttggttggttggttggttggttggggggbcb0',
+    '0bcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbggttggttggttggttggttggttgggggbbcb0',
+    '0bcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbggttggttggttggttggttggttgggggbbcb0',
+    '0bcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbggttggttggttggttggttggttgggggbbcb0',
+    '0bcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbggttggttggttggttggttggttgggggbbcb0',
+    '0bcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbggttggttggttggttggttggttgggggbbcb0',
+    '0bcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbggttggttggttggttggttggttgggggbbcb0',
+    '0bcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbggttggttggttggttggttggttgggggbbcb0',
+    '0bcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbggttggttggttggttggttggttgggggbbcb0',
+    '0bcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbggttggttggttggttggttggttgggggbbcb0',
+    '0bcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbggttggttggttggttggttggttgggggbbcb0',
+    '0bcbbbbbggbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbggbbbbbcbbbbbbcbbbgggggggggggggggggggggggggggggbbcb0',
+    '0bcbbbbbggbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbggbbbbbcbbbbbbcbbbghhhhhhhhhhhhhhhhhhhhhhhhhhhgbbcb0',
+    '0bcbbbbbggbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbggbbbbbcbbbbbbcbbbgggggggggggggggggggggggggggggbbcb0',
+    '0bcbbbbbggbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbggbbbbbcbbbbbbcbbbggttggttggttggttggttggttgggggbbcb0',
+    '0bcbbbbbggbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbggbbbbbcbbbbbbcbiiggttggttggttggttggttggttgggggiicb0',
+    '0bcbbbbbggbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbggbbbbbcbbbbbbcbiiggttggttggttggttggttggttgggggiicb0',
+    '0bcbbbbbggbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbggbbbbbcbbbbbbcbggggttggttggttggttggttggttgggggggcb0',
+    '0bcbbbbbggbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbggbbbbbcbbbbbbcbggggttggttggttggttggttggttgggggagcb0',
+    '0bggggggggmmmmmmmmmmmmmmmmmmmmmmmmmmbcggggggggbbbbbcbbbbbbcbggggttggttggttggttggttggttgggggagcb0',
+    '0bggggggggmmmmmmmmmmmmmmmmmmmmmmmmmmbcggggggggbbbbbcbbbbbbcbggggttggttggttggttggttggttgggggagcb0',
+    '0bggbbbmggmmmmmmmmmmmmmmmmmmmmmmmmmmbcggbbbbggbbbbbcbbbbbbcbggggttggttggttggttggttggttgggggagcb0',
+    '0bggbbbmggmmmmmmmmmmmmmmmmmmmmmmmmmmbcggbbbbggbbbbbcbbbbbbcbggggttggttggttggttggttggttgggggagcb0',
+    '0bggbbbmggmmmmmmmmmmmmmmmmmmmmmmmmmmbcggbbbbggbbbbbcbbbbbbcbggggttggttggttggttggttggttgggggagcb0',
+    '0bggbbbmggmmmmmmmmmmmmmmmmmmmmmmmmmmbcggbbbbggbbbbbcbbbbbbcbggggttggttggttggttggttggttgggggagcb0',
+    '0aggaaaaggaaaaaaaaaaaaaaaaaaaaaaaaaaaaggaaaaggaaaaaaaaaaaaaaggggttggttggttggttggttggttgggggagaa0',
+    '0aggaaaaggaaaaaaaaaaaaaaaaaaaaaaaaaaaaggaaaaggaaaaaaaaaaaaaagggggggggggggggggggggggggggggggggaa0',
+    '0eeeeeeedeeeeeeedeeeeeeedeeeeeeedeeeeeeedeeeeeeedeeeeeeedeeeeeeedeeeeeeedeeeeeeedeeeeeeedeeeeee0',
+    '0eeeeeeedeeeeeeedeeeeeeedeeeeeeedeeeeeeedeeeeeeedeeeeeeedeeeeeeedeeeeeeedeeeeeeedeeeeeeedeeeeee0',
+    '0eeeeeeedeeeeeeedeeeeeeedeeeeeeedeeeeeeedeeeeeeedeeeeeeedeeeeeeedeeeeeeedeeeeeeedeeeeeeedeeeeee0',
+    '0dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd0',
+    '0eeeeeeedeeeeeeedeeeeeeedeeeeeeedeeeeeeedeeeeeeedeeeeeeedeeeeeeedeeeeeeedeeeeeeedeeeeeeedeeeeee0',
+    '0eeeeeeedeeeeeeedeeeeeeedeeeeeeedeeeeeeedeeeeeeedeeeeeeedeeeeeeedeeeeeeedeeeeeeedeeeeeeedeeeeee0',
+    '0eeeeeeedeeeeeeedeeeeeeedeeeeeeedeeeeeeedeeeeeeedeeeeeeedeeeeeeedeeeeeeedeeeeeeedeeeeeeedeeeeee0',
+    '0dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd0',
+    '0eeeeeeedeeeeeeedeeeeeeedeeeeeeedeeeeeeedeeeeeeedeeeeeeedeeeeeeedeeeeeeedeeeeeeedeeeeeeedeeeeee0',
+    '000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000',
+  ] },
+  hotel: { name: 'Hotel', legit: 70, note: "A desk, a wall of keys and one plant. Rooms nobody stayed in are booked here.", rows: [
+    '000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000',
+    '0aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa0',
+    '0aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa0',
+    '0cccccccccccccccccccccccacccccccccccccccccccccccccccccccccccccccccccccccacccccccccccccccccccccc0',
+    '0bbbbbbbbbbbbbbbbbbbbbbbabbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbabbbbbbbbbbbbbbbbbbbbbb0',
+    '0bbbbbbbbbbbbbbbbbbbbooooooobbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbooooooobbbbbbbbbbbbbbbbbbb0',
+    '0bbbbbbbbbbbbbbbbbbbbooooooobbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbooooooobbbbbbbbbbbbbbbbbbb0',
+    '0bbbbbbbbbbbbbbbbbbbbbPPPPPbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbPPPPPbbbbbbbbbbbbbbbbbbbb0',
+    '0bbbbbbbbbbbbbbbbbbcccccccccccbbbbbbbbbbbbbbgggggggggggggggggggggggggggggggggggbbbbbbbbbbbbbbbb0',
+    '0bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbgggggggggggggggggggggggggggggggggggbbbbbbbbbbbbbbbb0',
+    '0bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbggaaaagaaaagaaaagaaaagaaaagaaaagaaaabbbbbbbbbbbbbbb0',
+    '0bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbggaaaagaaaagaaaagaaaagaaaagaaaagaaaabbbbbbbbbbbbbbb0',
+    '0bbbbbbbgggggggggggggbbbbbbbbbbbbbbbbbbbbbbbggaaaagaaaagaaaagaaaagaaaagaaaagaaaabbbbbbbbbbbbbbb0',
+    '0bbbbbbbgiiiiiiiiiiigbbbbbbbbbbbbbbbbbbbbbbbggaaaagaaaagaaaagaaaagaaaagaaaagaaaabbbbbbbbbbbbbbb0',
+    '0bbbbbbbgiiiiiiiiiiigbbbbbbbbbbbbbbbbbbbbbbbggaaaagaaaagaaaagaaaagaaaagaaaagaaaabbbbbbbbbbbbbbb0',
+    '0bbbbbbbgiiiiiiiiiiigbbbbbbbbbbbbbbbbbbbbbbbgggggggggggggggggggggggggggggggggggbbbbbbbbbbbbbbbb0',
+    '0bbbbbbbgiiiiiiiiiiigbggggggggggggggbbbbbbbbggaaaagaaaagaaaagaaaagaaaagaaaagaaaabbbbbbbbbbbbbbb0',
+    '0bbbbbbbgiiiiiiiiiiigbgaaaaaaaaaaaagbbbbbbbbggaaaagaaaagaaaagaaaagaaaagaaaagaaaabbbbbbbbbbbbbbb0',
+    '0bbbbbbbgiiiiiiiiiiigbgaaaaaaaaaaaagbbbbbbbbggaaaagaaaagaaaagaaaagaaaagaaaagaaaabbbbbbbbbbbbbbb0',
+    '0bbbbbbbgiiiiiiiiiiigbgaaaaaaaaaaaagbbbbbbbbggaaaagaaaagaaaagaaaagaaaagaaaagaaaabbbbbbbbbbbbbbb0',
+    '0bbbbbbbgiiiiiiiiiiigbgaaaaaaaaaaaagbbbbbbbbggaaaagaaaagaaaagaaaagaaaagaaaagaaaabbbbbbbbbbbbbbb0',
+    '0bbbbbbbgggggggggggggbgaaaaaaaaaaaagbbbbbbbbgggggggggggggggggggggggggggggggggggbbbbbbbbbbbbbbbb0',
+    '0bbbbbbbbbbbbbbbbbbbbbgaaaaaaaaaaaagbbbbbbbbggaaaagaaaagaaaagaaaagaaaagaaaagaaaabbbbbbbbbbbbbbb0',
+    '0bbbbbbbbbbbbbbbbbbbbbgaaaaaaaaaaaagbbbbbbbbggaaaagaaaagaaaagaaaagaaaagaaaagaaaabbbbbbbbbbbbbbb0',
+    '0bbbbbbbbbbbbbbbbbbbbbgaaaaaaaaaaaagbbbbbbbbggaaaagaaaagaaaagaaaagaaaagaaaagaaaabbbbbbbbbbbbbbb0',
+    '0bbbbbbbbbbbbbbbbbbbbbgaaaaaaaaaaaagbbbbbbbbggaaaagaaaagaaaagaaaagaaaagaaaagaaaabbbbbbbbbbbbbbb0',
+    '0bbbbbbsssssbbbbbbbbbbgaaaaaaaaaaaagbbbbbbbbggaaaagaaaagaaaagaaaagaaaagaaaagaaaabbbbbbbbbbbbbbb0',
+    '0bbbbbbsssssbbbbbbbbbbgaaaaaaaaaaaagbbbbbbbbgggggggggggggggggggggggggggggggggggbbbbbbbbbbbbbbbb0',
+    '0bbbbbbsssssbbbbbbbbbbgaaaaaaaaaaaagbbbbbbbbggaaaagaaaagaaaagaaaagaaaagaaaagaaaabbbbbbbbbbbbbbb0',
+    '0aaaaaasssssaaaaaaaaaagaaaaaaaaaaaagaaaaaaaaggaaaagaaaagaaaagaaaagaaaagaaaagaaaaaaaaaaaaaaaaaaa0',
+    '0aaaaaSsssssSaaaaaaaaagaaaaaaaaaaaagaaaaaaaaggaaaagaaaagaaaagaaaagaaaagaaaagaaaaaaaaaaaaaaaaaaa0',
+    '0ccaccSsssssSccccccaccgaaaaaaaaaaaagcccccccaccaaaacaaaacaaaacaaaacaaaacaaaaaaaaacccacccccccaccc0',
+    '0ccaccSsssssSccccccaccgaaaaaaaaaaaagcccccccaccaaaacaaaacaaaacaaaacaaaacaaaaaaaaacccacccccccaccc0',
+    '0ccaccSSSSSSSccccccaccgaaaaaaaaaaaagcccccccacccccccacccccccacccccccacccccccacccccccacccccccaccc0',
+    '0ccaccSSSSSSSccccccaccgaaaaaaaaaaaagcccciiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiccccccaccc0',
+    '0ccaccSSSSSSSccccccaccgaaaaaaaaaaaagcccciiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiccccccaccc0',
+    '0ccaccSSSSSSSccccccaccgaaaaaaaaaaaagccccgggggggggggggggggggggggggggggggggggggggggggggccccccaccc0',
+    '0ccaccSSSSSSSccccccaccgaaaaaaaaaaaagccccggggaggggggggaggggggggaggggggggaggggggggaggggccccccaccc0',
+    '0ccaccSSSSSSSccccccaccgaaaaaaaaaaaagccccggggaggggggggaggggggggaggggggggaggggggggaggggccccccaccc0',
+    '0ccaccSSSSSSSccccccaccgaaaaaaaaaaaagccccggggaggggggggaggggggggaggggggggaggggggggaggggccccccaccc0',
+    '0ccaccSSSSSSSccccccaccgaaaaaaaaaaaagccccggggaggggggggaggggggggaggggggggaggggggggaggggccccccaccc0',
+    '0ccaccSSSSSSSccccccaccgaaaaaaaaaaaagccccggggaggggggggaggggggggaggggggggaggggggggaggggccccccaccc0',
+    '0ccaccSSSSSSSccccccaccgaaaaaaaaaaaagccccggggaggggggggaggggggggaggggggggaggggggggaggggccccccaccc0',
+    '0cccccSSSSSSScccccccccgaaaaaaaaaaaagccccggggaggggggggaggggggggaggggggggaggggggggaggggcccccccccc0',
+    '0aaaaaSSSSSSSaaaaaaaaaaaaaaaaaaaaaaaaaaaggggaggggggggaggggggggaggggggggaggggggggaggggaaaaaaaaaa0',
+    '0aaaaaSSSSSSSaaaaaaaaaaaaaaaaaaaaaaaaaaagggggggggggggggggggggggggggggggggggggggggggggaaaaaaaaaa0',
+    '0eeeeeeedeeeeeeedeeeeeeedeeeeeeedeeeeeeedeeeeeeedeeeeeeedeeeeeeedeeeeeeedeeeeeeedeeeeeeedeeeeee0',
+    '0eeeeeeedeeeeeeedeeeeeeedeeeeeeedeeeeeeedeeeeeeedeeeeeeedeeeeeeedeeeeeeedeeeeeeedeeeeeeedeeeeee0',
+    '0eeeeeeedeeeeeeedeeeeeeedeeeeeeedeeeeeeedeeeeeeedeeeeeeedeeeeeeedeeeeeeedeeeeeeedeeeeeeedeeeeee0',
+    '0dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd0',
+    '0eeeeeeedeeeeeeedeeeeeeedeeeeeeedeeeeeeedeeeeeeedeeeeeeedeeeeeeedeeeeeeedeeeeeeedeeeeeeedeeeeee0',
+    '0eeeeeeedeeeeeeedeeeeeeedeeeeeeedeeeeeeedeeeeeeedeeeeeeedeeeeeeedeeeeeeedeeeeeeedeeeeeeedeeeeee0',
+    '0eeeeeeedeeeeeeedeeeeeeedeeeeeeedeeeeeeedeeeeeeedeeeeeeedeeeeeeedeeeeeeedeeeeeeedeeeeeeedeeeeee0',
+    '0dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd0',
+    '0eeeeeeedeeeeeeedeeeeeeedeeeeeeedeeeeeeedeeeeeeedeeeeeeedeeeeeeedeeeeeeedeeeeeeedeeeeeeedeeeeee0',
+    '000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000',
+  ] },
+  auto_shop: { name: 'Auto Shop', legit: 65, note: "A lift with something on it and a board of tools. Invoices happen at the back.", rows: [
+    '000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000',
+    '0aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa0',
+    '0aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa0',
+    '0cccccccccccccccccccccccccccccacccccccccccccccccccccccccccccccccccacccccccccccccccccccccccccccc0',
+    '0bbbbbbbbbbbbbbbbbbbbbbbbbbbbbabbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbabbbbbbbbbbbbbbbbbbbbbbbbbbbb0',
+    '0bbbbbbbbbbbbbbbbbbbbbbbbbbbbbabbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbabbbbbbbbbbbbbbbbbbbbbbbbbbbb0',
+    '0aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa0',
+    '0bbbbbbbbbbbbbbbbbbbbbbbbbbbbbabbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbabbbbbbbbbbbbbbbbbbbbbbbbbbbb0',
+    '0bbbbbbbbbbbbbbbbbbbbbbbbbbbbPPPbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbPPPbbbbbbbbbbbbbbbbbbbbbbbbbbb0',
+    '0aaaaaaaaaaaaaaaaaaaaaaaaaaaaPPPaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaPPPaaaaaaaaaaaaaaaaaaaaaaaaaaa0',
+    '0bbbbbbbbbbbbbbbbbbbbbbbbbbbbPPPbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbPPPbbbbbbbbbbbbbbbbbbbbbbbbbbb0',
+    '0bbbbbbbbbbbbbbbbbbbbbbbbbcccccccccbbbbbbbbbbbbbbbbbbbbbbbbbbbcccccccccbbbbbbbbbbbbbbbbbbbbbbbb0',
+    '0aaaaagggggggggggggggggggggggggaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa0',
+    '0bbbbbgggggggggggggggggggggggggbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb0',
+    '0bbbbbggjjggjjggjjggjjggjjggjjgbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb0',
+    '0aaaaaggjjggjjggjjggjjggjjggjjgaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa0',
+    '0bbbbbggjjggjjggjjggjjggjjggjjgbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb0',
+    '0bbbbbggjjggjjggjjggjjggjjggjjgbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb0',
+    '0aaaaaggjjggjjggjjggjjggjjggjjgaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa0',
+    '0bbbbbggjjggjjggjjggjjggjjggjjgbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb0',
+    '0bbbbbggjjggjjggjjggjjggjjggjjgbbbbbbbbbbbbbbbbbjjjjjjjjjjjjjjjjjjjjjjjjjjjbbbbbbbbbbbbbbbbbbbb0',
+    '0aaaaaggjjggjjggjjggjjggjjggjjgaaaaaaaaaaaaaaaaajjjjjjjjjjjjjjjjjjjjjjjjjjjaaaaaaaaaaaaaaaaaaaa0',
+    '0bbbbbggjjggjjggjjggjjggjjggjjgbbbbbbbbbbbbbbbbbjjjjjjjjjjjjjjjjjjjjjjjjjjjbbbbbbbbbbbbbbbbbbbb0',
+    '0bbbbbggjjggjjggjjggjjggjjggjjgbbbbbbbbbbbbbbbbbjjjjjjjjjjjjjjjjjjjjjjjjjjjbbbbbbbbbbbbbbbbbbbb0',
+    '0aaaaaggjjggjjggjjggjjggjjggjjgaaaaaaaaaaaaakkkkjjjjjjjjjjjjjjjjjjjjjjjjjjjkkkkkkaaaaaaaaaaaaaa0',
+    '0bbbbbgggggggggggggggggggggggggbbbbbbbbbbbbbkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkbbbbbbbbbbbbbb0',
+    '0bbbbbgggggggggggggggggggggggggbbbbbbbbbbbbbkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkbbbbbbbbbbbbbb0',
+    '0aaaaagggggggggggggggggggggggggaaaaaaaaaaaaakkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkaaaaaaaaaaaaaa0',
+    '0bbbbbgggggggggggggggggggggggggbbbbbbbbbbbbbkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkbbbbbbbbbbbbbb0',
+    '0bbbbbgggggggggggggggggggggggggbbbbbbbbbbbbbkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkbbbbbbbbbbbbbb0',
+    '0aaaaagggggggggggggggggggggggggaaaaaaaaajjjjkkkkkkxxxxxxkkkkkkkkkkkkkkkkkkxxxxxxkjjjjaaaaaaaaaa0',
+    '0bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbjjjjjjjjjjxxxxxxjjjjjjjjjjjjjjjjjjxxxxxxjjjjjbbbbbbbbbb0',
+    '0bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbjjjjjjjjjjxxxxxxjjjjjjjjjjjjjjjjjjxxxxxxjjjjjbbbbbbbbbb0',
+    '0aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaajjjjjjjjjjxxxxxxjjjjjjjjjjjjjjjjjjxxxxxxjjjjjaaaaaaaaaa0',
+    '0bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbjjjjjbbbbbbbbbbbbbbbbbbbbbbbrrrrrrrrb0',
+    '0bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbjjjjjbbbbbbbbbbbbbbbbbbbbbbbrrrrrrrrb0',
+    '0aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaajjjjjaaaaaaaaaaaaaaaaaaaaaaaRRRRRRRRa0',
+    '0bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbjjjjjbbbbbbbbbbbbbbbbbbbbbbbRRRRRRRRb0',
+    '0bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbjjjjjbbbbbbbbbbbbbbbbbbbbbbbRRRRRRRRb0',
+    '0aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaajjjjjaaaaaaaaaaaaaaaaaaaaaaaRRRRRRRRa0',
+    '0bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbjjjjjbbbbbbbbbbbbbbbbbbbbbbbRRRRRRRRb0',
+    '0bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbjjjjjbbbbbbbbbbbbbbbbbbbbbbbRRRRRRRRb0',
+    '0aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaajjjjjaaaaaaaaaaaaaaaaaaaaaaaRRRRRRRRa0',
+    '0bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbjjjjjbbbbbbbbbbbbbbbbbbbbbbbRRRRRRRRb0',
+    '0aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaajjjjjaaaaaaaaaaaaaaaaaaaaaaaRRRRRRRRa0',
+    '0aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaajjjjjaaaaaaaaaaaaaaaaaaaaaaaRRRRRRRRa0',
+    '0eeeedeeeeeeeeeeeeeeeeeeeeeedeeeeeeeeeeeeeeeeeeeeeedeeeeeeeeeeeeeeeeeeeeeedeeeeeeeeeeeeeeeeeeee0',
+    '0eeeedeeeeeeeeeeeeeeeeeeeeeedeeeeeeeeeeeeeeeeeeeeeedeeeeeeeeeeeeeeeeeeeeeedeeeeeeeeeeeeeeeeeeee0',
+    '0eeeedeeeeeeeeeeeeeeeeeeeeeedeeeeeeeeeeeeeeeeeeeeeedeeeeeeeeeeeeeeeeeeeeeedeeeeeeeeeeeeeeeeeeee0',
+    '0eeeedeeeeeeeeeeeeeeeeeeeeeedeeeeeeeeeeeeeeeeeeeeeedeeeeeeeeeeeeeeeeeeeeeedeeeeeeeeeeeeeeeeeeee0',
+    '0eeeedeeeeeeeeeeeeeeeeeeeeeedeeeeeeeeeeeeeeeeeeeeeedeeeeeeeeeeeeeeeeeeeeeedeeeeeeeeeeeeeeeeeeee0',
+    '0eeeedeeeeeeeeeeeeeeeeeeeeeedeeeeeeeeeeeeeeeeeeeeeedeeeeeeeeeeeeeeeeeeeeeedeeeeeeeeeeeeeeeeeeee0',
+    '0eeeedeeeeeeeeeeeeeeeeeeeeeedeeeeeeeeeeeeeeeeeeeeeedeeeeeeeeeeeeeeeeeeeeeedeeeeeeeeeeeeeeeeeeee0',
+    '0eeeedeeeeeeeeeeeeeeeeeeeeeedeeeeeeeeeeeeeeeeeeeeeedeeeeeeeeeeeeeeeeeeeeeedeeeeeeeeeeeeeeeeeeee0',
+    '0eeeedeeeeeeeeeeeeeeeeeeeeeedeeeeeeeeeeeeeeeeeeeeeedeeeeeeeeeeeeeeeeeeeeeedeeeeeeeeeeeeeeeeeeee0',
+    '000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000',
+  ] },
+  laundromat: { name: 'Laundromat', legit: 60, note: "A row of machines and a strip light. There is nothing else in here on purpose.", rows: [
+    '000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000',
+    '0aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa0',
+    '0aaaaaaanmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmnaaaaaaanmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmnaaaaaa0',
+    '0cccccccnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnncccccccnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnncccccc0',
+    '0bbbabbbbbbbbabbbbbbbbabbbbbbbbabbbbbbbbabbbbbbbbabbbbbbbbabbbbbbbbabbbbbbbbabbbbbbbbabbbbbbbba0',
+    '0bbbabbbbbbbbabbbbbbbbabbbbbbbbabbbbbbbbabbbbbbbbabbbbbbbbabbbbbbbbabbbbbbbbabbbbbbbbabbbbbbbba0',
+    '0bbbabbbbbbbbabbbbbbbbabbbbbbbbabbbbbbbbabbbbbbbbabbbbbbbbabbbbbbbbabbbbbbbbabbbbbbbbabbbbbbbba0',
+    '0aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa0',
+    '0bbbabbbbbbbbabbbbbbbbabbbbbbbbabbbbbbbbabbbbbbbbabbbbbbbbabbbbbbbbabbbbbbbbabbbbbbbbabbbbbbbba0',
+    '0bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb0',
+    '0bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb0',
+    '0bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb0',
+    '0aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa0',
+    '0bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb0',
+    '0bbbabbbbbbbbabbbbbbbbabbbbbbbbabbbbbbbbabbbbbbbbabbbbbbbbabbbbbbbbabbbbbbbbabbbbbbbbabbbbbbbba0',
+    '0bbbabbbbbbbbabbbbbbbbabbbbbbbbabbbbbbbbabbbbbbbbabbbbbbbbabbbbbbbbabbbbbbbbabbbbbbbbabbbbbbbba0',
+    '0bbbabbbbbbbbabbbbbbbbabbbbbbbbabbbbbbbbabbbbbbbbabbbbbbbbabbbbbbbbabbbbbbbbabbbbbbbbabbbbbbbba0',
+    '0aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa0',
+    '0bbbabbbbbbbbabbbbbbbbabbbbbbbbabbbbbbbbabbbbbbbbabbbbbbbbabbbbbbbbabbbbbbbbabbbbbbbbabbbbbbbba0',
+    '0bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb0',
+    '0bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb0',
+    '0bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb0',
+    '0aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa0',
+    '0bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb0',
+    '0bbbnnnnnnnnnnnnnbbnnnnnnnnnnnnnbbnnnnnnnnnnnnnbbnnnnnnnnnnnnnbbnnnnnnnnnnnnnbbnnnnnnnnnnnnnbba0',
+    '0bbbnnnnnnnnnnnnnbbnnnnnnnnnnnnnbbnnnnnnnnnnnnnbbnnnnnnnnnnnnnbbnnnnnnnnnnnnnbbnnnnnnnnnnnnnbba0',
+    '0bbbNNNNNNNNNNNNNbbNNNNNNNNNNNNNbbNNNNNNNNNNNNNbbNNNNNNNNNNNNNbbNNNNNNNNNNNNNbbNNNNNNNNNNNNNbba0',
+    '0aaaNNNNNNNNNNNNNaaNNNNNNNNNNNNNaaNNNNNNNNNNNNNaaNNNNNNNNNNNNNaaNNNNNNNNNNNNNaaNNNNNNNNNNNNNaaa0',
+    '0bbbNNNjjjjjjjNNNbbNNNjjjjjjjNNNbbNNNjjjjjjjNNNbbNNNjjjjjjjNNNbbNNNjjjjjjjNNNbbNNNjjjjjjjNNNbba0',
+    '0bbbNNNjkkkkkjNNNbbNNNjkkkkkjNNNbbNNNjkkkkkjNNNbbNNNjkkkkkjNNNbbNNNjkkkkkjNNNbbNNNjkkkkkjNNNbbb0',
+    '0bbbNNNjkkkkkjNNNbbNNNjkkkkkjNNNbbNNNjkkkkkjNNNbbNNNjkkkkkjNNNbbNNNjkkkkkjNNNbbNNNjkkkkkjNNNbbb0',
+    '0bbbNNNjkkkkkjNNNbbNNNjkkkkkjNNNbbNNNjkkkkkjNNNbbNNNjkkkkkjNNNbbNNNjkkkkkjNNNbbNNNjkkkkkjNNNbbb0',
+    '0aaaNNNjkkkkkjNNNaaNNNjkkkkkjNNNaaNNNjkkkkkjNNNaaNNNjkkkkkjNNNaaNNNjkkkkkjNNNaaNNNjkkkkkjNNNaaa0',
+    '0bbbNNNjkkkkkjNNNbbNNNjkkkkkjNNNbbNNNjkkkkkjNNNbbNNNjkkkkkjNNNbbNNNjkkkkkjNNNbbNNNjkkkkkjNNNbbb0',
+    '0bbbNNNjkkkkkjNNNbbNNNjkkkkkjNNNbbNNNjkkkkkjNNNbbNNNjkkkkkjNNNbbNNNjkkkkkjNNNbbNNNjkkkkkjNNNbba0',
+    '0bbbNNNjkkkkkjNNNbbNNNjkkkkkjNNNbbNNNjkkkkkjNNNbbNNNjkkkkkjNNNbbNNNjkkkkkjNNNbbNNNjkkkkkjNNNbba0',
+    '0bbbNNNjjjjjjjNNNbbNNNjjjjjjjNNNbbNNNjjjjjjjNNNbbNNNjjjjjjjNNNbbNNNjjjjjjjNNNbbNNNjjjjjjjNNNbba0',
+    '0aaaNNNNNNNNNNNNNaaNNNNNNNNNNNNNaaNNNNNNNNNNNNNaaNNNNNNNNNNNNNaaNNNNNNNNNNNNNaaNNNNNNNNNNNNNaaa0',
+    '0bbbNNNNNNNNNNNNNbbNNNNNNNNNNNNNbbNNNNNNNNNNNNNbbNNNNNNNNNNNNNbbNNNNNNNNNNNNNbbNNNNNNNNNNNNNbba0',
+    '0bbbNNNNNNNNNNNNNbbNNNNNNNNNNNNNbbNNNNNNNNNNNNNbbNNNNNNNNNNNNNbbNNNNNNNNNNNNNbbNNNNNNNNNNNNNbbb0',
+    '0aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa0',
+    '0aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa0',
+    '0aaaNNNNNNNNNNNNNaaNNNNNNNNNNNNNaaNNNNNNNNNNNNNaaNNNNNNNNNNNNNaaNNNNNNNNNNNNNaaNNNNNNNNNNNNNaaa0',
+    '0bbbNNNNNNNNNNNNNbbNNNNNNNNNNNNNbbNNNNNNNNNNNNNbbNNNNNNNNNNNNNbbNNNNNNNNNNNNNbbNNNNNNNNNNNNNbbb0',
+    '0aaaNNNNNNNNNNNNNaaNNNNNNNNNNNNNaaNNNNNNNNNNNNNaaNNNNNNNNNNNNNaaNNNNNNNNNNNNNaaNNNNNNNNNNNNNaaa0',
+    '0aaaNNNNNNNNNNNNNaaNNNNNNNNNNNNNaaNNNNNNNNNNNNNaaNNNNNNNNNNNNNaaNNNNNNNNNNNNNaaNNNNNNNNNNNNNaaa0',
+    '0eeeeeeedeeeeeeedeeeeeeedeeeeeeedeeeeeeedeeeeeeedeeeeeeedeeeeeeedeeeeeeedeeeeeeedeeeeeeedeeeeee0',
+    '0eeeeeeedeeeeeeedeeeeeeedeeeeeeedeeeeeeedeeeeeeedeeeeeeedeeeeeeedeeeeeeedeeeeeeedeeeeeeedeeeeee0',
+    '0eeeeeeedeeeeeeedeeeeeeedeeeeeeedeeeeeeedeeeeeeedeeeeeeedeeeeeeedeeeeeeedeeeeeeedeeeeeeedeeeeee0',
+    '0dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd0',
+    '0eeeeeeedeeeeeeedeeeeeeedeeeeeeedeeeeeeedeeeeeeedeeeeeeedeeeeeeedeeeeeeedeeeeeeedeeeeeeedeeeeee0',
+    '0eeeeeeedeeeeeeedeeeeeeedeeeeeeedeeeeeeedeeeeeeedeeeeeeedeeeeeeedeeeeeeedeeeeeeedeeeeeeedeeeeee0',
+    '0eeeeeeedeeeeeeedeeeeeeedeeeeeeedeeeeeeedeeeeeeedeeeeeeedeeeeeeedeeeeeeedeeeeeeedeeeeeeedeeeeee0',
+    '0dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd0',
+    '0eeeeeeedeeeeeeedeeeeeeedeeeeeeedeeeeeeedeeeeeeedeeeeeeedeeeeeeedeeeeeeedeeeeeeedeeeeeeedeeeeee0',
+    '000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000',
+  ] },
+  trucking: { name: 'Trucking Company', legit: 60, note: "A board of routes and a window onto the yard. Movement, explained.", rows: [
+    '000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000',
+    '0aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa0',
+    '0aaaaaaaaaaaaaaaaaaaaaaaaaaaaanmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmnaaaaaaaaaaaaaaaaaaaaaaaaaaaa0',
+    '0cccccccccccccccccccccccccccccnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnncccccccccccccccccccccccccccc0',
+    '0bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb0',
+    '0bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb0',
+    '0bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb0',
+    '0bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb0',
+    '0bbbbbbbgggggggggggggggggggggggggggggggggggggbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbgggggggb0',
+    '0bbbbbbbgaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaagbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbgmmmmmgb0',
+    '0bbbbbbbgaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaagbbbbbbbbbbbggggggggggggggggggggggggggggggggmmammgb0',
+    '0bbbbbbbgaannncnnnnnncnnnnnncnnnnnncnnnnnnaagbbbbbbbbbbbgkkkkkkkkkkkkkkgkkkkkkkkkkkkkkggmmaamgb0',
+    '0bbbbbbbgaaaaacaaaaaacaaaaaacaaaaaacaaaaaaaagbbbbbbbbbbbgkkkkkkkkkkkkkkgkkkkkkkkkkkkkkggmmmmmgb0',
+    '0bbbbbbbgaaaaacaaaaaacaaaaaacaaaaaacaaaaaaaagbbbbbbbbbbbgkkkkkkkkkkkkkkgkkkkkkkkkkkkkkggmmmmmgb0',
+    '0bbbbbbbgaaaaacaaaaaacaaaaaacaaaaaacaaaaaaaagbbbbbbbbbbbgkkkkkkkkkkkkkkgkkkkkkkkkkkkkkggggggggb0',
+    '0bbbbbbbgaannncnnnnnncnnnnnncnnnnnncnnnnnnaagbbbbbbbbbbbgkkkkkkkkkkkkkkgkkkkkkkkkkkkkkgbbbbbbbb0',
+    '0bbbbbbbgaaaaacaaaaaacaaaaaacaaaaaacaaaaaaaagbbbbbbbbbbbgkkkkkkkkkkkkkkgkkkkkkkkkkkkkkgbbbbbbbb0',
+    '0bbbbbbbgaaaaacaaaaaacaaaaaacaaaaaacaaaaaaaagbbbbbbbbbbbgkkkkkkkkkkkkkkgkkkkkkkkkkkkkkgbbbbbbbb0',
+    '0bbbbbbbgaaaaacaaaaaacaaaaaacaaaaaacaaaaaaaagbbbbbbbbbbbgkkkkkkkkkkkkkkgkkkkkkkkkkkkkkgbbbbbbbb0',
+    '0bbbbbbbgaannncnnnnnncnnnnnncnnnnnncnnnnnnaagbbbbbbbbbbbgkkkkkkkkkkkkkkgkkkkkkkkkkkkkkgbbbbbbbb0',
+    '0bbbbbbbgaaaaacaaaaaacaaaaaacaaaaaacaaaaaaaagbbbbbbbbbbbgkkkkkkkkkkkkkkgkkkkkkkkkkkkkkgbbbbbbbb0',
+    '0bbbbbbbgaaaaacaaaaaacaaaaaacaaaaaacaaaaaaaagbbbbbbbbbbbgkkkkkkkkkkkkkkgkkkkkkkkkkkkkkgbbbbbbbb0',
+    '0bbbbbbbgaaaaacaaaaaacaaaaaacaaaaaacaaaaaaaagbbbbbbbbbbbgkkkkkkkkkkkkkkgkkkkkkkkkkkkkkgbbbbbbbb0',
+    '0bbbbbbbgaannncnnnnnncnnnnnncnnnnnncnnnnnnaagbbbbbbbbbbbgkkkkkkkkkkkkkkgkkkkkkkkkkkkkkgbbbbbbbb0',
+    '0bbbbbbbgaaaaacaaaaaacaaaaaacaaaaaacaaaaaaaagbbbbbbbbbbbgkkkkkkkkkkkkkkgkkkkkkkkkkkkkkgbbbbbbbb0',
+    '0bbbbbbbgaaaaacaaaaaacaaaaaacaaaaaacaaaaaaaagbbbbbbbbbbbgkkkkkkkkkkkkkkgkkkkkkkkkkkkkkgbbbbbbbb0',
+    '0bbbbbbbgaaaaacaaaaaacaaaaaacaaaaaacaaaaaaaagbbbbbbbbbbbgkkkkkkkkkkkkkkgkkkkkkkkkkkkkkgbbbbbbbb0',
+    '0bbbbbbbgaannncnnnnnncnnnnnncnnnnnncnnnnnnaagbbbbbbbbbbbgkkkkkkkkkkkkkkgkkkkkkkkkkkkkkgbbbbbbbb0',
+    '0bbbbbbbgaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaagbbbbbbbbbbbgggggggggggggggggggggggggggggggbbbbbbbb0',
+    '0aaaaaaagaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaagaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa0',
+    '0aaaaaaagggggggggggggggggggggggggggggggggggggaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa0',
+    '0ccacccccccacccccccacccccccacccccccacccccccacccccccacccccccacccccccacccccccacccccccacccccccaccc0',
+    '0ccacccccccacccccccaccccccmmmmmmmmmmmmmccccacccccccacccccccacccccccacccccccacccccccacccccccaccc0',
+    '0ccacccccccacccccccaccccccmmmmmmmmmmmmmccccacccccccacccccccacccccccacccccccacccccccacccccccaccc0',
+    '0ccacccccccacccccccaccccccmmmmmmmmmmmmmccccacccccccacccccccacccccccacccccccacccccccacccccccaccc0',
+    '0ccacccccccacccccccaccccccmmmmmmmmmmmmmccccacccccccacccccccacccccccacccccccacccccccacccccccaccc0',
+    '0ccacccccccacccccccaiiiiiimmmmmmmmmmmmmiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiccccccacccccccaccc0',
+    '0ccacccccccacccccccaiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiccccccacccccccaccc0',
+    '0ccacccccccacccccccagggggggggggggggggggggggggggggggggggggggggggggggggggggggggccccccacccccccaccc0',
+    '0ccacccccccacccccccaggggaggggggggaggggggggaggggggggaggggggggaggggggggagggggggccccccacccccccaccc0',
+    '0ccacccccccacccccccaggggaggggggggaggggggggaggggggggaggggggggaggggggggagggggggccccccacccccccaccc0',
+    '0ccacccccccacccccccaggggaggggggggaggggggggaggggggggaggggggggaggggggggagggggggccccccacccccccaccc0',
+    '0ccacccccccacccccccaggggaggggggggaggggggggaggggggggaggggggggaggggggggagggggggccccccacccccccaccc0',
+    '0cccccccccccccccccccggggaggggggggaggggggggaggggggggaggggggggaggggggggagggggggcccccccccccccccccc0',
+    '0aaaaaaaaaaaaaaaaaaaggggaggggggggaggggggggaggggggggaggggggggaggggggggagggggggaaaaaaaaaaaaaaaaaa0',
+    '0aaaaaaaaaaaaaaaaaaagggggggggggggggggggggggggggggggggggggggggggggggggggggggggaaaaaaaaaaaaaaaaaa0',
+    '0eeeedeeeeeeeeeeeeeeeeeeeeeedeeeeeeeeeeeeeeeeeeeeeedeeeeeeeeeeeeeeeeeeeeeedeeeeeeeeeeeeeeeeeeee0',
+    '0eeeedeeeeeeeeeeeeeeeeeeeeeedeeeeeeeeeeeeeeeeeeeeeedeeeeeeeeeeeeeeeeeeeeeedeeeeeeeeeeeeeeeeeeee0',
+    '0eeeedeeeeeeeeeeeeeeeeeeeeeedeeeeeeeeeeeeeeeeeeeeeedeeeeeeeeeeeeeeeeeeeeeedeeeeeeeeeeeeeeeeeeee0',
+    '0eeeedeeeeeeeeeeeeeeeeeeeeeedeeeeeeeeeeeeeeeeeeeeeedeeeeeeeeeeeeeeeeeeeeeedeeeeeeeeeeeeeeeeeeee0',
+    '0eeeedeeeeeeeeeeeeeeeeeeeeeedeeeeeeeeeeeeeeeeeeeeeedeeeeeeeeeeeeeeeeeeeeeedeeeeeeeeeeeeeeeeeeee0',
+    '0eeeedeeeeeeeeeeeeeeeeeeeeeedeeeeeeeeeeeeeeeeeeeeeedeeeeeeeeeeeeeeeeeeeeeedeeeeeeeeeeeeeeeeeeee0',
+    '0eeeedeeeeeeeeeeeeeeeeeeeeeedeeeeeeeeeeeeeeeeeeeeeedeeeeeeeeeeeeeeeeeeeeeedeeeeeeeeeeeeeeeeeeee0',
+    '0eeeedeeeeeeeeeeeeeeeeeeeeeedeeeeeeeeeeeeeeeeeeeeeedeeeeeeeeeeeeeeeeeeeeeedeeeeeeeeeeeeeeeeeeee0',
+    '0eeeedeeeeeeeeeeeeeeeeeeeeeedeeeeeeeeeeeeeeeeeeeeeedeeeeeeeeeeeeeeeeeeeeeedeeeeeeeeeeeeeeeeeeee0',
+    '000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000',
+  ] },
+  construction: { name: 'Construction Firm', legit: 55, note: "Drawings pinned up and unrolled. Half of them are for work that will happen.", rows: [
+    '000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000',
+    '0aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa0',
+    '0aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa0',
+    '0cccccccccccccccccccccccccccccccccccccccccccccccacccccccccccccccccccccccccccccccccccccccccccccc0',
+    '0bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbabbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb0',
+    '0bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbabbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb0',
+    '0bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbabbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb0',
+    '0bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbabbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb0',
+    '0bbbbbbbbbgggggggggggggggggggggggggggggggggggggggggggggbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb0',
+    '0bbbbbbbbbgnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnngbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb0',
+    '0bbbbbbbbbgnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnngbbbbbbbbbbbgggggggggggggggggggggbbbbbbbb0',
+    '0bbbbbbbbbgnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnngbbbbbbbbbbbgnnnnnnnnnnnnnnnnnnngbbbbbbbb0',
+    '0bbbbbbbbbgnnnkkkkkkkkknnnkkkkkkkkknnnkkkkkkkkknnnkkkkkkkkkbbbbbbbgnnnnnnnnnnnnnnnnnnngbbbbbbbb0',
+    '0bbbbbbbbbgnnnkkkkkkkkknnnkkkkkkkkknnnkkkkkkkkknnnkkkkkkkkkbbbbbbbgnnnnnnnnnnnnnnnnnnngbbbbbbbb0',
+    '0bbbbbbbbbgnnnkkkkkkkkknnnkkkkkkkkknnnkkkkkkkkknnnkkkkkkkkkbbbbbbbgnnnnnnnnnnnnnnnnnnngbbbbbbbb0',
+    '0bbbbbbbbbgnnnkkkkkkkkknnnkkkkkkkkknnnkkkkkkkkknnnkkkkkkkkkbbbbbbbgnnnnnnnnnnnnnnnnnnngbbbbbbbb0',
+    '0bbbbbbbbbgnnnkkkkkkkkknnnkkkkkkkkknnnkkkkkkkkknnnkkkkkkkkkbbbbbbbgnnnnnnnnnnnnnnnnnnngbbbbbbbb0',
+    '0bbbbbbbbbgnnnkkkkkkkkknnnkkkkkkkkknnnkkkkkkkkknnnkkkkkkkkkbbbbbbbgnnnnnnnnnnnnnnnnnnngbbbbbbbb0',
+    '0bbbbbbbbbgnnnkkkkkkkkknnnkkkkkkkkknnnkkkkkkkkknnnkkkkkkkkkbbbbbbbgnnnnnnnnnnnnnnnnnnngbbbbbbbb0',
+    '0bbbbbbbbbgnnnkkkkkkkkknnnkkkkkkkkknnnkkkkkkkkknnnkkkkkkkkkbbbbbbbgnnnnnnnnnnnnnnnnnnngbbbbbbbb0',
+    '0bbbbbbbbbgnnnkkkkkkkkknnnkkkkkkkkknnnkkkkkkkkknnnkkkkkkkkkbbbbbbbgnnnnnnnnnnnnnnnnnnngbbbbbbbb0',
+    '0bbbbbbbbbgnnnkkkkkkkkknnnkkkkkkkkknnnkkkkkkkkknnnkkkkkkkkkbbbbbbbgnnnnnnnnnnnnnnnnnnngbbbbbbbb0',
+    '0bbbbbbbbbgnnnkkkkkkkkknnnkkkkkkkkknnnkkkkkkkkknnnkkkkkkkkkbbbbbbbgnnnnnnnnnnnnnnnnnnngbbbbbbbb0',
+    '0bbbbbbbbbgnnnkkkkkkkkknnnkkkkkkkkknnnkkkkkkkkknnnkkkkkkkkkbbbbbbbgnnnnnnnnnnnnnnnnnnngbbbbbbbb0',
+    '0bbbbbbbbbgnnnkkkkkkkkknnnkkkkkkkkknnnkkkkkkkkknnnkkkkkkkkkbbbbbbbgggggggggggggggggggggbbbbbbbb0',
+    '0bbbbbbbbbgnnnkkkkkkkkknnnkkkkkkkkknnnkkkkkkkkknnnkkkkkkkkkbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb0',
+    '0bbbbbbbbbgnnnkkkkkkkkknnnkkkkkkkkknnnkkkkkkkkknnnkkkkkkkkkbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb0',
+    '0bbbbbbbbbgnnnkkkkkkkkknnnkkkkkkkkknnnkkkkkkkkknnnkkkkkkkkkbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb0',
+    '0bbbbbbbbbgnnnkkkkkkkkknnnkkkkkkkkknnnkkkkkkkkknnnkkkkkkkkkbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb0',
+    '0bbbbbbbbbgnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnngbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb0',
+    '0bbbbbbbbbgnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnngbbbbbbbbbbbbbbbbbbbbbbbbbggbbbbbbbbbbbbb0',
+    '0bbbbbbbbbgnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnngbbbbbbbbbbbbbbbbbbbbbbbbbggbbbbbbbbbbbbb0',
+    '0bbbbbbbbbggggggggggggggggmmmmnnnnnnnnnnnnnnnnnnnnnnnmmmmmmmmbbbbbbbbbbbbbbbbbbbggbbbbbbbbbbbbb0',
+    '0bbbbbbbbbbbbbbbbbbbbbbbbbmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmbbbbbbbbbbbbbbbbbbbggbbbbbbbbbbbbb0',
+    '0bbbbbbbbbbbbbbbbbbbbbbbbbmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmbbbbbbbbbbbbbbbbbbbggbbbbbbbbbbbbb0',
+    '0bbbbbbbbbbbbbbbbbbbbbbbbbmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmbbbbbbbbbbbbbbbbbbbggbbbbbbbbbbbbb0',
+    '0bbbbbbbbbbbbbbbbbbbiiiiiimmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmiiiiiiiiiibbbbbbbbbggbbbbbbbbbbbbb0',
+    '0bbbbbbbbbbbbbbbbbbbiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiibbbbbbbbbggbbbbbbbbbbbbb0',
+    '0bbbbbbbbbbbbbbbbbbbbbggbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbggbbbbbggggggggbbbbbbbbbbbbb0',
+    '0bbbbbbbbbbbbbbbbbbbbbggbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbggbbbbbggggggggbbbbbbbbbbbbb0',
+    '0bbbbbbbbbbbbbbbbbbbbbggbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbggbbbbbggbbbbggbbbbbbbbbbbbb0',
+    '0bbbbbbbbbbbbbbbbbbbbbggbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbggbbbbbggbbbbggbbbbbbbbbbbbb0',
+    '0bbbbbbbbbbbbbbbbbbbbbggbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbggbbbbbggbbbbggbbbbbbbbbbbbb0',
+    '0bbbbbbbbbbbbbbbbbbbbbggbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbggbbbbbggbbbbggbbbbbbbbbbbbb0',
+    '0aaaaaaaaaaaaaaaaaaaaaggaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaggaaaaaggaaaaggaaaaaaaaaaaaa0',
+    '0aaaaaaaaaaaaaaaaaaaaaggaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaggaaaaaggaaaaggaaaaaaaaaaaaa0',
+    '0eeeedeeeeeeeeeeeeeeeeeeeeeedeeeeeeeeeeeeeeeeeeeeeedeeeeeeeeeeeeeeeeeeeeeedeeeeeeeeeeeeeeeeeeee0',
+    '0eeeedeeeeeeeeeeeeeeeeeeeeeedeeeeeeeeeeeeeeeeeeeeeedeeeeeeeeeeeeeeeeeeeeeedeeeeeeeeeeeeeeeeeeee0',
+    '0eeeedeeeeeeeeeeeeeeeeeeeeeedeeeeeeeeeeeeeeeeeeeeeedeeeeeeeeeeeeeeeeeeeeeedeeeeeeeeeeeeeeeeeeee0',
+    '0eeeedeeeeeeeeeeeeeeeeeeeeeedeeeeeeeeeeeeeeeeeeeeeedeeeeeeeeeeeeeeeeeeeeeedeeeeeeeeeeeeeeeeeeee0',
+    '0eeeedeeeeeeeeeeeeeeeeeeeeeedeeeeeeeeeeeeeeeeeeeeeedeeeeeeeeeeeeeeeeeeeeeedeeeeeeeeeeeeeeeeeeee0',
+    '0eeeedeeeeeeeeeeeeeeeeeeeeeedeeeeeeeeeeeeeeeeeeeeeedeeeeeeeeeeeeeeeeeeeeeedeeeeeeeeeeeeeeeeeeee0',
+    '0eeeedeeeeeeeeeeeeeeeeeeeeeedeeeeeeeeeeeeeeeeeeeeeedeeeeeeeeeeeeeeeeeeeeeedeeeeeeeeeeeeeeeeeeee0',
+    '0eeeedeeeeeeeeeeeeeeeeeeeeeedeeeeeeeeeeeeeeeeeeeeeedeeeeeeeeeeeeeeeeeeeeeedeeeeeeeeeeeeeeeeeeee0',
+    '0eeeedeeeeeeeeeeeeeeeeeeeeeedeeeeeeeeeeeeeeeeeeeeeedeeeeeeeeeeeeeeeeeeeeeedeeeeeeeeeeeeeeeeeeee0',
+    '000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000',
+  ] },
+  social_club: { name: 'Social Club', legit: 45, note: "The back room. A bulb, a green table, two chairs \u2014 this is where a sit-down is.", rows: [
+    '000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000',
+    '0aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa0',
+    '0aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa0',
+    '0cccccccccccccccccccccccccccccccccccccccccccccccacccccccccccccccccccccccccccccccccccccccccccccc0',
+    '0bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbabbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb0',
+    '0bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbabbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb0',
+    '0bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbabbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb0',
+    '0bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbabbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb0',
+    '0bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbabbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb0',
+    '0bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbabbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb0',
+    '0bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbPPPbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb0',
+    '0bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbPPPbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb0',
+    '0bbbbbbbbbggggggggggggbbbbbbbbbbbbbbbbbbbbbbbbbPPPbbbbbbbbbbbbbbbbbbbbbbbbbbggggggggggggbbbbbbb0',
+    '0bbbbbbbbbgiiiiiiiiiigbbbbbbbbbbbbbbbbbbbbbbcccccccccbbbbbbbbbbbbbbbbbbbbbbbgnnnnnnnnnngbbbbbbb0',
+    '0bbbbbbbbbgiiiiiiiiiigbbbbgggggggggggggggggggbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbgnnnnnnnnnngbbbbbbb0',
+    '0bbbbbbbbbgiiiiiiiiiigbbbbgggggggggggggggggggbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbgnnnnnnnnnngbbbbbbb0',
+    '0bbbbbbbbbgiiiiiiiiiigbbbbggjjjjjjjjjjjjjjjggbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbgnnnnnnnnnngbbbbbbb0',
+    '0bbbbbbbbbgiiiiiiiiiigbbbbggjjjjjjjjjjjjjjjggbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbgnnnnnnnnnngbbbbbbb0',
+    '0bbbbbbbbbgiiiiiiiiiigbbbbggjjjjjjjjjjjjjjjggbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbgnnnnnnnnnngbbbbbbb0',
+    '0bbbbbbbbbgiiiiiiiiiigbbbbggjjjxxxxxxxxxjjjggbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbgnnnnnnnnnngbbbbbbb0',
+    '0bbbbbbbbbgiiiiiiiiiigbbbbggjjjxxxxxxxxxjjjggbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbgnnnnnnnnnngbbbbbbb0',
+    '0bbbbbbbbbggggggggggggbbbbggjjjxxxxxxxxxjjjggbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbggggggggggggbbbbbbb0',
+    '0bbbbbbbbbbbbbbbbbbbbbbbbbggjjjxxxxPxxxxjjjggbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb0',
+    '0bbbbbbbbbbbbbbbbbbbbbbbbbggjjjxxxxxxxxxjjjggbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb0',
+    '0bbbbbbbbbbbbbbbbbbbbbbbbbggjjjxxxxxxxxxjjjggbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb0',
+    '0bbbbbbbbbbbbbbbbbbbbbbbbbggjjjxxxxxxxxxjjjggbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb0',
+    '0bbbbbbbbbbbbbbbbbbbbbbbbbggjjjjjjjjjjjjjjjggbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb0',
+    '0bbbbbbbbbbbbbbbbbbbbbbbbbggjjjjjjjjjjjjjjjggbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb0',
+    '0bbbbbbbbbbbbbbbbbbbbbbbbbggjjjjjjjjjjjjjjjggbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb0',
+    '0aaaaaaaaaaaaaaaaaaaaaaaaagggggggggggggggggggaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa0',
+    '0aaaaaaaaaaaaaaaaaaaaaggaagggggggggggggggggggaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaggaaaaaaaaaaaaa0',
+    '0ccacccccccacccccccaccggcccacccccccacccccccacccccccacccccccacccccccacccccccaccccggcacccccccaccc0',
+    '0ccacccccccacccccccaccggcccacccccccacccccccacccccccacccccccacccccccacccccccaccccggcacccccccaccc0',
+    '0ccacccccccacccccccaccggcccaccccccmmmmmmmccacpppppppccccmmmmmmmccccacccccccaccccggcacccccccaccc0',
+    '0ccacccccccacccccccaccggcccaccccccmmmmmmmccacpppppppccccmmmmmmmccccacccccccaccccggcacccccccaccc0',
+    '0ccacccccccacccccccaccggcSSSSSSSSSmmmmmmmSSSSpppppppSSSSmmmmmmmSSSSSSSSScccaccccggcacccccccaccc0',
+    '0ccacccccccacccccccaccggcSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSScccaccccggcacccccccaccc0',
+    '0ccacccccccacccccccaccggcSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSScccaccccggcacccccccaccc0',
+    '0ccacccccccaccccggggggggcSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSccggggggggcacccccccaccc0',
+    '0ccacccccccaccccggggggggcSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSccggggggggcacccccccaccc0',
+    '0ccacccccccaccccggcaccggcSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSccggccccggcacccccccaccc0',
+    '0ccacccccccaccccggcaccggcSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSccggccccggcacccccccaccc0',
+    '0ccacccccccaccccggcaccggcSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSccggccccggcacccccccaccc0',
+    '0cccccccccccccccggccccggcSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSccggccccggccccccccccccc0',
+    '0aaaaaaaaaaaaaaaggaaaaggaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaggaaaaggaaaaaaaaaaaaa0',
+    '0aaaaaaaaaaaaaaaggaaaaggaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaggaaaaggaaaaaaaaaaaaa0',
+    '0eeeeeeeedeeeeeeeedeeeeeeeedeeeeeeeedeeeeeeeedeeeeeeeedeeeeeeeedeeeeeeeedeeeeeeeedeeeeeeeedeeee0',
+    '0eeeeeeeedeeeeeeeedeeeeeeeedeeeeeeeedeeeeeeeedeeeeeeeedeeeeeeeedeeeeeeeedeeeeeeeedeeeeeeeedeeee0',
+    '0eeeeeeeedeeeeeeeedeeeeeeeedeeeeeeeedeeeeeeeedeeeeeeeedeeeeeeeedeeeeeeeedeeeeeeeedeeeeeeeedeeee0',
+    '0eeeeeeeedeeeeeeeedeeeeeeeedeeeeeeeedeeeeeeeedeeeeeeeedeeeeeeeedeeeeeeeedeeeeeeeedeeeeeeeedeeee0',
+    '0eeeeeeeedeeeeeeeedeeeeeeeedeeeeeeeedeeeeeeeedeeeeeeeedeeeeeeeedeeeeeeeedeeeeeeeedeeeeeeeedeeee0',
+    '0eeeeeeeedeeeeeeeedeeeeeeeedeeeeeeeedeeeeeeeedeeeeeeeedeeeeeeeedeeeeeeeedeeeeeeeedeeeeeeeedeeee0',
+    '0eeeeeeeedeeeeeeeedeeeeeeeedeeeeeeeedeeeeeeeedeeeeeeeedeeeeeeeedeeeeeeeedeeeeeeeedeeeeeeeedeeee0',
+    '0eeeeeeeedeeeeeeeedeeeeeeeedeeeeeeeedeeeeeeeedeeeeeeeedeeeeeeeedeeeeeeeedeeeeeeeedeeeeeeeedeeee0',
+    '0eeeeeeeedeeeeeeeedeeeeeeeedeeeeeeeedeeeeeeeedeeeeeeeedeeeeeeeedeeeeeeeedeeeeeeeedeeeeeeeedeeee0',
+    '000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000',
+  ] },
+  nightclub: { name: 'Nightclub', legit: 40, note: "Bar lit from underneath, stage dark. Everything above eye level is black.", rows: [
+    '000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000',
+    '0xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx0',
+    '0xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx0',
+    '0xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx0',
+    '0xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx0',
+    '0xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx0',
+    '0bbbbbvvvvvvbbbbbbvvvvvvbbbbbbvvvvvvbbbbbbvvvvvvbbbbbbvvvvvvbbbbbbvvvvvvbbbbbbvvvvvvbbbbbbbbbbb0',
+    '0bbbbbvvvvvvbbbbbbvvvvvvbbbbbbvvvvvvbbbbbbvvvvvvbbbbbbvvvvvvbbbbbbvvvvvvbbbbbbvvvvvvbbbbbbbbbbb0',
+    '0bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb0',
+    '0bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb0',
+    '0bbbxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb0',
+    '0bbbxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb0',
+    '0bbbxxRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRxxbbbbbbbghhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhgbbbb0',
+    '0bbbxxRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRxxbbbbbbbgggggggggggggggggggggggggggggggggggggggggggbbbb0',
+    '0bbbxxRRRRrrrrRRRRrrrrRRRRrrrrRRRRrrrrRxxbbbbbbbggttggttggttggttggttggttggttggttggttggttgggbbbb0',
+    '0bbbxxRRRRrrrrRRRRrrrrRRRRrrrrRRRRrrrrRxxbbbbbbbggttggttggttggttggttggttggttggttggttggttgggbbbb0',
+    '0bbbxxRRRRrrrrRRRRrrrrRRRRrrrrRRRRrrrrRxxbbbbbbbggttggttggttggttggttggttggttggttggttggttgggbbbb0',
+    '0bbbxxRRRRrrrrRRRRrrrrRRRRrrrrRRRRrrrrRxxbbbbbbbggttggttggttggttggttggttggttggttggttggttgggbbbb0',
+    '0bbbxxRRRRrrrrRRRRrrrrRRRRrrrrRRRRrrrrRxxbbbbbbbggttggttggttggttggttggttggttggttggttggttgggbbbb0',
+    '0bbbxxRRRRrrrrRRRRrrrrRRRRrrrrRRRRrrrrRxxbbbbbbbggttggttggttggttggttggttggttggttggttggttgggbbbb0',
+    '0bbbxxRRRRrrrrRRRRrrrrRRRRrrrrRRRRrrrrRxxbbbbbbbggttggttggttggttggttggttggttggttggttggttgggbbbb0',
+    '0bbbxxRRRRrrrrRRRRrrrrRRRRrrrrRRRRrrrrRxxbbbbbbbggttggttggttggttggttggttggttggttggttggttgggbbbb0',
+    '0bbbxxRRRRrrrrRRRRrrrrRRRRrrrrRRRRrrrrRxxbbbbbbbggttggttggttggttggttggttggttggttggttggttgggbbbb0',
+    '0bbbxxRRRRrrrrRRRRrrrrRRRRrrrrRRRRrrrrRxxbbbbbbbggttggttggttggttggttggttggttggttggttggttgggbbbb0',
+    '0bbbxxRRRRrrrrRRRRrrrrRRRRrrrrRRRRrrrrRxxbbbbbbbggttggttggttggttggttggttggttggttggttggttgggbbbb0',
+    '0bbbxxRRRRrrrrRRRRrrrrRRRRrrrrRRRRrrrrRxxbbbbbbbggttggttggttggttggttggttggttggttggttggttgggbbbb0',
+    '0bbbxxRRRRrrrrRRRRrrrrRRRRrrrrRRRRrrrrRxxbbbbbbbggttggttggttggttggttggttggttggttggttggttgggbbbb0',
+    '0bbbxxRRRRrrrrRRRRrrrrRRRRrrrrRRRRrrrrRxxbbbbbbbggttggttggttggttggttggttggttggttggttggttgggbbbb0',
+    '0bbbxxRRRRrrrrRRRRrrrrRRRRrrrrRRRRrrrrRxxbbbbbbbvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvbbbb0',
+    '0aaaxxRRRRrrrrRRRRrrrrRRRRrrrrRRRRrrrrRxxaaaaaaavvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvaaaa0',
+    '0aaaxxRRRRrrrrRRRRrrrrRRRRrrrrRRRRrrrrRxxaaaaaaavvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvaaaa0',
+    '0ccaxxRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRxxccaccccggttggttggttggttggttggttggttggttggttggttgggaccc0',
+    '0ccaxxRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRxxccacciiggttggttggttggttggttggttggttggttggttggttgggiicc0',
+    '0ccaxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxccacciiggttggttggttggttggttggttggttggttggttggttgggiicc0',
+    '0ccaxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxccaccxxggttggttggttggttggttggttggttggttggttggttgggxxcc0',
+    '0ccacccccccacccccccacccccccacccccccacccccccaccxxggttggttggttggttggttggttggttggttggttggttgggxxcc0',
+    '0ccacccccccacccccccacccccccacccccccacccccccaccxxggttggttggttggttggttggttggttggttggttggttgggxxcc0',
+    '0ccacccccccacccccccacccccccacccccccacccccccaccxxggttggttggttggttggttggttggttggttggttggttgggxxcc0',
+    '0ccacccccccacccccccacccccccacccccccacccccccaccxxggggggggggttggggggggggttggggggggggttggttgggxxcc0',
+    '0ccacccccccacccccccacccccccacccccccacccccccaccxxggggggggggttggggggggggttggggggggggttggttgggxxcc0',
+    '0ccacccccccacccccccacccccccacccccccacccccccaccxxggttjjttggttggttjjttggttggttjjttggttggttgggxxcc0',
+    '0ccacccccccacccccccacccccccacccccccacccccccaccxxggttjjttggttggttjjttggttggttjjttggttggttgggxxcc0',
+    '0ccacccccccacccccccacccccccacccccccacccccccaccxxggttjjttggttggttjjttggttggttjjttggttggttgggxxcc0',
+    '0cccccccccccccccccccccccccccccccccccccccccccccxxggttjjttggttggttjjttggttggttjjttggttggttgggxxcc0',
+    '0aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaxxggttjjttggttggttjjttggttggttjjttggttggttgggxxaa0',
+    '0aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaxxggggjjggggggggggjjggggggggggjjgggggggggggggxxaa0',
+    '0RRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR0',
+    '0RRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR0',
+    '0RRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR0',
+    '0RRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR0',
+    '0RRrRRRRRrRRRRRrRRRRRrRRRRRrRRRRRrRRRRRrRRRRRrRRRRRrRRRRRrRRRRRrRRRRRrRRRRRrRRRRRrRRRRRrRRRRRrR0',
+    '0RRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR0',
+    '0RRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR0',
+    '0RRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR0',
+    '0RRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR0',
+    '000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000',
+  ] },
+  casino: { name: 'Casino', legit: 25, note: "Baize, a cage and three chandeliers. Legitimacy 25 does not hide indoors either.", rows: [
+    '000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000',
+    '0aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa0',
+    '0aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa0',
+    '0cccccccccccccccccccccccacccccccccccccccccccccccacccccccccccccccccccccccacccccccccccccccccccccc0',
+    '0bcbbbbbbcbbbbbbcbbbbpppppppbbcbbbbbbcbbbbbbcpppppppbbbbbbcbbbbbbcbbbpppppppbbbcbbbbbbcbbbbbbcb0',
+    '0bcbbbbbbcbbbbbbcbbbbpppppppbbcbbbbbbcbbbbbbcpppppppbbbbbbcbbbbbbcbbbpppppppbbbcbbbbbbcbbbbbbcb0',
+    '0bcbbbbbbcbbbbbbcbbbbbPPPPPbbbcbbbbbbcbbbbbbcbPPPPPcbbbbbbcbbbbbbcbbbbPPPPPbbbbcbbbbbbcbbbbbbcb0',
+    '0bcbbbbbbcbbbbbbcbbccccccccccccbbbbbbcbbbbbcccccccccccbbbbcbbbbbbcbcccccccccccbcbbbbbbcbbbbbbcb0',
+    '0bcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcb0',
+    '0bcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcb0',
+    '0bcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcb0',
+    '0bcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcb0',
+    '0bcbbbgggggggggggggggggggggbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcb0',
+    '0bcbbbgaapaapaapaapaapaapagbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcb0',
+    '0bcbbbgaapaapaapaapaapaapagbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcb0',
+    '0bcbbbgaapaapaapaapaapaapagbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcb0',
+    '0bcbbbgaapaapaapaapaapaapagbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcb0',
+    '0bcbbbgaapaapaapaapaapaapagbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcb0',
+    '0bcbbbgaapaapaapaapaapaapagbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcb0',
+    '0bcbbbgaapaapaapaapaapaapagbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcb0',
+    '0bcbbbgaapaapaapaapaapaapagbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcb0',
+    '0bcbbbgaapaapaapaapaapaapagbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcb0',
+    '0bcbbbgaapaapaapaapaapaapagbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcb0',
+    '0bcbbbgaapaapaapaapaapaapagbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcb0',
+    '0bcbbbgaapaapaapaapaapaapagbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcb0',
+    '0bcbbbgaapaapaapaapaapaapagbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcb0',
+    '0bcbbbgiiiiiiiiiiiiiiiiiiigbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbrrrrrrrrrbbbcbbbbbbcbbbbbbcbbbbbbcb0',
+    '0bcbbbgiiiiiiiiiiiiiiiiiiigbbbcbbbbbbcmmmmbbcmmmmbbcmmmmbbcmrrrrrrrrrmbbcmmmmbbcmmmmbbcmmmmbbcb0',
+    '0bcbbbgiiiiiiiiiiiiiiiiiiigbbbcbbbbbbcmmmmbbcmmmmbbcmmmmbbcmrrrrrrrrrmbbcmmmmbbcmmmmbbcmmmmbbcb0',
+    '0bcbbbgaapaapaapaapaapaapagbbbcbbbbbbcmmmmbbcmmmmbbcmmmmbbcmrrrrrrrrrmbbcmmmmbbcmmmmbbcmmmmbbcb0',
+    '0bcbbbgaapaapaapaapaapaapagbbbcbbbppppmmmmggpmmmmpppmmmmpppmrrrrrrrrrmpppmmmmpppmmmmpppmmmggpcb0',
+    '0bcbbbgaapaapaapaapaapaapagbbbcbbbSSSSSSSSggSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSggScb0',
+    '0bcbbbgaapaapaapaapaapaapagbbbcbbbSSSSSSSSggSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSggScb0',
+    '0bcbbbgaapaapaapaapaapaapagbbbcbbbssssssssggssssssssssssssssssssssssssssssssssssssssssssssggscb0',
+    '0bcbbbgggggggggggggggggggggbbbcbbbssssssssggssssssssssssssssssssssssssssssssssssssssssssssggscb0',
+    '0bcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbssssssssggssssssssssssssssssssssssssssssssssssssssssssssggscb0',
+    '0bcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbssssssssggssssssssssssssssssssssssssssssssssssssssssssssggscb0',
+    '0bcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbssssssssggssssssssssssssssssssssssssssssssssssssssssssssggscb0',
+    '0bcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbssggggggggssssssssssssssssssssssssssssssssssssssssggggggggscb0',
+    '0bcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbssggggggggssssssssssssssssssssssssssssssssssssssssggggggggscb0',
+    '0bcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbssggssssggssssssssssssssssssssssssssssssssssssssssggssssggscb0',
+    '0bcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbggbbbbggcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbggcbbbggbcb0',
+    '0bcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbggbbbbggcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbggcbbbggbcb0',
+    '0bcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbggbbbbggcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbbbcbbbbggcbbbggbcb0',
+    '0aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaggaaaaggaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaggaaaaggaaa0',
+    '0aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaggaaaaggaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaggaaaaggaaa0',
+    '0RRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR0',
+    '0RRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR0',
+    '0RRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR0',
+    '0RRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR0',
+    '0RRrRRRRRrRRRRRrRRRRRrRRRRRrRRRRRrRRRRRrRRRRRrRRRRRrRRRRRrRRRRRrRRRRRrRRRRRrRRRRRrRRRRRrRRRRRrR0',
+    '0RRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR0',
+    '0RRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR0',
+    '0RRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR0',
+    '0RRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR0',
+    '000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000',
+  ] },
+};
+
+const FIGURES = {
+  falcone: { name: 'Salvatore Falcone', pal: {"skin": "olive", "suit": "charcoal", "hair": "pepper", "tie": "blood", "felt": "black"}, rows: [
+    '................................',
+    '................................',
+    '............00000000............',
+    '...........0111111110...........',
+    '..........012112211210..........',
+    '..........012112211210..........',
+    '..........011111111110..........',
+    '.........0hhhhhhhhhhhh0.........',
+    '......0111111111111111110.......',
+    '.......000000000000000000.......',
+    '...........cccccccccc...........',
+    '...........cc0dccd0cc...........',
+    '...........cdddccdddc...........',
+    '...........cdeddcdedc...........',
+    '...........cded00dedc...........',
+    '..........ccd555555dcc..........',
+    '..........ccddd00dddcc..........',
+    '..........ccddeeeeddcc..........',
+    '...........cddddddddc...........',
+    '............cddddddc............',
+    '.............cccccc.............',
+    '.............cccccc.............',
+    '.........3333cccccc3333.........',
+    '.......3333337cccc7333333.......',
+    '.....333333347bbbb74333333......',
+    '...03333333347bbbb743333333330..',
+    '..022333333347bbbb743333333220..',
+    '..a22333333347bbbb743333333220..',
+    '..022333333347bbbb743333333220..',
+    '.a022333333347bbbb743333333220..',
+    '..022333333347b99b743333333220..',
+    '.a022333333347bbbb743333333220..',
+    '..0223dd333347bbbb743333333220..',
+    'b888ded9333347bbbb743333333220..',
+    '..02cccc333347bbbb743333333220..',
+    '..0223333333433333343333333220..',
+    '..0223333333433333343333333220..',
+    '..0223333333433333343333333220..',
+    '..0223333333433333343333333220..',
+    '..0000000000000000000000000000..',
+  ] },
+  vasari: { name: 'Ottavia Vasari', pal: {"skin": "tan", "suit": "navy", "hair": "black", "tie": "carbon", "shirt": "cream"}, rows: [
+    '................................',
+    '................................',
+    '................................',
+    '................................',
+    '................................',
+    '..............0000..............',
+    '.............555555.............',
+    '.........00.55555555............',
+    '........0556555555555...........',
+    '........05565555555555..........',
+    '.........05cddddddddc5..........',
+    '..........5cc0dccd0cc5..........',
+    '..........5cdddccdddc5..........',
+    '...........cdeddcdedc...........',
+    '...........cded00dedc...........',
+    '...........cddddddddc...........',
+    '...........cddd00dddc...........',
+    '...........cddeeeeddc...........',
+    '............cddddddc............',
+    '.............cddddc.............',
+    '..............cccc..............',
+    '..............cccc..............',
+    '..........3334cccc4333..........',
+    '........3333344cc4433333........',
+    '......33333344444444333333......',
+    '.....0333333444444443333330.....',
+    '....033333334444444433333330....',
+    '....022333334444444433333220....',
+    '....022333334444444433333220....',
+    '....022333334444444433333220....',
+    '....022333334444444433333220....',
+    '....022333334444444433333220....',
+    '....022333334444444433333220....',
+    '....022333334444444433333220....',
+    '....022333334333333433333220....',
+    '....022333334333333433333220....',
+    '....022333334333333433333220....',
+    '....022333334333333433333220....',
+    '....022333334333333433333220....',
+    '....000000000000000000000000....',
+  ] },
+};
+
+/* ======================================================================
+   3. RENDER
+   ====================================================================== */
+const params = new URLSearchParams(location.search);
+let scale = Number(params.get('scale')) || 2;
+let light = params.get('light') || 'on';
+
+function paint(ctx, rows, s, p, ox, oy, y0, y1) {
+  for (let y = (y0 || 0); y < (y1 === undefined ? rows.length : y1); y++) {
+    for (let x = 0; x < rows[y].length; x++) {
+      const k = rows[y][x];
+      if (k === '.') continue;
+      const hex = p[k];
+      if (!hex) { console.warn('no colour for', k); continue; }
+      ctx.fillStyle = hex;
+      ctx.fillRect((x + (ox || 0)) * s, (y + (oy || 0)) * s, s, s);
+    }
+  }
+}
+
+function buildGrid() {
+  const wrap = document.getElementById('grid');
+  wrap.innerHTML = '';
+  Object.values(ROOMS).forEach((r) => {
+    const el = document.createElement('div');
+    el.className = 'cell';
+    const c = document.createElement('canvas');
+    c.width = 96 * scale; c.height = 56 * scale;
+    const ctx = c.getContext('2d'); ctx.imageSmoothingEnabled = false;
+    paint(ctx, r.rows, scale, pal(), 0, 0);
+    el.appendChild(c);
+    const n = document.createElement('div');
+    n.className = 'nm';
+    n.innerHTML = '<span>' + r.name + '</span><i>' + r.legit + '</i>';
+    el.appendChild(n);
+    const t = document.createElement('div'); t.className = 'note'; t.textContent = r.note;
+    el.appendChild(t);
+    wrap.appendChild(el);
+  });
+}
+
+/* The whole point of the page. Room, then people, then the room's own front
+   rows again over the top — so the table is in front of them and nobody has
+   to draw a table twice. */
+function scene(canvas, s) {
+  const room = ROOMS.social_club;
+  canvas.width = 96 * s; canvas.height = 56 * s;
+  const ctx = canvas.getContext('2d'); ctx.imageSmoothingEnabled = false;
+  paint(ctx, room.rows, s, pal(), 0, 0);
+  paint(ctx, FIGURES.falcone.rows, s, figPalette(FIGURES.falcone.pal), 12, 8);
+  paint(ctx, FIGURES.vasari.rows, s, figPalette(FIGURES.vasari.pal), 54, 8);
+  paint(ctx, room.rows, s, pal(), 0, 0, 33, 56);
+}
+
+function buildRamp() {
+  const wrap = document.getElementById('ramp');
+  wrap.innerHTML = '';
+  const sets = [['wall', ['a','b','c']], ['floor', ['d','e']], ['timber', ['g','h','i']],
+                ['metal', ['j','k','l']], ['cloth', ['m','n']], ['light', ['o','p','P']],
+                ['baize', ['s','S']], ['signal', ['r','R','v']]];
+  const p = pal();
+  sets.forEach(([label, keys]) => {
+    const d = document.createElement('div');
+    d.innerHTML = '<b>' + label + '</b>' + keys.map((k) => '<i style="background:' + p[k] + '"></i>').join('');
+    wrap.appendChild(d);
+  });
+}
+
+function wire(id, apply) {
+  const box = document.getElementById(id);
+  box.addEventListener('click', (e) => {
+    const btn = e.target.closest('button');
+    if (!btn) return;
+    [...box.querySelectorAll('button')].forEach((b) => b.setAttribute('aria-pressed', String(b === btn)));
+    apply(btn.dataset.v);
+  });
+}
+wire('scale', (v) => { scale = Number(v); everything(); });
+wire('light', (v) => { light = v; everything(); });
+
+function syncControls() {
+  [['scale', String(scale)], ['light', light]].forEach(([id, v]) => {
+    [...document.getElementById(id).querySelectorAll('button')].forEach((b) =>
+      b.setAttribute('aria-pressed', String(b.dataset.v === v)));
+  });
+}
+function everything() {
+  buildGrid();
+  scene(document.getElementById('scene'), Math.max(3, scale + 1));
+  scene(document.getElementById('scene2'), 4);
+  buildRamp();
+}
+syncControls();
+everything();
+/* ?only=sitdown renders just the composite, for capturing a still of it. */
+if (params.get('only') === 'sitdown') {
+  document.querySelectorAll('.grid, h3, .lede').forEach((el, i) => { if (i < 2) el.remove(); });
+  const g = document.getElementById('grid'); if (g) g.remove();
+}
+</script>
+</body>
+</html>

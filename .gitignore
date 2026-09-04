@@ -12,9 +12,3 @@ coverage
 
 # Local Claude Code state, if it ever appears
 .claude/settings.local.json
-
-# The design record and the director loop. Kept locally, not published:
-# 17,000 lines of specs, findings and playtest history that are not the
-# engine and not how to get started.
-docs/
-prototypes/
