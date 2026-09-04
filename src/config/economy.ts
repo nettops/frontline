@@ -1,9 +1,18 @@
 /**
  * Money, wages and rank progression.
  * Tune the game's pacing here — no logic in this file.
+ *
+ * The figures themselves live in `tuning/economy.json` so they can be changed
+ * without a TypeScript toolchain. What stays here is everything JSON cannot
+ * carry: the shapes, the labels, the ordering that encodes authority, and the
+ * long reasons — most of this file is the record of what a number used to be
+ * and what measurement did to it, which is the part worth reading before
+ * changing one.
  */
 
 import type { AttributeId, Attributes, RankId, RoleId } from '../sim/types';
+import { checkIds } from './tuning/check';
+import data from './tuning/economy.json';
 
 /**
  * Fear and standing, kept apart.
@@ -39,14 +48,14 @@ export const FEAR = {
    * its moments settles near 8. That gap is the design: being feared is a way
    * of running a family, not a garnish.
    */
-  decayShare: 0.08,
+  decayShare: data.fear.decayShare,
   /** Ceiling, on the same scale as heat. */
-  max: 100,
+  max: data.fear.max,
 
   /** What violence buys, per act. */
-  fromViolence: 6,
-  fromWarClash: 4,
-  fromIntimidation: 4,
+  fromViolence: data.fear.fromViolence,
+  fromWarClash: data.fear.fromWarClash,
+  fromIntimidation: data.fear.fromIntimidation,
   /**
    * What a public failure costs. Being feared is a claim; failing tests it.
    *
@@ -74,18 +83,18 @@ export const FEAR = {
    * loud job that goes wrong in front of everybody really is the claim being
    * tested. A quiet burglary going wrong is not.
    */
-  onFailure: -2,
+  onFailure: data.fear.onFailure,
 
   /** Fear suppresses defection: multiplier on the weekly chance, at maximum. */
-  defectionAtMax: 0.45,
+  defectionAtMax: data.fear.defectionAtMax,
   /** ...and adds to witness pressure and shakedown success. */
-  witnessBonusAtMax: 0.25,
+  witnessBonusAtMax: data.fear.witnessBonusAtMax,
   /** But frightened people are not loyal people. Loyalty drift, at maximum. */
-  loyaltyPerWeekAtMax: -1.1,
+  loyaltyPerWeekAtMax: data.fear.loyaltyPerWeekAtMax,
   /** Sentiment across districts you hold, per week at maximum. */
-  sentimentPerWeekAtMax: -0.55,
+  sentimentPerWeekAtMax: data.fear.sentimentPerWeekAtMax,
   /** Recruits are harder to find when the job is frightening. */
-  recruitCostAtMax: 1.6,
+  recruitCostAtMax: data.fear.recruitCostAtMax,
 };
 
 /**
@@ -112,15 +121,12 @@ export const FEAR = {
  * Shuttered fronts are not counted. `ownedBusinesses` filters them out before
  * this sees them, so a boarded-up shop is worth exactly what it looks like.
  */
-export const STANDING_HELD = {
-  perDistrictPerWeek: 0.55,
-  perFrontPerWeek: 0.2,
-};
+export const STANDING_HELD = data.standingHeld;
 
-export const STARTING_CASH = 2_500;
-export const STARTING_DIRTY_CASH = 0;
-export const STARTING_RESPECT = 0;
-export const STARTING_FEAR = 0;
+export const STARTING_CASH = data.starting.cash;
+export const STARTING_DIRTY_CASH = data.starting.dirtyCash;
+export const STARTING_RESPECT = data.starting.respect;
+export const STARTING_FEAR = data.starting.fear;
 
 /** Wages are paid every 7 days, on days where day % 7 === 0. */
 /**
@@ -136,9 +142,9 @@ export const STARTING_FEAR = 0;
  */
 export const HOLDINGS = {
   /** Nothing smaller is worth the paperwork. */
-  minimum: 1_000,
+  minimum: data.holdings.minimum,
   /** What you get back per dollar when you sell in a hurry. */
-  withdrawReturn: 0.85,
+  withdrawReturn: data.holdings.withdrawReturn,
   /**
    * What it earns while it sits there, per week.
    *
@@ -159,10 +165,10 @@ export const HOLDINGS = {
    * that a front in the same catalogue pays for itself in twenty weeks. It is
    * deliberately the *worst* return available and the only safe one.
    */
-  yieldPerWeek: 0.0045,
+  yieldPerWeek: data.holdings.yieldPerWeek,
 } as const;
 
-export const PAYDAY_INTERVAL = 7;
+export const PAYDAY_INTERVAL = data.paydayInterval;
 
 /**
  * Length of a year, for everything that happens annually.
@@ -171,7 +177,7 @@ export const PAYDAY_INTERVAL = 7;
  * than an astronomical one — nothing in the simulation cares about a leap day,
  * and a fixed number keeps the yearly tick reachable from day % YEAR === 0.
  */
-export const DAYS_PER_YEAR = 365;
+export const DAYS_PER_YEAR = data.daysPerYear;
 
 /** Weekly wage by role. Underpaying a greedy NPC erodes loyalty fast. */
 /**
@@ -181,17 +187,9 @@ export const DAYS_PER_YEAR = 365;
  * that function could ask where the ceiling was — and the UI, unable to ask,
  * offered a raise that could not happen and charged the man grievance for it.
  */
-export const WAGE_CEILING_MULTIPLE = 4;
+export const WAGE_CEILING_MULTIPLE = data.wageCeilingMultiple;
 
-export const ROLE_WAGE: Record<RoleId, number> = {
-  associate: 150,
-  soldier: 300,
-  enforcer: 450,
-  lieutenant: 700,
-  capo: 1_200,
-  consigliere: 1_500,
-  underboss: 2_000,
-};
+export const ROLE_WAGE: Record<RoleId, number> = data.roleWage;
 
 export const ROLE_LABEL: Record<RoleId, string> = {
   associate: 'Associate',
@@ -215,7 +213,7 @@ export const ROLE_ORDER: RoleId[] = [
 ];
 
 /** Cost to bring someone in, on top of their wage. */
-export const RECRUIT_COST = 500;
+export const RECRUIT_COST = data.recruitCost;
 
 /** Missing a payday costs loyalty and adds a grievance. */
 /**
@@ -229,8 +227,8 @@ export const RECRUIT_COST = 500;
  * They are now the hit at a total miss, scaled by the fraction of the wage bill
  * that actually went unpaid. Covering nine tenths of it costs a tenth of this.
  */
-export const MISSED_PAY_LOYALTY_HIT = 12;
-export const MISSED_PAY_GRIEVANCE = 15;
+export const MISSED_PAY_LOYALTY_HIT = data.missedPayLoyaltyHit;
+export const MISSED_PAY_GRIEVANCE = data.missedPayGrievance;
 
 /**
  * How short a week has to be before a man files it as a thing that happened to
@@ -240,10 +238,10 @@ export const MISSED_PAY_GRIEVANCE = 15;
  * whether to walk, so writing one for a payday that was 95% covered would make
  * a rounding error permanent.
  */
-export const UNPAID_MEMORY_THRESHOLD = 0.35;
+export const UNPAID_MEMORY_THRESHOLD = data.unpaidMemoryThreshold;
 
 /** Goodwill returned per man when back wages are finally cleared. */
-export const ARREARS_CLEARED_LOYALTY = 5;
+export const ARREARS_CLEARED_LOYALTY = data.arrearsClearedLoyalty;
 
 // ----------------------------------------------------------------- ranks ---
 
@@ -298,8 +296,8 @@ export interface RankDef {
  * curves these were sized against — the point was to land on the old ladder's
  * shape at the same days rather than to change what a career can afford.
  */
-export const CREW_BASE = 3;
-export const CREW_PER_DISTRICT = 4;
+export const CREW_BASE = data.crew.base;
+export const CREW_PER_DISTRICT = data.crew.perDistrict;
 /**
  * Premises feed people too, and leaving them out starved a whole play style.
  *
@@ -312,7 +310,7 @@ export const CREW_PER_DISTRICT = 4;
  * A front is a payroll a man can plausibly be on, so it counts. Ground counts
  * for more because it is harder to get and it is what a crew is *for*.
  */
-export const CREW_PER_FRONT = 2;
+export const CREW_PER_FRONT = data.crew.perFront;
 
 export const RANKS: RankDef[] = [
   {
@@ -449,18 +447,9 @@ export const ATTRIBUTE_BLURB: Record<AttributeId, string> = {
     'Pull with people who matter. Contacts, counsel, favours. Grows while you keep a lawyer on retainer, and every time you go and talk to another family.',
 };
 
-export const STARTING_ATTRIBUTES: Attributes = {
-  leadership: 2,
-  intimidation: 3,
-  negotiation: 2,
-  intelligence: 3,
-  streetSmarts: 4,
-  business: 1,
-  strategy: 2,
-  influence: 0,
-};
+export const STARTING_ATTRIBUTES: Attributes = data.startingAttributes;
 
-export const ATTRIBUTE_MAX = 20;
+export const ATTRIBUTE_MAX = data.attributeMax;
 
 /**
  * What builds pull with people who matter, and why it had to be added.
@@ -551,9 +540,9 @@ export const INFLUENCE_FROM = {
      lawyer and earns no pull at all. That is backwards and it is the next
      finding, not this one.
   */
-  counselPerWeek: 0.9,
+  counselPerWeek: data.influenceFrom.counselPerWeek,
   /** Per diplomatic approach that is made and paid for, refused or not. */
-  approach: 0.6,
+  approach: data.influenceFrom.approach,
   /*
      Days before the same family builds you any more pull.
 
@@ -571,7 +560,7 @@ export const INFLUENCE_FROM = {
      families across 300 days is about twenty rooms a family, which is a real
      route to the middle of the scale and nowhere near the top of it.
   */
-  approachCooldownDays: 14,
+  approachCooldownDays: data.influenceFrom.approachCooldownDays,
 };
 
 /**
@@ -580,5 +569,17 @@ export const INFLUENCE_FROM = {
  * 15→16 is a grind.
  */
 export function attributeProgressNeeded(current: number): number {
-  return 3 + current * 1.6;
+  return data.attributeProgress.base + current * data.attributeProgress.perPoint;
 }
+
+/*
+   The ids in the JSON must be the ids the types name.
+
+   `resolveJsonModule` checks every shape in `tuning/economy.json` against the
+   declarations above — a missing key or a number written as a string fails the
+   build. What it cannot check is that `"soldeir"` is not a `RoleId`, because an
+   imported JSON key is a `string`. These two calls are that check, and they run
+   last because they read the id lists declared throughout this file.
+*/
+checkIds('tuning/economy.json', 'role', Object.keys(data.roleWage), ROLE_ORDER);
+checkIds('tuning/economy.json', 'attribute', Object.keys(data.startingAttributes), ATTRIBUTE_IDS);
