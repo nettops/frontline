@@ -31,23 +31,18 @@ npm run dev
 
 ## Documentation
 
-The design record lives in `docs/` rather than in this file — it is the
-project's memory, and it is far longer than a README should be.
+The design record is not published. It is the project's private memory —
+seventeen thousand lines of specs, measured findings, playtest rounds and the
+rules an iteration runs under — and none of it is the engine or how to start.
 
-| Where | What is in it |
-| --- | --- |
-| [`docs/design/systems-in-depth.md`](docs/design/systems-in-depth.md) | The briefing, the tutorial that is not one, sound and motion, the second skin, the three modes, what people want and remember, the two trades, and what the engine audit found |
-| [`docs/design/verbs-and-lessons.md`](docs/design/verbs-and-lessons.md) | The sit-down, delegation, the informant, promises, succession, and how long the game keeps offering something new |
-| [`docs/design/the-money-floor.md`](docs/design/the-money-floor.md) | The no-capital ladder, and why being broke was never what locked a career up |
-| [`docs/design/playtest-history.md`](docs/design/playtest-history.md) | Round by round: what testers found and what it changed |
-| [`docs/HANDOFF.md`](docs/HANDOFF.md) | Current state of the build — read this first when picking the project back up |
-| [`docs/DIRECTOR.md`](docs/DIRECTOR.md) | The rules an iteration runs under |
-| [`docs/PLAYTEST.md`](docs/PLAYTEST.md) | The tester brief, with the reason for every clause in it |
-| [`docs/DAILY-ROUTINE.md`](docs/DAILY-ROUTINE.md) | The loop the project is worked in |
-| [`docs/specs/`](docs/specs) · [`docs/plans/`](docs/plans) · [`docs/findings/`](docs/findings) | Per-change design notes, implementation plans, and measured findings |
-| [`prototypes/`](prototypes) | Standalone HTML art studies. Not part of the build; `ui/art/` was ported from them |
+What is here instead: this file for the shape of the game and how to run it,
+`CLAUDE.md` for the invariants any change has to keep, and the source itself,
+where every non-obvious number carries the reading that set it in a comment
+beside it. Some of those comments cite a design note by filename; the note is
+not in the repository, and the reasoning quoted in the comment is.
 
 ---
+
 
 ## The three systems that carry the game
 
@@ -449,3 +444,12 @@ and now `promises?`, `leaks?`, `informingSince?` and `carefulUntilDay?`. Absent
 reads as the truth for a save written before the system existed — nobody was in
 the room, nothing is owed, nobody has said anything to anybody, and nobody is
 talking. A day-347 career from before any of this loads and keeps playing.
+
+---
+
+## Licence
+
+MIT. Use it, change it, ship it, sell it — keep the copyright line and the
+licence text with the source.
+
+See [`LICENSE`](LICENSE).

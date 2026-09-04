@@ -13,9 +13,13 @@ districts have moods — and the player navigates it.
     npx tsc -b         # types
     npm run playtest   # an isolated instance, for playing. Never the dev server.
 
-Rules are in `docs/DIRECTOR.md` (the loop, and §0: you never score your own
-work) and `docs/PLAYTEST.md`. Current state is `docs/HANDOFF.md`. How the
-systems fit together is `docs/design/systems-in-depth.md`.
+The design record — `docs/`, the loop in `DIRECTOR.md` and its §0 *you never
+score your own work*, the tester brief, the current state in `HANDOFF.md`, and
+`design/systems-in-depth.md` — is kept locally and is **not** in the
+repository. If you have it, it is the authority and everything below defers to
+it. If you are working from a clone and do not, this file and the comments in
+the source are the whole record, and §0 still holds: you do not grade your own
+work.
 
 ---
 
