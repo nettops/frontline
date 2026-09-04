@@ -1,6 +1,12 @@
 /**
  * What the organization makes go away, against what it makes.
  *
+ * NOTE: the trades no longer pay into this channel — see `TradeDef.heatChannel`.
+ * What follows is still the true shape of the apparatus and still the reason
+ * anything paying into `street` continuously becomes free above twelve people;
+ * the figures below use the product trade's rate as a familiar yardstick, not
+ * as a claim about where product's attention now lands.
+ *
  * `HEAT_ABSORPTION` exists for a good reason and was measured carefully: heat
  * removed per day was a constant while heat generated per day rose with the
  * number of people working, so no family could grow past the size at which the
@@ -116,6 +122,52 @@ describe('the apparatus', () => {
     // trade costs attention only to the outfits too small to have one.
     expect(rows[0].settled, 'four hands').toBeGreaterThan(10);
     expect(rows[2].settled, 'twelve hands').toBeLessThan(1);
+  });
+
+  /*
+   * And the repair, which is not to the apparatus.
+   *
+   * Capping the apparatus was measured against the paired sweep in
+   * `ladder.probe` and costs twelve seeds of thirty-six their Boss career. So
+   * the trades pay into `money` instead, where nothing absorbs, paper decays
+   * slower than the street, and laying low does not help — which is also what
+   * the law actually sees in a standing trade. This is the guard on that:
+   * neither trade may quietly go back to the channel the apparatus eats.
+   */
+  it('is not where a standing trade pays any more', () => {
+    for (const trade of ['product', 'arms'] as const) {
+      expect(
+        TRADES[trade].heatChannel,
+        `${trade} pays into the channel the apparatus absorbs, so its attention is free`,
+      ).not.toBe(HEAT_ABSORPTION.channel);
+    }
+
+    // And the effect, end to end: the same weekly attention that settles at
+    // nothing on the street settles somewhere a player can see it.
+    const perWeek = 15 * TRADES.product.heatPerUnit;
+    const onTheStreet = settles(16, perWeek);
+    const state = game();
+    payroll(state, 16);
+    state.org.quietDays = QUIET_DAYS_BEFORE_DECAY;
+    for (let day = 1; day <= 700; day++) {
+      state.day = day;
+      if (day % 7 === 0) addHeat(state, perWeek, TRADES.product.heatChannel, 'the trade');
+      tickHeat(state);
+    }
+    const onPaper = state.org.heatBy[TRADES.product.heatChannel];
+
+    // eslint-disable-next-line no-console
+    console.log(
+      `the same ${perWeek.toFixed(1)} a week, sixteen hands:\n` +
+        `        into the street: settles at ${onTheStreet.toFixed(1)}\n` +
+        `        into the books:  settles at ${onPaper.toFixed(1)}`,
+    );
+
+    expect(onTheStreet).toBe(0);
+    expect(
+      onPaper,
+      'a standing trade is still invisible in its own channel',
+    ).toBeGreaterThan(10);
   });
 
   it('grows with the payroll, which is the whole reason it exists', () => {

@@ -286,6 +286,13 @@ export const HEAT_ABSORPTION = {
      is a bigger one. Repricing what a standing trade costs in attention is a
      different change, and it needs to reach the heat without going through the
      apparatus every family is entitled to.
+
+     That change is `TradeDef.heatChannel`, and it went in: both trades pay
+     into `money` now, where nothing absorbs, paper decays slower than the
+     street and laying low does not help. Same weekly figure, sixteen hands —
+     it settles at 0.0 on the street and 20.3 on the books. Paired over a
+     hundred seeds it costs 12 careers their Boss and returns 5, against the
+     cap's 12 and 2 out of thirty-six, and the whole probe suite passes.
   */
   /**
    * The most an organization can make go away by being large alone.

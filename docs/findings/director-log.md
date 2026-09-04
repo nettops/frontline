@@ -2753,3 +2753,30 @@ off in `APPARATUS_CAP`. What is now known is what closing it this way costs,
 which is more than the fault is worth. An invisible standing operation is a
 real defect; a third of the ladder is a bigger one. The next attempt has to
 reach the heat without going through the apparatus every family is entitled to.
+
+### And the repair that did land — 2026-09-05
+
+The attention had to arrive somewhere the apparatus does not reach, and `money`
+is not a workaround for that: it is the channel's own description. What the law
+sees in a standing trade is not a body in a street, it is a great deal of cash
+that cannot say where it came from. `TradeDef.heatChannel` is `money` for both
+trades, no magnitude changed.
+
+    the same 2.4 a week, sixteen hands
+        into the street   settles at  0.0
+        into the books    settles at 20.3
+
+Paired over a hundred seeds, and read against the cap it replaces:
+
+    the cap, 36 seeds     12 lost Boss, 2 gained · heat +10 · estate -500k
+    the channel, 100      12 lost Boss, 5 gained · heat +3.8 · estate -44k
+
+Seventeen seeds moved, twelve down and five up, which by this file's own
+resolution rule **does not resolve** — the split is inside its own noise at
+that sample, and it is recorded that way rather than quoted as an effect. What
+is established is the size relative to the alternative: a quarter of the cap's
+damage for most of its benefit, and all eight probe files pass.
+
+The street's half of the price was never heat and is not now. It is
+`sentimentPerUnit`, paid to the neighbourhood, and it is a different price paid
+to a different party.
