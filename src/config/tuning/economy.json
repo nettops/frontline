@@ -1,0 +1,81 @@
+{
+  "fear": {
+    "decayShare": 0.08,
+    "max": 100,
+    "fromViolence": 6,
+    "fromWarClash": 4,
+    "fromIntimidation": 4,
+    "onFailure": -2,
+    "defectionAtMax": 0.45,
+    "witnessBonusAtMax": 0.25,
+    "loyaltyPerWeekAtMax": -1.1,
+    "sentimentPerWeekAtMax": -0.55,
+    "recruitCostAtMax": 1.6
+  },
+
+  "standingHeld": {
+    "perDistrictPerWeek": 0.55,
+    "perFrontPerWeek": 0.2
+  },
+
+  "starting": {
+    "cash": 2500,
+    "dirtyCash": 0,
+    "respect": 0,
+    "fear": 0
+  },
+
+  "holdings": {
+    "minimum": 1000,
+    "withdrawReturn": 0.85,
+    "yieldPerWeek": 0.0045
+  },
+
+  "paydayInterval": 7,
+  "daysPerYear": 365,
+
+  "wageCeilingMultiple": 4,
+  "roleWage": {
+    "associate": 150,
+    "soldier": 300,
+    "enforcer": 450,
+    "lieutenant": 700,
+    "capo": 1200,
+    "consigliere": 1500,
+    "underboss": 2000
+  },
+  "recruitCost": 500,
+
+  "missedPayLoyaltyHit": 12,
+  "missedPayGrievance": 15,
+  "unpaidMemoryThreshold": 0.35,
+  "arrearsClearedLoyalty": 5,
+
+  "crew": {
+    "base": 3,
+    "perDistrict": 4,
+    "perFront": 2
+  },
+
+  "startingAttributes": {
+    "leadership": 2,
+    "intimidation": 3,
+    "negotiation": 2,
+    "intelligence": 3,
+    "streetSmarts": 4,
+    "business": 1,
+    "strategy": 2,
+    "influence": 0
+  },
+  "attributeMax": 20,
+  "attributeProgress": {
+    "base": 3,
+    "perPoint": 1.6
+  },
+
+  "influenceFrom": {
+    "counselPerWeek": 0.9,
+    "approach": 0.6,
+    "approachCooldownDays": 14
+  }
+}
