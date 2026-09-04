@@ -202,6 +202,60 @@ describe('losing on purpose', () => {
   });
 });
 
+/*
+ * And whether the player can tell those two cases apart before paying.
+ *
+ * Every seat carried one string — "Worth an evening whatever the cards do" —
+ * so a figure two points off a favour and a figure who already owes you
+ * everything he is going to read identically. A blind tester threw five nights
+ * across a 481-day career, two landed and three did not, and reported it as a
+ * lottery he could not read. Half of it is a roll and is meant to be. The
+ * other half is `CIVIC.maxOwed`, where a thrown night is a guaranteed nothing
+ * and the log says the same sentence an unlucky one gets.
+ */
+describe('what a thrown night is worth', () => {
+  it('names the odds and how many they already owe', () => {
+    const state = game();
+    const id = seatCivic(state, 'the_club');
+    expect(id).not.toBeNull();
+    figure(state, id!).owed = 0;
+
+    const row = tableRead(state).find((r) => r.def.id === 'the_club')!;
+    expect(row.thrown).toMatch(new RegExp(`0 of ${CIVIC.maxOwed}`));
+    expect(row.thrown).toMatch(/\d+% of the time/);
+  });
+
+  it('says outright when it would buy nothing at all', () => {
+    // The case that read as bad luck and is not luck.
+    const state = game();
+    const id = seatCivic(state, 'the_club');
+    figure(state, id!).owed = CIVIC.maxOwed;
+
+    const row = tableRead(state).find((r) => r.def.id === 'the_club')!;
+    expect(row.thrown).toMatch(/buys nothing more/);
+    expect(row.thrown).not.toMatch(/% of the time/);
+
+    // And the screen is telling the truth: it really does buy nothing.
+    const before = figure(state, id!).owed;
+    sitDown(state, new Rng(state.rng), 'the_club', 'lose');
+    expect(figure(state, id!).owed).toBe(before);
+  });
+
+  it('does not give every seat the same sentence', () => {
+    /*
+       The whole fault, as a property. Across a population there have to be
+       seats that read differently from each other, or the line is decoration
+       in the same way the string it replaced was.
+    */
+    const said = new Set<string>();
+    for (let seed = 1; seed <= 40; seed++) {
+      const state = game(seed);
+      for (const row of tableRead(state)) said.add(row.thrown);
+    }
+    expect(said.size, 'every seat in forty careers says the same thing').toBeGreaterThan(2);
+  });
+});
+
 describe('sitting down at all', () => {
   it('runs weekly, and says how long is left', () => {
     const state = game();

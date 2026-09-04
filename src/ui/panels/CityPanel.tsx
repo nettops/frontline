@@ -119,11 +119,14 @@ function TheGame() {
                   </td>
                   <td>
                     <div>{room.seat.who}</div>
-                    <div className="tiny faint">
-                      {room.seat.kind === 'nobody'
-                        ? 'Nobody who decides anything'
-                        : 'Worth an evening whatever the cards do'}
-                    </div>
+                    {/*
+                       The odds and the ceiling, per seat, instead of one
+                       string on all of them. See `throwRead` — a figure
+                       already at `CIVIC.maxOwed` buys nothing from a thrown
+                       night and used to say the same sentence as an unlucky
+                       one.
+                    */}
+                    <div className="tiny faint">{room.thrown}</div>
                   </td>
                   <td className="num mono">{formatMoney(room.stake)}</td>
                   <td style={{ minWidth: 260 }}>
