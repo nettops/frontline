@@ -48,6 +48,23 @@ export interface Snapshot {
   panel: string | null;
   /** Title of whatever is demanding an answer, if anything. */
   modal: string | null;
+  /**
+   * The answers the open memo will accept, in the words `{answer:}` wants.
+   *
+   * `modal` named the thing demanding an answer and then left you to find out
+   * what the answers were, so replying to one cost a screenshot or a DOM read
+   * — an extra round trip on the most frequent interruption in the game.
+   *
+   * Worse, `actions` looks like it would do: it is every enabled control on
+   * the page, which while a memo is open means SOUND, HINTS and the whole
+   * navigation rail come first and none of them close the memo. Two separate
+   * measurement runs were built on `actions[0]` while writing this, both
+   * clicked SOUND several hundred times, and both reported a career that had
+   * reached day 8 in four minutes as though that were the game's fault.
+   *
+   * Empty when no memo is open.
+   */
+  modalChoices: string[];
   /** Left-hand navigation, with its badge counts. */
   nav: { label: string; badge: string | null; current: boolean }[];
   /** Every enabled control, by the text a person would click. */
@@ -183,12 +200,27 @@ export function read(): Snapshot {
 
   const all = buttons();
   const modalEl = document.querySelector('.memo, .modal, [role="dialog"]');
+  /*
+     Scoped to the memo, and only the enabled ones.
+
+     A refused choice already appears in `refused` with the reason it gives,
+     which is the half worth reading; what belongs here is what `{answer:}`
+     will actually accept. First line only, because a choice renders its
+     consequence underneath it and `{answer:}` matches on the visible text.
+  */
+  const modalChoices = modalEl
+    ? [...modalEl.querySelectorAll('button')]
+        .filter((b) => !b.disabled && visible(b))
+        .map((b) => text(b).split('\n')[0].trim())
+        .filter(Boolean)
+    : [];
 
   return {
     namespace: NAMESPACE,
     bar: readBar(),
     panel: text(document.querySelector('.page-title, main h1')) || null,
     modal: modalEl ? text(modalEl.querySelector('h1, h2, h3')) || 'something is open' : null,
+    modalChoices,
     nav,
     actions: all.filter((b) => !b.disabled).map((b) => text(b)).filter(Boolean),
     refused: all
@@ -233,10 +265,29 @@ async function settle(times = 2): Promise<void> {
  * Half a second per sequence, and it buys the difference between a reading and
  * a rumour. A person waits for the number to settle too.
  */
+let moved = true;
+
+/**
+ * Whether anything has been clicked since the page was last known still.
+ *
+ * `run()` ends with `stillness()` and nothing but `run()` touches the page, so
+ * the page is already settled when the next `run()` starts — and the leading
+ * `stillness()` was buying a guarantee it already had. Measured: every `run()`
+ * cost 1,102ms whatever it did, including one that was refused and changed
+ * nothing, because the two settles are ~500ms each and the work between them
+ * is a few milliseconds.
+ *
+ * A playtest is hundreds of these back to back, so it was paying about half of
+ * its harness time for a wait it had already done. This flag keeps the
+ * guarantee and stops paying twice for it: any click sets it, and only a set
+ * flag costs a settle.
+ */
 async function stillness(): Promise<void> {
+  if (!moved) return;
   await settle();
   await pause(COUNTER_MS + 80);
   await settle();
+  moved = false;
 }
 
 /**
@@ -289,6 +340,10 @@ function findRow(needle: string, within?: string): HTMLElement | null {
 }
 
 async function one(step: Step): Promise<StepResult> {
+  // Every step is a reason to settle again before the next reading. Set here
+  // rather than in `press`, because `{set:}` moves the page through a
+  // dispatched input event and never presses anything.
+  moved = true;
   const fail = (note: string): StepResult => ({ step, ok: false, note });
 
   if ('settle' in step) {
@@ -472,6 +527,10 @@ const HELP = `__frontline — a harness for driving this game with a script.
 
   read()        what is on screen now: stat bar, panel, tables, actions,
                 refused actions with their reasons, and the recent log.
+                When a memo is open, modal is its title and modalChoices are
+                the answers it will take — pass one of those to {answer:}.
+                Do not pick from actions while a memo is open; that list is
+                every control on the page and none of the first few close it.
 
   run(steps)    do a sequence of things and report what changed. Stops at the
                 first step that cannot be done and tells you what the interface
@@ -487,6 +546,17 @@ const HELP = `__frontline — a harness for driving this game with a script.
                   {advance: 'week', times: 4} run the clock with the real buttons
                   {answer: 'Do it the slow way'}  answer an open memo
                   {settle: 3}                 wait for the page
+
+Answer and carry on in one call. A memo stops the clock, and replying to it in
+its own call and then re-issuing the advance costs two round trips for every
+interruption — about sixty across a career, which is most of what a scripted
+traverse spends. Put both in one array instead:
+
+    run([{answer: read().modalChoices[0]}, {advance: 'month', times: 12}])
+
+A 300-day career is 33 calls and about 22 seconds that way, against 62 calls
+when the answer travels alone. Steps run in order and stop at the first one
+that cannot be done, so the advance simply does not happen if the answer fails.
 
 It clicks real elements and reads the rendered page. It cannot see anything the
 screen is not showing, which is deliberate — most of this game is what it will
