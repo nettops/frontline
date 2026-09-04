@@ -472,14 +472,66 @@ export interface TableRead extends Refusal {
   def: TableDef;
   stake: number;
   seat: Seated;
+  /** What a deliberate loss against this seat is worth. See `throwRead`. */
+  thrown: string;
+}
+
+/**
+ * What a thrown night against this seat is actually worth.
+ *
+ * Every seat carried the same string — *"Worth an evening whatever the cards
+ * do"* — whether the man opposite was two points off owing you a favour or
+ * already owed you everything he is going to. A blind tester threw five nights
+ * across a 481-day career, two landed, three did not, and he could not tell
+ * the cases apart before or after:
+ *
+ *   > "It fails silently about half the time... All five opposites carried
+ *   > the identical tag. A $12,313 stake against Doreen Rowe read exactly the
+ *   > same as a $413 stake against a city-hall man."
+ *
+ * Half of that is a roll and is meant to be: `CARDS.lose.civicFavourChance` is
+ * 0.45 and a coin flip you can read is not a coin flip. The other half is not
+ * a roll at all. `CIVIC.maxOwed` is 2, and a figure already holding two owes
+ * you nothing further no matter what you throw — the money goes, and the log
+ * says *"They took it as their due, and nothing more"*, which is the same
+ * sentence an unlucky night gets. That case is a guaranteed nothing wearing
+ * the costume of bad luck, and it is the one this exists to name.
+ *
+ * States the odds and the ceiling. It does not state the outcome.
+ */
+export function throwRead(state: GameState, seat: Seated): string {
+  if (seat.kind === 'nobody') return 'Nobody who decides anything';
+
+  if (seat.kind === 'civic' && seat.id) {
+    const held = figure(state, seat.id);
+    if (held.owed >= CIVIC.maxOwed) {
+      return (
+        `Owes you ${held.owed} of ${CIVIC.maxOwed} — a thrown night buys ` +
+        `nothing more until you spend one`
+      );
+    }
+    const odds = Math.round(CARDS.lose.civicFavourChance * 100);
+    return (
+      `Owes you ${held.owed} of ${CIVIC.maxOwed} · a thrown night lands a ` +
+      `favour about ${odds}% of the time`
+    );
+  }
+
+  // A rival always moves. What does not always move is the band the panel
+  // draws it in, which is what read as a failure.
+  return 'A thrown night always moves what they think of you, whether or not the band changes';
 }
 
 /** What the panel shows, already priced and already refused. */
 export function tableRead(state: GameState): TableRead[] {
-  return TABLES.map((def) => ({
-    def,
-    stake: tableStake(state, def),
-    seat: seatedAt(state, def.id),
-    ...canSit(state, def.id),
-  }));
+  return TABLES.map((def) => {
+    const seat = seatedAt(state, def.id);
+    return {
+      def,
+      stake: tableStake(state, def),
+      seat,
+      thrown: throwRead(state, seat),
+      ...canSit(state, def.id),
+    };
+  });
 }

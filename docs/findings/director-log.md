@@ -2632,3 +2632,124 @@ The audit table this came from was wrong in one direction five times, and that
 is recorded in `ENGAGEMENT_OVERHAUL_AUDIT.md`: an audit written from the outside
 reads *"I cannot find the seam"* as *"the seam is not there"*. Six of the eight
 phases needed a route, a direction or a view rather than a system.
+
+---
+
+## Round 18 — the first directed round — 2026-09-04
+
+**One tester, told what to look for.** Three blind rounds had established that
+the trade, the card game and executing your own man were never reached; round
+17 reported all three unreached by three testers of three, each classified with
+the four-way split. That measurement is spent. What was still unknown is
+whether any of them is any good when you *do* use them, and only somebody told
+to go and get them can say. DIRECTOR §4 now carries the shape and the one
+condition that makes it legal: the under-use finding has to already be in the
+log, and the round gives up discovery, First Hour, Pacing and coverage. Its
+scores may never sit in a table beside a blind round's.
+
+He reached all three and played to day 481.
+
+### What the three are worth when used
+
+| | verdict | the fault |
+|---|---|---|
+| The Trade | *"Yes, overwhelmingly — and for the wrong reason: it is underpriced in risk"* | ~90 days lost to a blockers panel naming a blocker the state contradicted |
+| The card game | *"The cheapest legal defence in the game"* — judge favours at $2.5k a hand against $30k for a police contact | every decision-maker carried the identical tag, so a thrown night was unreadable |
+| Executing your own | free, and he would do it again — but *"not a hard decision"* | 6-of-27 nights and 14-of-15 nights paid the same, as far as he could see |
+
+### The headline, and how it had survived
+
+He ran product through his own neighbourhood for 348 days at $101,099 a week
+and reported its public feeling at 50 out of 100 — the value it started at. The
+cost was in the config the whole time and could never have applied: a district
+recovers 2.0 a week, and Downtown at dominance, saturated, carries 6.6 units,
+which at -0.11 is 0.73. Every street in the city got *happier* while narcotics
+ran through it.
+
+**The guard that should have caught it is why it shipped.** `deep.test.ts`
+asserted the trade costs a district its feeling and ticked only contraband —
+never the territory tick that carries the recovery. It measured one side of a
+race for a year and passed.
+
+The first repair was flat -0.45 and was also wrong: a flat cost against a flat
+recovery is still a race, just with the other winner. Thirty-six careers put
+the median worst routed district at 1 out of 100 with 36 of 36 below the
+hostile bar. The drain now scales by the room left above a floor, so each
+district finds an equilibrium. Paired within each career, so jobs and standing
+orders sit on both sides of the subtraction: **streets ran through 26, ground
+held and left alone 49.** Income unchanged at a median $4.37M against $4.27M.
+
+### What the round said about instruments
+
+Three separate readings in this round could not attribute anything, and each
+was fixed rather than quoted.
+
+`ladder.probe` has run the trade 36 careers at a time since the trade existed
+and **never once looked at what it did to the streets it ran through.** That is
+why a number could sit wrong for the life of a feature. The first instrument
+added here could not attribute either: "worst feeling on a routed street" read
+a median of 1 both before *and* after an eightfold correction, because the bot
+grinds jobs in the same districts. Only the paired reading measures the trade.
+
+The tester's own instrument failed the same way. His MUST FIX said killing a
+man you are sure about and one you are guessing at pay identically. The branch
+is real — +14 respect against -10, -5 loyalty against -16 — and both of his men
+were in fact talking, so he killed correctly twice and got the correct numbers
+twice. **His premise was wrong and his finding underneath it was right:**
+neither outcome was observable, because nothing tracked the record from the day
+of the accusation and a quiet page looked exactly like a solved problem.
+
+And his memo complaint. He reported being stopped every one to two days; the
+instrument says one every 4.2 days, flat at every career stage and every family
+size, out of 23 templates. What was exactly right was his next sentence — a
+"+1 month" advance never delivered more than five days — because that is what
+one-every-four-days does to an advance that halts on the first memo. Measured,
+six careers past day 180 asking for thirty days: **2.8 days.** The repair was
+never fewer memos. Answering one now no longer cancels the month, and only
+`danger` ends the span — 2% of the queue, and the six memos that change your
+situation. **27.2 days.**
+
+### The one left standing
+
+The apparatus. With a standing trade running, street heat settles at exactly
+zero for any payroll of sixteen or more, and at 13.3 for a payroll of four:
+trade throughput is capped by ground and the apparatus grows with the payroll,
+so the largest families are the quietest and hiring is a way to make a standing
+operation invisible.
+
+A cap was built and measured, and it is not going in — but the reason changed
+between the first reading and the second, and the first reading was mine.
+
+Three settings against the full probe read 5 of 53 bars failing at 0.7, none at
+0.9 and 3 at 0.95, with the weekly heat distribution barely moving across all
+three. A weaker setting making the ladder worse is not physical, so I called
+the instrument unable to size the change and backed the fix out.
+
+**That was half right and the diagnosis was wrong.** Every one of those bars is
+an unpaired count — 36 careers under one config against a fixed number — and
+Boss inside 300 days runs at about one career in five, so the count carries
+roughly two and a half careers of noise. The fault was in the reading, but not
+because the effect was too small to see. It was because an unpaired count
+cannot see it at all.
+
+`sizing the apparatus cap` runs the same 36 seeds under each setting and pairs
+each seed against itself, so a career that was never reaching Boss cannot vote:
+
+    0.7    Boss 7/36 (off: 17/36)   12 seeds lost it, 2 gained
+    0.9    Boss 8/36                12 lost, 3 gained
+    0.95   Boss 6/36                12 lost, 1 gained
+                                    weekly heat +10 · estate -500k to -640k
+
+Twelve down and one to three up, at every setting. The effect is large,
+consistent, and costs about a third of the Boss careers in a human-length
+career. **And 0.9 "passing all 53" was a coin landing on its edge** — 8 of 36
+against a bar of at least 8. I quoted a four-year population's Boss count
+(27/36 to 29/36) as evidence that setting was safe, when the bar that failed is
+the 300-day one; those are different populations and I conflated them.
+
+So the fault stands, held open by a test whose assertions describe what the
+game does today and go red the moment somebody changes it, and the dial ships
+off in `APPARATUS_CAP`. What is now known is what closing it this way costs,
+which is more than the fault is worth. An invisible standing operation is a
+real defect; a third of the ladder is a bigger one. The next attempt has to
+reach the heat without going through the apparatus every family is entitled to.

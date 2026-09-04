@@ -272,6 +272,16 @@ export interface Org {
   heatBy: Record<HeatChannel, number>;
   /** Days since the last heat-generating action, drives decay. */
   quietDays: number;
+  /**
+   * A rolling week of street attention arriving, decayed a seventh a day.
+   *
+   * Only read when `HEAT_ABSORPTION.ofIntake` is set, which it is not by
+   * default — it exists so the apparatus can be capped against what the
+   * organization is actually producing, and so that cap can be swept. Optional
+   * and lazily initialised, so an old save reads as an outfit that has not
+   * generated anything yet and fills in over its first week.
+   */
+  heatIntake?: number;
   /** Player has ordered a lay-low period; ends on this day. */
   layLowUntilDay: number | null;
 }

@@ -30,6 +30,7 @@ import {
   LAY_LOW_DURATION_DAYS,
   LAY_LOW_RESPECT_COST,
   QUIET_DAYS_BEFORE_DECAY,
+  APPARATUS_CAP,
   HEAT_ABSORPTION,
   heatTier,
   type HeatChannel,
@@ -79,11 +80,13 @@ export function addHeat(
   const tierBefore = heatTier(state.org.heat).name;
 
   const by = channels(state);
-  by[channel] = clamp(
-    (by[channel] ?? 0) + amount * diff.heatGain * worldMod(state, 'heatGain'),
-    0,
-    100,
-  );
+  const arriving = amount * diff.heatGain * worldMod(state, 'heatGain');
+  by[channel] = clamp((by[channel] ?? 0) + arriving, 0, 100);
+  // What the apparatus may be measured against. See HEAT_ABSORPTION.ofIntake,
+  // which is null by default, in which case nothing below reads this.
+  if (channel === HEAT_ABSORPTION.channel) {
+    state.org.heatIntake = (state.org.heatIntake ?? 0) + arriving;
+  }
   resettle(state);
   state.org.quietDays = 0;
 
@@ -148,8 +151,19 @@ export function tickHeat(state: GameState): void {
     (n) => n.status === 'active' || n.status === 'busy',
   ).length;
   const apparatus = Math.max(0, hands - HEAT_ABSORPTION.fromCrew);
+  /*
+     A rolling week of arrivals, decayed a seventh a day. Cheaper than keeping
+     seven days in the save and close enough for what it answers: roughly how
+     much is this outfit currently producing. Kept whether or not the cap is
+     on, so turning the cap on mid-career does not read a week of zero.
+  */
+  org.heatIntake = (org.heatIntake ?? 0) * (1 - 1 / 7);
+  const ceiling =
+    APPARATUS_CAP.ofIntake === null
+      ? Infinity
+      : ((org.heatIntake ?? 0) / 7) * APPARATUS_CAP.ofIntake;
   const absorbed =
-    Math.min(HEAT_ABSORPTION.max, apparatus * HEAT_ABSORPTION.perCrew) *
+    Math.min(HEAT_ABSORPTION.max, apparatus * HEAT_ABSORPTION.perCrew, ceiling) *
     heatTier(org.heat).decayMultiplier *
     diff.heatDecay;
   const soaking = channels(state);

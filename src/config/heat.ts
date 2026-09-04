@@ -257,29 +257,35 @@ export const HEAT_ABSORPTION = {
      touch it; that would punish the small outfits, who are the fragile ones,
      and leave the large ones where they are.
 
-     A repair was built and backed out. It capped the apparatus at a share of a
-     rolling week of arrivals, so it could never remove more than it was given,
-     and three values were measured against the full probe:
+     A repair was built, measured, and is not going in. `APPARATUS_CAP` below
+     is the dial; the reading that settles it is `sizing the apparatus cap` in
+     `ladder.probe`, which runs the same 36 seeds under each setting and pairs
+     each against itself:
 
-         0.7    5 of 53 probe bars fail · Boss 7/36 in a human career
-         0.9    all 53 pass · Boss 27/36 to 29/36 · fails the unit gate, where
-                the doorway property in `approaches.test.ts` narrows from over
-                15 points to 12
-         0.95   3 of 53 fail · Boss 25/36 · unit gate green
+         0.7    Boss 7/36 (off: 17/36)   12 seeds lost it, 2 gained
+         0.9    Boss 8/36                12 lost, 3 gained
+         0.95   Boss 6/36                12 lost, 1 gained
+                                         weekly heat +10 · estate -500k to -640k
 
-     No value clears both gates, and the result is not monotonic: a *weaker*
-     setting made the ladder worse, while the weekly heat distribution barely
-     moved across all three (mean 41 before, then 52, 51, 51). Almost the whole
-     effect is in stopping the apparatus zeroing a continuous source at all and
-     almost none of it is in how much it may then take — so the bars are
-     flipping on where a handful of 36 careers fall against a threshold rather
-     than resolving the figure. `ladder.probe` cannot currently size this
-     change, and picking the value whose noise draw happens to come out green
-     would be choosing a number and calling it a measurement.
+     Twelve down and one to three up, at every setting. The cap costs about a
+     third of the Boss careers in a human-length career and half a million of
+     estate, and it does it consistently rather than at one value.
 
-     So the fault stands, recorded and instrumented, and the next attempt needs
-     an instrument that can tell two settings of this apart before it needs a
-     setting.
+     The first pass at this measured the same three settings *unpaired* — 36
+     careers under one config against a fixed bar — and read 5 bars failing at
+     0.7, none at 0.9 and 3 at 0.95, which is not monotonic and looked like
+     noise. It was not noise. Boss inside 300 days runs at about one career in
+     five, so an unpaired count carries roughly two and a half careers before
+     anything is done to the game, and 0.9 had landed on exactly 8 of 36
+     against a bar of "at least 8". Reading that as "all 53 pass, so 0.9 is
+     safe" was reading a coin landing on its edge as a decision.
+
+     So the fault stands and the dial ships off. What is now known is what it
+     would cost to close it this way, which is more than the fault is worth: an
+     invisible standing operation is a real defect, and a third of the ladder
+     is a bigger one. Repricing what a standing trade costs in attention is a
+     different change, and it needs to reach the heat without going through the
+     apparatus every family is entitled to.
   */
   /**
    * The most an organization can make go away by being large alone.
@@ -336,6 +342,25 @@ export const LAY_LOW_RESPECT_COST = 4;
  * points of success chance, which is what makes the doom loop real:
  * high heat causes failures, failures cause more heat.
  */
+/**
+ * The cap on the apparatus, as a share of what the outfit is producing.
+ *
+ * `null` is the shipped setting and is exactly the behaviour `HEAT_ABSORPTION`
+ * describes: the flat figures apply, and nothing compares them to the
+ * organization's own output. A number caps the apparatus at that share of a
+ * rolling week of arrivals, so it can never remove more heat than it was given
+ * — which is the repair for the fault recorded on `HEAT_ABSORPTION.max`, where
+ * a family of sixteen absorbs seven times what a full narcotics operation
+ * generates and street heat settles at exactly zero.
+ *
+ * A mutable holder rather than a field on the frozen table, and that is the
+ * point of it: `apparatus.probe.test.ts` sweeps it across the same seeds to
+ * produce a paired reading, which is the thing that was missing when three
+ * settings were measured and none could be chosen. Nothing in the game writes
+ * it. Turning it on is a change to the game and needs that probe behind it.
+ */
+export const APPARATUS_CAP: { ofIntake: number | null } = { ofIntake: null };
+
 export const HEAT_SUCCESS_PENALTY_AT_MAX = 0.3;
 
 /** Dismissing an exposed crew member cuts a thread — and their loyalty to you. */

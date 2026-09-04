@@ -184,6 +184,7 @@ import {
 import { acceptOrder, liveOrders, orderList, refuseOrder } from '../orders';
 import { GANGS } from '../../config/orders';
 import { SENTIMENT_HOSTILE_BELOW } from '../../config/territories';
+import { APPARATUS_CAP } from '../../config/heat';
 import { activeCases, pressureWitness, worstStage } from '../investigation';
 import { PRESSURE_WITNESS } from '../../config/lawEnforcement';
 import { stageIndex } from '../../config/lawEnforcement';
@@ -8931,3 +8932,138 @@ describe('what being feared is for', () => {
   });
 });
 
+
+// ============================================== sizing the apparatus =====
+
+/**
+ * The instrument that was missing when the apparatus cap was measured.
+ *
+ * `HEAT_ABSORPTION` is a flat subsidy per head per day and nothing compares it
+ * to what the outfit is producing, so a family of sixteen absorbs seven times
+ * what a full narcotics operation generates and street heat settles at exactly
+ * zero — see `heatApparatus.test.ts`, which holds that fault open.
+ *
+ * The repair is `APPARATUS_CAP.ofIntake`. It was built and backed out, because
+ * three settings measured against this file gave 5 of 53 bars failing at 0.7,
+ * none at 0.9 and 3 at 0.95, while the weekly heat distribution barely moved
+ * across all three. A weaker setting making the ladder worse is not physical.
+ * The bars were flipping on where a handful of 36 careers fell against a
+ * threshold, and picking the value whose draw came out green would have been
+ * choosing a number and calling it a measurement.
+ *
+ * The fault was in the reading, not in the change. Every one of those bars is
+ * an *unpaired* count: 36 careers under one config against a fixed number.
+ * Boss inside 300 days runs at roughly one career in five, so a 36-sample
+ * count carries about plus or minus two and a half careers of noise before
+ * anything is done to the game — which is the whole size of the effect being
+ * argued about.
+ *
+ * This pairs it. The same seed is run under both settings and compared with
+ * itself, so a seed that was never going to reach Boss cannot vote. What comes
+ * out is who changed and in which direction, which is a signal the unpaired
+ * count cannot produce at any sample size this project can afford.
+ */
+describe('sizing the apparatus cap', () => {
+  /** Runs the population under one setting, restoring the shipped one after. */
+  function under(cap: number | null, seeds: number[]): Climb[] {
+    const was = APPARATUS_CAP.ofIntake;
+    APPARATUS_CAP.ofIntake = cap;
+    try {
+      return seeds.map((s) => climb(s, HUMAN_DAYS));
+    } finally {
+      APPARATUS_CAP.ofIntake = was;
+    }
+  }
+
+  it('says whether a setting can be told apart from shipping it off', () => {
+    const seeds = Array.from({ length: 36 }, (_, i) => 700 + i);
+    const off = under(null, seeds);
+    const candidates: (number | null)[] = [0.7, 0.9, 0.95];
+
+    const bossOff = off.map((r) => r.reachedOn.has('boss'));
+    const heatOff = off.map((r) => r.trade.meanHeat);
+    const estateOff = off.map((r) => r.bestEstate);
+
+    const lines: string[] = [];
+    const readings: { cap: number; lost: number; gained: number; heat: number }[] = [];
+
+    for (const cap of candidates) {
+      const on = under(cap, seeds);
+      const bossOn = on.map((r) => r.reachedOn.has('boss'));
+
+      /*
+         McNemar's two cells, which is the whole point of pairing. A seed that
+         reaches Boss under both, or under neither, carries no information
+         about the change and is excluded — an unpaired count includes all of
+         them and buries the signal in their variance.
+      */
+      let lost = 0;
+      let gained = 0;
+      for (let i = 0; i < seeds.length; i++) {
+        if (bossOff[i] && !bossOn[i]) lost += 1;
+        if (!bossOff[i] && bossOn[i]) gained += 1;
+      }
+
+      const heatGap = meanOf(on.map((r, i) => r.trade.meanHeat - heatOff[i]));
+      const estateGap = meanOf(on.map((r, i) => r.bestEstate - estateOff[i]));
+      readings.push({ cap: cap!, lost, gained, heat: heatGap });
+
+      lines.push(
+        `        ${String(cap).padEnd(5)} Boss ${bossOn.filter(Boolean).length}/36 ` +
+          `(off: ${bossOff.filter(Boolean).length}/36) · ` +
+          `${lost} seeds lost it, ${gained} gained it · ` +
+          `weekly heat ${heatGap >= 0 ? '+' : ''}${heatGap.toFixed(1)} · ` +
+          `estate ${estateGap >= 0 ? '+' : ''}${Math.round(estateGap).toLocaleString('en-US')}`,
+      );
+    }
+
+    // eslint-disable-next-line no-console
+    console.log(
+      `the apparatus cap, ${seeds.length} seeds run under each setting and ` +
+        `paired against themselves\n` +
+        lines.join('\n') +
+        `\n        (lost + gained is the sample. Seeds that reach Boss under ` +
+        `both, or neither, say nothing about the change.)`,
+    );
+
+    /*
+       Two properties, and neither is a bar on the game.
+
+       The first is that the instrument works: at least one setting has to move
+       *somebody*, or 36 seeds is too few to see this change at all and the
+       honest answer is a bigger population rather than a number.
+
+       The second is the discipline the unpaired version could not enforce. A
+       reading where seeds move both ways in similar numbers is noise wearing a
+       direction, and it may not be quoted as an effect. `resolves` refuses the
+       same way when a share sits inside its own sampling error.
+    */
+    const moved = readings.reduce((n, r) => n + r.lost + r.gained, 0);
+    expect(
+      moved,
+      'no seed changed outcome under any setting, so this population cannot see the change',
+    ).toBeGreaterThan(0);
+
+    for (const r of readings) {
+      const sample = r.lost + r.gained;
+      if (sample === 0) continue;
+      const lean = Math.abs(r.lost - r.gained);
+      const verdict = lean >= Math.max(3, sample * 0.6) ? 'resolves' : 'does not resolve';
+      // eslint-disable-next-line no-console
+      console.log(
+        `        ${r.cap}: ${sample} seeds moved, ${r.lost} down and ${r.gained} up — ${verdict}`,
+      );
+    }
+
+    // The heat effect is the thing the change is actually about, and it is the
+    // reading that held still across all three settings when the rank bars did
+    // not. It has to point one way.
+    for (const r of readings) {
+      expect(
+        r.heat,
+        `capping the apparatus at ${r.cap} did not raise weekly heat, so the ` +
+          `change does not do what it is for`,
+      ).toBeGreaterThan(0);
+    }
+  });
+});
