@@ -284,6 +284,17 @@ export interface Org {
   heatIntake?: number;
   /** Player has ordered a lay-low period; ends on this day. */
   layLowUntilDay: number | null;
+  /**
+   * The last rank the game said out loud, and which trades it said were open.
+   *
+   * Both are derived — `rankNow` reads the job board, `tradeUnlocked` counts
+   * fronts — which is why neither can drift out of step with what the player
+   * can do, and also why neither has a moment of change to hang a message on.
+   * These are the marks `announce.ts` compares against. Optional and lazily
+   * set, so an old save reads as an outfit nobody has told anything yet.
+   */
+  rankSaid?: RankId;
+  tradeSaid?: Partial<Record<TradeId, boolean>>;
 }
 
 // ------------------------------------------------------------------- npcs ---

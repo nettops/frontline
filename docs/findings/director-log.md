@@ -2788,3 +2788,78 @@ damage for most of its benefit, and all eight probe files pass.
 The street's half of the price was never heat and is not now. It is
 `sentimentPerUnit`, paid to the neighbourhood, and it is a different price paid
 to a different party.
+
+---
+
+## Round 19 — 2026-09-05 — the first round on a pinned tester
+
+**Tester model: Sonnet**, pinned per §4, one scorer, full round from nothing.
+Not seeded: two of the five unmeasured changes were memo pacing and the trade's
+blockers panel, which are pacing and signposting questions, and a seeded start
+invalidates exactly those axes.
+
+    day 31    Enforcer    · 4 crew  · $3.8K · 1 district  · 1 front
+    day 130   Boss        · 22 crew · $106K · 4 districts · ~10 fronts
+    day 300   Crime Lord  · 24 crew · $1.5M · 5 districts · 12 fronts
+
+    First hour 8 · Clarity 8 · Feedback 9 · Depth 7 · Pacing 7
+    Difficulty 7 · Writing 9 · Interface 8 · Standing in it 6 · Fun 7
+
+Not comparable to rounds 17 or 18, which ran Opus 5 inherited rather than
+chosen. This is the first entry on the far side of that seam.
+
+### The instrument was wrong about the top of its own ladder
+
+He reached Capo on day 72, Boss on 114 and **Crime Lord on day 147**, and named
+the alliance he built through Diplomacy as the last unlock.
+
+`ladder.probe` has reported `Crime Lord: 0/36` over four-year careers for the
+life of the rung. `crime_lord` is the only rung whose `needs` include
+`bestRivalTrust`, and the file's own note on `pull` says the bot *"never
+approaches a family"* — so the bot was structurally incapable of it, and the
+guard asserting the rung stays under 3 careers of 36 could not fail. It was
+asserting that water is wet.
+
+Every ladder figure in this log understates the top of the game by an unknown
+amount and none of them said so. §5 already carried the rule that produced
+this — *know what each instrument does not touch, and quote it accordingly* —
+and it was not applied to the one reading that most looked like a design fact.
+The bar stays, because it would bite if the rung were ever re-gated off rival
+trust; it is now printed with what it cannot see.
+
+### The round did not measure four of the five things it was run for
+
+The honest result. Shipped unseen and still unseen: the trade's street price,
+its attention channel, the card table's per-seat odds, and the blockers panel.
+
+The trade he classified **wanted to, was blocked — then simply forgot**. He met
+it on day 114 two fronts short, bought fronts over the following weeks for
+unrelated reasons, and *"nothing on screen reminded me it had opened, so I never
+went back."* So the blockers panel was never reached either, and the card game
+he does not mention at all. Memo pacing he does not raise, which is weak
+evidence that it stopped hurting and not a measurement of it.
+
+One real negative result: the war log's start/stop churn, six dated occurrences
+in round 18, is absent from a 300-day career.
+
+### What it did find
+
+**A rank that falls silently.** Two arrests took his crew from 24 to 22, the
+Overview quietly read *Boss · Crime Lord wants 2 more bodies on the books*, and
+nothing logged it — *"the log has no entry for the demotion at all, while it
+logs everything else down to a single failed job."* Confirmed in code: `rankNow`
+is derived from the same board the job table gates on, which is right and is why
+it cannot drift out of step with what the player may do, and is also why it has
+no moment of change to hang a message on. `announce.ts` is that moment, both
+directions, and it carries the trade gate with it for the same reason.
+
+Two more, unfixed and recorded: the *mystery opportunity* memos ask for money
+against no description of the job — the one place a shown-odds number arrives
+with no picture behind it — and dense purchase lists repeat "Go and see" across
+ten rows distinguishable only by a narrow district column.
+
+And the thing he was told rather than shown: decisions stopped changing at day
+110–115, and days 150–300 were the same five-job rotation at bigger numbers.
+The game itself agreed with his Standing-in-it 6 at the end — **Obeyed 43/100,
+weakest of the four** — which is the score and the diagnosis arriving from two
+directions at once.

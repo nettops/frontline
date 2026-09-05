@@ -405,7 +405,15 @@ running a bot that had never promoted anybody.
 
 Know what each instrument does not touch, and quote it accordingly. Measured:
 **no career-length probe in this project has ever acquired a police contact or
-approached a family**, and only one has ever held a sit-down. `scorecard.probe`,
+approached a family**, and only one has ever held a sit-down.
+
+Round 19 is what that costs when it is forgotten. `ladder.probe` has reported
+`Crime Lord: 0/36` over four-year careers for the life of the rung, and the
+rung is the only one whose terms include a rival thinking well of you — so the
+bot could never have reached it and the reading was never about the game. A
+Sonnet tester reached Crime Lord on **day 147** of a 300-day career and named
+the alliance as the last unlock. Every ladder figure in this log understates the
+top of the game by an unknown amount, and none of them said so. `scorecard.probe`,
 the source of every Depth and Pacing figure quoted in this log, recruits,
 launches one job a day and answers events with the cheapest enabled choice —
 four systems out of roughly fifteen. That is a deliberate property of a

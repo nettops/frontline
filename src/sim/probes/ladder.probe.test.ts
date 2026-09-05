@@ -4833,12 +4833,33 @@ describe('the ladder, over the 300 days a person plays', () => {
      is reachable has not been fixed, it has been flattened, and Crime Lord is
      the rung that would show it first. It stays a thing you play a long career
      for.
+
+     **And this bar cannot fail, which is the finding rather than the guard.**
+     `crime_lord` is the only rung whose `needs` include `bestRivalTrust`, and
+     this file's own note on `pull` says the bot "never approaches a family".
+     So the bot is structurally incapable of the rung, 0 of 36 is a fact about
+     the instrument, and an assertion that it stays under 3 is asserting that
+     water is wet.
+
+     Round 19's tester reached Crime Lord on **day 147** of a 300-day career,
+     and named the alliance he built through Diplomacy as the last unlock. Every
+     ladder reading this project has taken understates the top of the game by
+     an unknown amount, and this is the note that stops the next person quoting
+     0/36 as though it described the game.
+
+     The bar stays because it is still the right shape and would bite if the
+     rung were ever re-gated off rival trust. It is not evidence of anything
+     until the bot can approach a family.
   */
   it('keeps Crime Lord out of reach of a single 300-day career', () => {
-    expect(
-      RUNS_300.filter((r) => r.reachedOn.has('crime_lord')).length,
-      'Crime Lord has stopped being a stretch',
-    ).toBeLessThanOrEqual(3);
+    const reached = RUNS_300.filter((r) => r.reachedOn.has('crime_lord')).length;
+    // eslint-disable-next-line no-console
+    console.log(
+      `crime lord: ${reached}/${RUNS_300.length} — and the bot cannot approach a ` +
+        `family, which is the one thing this rung asks for. A human tester ` +
+        `reached it on day 147. Read this as a floor, not a measurement.`,
+    );
+    expect(reached, 'Crime Lord has stopped being a stretch').toBeLessThanOrEqual(3);
   });
 });
 
