@@ -1,4 +1,4 @@
-import { rankNow, nextRank, whatItNeeds } from '../../sim/rank';
+import { rankNow, nextRank, whatItNeeds, whatHoldsIt } from '../../sim/rank';
 import { useGame, mutate } from '../../store';
 import { buildRead, canSpendPoint, pointsLeft, spendPoint } from '../../sim/build';
 import { nicknameRead } from '../../sim/nicknames';
@@ -350,6 +350,13 @@ export default function PlayerPanel() {
              is what tells the two apart.
           */}
           <KeyValue label="They call you" value={rankNow(state).name} tone="brass" />
+          {/* And at the top, what is keeping you there. See `whatHoldsIt`. */}
+          {!nextRank(state) && whatHoldsIt(state).length > 0 && (
+            <KeyValue
+              label="What holds it"
+              value={whatHoldsIt(state).join(' · ')}
+            />
+          )}
           {nextRank(state) && whatItNeeds(state).length > 0 && (
             <KeyValue
               label={`To be ${nextRank(state)!.name}`}

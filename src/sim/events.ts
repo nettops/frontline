@@ -569,6 +569,29 @@ const EVENT_DEFS: EventDef[] = [
       const cost = askable(state, Math.round(rng.float(scale * 0.35, scale * 0.6)), 400);
       const reward = Math.round(cost * rng.float(2.2, 3.6));
       const heat = rng.int(6, 16);
+      /*
+         The odds, decided here and carried on the memo.
+
+         Round 19 called this family of memos the one place in the game where a
+         shown-odds number arrives with no picture behind it: *"the choice is
+         'Take it — $X, roughly even odds' with no description of what the job
+         actually is, who's involved, or what failure costs beyond money. Every
+         other financial decision in the game states its terms."* He was right,
+         and the design rule he was standing on is the second one: shown odds
+         are real odds, and the breakdown that produced them is itemised.
+
+         The figures existed the whole time. `staked` is
+         `0.5 + streetSmarts * 0.012`, the send branch is that minus
+         `oddsPenalty`, and `heat` was already rolled and stored. Nothing was
+         hidden on purpose; it simply was never said.
+
+         Decided at build time rather than recomputed in the resolver, for the
+         same reason the lawyer's days off are: a memo can sit in the queue
+         while street smarts move, and a screen that quotes one number and
+         serves another is worse than one that quotes nothing.
+      */
+      const odds = 0.5 + state.player.attributes.streetSmarts * 0.012;
+      const sendOdds = Math.max(0.05, odds - SHORT_NOTICE.oddsPenalty);
       return {
         defId: 'opportunity_score',
         title: oneOf(rng, [
@@ -601,12 +624,14 @@ const EVENT_DEFS: EventDef[] = [
         ]),
         severity: 'opportunity',
         npcId: null,
-        data: { cost, reward, heat },
+        data: { cost, reward, heat, odds, sendOdds },
         choices: [
           {
             id: 'take',
             label: `Take it — ${money(cost)}`,
-            hint: 'Roughly even odds. Significant attention either way',
+            hint:
+              `${Math.round(odds * 100)}% it holds. ${heat} attention if it does not, ` +
+              `${Math.round(heat * 0.6)} if it does, and the stake is gone either way`,
             disabledReason:
               totalFunds(state) < cost ? 'You cannot cover the up-front cost' : undefined,
             cost: cost,
@@ -630,9 +655,21 @@ const EVENT_DEFS: EventDef[] = [
             */
             id: 'send',
             label: 'Send your own people instead',
+            /*
+               Said as a share rather than a figure, and that is not
+               cosmetic. `priced.test.ts` reads the largest dollar amount in a
+               label or hint as what the choice is asking for, and refuses an
+               enabled option quoting more than the player holds — which is
+               right, and which a free option naming its payout in dollars
+               would trip. The share is the more useful sentence anyway: what
+               this answer costs is people, and the money is a proportion of an
+               amount already on the memo two lines up.
+            */
             hint:
-              `No money up front. A smaller cut, worse odds, and it is ` +
-              `${SHORT_NOTICE.crewNeeded} of your own people in the room`,
+              `${Math.round(sendOdds * 100)}% it holds, for ` +
+              `${Math.round(SHORT_NOTICE.rewardShare * 100)}% of the money. ` +
+              `${SHORT_NOTICE.crewNeeded} of your own in the room, and one of them ` +
+              `hurt for ${SHORT_NOTICE.hurtDays} days if it goes wrong`,
             disabledReason:
               freeCrew(state).length < SHORT_NOTICE.crewNeeded
                 ? `You would need ${SHORT_NOTICE.crewNeeded} people free tonight; ` +
@@ -2075,8 +2112,9 @@ export function resolveEvent(
         }
         const sent = free.slice(0, SHORT_NOTICE.crewNeeded);
         const names = sent.map((n) => n.name).join(' and ');
-        const odds =
-          0.5 + state.player.attributes.streetSmarts * 0.012 - SHORT_NOTICE.oddsPenalty;
+        // What the memo quoted, not a fresh reading of a stat that may have
+        // moved while it sat in the queue.
+        const odds = (event.data.sendOdds as number) ?? 0.5 - SHORT_NOTICE.oddsPenalty;
 
         if (rng.chance(odds)) {
           const paid = Math.round(reward * SHORT_NOTICE.rewardShare);
@@ -2127,8 +2165,9 @@ export function resolveEvent(
         addLog(state, 'The money was not there when it came to it.', 'failure');
         return;
       }
-      // Deliberately close to a coin flip — street smarts tilt it slightly.
-      const staked = 0.5 + state.player.attributes.streetSmarts * 0.012;
+      // Deliberately close to a coin flip — street smarts tilt it slightly —
+      // and it is the figure the memo put in front of the player.
+      const staked = (event.data.odds as number) ?? 0.5;
       if (rng.chance(staked)) {
         earnDirty(state, reward);
         addHeat(state, heat * 0.6, 'street', 'short-notice job');

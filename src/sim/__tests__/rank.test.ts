@@ -18,10 +18,14 @@
  */
 import { describe, expect, it } from 'vitest';
 import { newGame } from '../state';
-import { rankNow, nextRank, whatItNeeds } from '../rank';
+import { rankNow, nextRank, whatItNeeds, whatHoldsIt } from '../rank';
 import { RANKS } from '../../config/economy';
 import { crewList } from '../npc';
 import { territoryList } from '../territory';
+import { figure } from '../civic';
+import { CIVIC_FIGURES } from '../../config/civic';
+import { bond } from '../diplomacy';
+import { RIVAL_IDS } from '../../config/factions';
 import type { GameState } from '../types';
 
 function game(seed = 5): GameState {
@@ -147,5 +151,57 @@ describe('the rank a player is actually at', () => {
     build(state, 2, 3, 9);
     const reloaded = JSON.parse(JSON.stringify(state)) as GameState;
     expect(rankNow(reloaded).id).toBe(rankNow(state).id);
+  });
+});
+
+/*
+ * And what the game asks of somebody who has run out of ladder.
+ *
+ * At the top rung `nextRank` is null, `whatItNeeds` returns nothing, and both
+ * panels that read it rendered nothing at all. Round 19's tester reached Crime
+ * Lord on day 147 of a 300-day career; from that moment the only line in the
+ * game stating a goal disappeared, and he described the back half as *"the
+ * same five-job rotation at bigger numbers with no new structural question"*.
+ * The screen had stopped asking him anything literally, not only in spirit.
+ *
+ * It is worse than silence, because rank falls. The same tester lost Crime
+ * Lord to two arrests, and the terms holding it were never on any screen.
+ */
+describe('the top of the ladder', () => {
+  /** An organization that meets the last rung's terms outright. */
+  function topped(seed = 41): GameState {
+    const state = game(seed);
+    const top = RANKS[RANKS.length - 1];
+    const n = top.needs!;
+    build(state, n.districtsControlled ?? 0, n.fronts ?? 0, n.crew ?? 0);
+    for (const f of CIVIC_FIGURES.slice(0, n.owedTotal ?? 0)) {
+      figure(state, f.id).owed = 1;
+    }
+    for (const id of RIVAL_IDS) {
+      bond(state, id, 'player').trust = (n.bestRivalTrust ?? 0) + 5;
+    }
+    return state;
+  }
+
+  it('is actually at the top, or nothing below this means anything', () => {
+    const state = topped();
+    expect(rankNow(state).id).toBe(RANKS[RANKS.length - 1].id);
+    expect(nextRank(state)).toBeNull();
+    expect(whatItNeeds(state), 'there is still a rung to climb').toEqual([]);
+  });
+
+  it('names what it is standing on, which nothing did', () => {
+    const said = whatHoldsIt(topped());
+    expect(said.length, 'the top rung says nothing about what keeps it').toBeGreaterThan(0);
+    // The margin, not the total: how close the fall is was the invisible part.
+    expect(said.join(' · ')).toMatch(/clear|nothing spare/);
+  });
+
+  it('says nothing while there is still a rung above you', () => {
+    // Below the top, "what you still need" is the better sentence, and two
+    // lines competing for the same slot is how a panel starts lying.
+    const state = game(42);
+    expect(nextRank(state)).not.toBeNull();
+    expect(whatHoldsIt(state)).toEqual([]);
   });
 });

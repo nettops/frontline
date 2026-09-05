@@ -6,7 +6,7 @@ import { crewList, availableCrew } from '../../sim/npc';
 import { attention } from '../../sim/attention';
 import { approaches } from '../../sim/approaches';
 import { arcs } from '../../sim/arcs';
-import { rankNow, nextRank, whatItNeeds } from '../../sim/rank';
+import { rankNow, nextRank, whatItNeeds, whatHoldsIt } from '../../sim/rank';
 import { openSitdown } from '../../sim/sitdown';
 import { payrollForecast, weeklyWageBill } from '../../sim/economy';
 import { channelHeat, isLayingLow, startLayLow } from '../../sim/heat';
@@ -246,6 +246,14 @@ export default function Dashboard({ onNavigate }: { onNavigate: (id: PanelId) =>
         */}
         <span className="tiny">
           <span className="stamp cool">{rankNow(state).name}</span>
+          {/* At the top there is no next rung, so the goal line used to
+              vanish. `whatHoldsIt` says what the rank is standing on instead —
+              rank is derived and falls, so those terms are live. */}
+          {whatItNeeds(state).length === 0 && whatHoldsIt(state).length > 0 && (
+            <span className="faint">
+              {' '}· holding it on {whatHoldsIt(state).join(', ')}
+            </span>
+          )}
           {whatItNeeds(state).length > 0 && (
             <span className="faint">
               {' '}· {nextRank(state)?.name} wants {whatItNeeds(state).join(', ')}
