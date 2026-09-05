@@ -159,6 +159,22 @@ Dispatched fresh every round. It gets:
 - The reproduction gate: no MUST FIX item without steps, reproduced at least
   once by the tester.
 
+**And it runs on Sonnet, pinned.** Dispatch with `model: "sonnet"` rather than
+letting the subagent inherit whatever this session happens to be configured
+for, and **name the model in the round's log entry**.
+
+This is not about which model tests better. It is that a score is only worth
+something against the scores before it, and a tester model that changes without
+anybody noticing moves every axis at once — the same build would read
+differently, and the difference would be filed as a change to the game. The
+loop already refuses to compare a seeded round with a full one and a directed
+round with a blind one, for exactly this reason. The model is the same kind of
+variable and was the only one nothing recorded.
+
+Rounds 17 and 18 ran on Opus 5, inherited rather than chosen, which is the seam
+this closes. Their numbers stand as what they are and are marked in the log; a
+round that wants to compare against them has to say so.
+
 ### Size the round to the question it is answering
 
 Not every round is a full one, and running a full one to settle a small question
