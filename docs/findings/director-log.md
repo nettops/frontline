@@ -2305,6 +2305,12 @@ Everything else in this iteration is a fact a single scorer can reproduce.
 
 ## Round 17 — 2026-09-01 — the first blind measurement of the overhaul
 
+**Tester model: Opus 5** — inherited from the dispatching session rather than
+chosen, and recorded here after the fact. Rounds up to 16 are believed to have
+run on Sonnet and none of them recorded it, so this is where the seam is. §4
+pins the tester to Sonnet from round 19; these numbers are not comparable
+across it in either direction.
+
 Three scorers, dispatched fresh, no source access, one instance each. Careers of
 **184, 163 and 317 days**; all three reached Boss or Underboss and stopped
 voluntarily rather than being wiped out.
@@ -2636,6 +2642,8 @@ phases needed a route, a direction or a view rather than a system.
 ---
 
 ## Round 18 — the first directed round — 2026-09-04
+
+**Tester model: Opus 5** — inherited, not chosen; see the note on round 17.
 
 **One tester, told what to look for.** Three blind rounds had established that
 the trade, the card game and executing your own man were never reached; round
