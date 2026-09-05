@@ -125,3 +125,55 @@ export function whatItNeeds(state: GameState): string[] {
   }
   return out;
 }
+
+/**
+ * What is keeping you where you are, once there is nothing left to climb to.
+ *
+ * At the top rung `nextRank` is null, so `whatItNeeds` returns an empty array
+ * and both panels that read it render nothing at all. Round 19's tester
+ * reached Crime Lord on day 147 of a 300-day career, and from that moment the
+ * only line in the game stating a goal simply disappeared. He described the
+ * back half as *"the same five-job rotation at bigger numbers with no new
+ * structural question"*, and the screen had stopped asking him anything
+ * literally rather than only in spirit.
+ *
+ * It is worse than silence. Rank is derived and falls — the same tester lost
+ * Crime Lord to two arrests and was not told — so the terms are live, and a
+ * player at the top has no way to see what they are holding or how close they
+ * are to dropping it. The vanished line becomes a standing one: the same
+ * facts, read the other way round.
+ *
+ * Only at the top. Below it, `whatItNeeds` is the better sentence, because a
+ * gap you can close is more use than a margin you are sitting on.
+ */
+export function whatHoldsIt(state: GameState): string[] {
+  if (nextRank(state) !== null) return [];
+  const held = rankNow(state);
+  if (!held.needs) return [];
+  const board = opsBoard(state);
+  const n = held.needs;
+  const out: string[] = [];
+
+  // The margin, not the total. "5 districts" is a fact about the world; "one
+  // district clear" is a fact about how close the fall is, which is the thing
+  // that turned out to be invisible.
+  const margin = (have: number, want: number, one: string, many: string) => {
+    const spare = have - want;
+    return spare === 0
+      ? `${want} ${want === 1 ? one : many}, with nothing spare`
+      : `${want} ${want === 1 ? one : many}, ${spare} clear`;
+  };
+
+  if (n.districtsControlled !== undefined) {
+    out.push(margin(board.districtsControlled, n.districtsControlled, 'district', 'districts'));
+  }
+  if (n.fronts !== undefined) out.push(margin(board.fronts, n.fronts, 'front', 'fronts'));
+  if (n.crew !== undefined) {
+    out.push(margin(board.crew, n.crew, 'body on the books', 'bodies on the books'));
+  }
+  if (n.owedTotal !== undefined) {
+    out.push(margin(board.owedTotal, n.owedTotal, 'favour owed', 'favours owed'));
+  }
+  if (n.bestRivalTrust !== undefined) out.push('a rival family that still trusts you');
+  return out;
+}
