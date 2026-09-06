@@ -516,6 +516,17 @@ interface Climb {
     /** Dirty money on hand at the end, and the most ever held at once. */
     dirtyEnd: number;
     dirtyPeak: number;
+    /**
+     * The day the trade first *appeared* — `minFronts` met — against
+     * `productOpenedOn`, the day it could first be entered.
+     *
+     * Two rounds classified the trade as understood-and-declined on price, and
+     * a third paid it and called it worth the money. What separates them is
+     * the gap between those two days: the trade shows itself at two fronts and
+     * the cheapest way in is $40,000, and round 18's tester met it on day 41
+     * and could not act on it until day 133.
+     */
+    productShownOn: number | null;
     productOpenedOn: number | null;
     armsOpenedOn: number | null;
     /** Everything the two trades earned, lifetime. */
@@ -1778,6 +1789,7 @@ function climb(seed: number, days: number, policy: Policy = {}): Climb {
     */
     running: { noFronts: 0, nothingToWash: 0, dirtyBound: 0, capacityBound: 0 },
     productOpenedOn: null as number | null,
+    productShownOn: null as number | null,
     armsOpenedOn: null as number | null,
     plantOn: null as number | null,
     couldBuild: false,
@@ -3417,6 +3429,10 @@ function climb(seed: number, days: number, policy: Policy = {}): Climb {
       if (policy.trades) {
         for (const id of TRADE_IDS) {
           if (!tradeUnlocked(state, id)) continue;
+          // The day it showed itself, as against the day it could be entered.
+          if (id === 'product' && trade.productShownOn === null) {
+            trade.productShownOn = state.day;
+          }
           for (const t of readTrade(state, id).eligible) {
             if (!state.contraband.routes[id].includes(t.id)) openRoute(state, id, t.id);
           }
@@ -3858,6 +3874,7 @@ function climb(seed: number, days: number, policy: Policy = {}): Climb {
       dirtyEnd: Math.max(0, Math.floor(state.org.dirtyCash)),
       dirtyPeak: Math.max(0, Math.floor(trade.dirtyPeak)),
       productOpenedOn: trade.productOpenedOn,
+      productShownOn: trade.productShownOn,
       armsOpenedOn: trade.armsOpenedOn,
       income: state.contraband.lifetime.product + state.contraband.lifetime.arms,
       plants: plantList(state).length,
@@ -7306,6 +7323,10 @@ describe('the trades, and the two things built on top of them', () => {
     // eslint-disable-next-line no-console
     console.log(
       `trades: ${RUNS_TRADING.length} careers, ${HUMAN_DAYS} days each\n` +
+        `        the trade appeared (${TRADES.product.minFronts} fronts): median day ` +
+        `${Math.round(median(RUNS_TRADING.filter((r) => r.trade.productShownOn !== null).map((r) => r.trade.productShownOn!)))}` +
+        `, and the cheapest way in is ` +
+        `$${Math.min(...SUPPLIERS.map((s) => s.retainer)).toLocaleString('en-US')}\n` +
         `        opened a product arrangement: ${opened.length}/${RUNS_TRADING.length}` +
         (opened.length
           ? `, median day ${Math.round(median(opened.map((r) => r.trade.productOpenedOn!)))}`
