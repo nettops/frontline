@@ -42,6 +42,7 @@ import { cancelStanding, liveStanding, setStanding } from '../standingOrders';
 import { canSilence, silence } from '../silence';
 import { SILENCE, MARK } from '../../config/silence';
 import { liveMarks } from '../marks';
+import { STAKES } from '../../config/cards';
 import { SCORE_TARGETS, SETUP_BY_ID } from '../../config/scores';
 import { PATTERN } from '../../config/standingOrders';
 import { workingHoldings, yieldOf, yieldsHeld } from '../holdings';
@@ -63,7 +64,7 @@ import {
   territoryList,
 } from '../territory';
 import { canPromote, canRecruit, promote, recruit, recruitCost } from '../crew';
-import { cleanWorth, putAway, takeBack, totalFunds, weeklyWageBill } from '../economy';
+import { cleanWorth, putAway, spend, takeBack, totalFunds, weeklyWageBill } from '../economy';
 import { HOLDINGS } from '../../config/economy';
 import { isLayingLow, startLayLow } from '../heat';
 import { fearLevel, maxCrew } from '../player';
@@ -153,7 +154,6 @@ import {
   heldPossessions,
   possessionValue,
 } from '../possessions';
-import { TABLES, TABLE_BY_ID } from '../../config/cards';
 
 /**
  * The rungs the weekly respect distribution is read against.
@@ -165,7 +165,7 @@ import { TABLES, TABLE_BY_ID } from '../../config/cards';
  * 55 and turned out to be cleared in 77% of weeks.
  */
 const RESPECT_BARS = [25, 55, 85, 120, 150, 180, 220, 260];
-import { canSit, seatedAt } from '../cards';
+import { canSit, seatedAt, sitDown, stakeCeiling, stakeFloor } from '../cards';
 import { ledger, ledgerWeeks } from '../ledger';
 import { LEDGER_KEYS } from '../../config/ledger';
 import { canRetainLauderer, launderer, laundererTrust, retainLaunderer } from '../launderers';
@@ -652,14 +652,24 @@ interface Climb {
      * them.
      */
     tables: {
-      /** Weeks each room would have let the player sit, by table id. */
-      weeksOpen: Record<string, number>;
-      /** Weeks the top table seated somebody who decides things. */
+      /**
+       * Weeks the biggest bet the drawer could cover fell in each band.
+       *
+       * Was `weeksOpen`, keyed by table id, when there were three rooms. The
+       * bands are a share of the player's own ceiling, so this counts how far
+       * up the company a career could reach with the money it actually had —
+       * the same question the room ladder was asking, asked of the thing that
+       * replaced it. A week where nothing could be covered counts in no band.
+       */
+      weeksInBand: Record<string, number>;
+      /** What the biggest possible bet actually was, each week it existed. */
+      mostCouldPutUp: number[];
+      /** Weeks that money seated somebody who decides things. */
       weeksWorthSitting: number;
       /**
        * The weekly respect distribution, as shares clearing a set of bars.
        *
-       * Kept separately from `weeksOpen` because the first version of this
+       * Kept separately from the bands because the first version of this
        * reading could not tell the two gates apart: it asserted the top room
        * opens less often than the bottom one, which stayed true with the
        * respect bar set to **zero** — $12,000 is more than $400 and that was
@@ -892,8 +902,21 @@ interface Climb {
    */
   invitedDay: number | null;
   invitedDays: number;
-  /** First day each room would let the player sit, by table id. */
-  roomOpenDay: Record<string, number | null>;
+  /**
+   * What the table would take off this career, at the end and at its best.
+   *
+   * The three rooms are gone — one game a night, and the bet is the decision —
+   * so "which rooms opened" became a question about a ladder that no longer
+   * exists. What replaces it is the ceiling itself, which is what the respect
+   * bars were really measuring: how much of yourself you are allowed to put on
+   * a table.
+   */
+  stakeCeilingEnd: number;
+  stakeCeilingBest: number;
+  /** What the `cards` arm did at the table, and what it cost or paid. */
+  handsPlayed: number;
+  handsCaught: number;
+  handsSwing: number;
   /** Clean + dirty at the moment tier-4 work first became available. */
   fundsAtTier4: number | null;
   /** Day that happened, and the first day $50,000 was in hand after it. */
@@ -1264,6 +1287,40 @@ interface Policy {
    * and nothing balance-related should be quoted off it.
    */
   readsOdds?: boolean;
+  /**
+   * Sits down at the card table every night it is allowed to.
+   *
+   * The game ran weekly and that clock was one of three things holding the
+   * anti-grind together — 52 hands a year, and every effect in `config/cards`
+   * was sized against that. It is nightly now and the bet is the player's, so
+   * the throughput of the money, the street smarts and the respect all went up
+   * sevenfold at once and `suspicion.decayPerDay` plus `learnAtCeiling` are the
+   * two things standing in for the calendar.
+   *
+   * That is a claim about balance, and a claim about balance nobody measured
+   * is the fifth thing this project says must stay true. So: an arm that does
+   * the worst thing available every single night, against the same seeds not
+   * doing it. `'hard'` is the +EV line before suspicion bites; `'straight'` is
+   * the patient grind the house edge is supposed to eat.
+   */
+  cards?: 'straight' | 'hard' | 'lose';
+  /** What share of what the room will take it puts up. */
+  cardsShare?: number;
+  /**
+   * Burns the same money every night and never sits down.
+   *
+   * DIRECTOR §5: nothing may be concluded about the game from a bot until the
+   * bot has been shown able to perform the counterplay being measured. The
+   * first reading of `cards: 'straight'` came back Boss 25/36 against a
+   * control of 15 — while holding less respect, fewer favour-weeks and
+   * $925,260 less estate. Nothing the card game gives explains that, and this
+   * bot spends every dollar it has on the next job, so a nightly hole in the
+   * drawer makes it play a smaller and safer career whatever the hole is for.
+   *
+   * This is the hole with no card game at the bottom of it. If it moves the
+   * ladder the same way, the finding is about the bot.
+   */
+  burnsNightly?: boolean;
   /**
    * ...and the same boss, with the work handed to the shipped autopilot.
    *
@@ -1755,9 +1812,10 @@ function climb(seed: number, days: number, policy: Policy = {}): Climb {
   const lateFrom = days - 90;
   let invitedDay: number | null = null;
   let invitedDays = 0;
-  const roomOpenDay: Record<string, number | null> = Object.fromEntries(
-    TABLES.map((t) => [t.id, null]),
-  );
+  let stakeCeilingBest = 0;
+  let handsPlayed = 0;
+  let handsCaught = 0;
+  let handsSwing = 0;
   const noteWorked = (defId: string, territoryId: string, day: number): void => {
     const key = `${defId}@${territoryId}`;
     pairFirstDay[key] ??= day;
@@ -1858,7 +1916,8 @@ function climb(seed: number, days: number, policy: Policy = {}): Climb {
     sentimentSum: 0,
     sentimentWeeks: 0,
     favoursSpent: 0,
-    tableWeeks: Object.fromEntries(TABLES.map((t) => [t.id, 0])) as Record<string, number>,
+    bandWeeks: { name: 0, money: 0 } as Record<string, number>,
+    mostCouldPutUp: [] as number[],
     worthSitting: 0,
     respectAtLeast: Object.fromEntries(RESPECT_BARS.map((b) => [b, 0])) as Record<number, number>,
     ownWeeks: 0,
@@ -1963,15 +2022,49 @@ function climb(seed: number, days: number, policy: Policy = {}): Climb {
          Thirteen minutes of probe went to nine hundred thousand `throwRead`
          strings nothing read.
       */
-      let invited = false;
-      for (const def of TABLES) {
-        if (!canSit(state, def.id).ok) continue;
-        roomOpenDay[def.id] ??= state.day;
-        if (!invited && seatedAt(state, def.id).kind !== 'nobody') invited = true;
+      const ceiling = stakeCeiling(state);
+      stakeCeilingBest = Math.max(stakeCeilingBest, ceiling);
+      /*
+         The most this career could put on a table tonight, and who that buys.
+         `canSit` and `seatedAt` both derive — `seatedAt` is `stableNoise` by
+         construction — so this draws nothing from the causal stream.
+      */
+      const most = Math.min(ceiling, state.org.cash + state.org.dirtyCash);
+      if (most >= stakeFloor(state) && canSit(state, most).ok) {
+        if (seatedAt(state, most).kind !== 'nobody') {
+          invitedDay ??= state.day;
+          invitedDays += 1;
+        }
       }
-      if (invited) {
-        invitedDay ??= state.day;
-        invitedDays += 1;
+
+      /*
+         The same money, out of the drawer, with nothing at the other end of
+         it. See `burnsNightly`.
+      */
+      if (policy.burnsNightly) {
+        const want = Math.round(ceiling * (policy.cardsShare ?? 1));
+        const stake = Math.min(most, Math.max(stakeFloor(state), want));
+        if (stake > 0 && stake <= most) {
+          clean('jobs', () => spend(state, stake, 'world'));
+          handsPlayed += 1;
+          handsSwing -= stake;
+        }
+      }
+
+      /*
+         And the arm that actually plays. Everything above only reads.
+      */
+      if (policy.cards) {
+        const want = Math.round(ceiling * (policy.cardsShare ?? 1));
+        const stake = Math.min(most, Math.max(stakeFloor(state), want));
+        if (canSit(state, stake).ok) {
+          const out = clean('jobs', () => sitDown(state, rng, stake, policy.cards!));
+          if (out.ok) {
+            handsPlayed += 1;
+            handsSwing += out.swing ?? 0;
+            if (out.caught) handsCaught += 1;
+          }
+        }
       }
     }
     /*
@@ -3544,14 +3637,35 @@ function climb(seed: number, days: number, policy: Policy = {}): Climb {
       if (homeNow) newSys.ownHomeWeeks += 1;
 
       /*
-         And the card game. `canSit` and `seatedAt` both derive — `seatedAt`
-         is `stableNoise` by construction — so this stays inside the
-         no-rolling rule the whole block is held to.
+         And the card game. `canSit`, `seatedAt` and `stakeCeiling` all derive
+         — `seatedAt` is `stableNoise` by construction — so this stays inside
+         the no-rolling rule the whole block is held to.
+
+         The three rooms are gone. What is counted instead is which company the
+         money in the drawer could actually buy a seat opposite this week: how
+         far up the bands a career can reach is the same question the room
+         ladder was asking, asked of the thing that replaced it.
       */
-      for (const t of TABLES) {
-        if (canSit(state, t.id).ok) newSys.tableWeeks[t.id] += 1;
+      {
+        const ceiling = stakeCeiling(state);
+        const funds = state.org.cash + state.org.dirtyCash;
+        const most = Math.min(ceiling, funds);
+        if (most >= stakeFloor(state)) {
+          /*
+             Which of the two gates is actually binding, which is the only
+             non-trivial thing to ask here.
+
+             The first version counted which band the biggest possible bet fell
+             in, and after `bandFor` was corrected to divide by that same
+             quantity it read `serious 100%` — a reading whose denominator is
+             its own numerator. What separates two very different games is
+             whether the limit on a night is your name or your wallet.
+          */
+          newSys.bandWeeks[ceiling <= funds ? 'name' : 'money'] += 1;
+          newSys.mostCouldPutUp.push(most);
+          if (seatedAt(state, most).kind !== 'nobody') newSys.worthSitting += 1;
+        }
       }
-      if (seatedAt(state, 'upstairs').kind !== 'nobody') newSys.worthSitting += 1;
       for (const bar of RESPECT_BARS) {
         if (state.org.respect >= bar) newSys.respectAtLeast[bar] += 1;
       }
@@ -4091,7 +4205,8 @@ function climb(seed: number, days: number, policy: Policy = {}): Climb {
       finalEstate: estate(state).total,
       finalRespect: state.org.respect,
       tables: {
-        weeksOpen: newSys.tableWeeks,
+        weeksInBand: newSys.bandWeeks,
+        mostCouldPutUp: newSys.mostCouldPutUp,
         weeksWorthSitting: newSys.worthSitting,
         respectAtLeast: newSys.respectAtLeast,
         weeks: newSys.weeks,
@@ -4189,7 +4304,11 @@ function climb(seed: number, days: number, policy: Policy = {}): Climb {
     pairLate,
     invitedDay,
     invitedDays,
-    roomOpenDay,
+    stakeCeilingEnd: stakeCeiling(state),
+    stakeCeilingBest,
+    handsPlayed,
+    handsCaught,
+    handsSwing,
     fundsAtTier4,
     tier4Day,
     couldAffordDay,
@@ -8323,11 +8442,8 @@ describe('the game every week', () => {
     const invited = RUNS_300.filter((r) => r.invitedDay !== null);
     const days = RUNS_300.map((r) => r.invitedDays).sort((a, b) => a - b);
     const first = invited.map((r) => r.invitedDay ?? 0).sort((a, b) => a - b);
-    const openBy = (id: string): string => {
-      const got = RUNS_300.filter((r) => r.roomOpenDay[id] !== null);
-      if (!got.length) return 'never';
-      return `${got.length}/${RUNS_300.length}, median day ${median(got.map((r) => r.roomOpenDay[id] ?? 0))}`;
-    };
+    const ends = RUNS_300.map((r) => r.stakeCeilingEnd).sort((a, b) => a - b);
+    const bests = RUNS_300.map((r) => r.stakeCeilingBest).sort((a, b) => a - b);
 
     // eslint-disable-next-line no-console
     console.log(
@@ -8335,66 +8451,186 @@ describe('the game every week', () => {
         `${first.length ? `, median first on day ${median(first)}` : ''}\n` +
         `         days of ${HUMAN_DAYS} it held, 25th / median / 75th: ` +
         `${pct(days, 0.25)} / ${median(days)} / ${pct(days, 0.75)}\n` +
-        TABLES.map((def) => `         ${def.name} first opened: ${openBy(def.id)}`).join('\n'),
+        `         what the room would take, at the end: ` +
+        `${pct(ends, 0.25).toLocaleString('en-US')} / ${median(ends).toLocaleString('en-US')} / ` +
+        `${pct(ends, 0.75).toLocaleString('en-US')}   (base ${STAKES.ceilingBase})\n` +
+        `         and at its best: ${median(bests).toLocaleString('en-US')}`,
     );
   });
 
-  it('opens the bottom room to everybody and the top room to almost nobody', () => {
-    const t = RUNS_300.map((r) => r.newSystems.tables);
-    const weeks = t.reduce((n, x) => n + x.weeks, 0);
-    const open = (id: string) => t.reduce((n, x) => n + x.weeksOpen[id], 0);
-    const share = (n: number) => (weeks ? Math.round((n / weeks) * 100) : 0);
+  /**
+   * The two pre-committed conditions, restated for the thing that replaced the
+   * rooms.
+   *
+   * They were: **the bottom room has to be open most of the time**, because it
+   * is supposed to be available from the first morning, and **the top room has
+   * to be mostly shut**, because a room you are eventually invited to that
+   * turns out to be open all along is just another button. Both bars passed on
+   * the build before this one — the back room opened in 100% of weeks and the
+   * top room's respect bar was cleared in 27%.
+   *
+   * The rooms are gone by decision, not because a bar failed, and neither claim
+   * was about rooms. The first is *anybody can sit down*, which is now a
+   * question about the floor. The second is *the good company has to be
+   * earned*, which is now a question about whether the ceiling actually moves
+   * across a career — a curve whose end looks like its beginning is decoration
+   * in exactly the way three identical rooms would have been.
+   *
+   * So the same two claims, against the same thirty-six careers, with what they
+   * used to read printed beside what they read now.
+   */
+  /**
+   * And the thing the weekly clock used to guarantee, now that it is gone.
+   *
+   * The old game ran once every seven days and that cap was doing more work
+   * than anything else in `config/cards`: 52 hands a year against a straight
+   * line that loses about 1% of the stake and a sharp one that pays 49% until
+   * people start watching. It is nightly now, and the bet is the player's, so
+   * everything downstream went up sevenfold on the same afternoon — the money,
+   * the street smarts a hand teaches, and the respect a big pot buys.
+   *
+   * Two of those were re-clocked by hand and the third was an outright exploit
+   * before it was: `trainAttribute` took a flat 1.2 a hand whatever was on the
+   * table, so 365 nights at the minimum bet was a free attribute. It scales
+   * with the share of your own ceiling now.
+   *
+   * None of which is worth anything as an argument. **A number nobody measured
+   * is a number nobody knows**, so this is the paired reading: the same seeds,
+   * playing the same career, with and without doing the worst thing the table
+   * allows every single night.
+   */
+  it('cannot be ground for a living, a reputation, or a rank', () => {
+    const seeds = Array.from({ length: 36 }, (_, i) => 700 + i);
+    const plain = seeds.map((seed) => climb(seed, HUMAN_DAYS));
+    const sharp = seeds.map((seed) => climb(seed, HUMAN_DAYS, { cards: 'hard' }));
+    const patient = seeds.map((seed) => climb(seed, HUMAN_DAYS, { cards: 'straight' }));
+    const burnt = seeds.map((seed) => climb(seed, HUMAN_DAYS, { burnsNightly: true }));
+
+    const say = (label: string, arm: Climb[]): string => {
+      const estate = meanOf(arm.map((r, i) => r.bestEstate - plain[i].bestEstate));
+      const respect = meanOf(
+        arm.map((r, i) => r.newSystems.finalRespect - plain[i].newSystems.finalRespect),
+      );
+      const boss = arm.filter((r) => r.reachedOn.has('boss')).length;
+      const owed = meanOf(
+        arm.map((r, i) => r.newSystems.civic.weeksOwed - plain[i].newSystems.civic.weeksOwed),
+      );
+      const hands = median(arm.map((r) => r.handsPlayed));
+      const caught = median(arm.map((r) => r.handsCaught));
+      const swing = median(arm.map((r) => r.handsSwing));
+      return (
+        `        ${label.padEnd(10)} ${String(hands).padStart(4)} hands, ` +
+        `${String(caught).padStart(3)} caught · at the table ` +
+        `${swing >= 0 ? '+' : ''}${Math.round(swing).toLocaleString('en-US').padStart(10)} · ` +
+        `estate ${estate >= 0 ? '+' : ''}${Math.round(estate).toLocaleString('en-US')} · ` +
+        `respect ${respect >= 0 ? '+' : ''}${Math.round(respect)} · ` +
+        `weeks owed a favour ${owed >= 0 ? '+' : ''}${Math.round(owed)} · ` +
+        `Boss ${boss}/${seeds.length}`
+      );
+    };
 
     // eslint-disable-next-line no-console
     console.log(
-      `the game every week: weeks each room would have seated you — ` +
-        TABLES.map((def) => `${def.name} ${share(open(def.id))}%`).join(', ') +
-        `\n         the top table seated somebody worth an evening in ` +
-        `${share(t.reduce((n, x) => n + x.weeksWorthSitting, 0))}% of weeks`,
+      `the nightly table, ${seeds.length} paired seeds against the same careers not playing\n` +
+        `        ${'(control)'.padEnd(10)} Boss ${plain.filter((r) => r.reachedOn.has('boss')).length}/${seeds.length}\n` +
+        say('hard', sharp) +
+        `\n` +
+        say('straight', patient) +
+        `\n` +
+        say('burnt', burnt),
     );
 
     /*
-       The respect gate on its own, with the money taken out of it.
+       The pre-committed condition, and it is the fifth rule of the project
+       rather than a preference: no single strategy dominates.
 
-       The first version of this test asserted only that the top room opens
-       less often than the bottom one, and that stayed true with the respect
-       bar set to zero — $12,000 is more than $400, which is all it was
-       measuring. Two conditions instead, and they pull against each other:
-       the invitation has to be **earnable** and it has to be **earned**.
+       **Two halves, and the first version of this only had the money one.**
+       It passed — both arms were hundreds of thousands down — while
+       `cards: 'straight'` was quietly taking Boss from 15 careers in 36 to 25.
+       An estate bar cannot see a strategy that buys a rank with something
+       other than money, and a rank is what this game is played for. The two
+       constants doing it are named in `CARDS.straight`; putting either back
+       to its weekly value takes this arm to 29/36 on its own, which is how
+       that comment is entitled to be as specific as it is.
+
+       Boss at n=36 does move on noise, which is why the bar is the control
+       plus a third rather than the control: a grind may cost anything at all,
+       and may not buy a ladder.
     */
+    const bossPlain = plain.filter((r) => r.reachedOn.has('boss')).length;
+    for (const [label, arm] of [
+      ['playing hard', sharp],
+      ['playing straight', patient],
+    ] as [string, Climb[]][]) {
+      const gap = meanOf(arm.map((r, i) => r.bestEstate - plain[i].bestEstate));
+      expect(
+        gap,
+        `${label} at the table every night out-earns running the family, by ${Math.round(gap)}`,
+      ).toBeLessThan(0);
+      const boss = arm.filter((r) => r.reachedOn.has('boss')).length;
+      expect(
+        boss,
+        `${label} at the table every night climbs better than running the family — ` +
+          `${boss}/${seeds.length} against ${bossPlain}`,
+      ).toBeLessThanOrEqual(Math.ceil(bossPlain * 1.33));
+    }
+  });
+
+  it('lets anybody sit down, and makes the money that buys company something you earn', () => {
+    const t = RUNS_300.map((r) => r.newSystems.tables);
+    const weeks = t.reduce((n, x) => n + x.weeks, 0);
+    const inBand = (band: string) => t.reduce((n, x) => n + x.weeksInBand[band], 0);
+    const share = (n: number) => (weeks ? Math.round((n / weeks) * 100) : 0);
+    const couldPlay = inBand('name') + inBand('money');
+    const most = t.flatMap((x) => x.mostCouldPutUp).sort((a, b) => a - b);
+
+    // eslint-disable-next-line no-console
+    console.log(
+      `the game every night: could have sat down in ${share(couldPlay)}% of weeks ` +
+        `(the back room used to open in 100%)\n` +
+        `         what stopped it betting more: its name ${share(inBand('name'))}%, ` +
+        `its wallet ${share(inBand('money'))}%\n` +
+        `         the biggest bet it could have made, 25th / median / 75th: ` +
+        `${Math.round(pct(most, 0.25)).toLocaleString('en-US')} / ` +
+        `${Math.round(median(most)).toLocaleString('en-US')} / ` +
+        `${Math.round(pct(most, 0.75)).toLocaleString('en-US')}\n` +
+        `         somebody worth an evening was opposite that money in ` +
+        `${share(t.reduce((n, x) => n + x.weeksWorthSitting, 0))}% of weeks`,
+    );
+
+    const grew = RUNS_300.map((r) => r.stakeCeilingEnd / STAKES.ceilingBase).sort((a, b) => a - b);
     const atLeast = (bar: number) => share(t.reduce((n, x) => n + x.respectAtLeast[bar], 0));
-    const welcome = atLeast(TABLE_BY_ID.upstairs.respectAbove);
     // eslint-disable-next-line no-console
     console.log(
       `         weekly respect, share of weeks at or above: ` +
         RESPECT_BARS.map((b) => `${b} ${atLeast(b)}%`).join(', ') +
-        `\n         the top room asks for ${TABLE_BY_ID.upstairs.respectAbove}, ` +
-        `which ${welcome}% of weeks clear`,
+        `\n         the ceiling ended at ${median(grew).toFixed(1)}x what a nobody can put up, ` +
+        `median of ${RUNS_300.length}`,
     );
 
     expect(
-      share(open('back_room')),
-      'the room that is meant to be open on the first morning is mostly shut',
+      share(couldPlay),
+      'a career cannot get a hand dealt most weeks, and the floor is meant to be reachable from the first morning',
     ).toBeGreaterThanOrEqual(50);
+
     /*
-       And how many careers ever got in, which a share of weeks hides.
-
-       27% of weeks is the same number whether a quarter of careers are welcome
-       always or every career is welcome eventually, and those are completely
-       different features. An invitation should be the second one.
+       And the second one, which is the whole reason the curve exists. Four
+       times is two doublings — 70 respect — and a career that never manages
+       that has a ceiling doing the job three identical rooms would have done.
     */
-    const everWelcome = t.filter((x) => x.respectAtLeast[TABLE_BY_ID.upstairs.respectAbove] > 0).length;
+    const earned = RUNS_300.filter(
+      (r) => r.stakeCeilingEnd >= STAKES.ceilingBase * 4,
+    ).length;
     // eslint-disable-next-line no-console
-    console.log(`         careers ever invited upstairs: ${everWelcome}/${t.length}`);
-
+    console.log(`         careers that at least quadrupled it: ${earned}/${RUNS_300.length}`);
     expect(
-      everWelcome,
-      'nobody in thirty-six careers is ever respected enough for the top room, so it is scenery',
+      earned,
+      'nobody in thirty-six careers ever moves the ceiling, so the curve is decoration',
     ).toBeGreaterThan(0);
     expect(
-      welcome,
-      'the top room lets everybody in, so the tiers are decoration',
-    ).toBeLessThan(70);
+      median(grew),
+      'the ceiling barely moves across a career, which is three identical rooms wearing a formula',
+    ).toBeGreaterThan(2);
   });
 });
 

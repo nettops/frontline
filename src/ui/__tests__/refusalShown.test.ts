@@ -58,7 +58,7 @@ describe('a refusal on the row that was refused', () => {
 
   it('is the same thing the card tables have always done', () => {
     // The panel this was copied from, so the two screens cannot drift apart.
-    expect(city).toMatch(/\{!check\.ok && \(\s*<div className="tiny faint">\{check\.reason\}/);
+    expect(city).toMatch(/\{!check\.ok && <div className="tiny faint">\{check\.reason\}<\/div>\}/);
   });
 });
 
