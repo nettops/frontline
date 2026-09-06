@@ -232,7 +232,25 @@ function play(seed: number, days: number, policy: Policy): Run {
 }
 
 const DAYS = 180;
-const SEEDS = Array.from({ length: 30 }, (_, i) => 2000 + i);
+/*
+   A hundred and fifty, and the reason is the floor reading below.
+
+   At thirty, "rotating raises the floor against concentrating" passed on an
+   exact tie — 32 against 32 — which is not evidence of the direction it
+   asserts, only an absence of evidence against it. `skillFloor` is the *worst*
+   man on the roster, medianed across the population, and a median of minima
+   over thirty careers moves by whole points on nothing.
+
+   It showed. An unrelated change to how repetition is priced moved both arms
+   down a point and the tie inverted, 31 against 30, and a bar that had never
+   resolved failed. At a hundred and fifty the claim comes back in the
+   direction it always made and with room in it: floor 32 against 30, and the
+   median man 49 against 48.
+
+   Twelve seconds, measured — 17s against 5s. That is a cheap price for a bar
+   that says something.
+*/
+const SEEDS = Array.from({ length: 150 }, (_, i) => 2000 + i);
 const best = SEEDS.map((s) => play(s, DAYS, 'best'));
 const rotate = SEEDS.map((s) => play(s, DAYS, 'rotate'));
 

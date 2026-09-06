@@ -147,17 +147,33 @@ export function setStanding(
  * counterplay: the answer to a groove is to go and stand somewhere else, not
  * to stop. See `config/standingOrders.ts`.
  */
+export function patternKey(defId: string, territoryId: string): string {
+  return `${defId}@${territoryId}`;
+}
+
 export function patternOn(state: GameState, defId: string, territoryId: string): number {
-  let total = 0;
+  const worn = state.patterns?.[patternKey(defId, territoryId)] ?? 0;
+  /*
+     Legacy orders are still summed, for exactly as long as it takes the tick
+     to fold them in. A save written before the groove moved off the order
+     keeps what it earned, and the fold zeroes the order's copy so nothing is
+     counted twice on the day after.
+  */
+  let legacy = 0;
   for (const o of state.standing ?? []) {
-    if (o.defId === defId && o.territoryId === territoryId) total += o.pattern ?? 0;
+    if (o.defId === defId && o.territoryId === territoryId) legacy += o.pattern ?? 0;
   }
-  return Math.min(total, PATTERN.cap);
+  return Math.min(worn + legacy, PATTERN.cap);
 }
 
 /**
- * Points off the odds. Mirrors `prepDelta`, and is zero for the same reason —
- * nobody who has never set an order pays anything here.
+ * Points off the odds. Mirrors `prepDelta`.
+ *
+ * It used to be zero for anybody who had never set an order, "for the same
+ * reason `prep` is", and that turned out to be the difference between the two.
+ * A score is something you opt into; standing on the same corner every week is
+ * something you do by default, and it was the thing round 19 spent its back
+ * two hundred days doing for free.
  */
 export function patternDelta(pattern: number): number {
   return pattern * PATTERN.weight;
@@ -182,6 +198,63 @@ export function cancelStanding(state: GameState, id: Id): void {
  * Nothing here checks whether tonight is a good night. See the header — that
  * omission is the feature.
  */
+/**
+ * The groove, worn by whoever is standing there — order or not.
+ *
+ * This is the half the mechanic was described as having and did not have. The
+ * config says it plainly: *"charged to anybody working the pair, not only to
+ * the order. The police watch the pattern, not your minutes."* But the number
+ * lived on the `StandingOrder` record, so a player who never automated
+ * anything had nothing for it to live on, and repeating one job on one corner
+ * cost him nothing at all.
+ *
+ * Round 19 is what that is worth. Its tester hand-ran the same five jobs from
+ * roughly day 110 to day 300 and reported *"the inputs got bigger; the
+ * decision never got new"* — with no pressure anywhere in the game pushing him
+ * to stand somewhere else, because the one mechanism that would have was
+ * switched off for anybody who had not set an order. Round 18's tester, who
+ * had, met it on day 68: *"They know the routine −17%."* Same build, opposite
+ * experience, and the difference was a feature neither of them was choosing
+ * between.
+ *
+ * Decay first and on every pair, so a pair worked continuously settles at
+ * `perFire / decayShare` rather than running away — the same balance the
+ * per-order version had. Pairs that fade to nothing are dropped, so the record
+ * does not grow for the life of a career.
+ */
+function wearPatterns(state: GameState): void {
+  const worn = { ...(state.patterns ?? {}) };
+  for (const key of Object.keys(worn)) {
+    worn[key] *= 1 - PATTERN.decayShare;
+    if (worn[key] < 0.5) delete worn[key];
+  }
+  /*
+     Charged off `activeOperations`, which is what makes a long job three days
+     of routine rather than one. Three men parked outside the same warehouse
+     for three days are three days of pattern, and nobody watching stopped on
+     the second morning.
+
+     Safe for the one-day case the rate was swept on: `tickOperations` resolves
+     at phase 1 and this runs at 1b4, so a one-day job is already home before
+     this sees it and still accrues exactly once.
+  */
+  for (const op of Object.values(state.activeOperations)) {
+    const ordered = (state.standing ?? []).some(
+      (o) => o.defId === op.defId && o.territoryId === op.territoryId,
+    );
+    if (!ordered && !PATTERN.wornByHand) continue;
+    /*
+       An order is a timetable; a boss turning up himself is not. Charging both
+       at `perFire` took Boss from 54 careers of 100 to 24 — see
+       `perFireByHand`, which is the rate a night nobody scheduled is worth.
+    */
+    const rate = ordered ? PATTERN.perFire : PATTERN.perFireByHand;
+    const key = patternKey(op.defId, op.territoryId);
+    worn[key] = Math.min((worn[key] ?? 0) + rate, PATTERN.cap);
+  }
+  state.patterns = worn;
+}
+
 export function tickStandingOrders(state: GameState): void {
   /*
      The groove fades first, on every order and every day.
@@ -193,9 +266,21 @@ export function tickStandingOrders(state: GameState): void {
      like the heat meter needs, because an order either sent somebody today or
      it did not.
   */
+  wearPatterns(state);
+
   const remaining: StandingOrder[] = [];
   for (const order of standingList(state)) {
-    order.pattern = (order.pattern ?? 0) * (1 - PATTERN.decayShare);
+    // Fold whatever a pre-move save left on the order into the pair's own
+    // record, once, and stop keeping it here.
+    if (order.pattern) {
+      const key = patternKey(order.defId, order.territoryId);
+      state.patterns = state.patterns ?? {};
+      state.patterns[key] = Math.min(
+        PATTERN.cap,
+        (state.patterns[key] ?? 0) + order.pattern,
+      );
+      order.pattern = 0;
+    }
 
     /*
        And a long job is not one night's work.
@@ -222,17 +307,9 @@ export function tickStandingOrders(state: GameState): void {
        resolves at phase 1 and this runs at 1b4, so a one-day job is already
        home before this sees it and still accrues exactly once.
     */
-    if (order.status === 'standing') {
-      const stillOut = Object.values(state.activeOperations).some(
-        (op) => op.defId === order.defId && op.territoryId === order.territoryId,
-      );
-      if (stillOut) {
-        order.pattern = Math.min(order.pattern + PATTERN.perFire, PATTERN.cap);
-      }
-    }
-
-    // A called-off order is only still here to carry what it left behind.
-    if (order.status !== 'standing' && order.pattern < 0.5) continue;
+    // A called-off order carried what it left behind. The pair's record does
+    // that now, so a stopped order with nothing else to say can go.
+    if (order.status !== 'standing') continue;
     remaining.push(order);
   }
   state.standing = remaining;

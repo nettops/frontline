@@ -9015,6 +9015,69 @@ describe('sizing the apparatus cap', () => {
    * whole point of building this was to stop choosing between two settings on
    * an unpaired count.
    */
+  /**
+   * And the groove, which was inert for anybody who did not automate.
+   *
+   * `PATTERN` is described as charged to anybody working a job-and-district
+   * pair, and was stored on the `StandingOrder` record — so a player who never
+   * set one had nothing for it to live on. Round 19's tester hand-ran five jobs
+   * from day 110 to day 300 and paid nothing for the repetition; round 18's,
+   * who had set an order, met it on day 68 at -17% on his odds.
+   *
+   * The old note in `config/standingOrders.ts` said every baseline in this file
+   * was untouched *because* the mechanic was inert without an order. Turning it
+   * on moves all of them, which is why it gets the paired reading rather than a
+   * before-and-after count.
+   */
+  it('says what wearing the groove by hand costs', () => {
+    const seeds = Array.from({ length: 100 }, (_, i) => 700 + i);
+    const shipped = seeds.map((seed) => climb(seed, HUMAN_DAYS));
+
+    const was = PATTERN.wornByHand;
+    let asBefore: Climb[];
+    try {
+      (PATTERN as { wornByHand: boolean }).wornByHand = false;
+      asBefore = seeds.map((seed) => climb(seed, HUMAN_DAYS));
+    } finally {
+      (PATTERN as { wornByHand: boolean }).wornByHand = was;
+    }
+
+    let lost = 0;
+    let gained = 0;
+    for (let i = 0; i < seeds.length; i++) {
+      const before = asBefore[i].reachedOn.has('boss');
+      const now = shipped[i].reachedOn.has('boss');
+      if (before && !now) lost += 1;
+      if (!before && now) gained += 1;
+    }
+    const estateGap = meanOf(shipped.map((r, i) => r.bestEstate - asBefore[i].bestEstate));
+
+    // eslint-disable-next-line no-console
+    console.log(
+      `the groove worn by hand, ${seeds.length} paired seeds\n` +
+        `        Boss ${shipped.filter((r) => r.reachedOn.has('boss')).length}/${seeds.length} ` +
+        `(inert: ${asBefore.filter((r) => r.reachedOn.has('boss')).length}/${seeds.length}) · ` +
+        `${lost} lost it, ${gained} gained it · ` +
+        `estate ${estateGap >= 0 ? '+' : ''}${Math.round(estateGap).toLocaleString('en-US')}\n` +
+        `        ${lost + gained} seeds moved — ` +
+        (Math.abs(lost - gained) >= Math.max(3, (lost + gained) * 0.6)
+          ? 'resolves'
+          : 'does not resolve: the split is inside its own noise'),
+    );
+
+    /*
+       This one is *supposed* to cost something — a price nobody pays is not a
+       price, and the whole finding is that repetition was free. What it must
+       not do is what the apparatus cap did: take a third of the ladder off the
+       board. The bar is the same one, and it is the shape of the effect rather
+       than its existence that is being guarded.
+    */
+    expect(
+      lost - gained,
+      'making repetition cost something costs as much of the ladder as the apparatus cap did',
+    ).toBeLessThan(seeds.length / 6);
+  });
+
   it('says what moving the trades off the street channel costs', () => {
     /*
        A hundred rather than thirty-six, because the collect dominates this
