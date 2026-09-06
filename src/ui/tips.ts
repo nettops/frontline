@@ -602,10 +602,31 @@ export function nextTip(state: GameState): Tip | null {
     if (tip.only && !tip.only.includes(state.mode)) continue;
     if (tip.ceiling !== undefined && state.day > tip.ceiling) continue;
     if (!tip.when(state)) continue;
-    if (tip.urgent) return tip;
     // Had its turn. It stays on the Advice page; it stops holding the slot.
     const shown = state.flags[shownKey(tip.id)];
-    if (shown !== undefined && state.day - shown >= TIP_LINGER_DAYS) continue;
+    const spent = shown !== undefined && state.day - shown >= TIP_LINGER_DAYS;
+    /*
+       Urgency jumps the queue. It does not own it.
+
+       `if (tip.urgent) return tip` sat above the linger check, so an urgent
+       tip whose condition kept holding held the strip for the rest of the
+       career — and the five urgent conditions are `heat >= 35`, an open case,
+       a leak, unrest and a war. The first two are the steady state of a
+       working family, not emergencies. Measured over six ordinary 300-day
+       careers, THE LAW and the case tip alternated at the head from day 19 to
+       the end and **five tips of twenty-eight ever reached the screen**, with
+       eleven predicates true at day 300 that had never been shown once.
+
+       That is round 11's report — "5 OF 25 SAID" — still true four rounds
+       after `TIP_LINGER_DAYS` was added to fix it. The linger did fix one tip
+       starving the rest; it never applied to the ones that jump.
+
+       So the same twelve days apply to everything. A war still takes the strip
+       on the day it breaks out, ahead of whatever was queued. It just does not
+       still be doing that in six months.
+    */
+    if (tip.urgent && !spent) return tip;
+    if (spent) continue;
     if (!first) first = tip;
   }
   return first;

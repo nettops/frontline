@@ -2967,6 +2967,43 @@ The card game. Round 18 was directed to it; 19 and 20 never reached it — the
 better rooms want Respect 180 and round 20 finished on 110. Its per-seat odds
 have shipped without a blind tester ever sitting down.
 
+**That explanation was wrong, and it had been carried for two rounds.** The
+gate was never the reason. The back room is `respectAbove: 0` at a $400 stake,
+open on the first morning; the club is 85 and round 20 finished on 110, so two
+of the three rooms were open to him. `ladder.probe` now reads the invitation
+directly: 36 of 36 careers are ever shown the game, median first on **day 7**,
+and the condition holds for a median of **234 days of 300**. Nobody was
+blocked. The test above had been saying so for months, about the top room, and
+was read as a fact about the top room.
+
+What was actually broken is the queue. Six ordinary 300-day careers driving
+`nextTip`/`markShown` exactly as `Coach` does: **five tips of twenty-eight ever
+reached the screen**, THE LAW and the case tip alternating at the head from day
+19 to the end, and eleven predicates true on the last day that had never been
+shown once — `the_game`, `sitdown`, `trade`, `delegate`, `heir`, `rivals`,
+`wages`, `leaks`, `why` among them.
+
+That is round 11's "5 OF 25 SAID" verbatim, four rounds after `TIP_LINGER_DAYS`
+was added to fix it. The linger did fix one tip starving the rest. It sat below
+`if (tip.urgent) return tip`, so it never applied to the five that jump the
+queue — and two of those five are `heat >= 35` and "a case is open", which are
+the steady state of a working family rather than emergencies. Urgency jumps the
+queue now; it does not own it. Same twelve days for everything, so a war still
+takes the strip the day it breaks out and is not still doing it in six months.
+
+After the change the same six careers show fourteen tips instead of five, and
+every one of them is told about the card game between days 59 and 98.
+`tips.starve.test.ts` holds both numbers, and holds the predicate-held count
+beside them — without that second reading a career that simply never qualified
+would pass as a career that was told.
+
+**Which leaves the question the round has to answer.** Three testers were shown
+the game — or would have been, from this week — and none sat down. Never knew
+is now fixed and no longer the explanation for the next round. Whether the
+remaining answer is *saw it and could not work it out* or *understood it and
+judged it not worth the week* is not measurable from here, and the second one
+is a design finding rather than a defect.
+
 And his decisions stopped changing at day 245, against round 19's day 110.
 Between the two rounds nothing was done about it; the groove change that prices
 repetition landed after this round was dispatched, so both figures are from
