@@ -165,7 +165,7 @@ import { TABLES, TABLE_BY_ID } from '../../config/cards';
  * 55 and turned out to be cleared in 77% of weeks.
  */
 const RESPECT_BARS = [25, 55, 85, 120, 150, 180, 220, 260];
-import { canSit, seatedAt, tableRead } from '../cards';
+import { canSit, seatedAt } from '../cards';
 import { ledger, ledgerWeeks } from '../ledger';
 import { LEDGER_KEYS } from '../../config/ledger';
 import { canRetainLauderer, launderer, laundererTrust, retainLaunderer } from '../launderers';
@@ -1957,11 +1957,19 @@ function climb(seed: number, days: number, policy: Policy = {}): Climb {
        that does not play cards.
     */
     {
-      const rooms = tableRead(state);
-      for (const room of rooms) {
-        if (room.ok && roomOpenDay[room.def.id] === null) roomOpenDay[room.def.id] = state.day;
+      /*
+         `canSit` and `seatedAt` rather than `tableRead`, which is the call the
+         panel makes and formats a sentence per room while it is at it.
+         Thirteen minutes of probe went to nine hundred thousand `throwRead`
+         strings nothing read.
+      */
+      let invited = false;
+      for (const def of TABLES) {
+        if (!canSit(state, def.id).ok) continue;
+        roomOpenDay[def.id] ??= state.day;
+        if (!invited && seatedAt(state, def.id).kind !== 'nobody') invited = true;
       }
-      if (rooms.some((room) => room.ok && room.seat.kind !== 'nobody')) {
+      if (invited) {
         invitedDay ??= state.day;
         invitedDays += 1;
       }
