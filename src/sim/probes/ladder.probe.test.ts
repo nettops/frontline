@@ -165,7 +165,7 @@ import { TABLES, TABLE_BY_ID } from '../../config/cards';
  * 55 and turned out to be cleared in 77% of weeks.
  */
 const RESPECT_BARS = [25, 55, 85, 120, 150, 180, 220, 260];
-import { canSit, seatedAt } from '../cards';
+import { canSit, seatedAt, tableRead } from '../cards';
 import { ledger, ledgerWeeks } from '../ledger';
 import { LEDGER_KEYS } from '../../config/ledger';
 import { canRetainLauderer, launderer, laundererTrust, retainLaunderer } from '../launderers';
@@ -873,6 +873,27 @@ interface Climb {
   pairFirstDay: Record<string, number>;
   /** How many times each pair was worked over the career's last ninety days. */
   pairLate: Record<string, number>;
+  /**
+   * The invitation to the card game, and whether a career ever gets it.
+   *
+   * Three blind rounds have now finished without anybody sitting down, and the
+   * assumption written into the carried list was that the rooms are gated too
+   * high. They are not: the back room is `respectAbove: 0`, open on the first
+   * morning at a $400 stake, and round 20 finished on 110 with the club at 85
+   * open too. So the gate is not the reason, and nothing in this project had
+   * ever checked what is.
+   *
+   * `invitedDay` is the first day the condition on the `the_game` tip holds —
+   * a room open *and* somebody worth an evening sitting in it — and
+   * `invitedDays` is how many days of the career it holds for. That predicate
+   * is the game's only unprompted mention of the whole system, so the two
+   * numbers are the difference between "he was never told" and "he was told
+   * and it was not worth his week".
+   */
+  invitedDay: number | null;
+  invitedDays: number;
+  /** First day each room would let the player sit, by table id. */
+  roomOpenDay: Record<string, number | null>;
   /** Clean + dirty at the moment tier-4 work first became available. */
   fundsAtTier4: number | null;
   /** Day that happened, and the first day $50,000 was in hand after it. */
@@ -1732,6 +1753,11 @@ function climb(seed: number, days: number, policy: Policy = {}): Climb {
      follows the run length rather than assuming three hundred.
   */
   const lateFrom = days - 90;
+  let invitedDay: number | null = null;
+  let invitedDays = 0;
+  const roomOpenDay: Record<string, number | null> = Object.fromEntries(
+    TABLES.map((t) => [t.id, null]),
+  );
   const noteWorked = (defId: string, territoryId: string, day: number): void => {
     const key = `${defId}@${territoryId}`;
     pairFirstDay[key] ??= day;
@@ -1921,6 +1947,25 @@ function climb(seed: number, days: number, policy: Policy = {}): Climb {
   reachedOn.set(RANKS[standing(state)].id, 0);
 
   for (let d = 0; d < days; d++) {
+    /*
+       The card game, read and never touched.
+
+       `tableRead` derives from `Rng.stableNoise` and the state it is handed —
+       who is sitting opposite is read, never rolled — so calling it daily from
+       here draws nothing from the causal stream and cannot move a single
+       reading in this file. That is the only reason it is safe to add to a bot
+       that does not play cards.
+    */
+    {
+      const rooms = tableRead(state);
+      for (const room of rooms) {
+        if (room.ok && roomOpenDay[room.def.id] === null) roomOpenDay[room.def.id] = state.day;
+      }
+      if (rooms.some((room) => room.ok && room.seat.kind !== 'nobody')) {
+        invitedDay ??= state.day;
+        invitedDays += 1;
+      }
+    }
     /*
        Read before answering, because answering removes it. A first version
        counted `state.pendingEvents` after the run and reported that a career
@@ -4134,6 +4179,9 @@ function climb(seed: number, days: number, policy: Policy = {}): Climb {
     launchedBy,
     pairFirstDay,
     pairLate,
+    invitedDay,
+    invitedDays,
+    roomOpenDay,
     fundsAtTier4,
     tier4Day,
     couldAffordDay,
@@ -8241,6 +8289,48 @@ describe('the game every week', () => {
      to be mostly shut**, because a room you are eventually invited to that
      turns out to be open all along is just another button.
   */
+  /**
+   * And whether anybody is ever told there is a game.
+   *
+   * Three blind rounds have finished without a tester sitting down, and the
+   * reason written on the carried list was the gate — *"the better rooms want
+   * Respect 180"*. That is wrong and it was wrong for three rounds: the back
+   * room is `respectAbove: 0` at a $400 stake, open on the first morning, and
+   * round 20 finished on 110 with the club at 85 open as well. Nobody was
+   * blocked. The test above already said so and it was read as a fact about
+   * the top room.
+   *
+   * So the question is which of the other three the failure is — never knew,
+   * saw it and could not work it out, or understood it and judged it not worth
+   * the week — and the first of those is the only one measurable from here.
+   * `the_game` is the game's one unprompted mention of the whole system, and
+   * it fires when a room is open **and** somebody worth an evening is sitting
+   * in it. This says how often that is true and how early.
+   *
+   * Reporting only. Which of the remaining three it is comes from a tester,
+   * not from this file, and inventing a bar for it here would be guessing at
+   * the answer before the round that can give it.
+   */
+  it('says how often a career is actually invited to the game', () => {
+    const invited = RUNS_300.filter((r) => r.invitedDay !== null);
+    const days = RUNS_300.map((r) => r.invitedDays).sort((a, b) => a - b);
+    const first = invited.map((r) => r.invitedDay ?? 0).sort((a, b) => a - b);
+    const openBy = (id: string): string => {
+      const got = RUNS_300.filter((r) => r.roomOpenDay[id] !== null);
+      if (!got.length) return 'never';
+      return `${got.length}/${RUNS_300.length}, median day ${median(got.map((r) => r.roomOpenDay[id] ?? 0))}`;
+    };
+
+    // eslint-disable-next-line no-console
+    console.log(
+      `the invitation: ${invited.length}/${RUNS_300.length} careers were ever shown the game` +
+        `${first.length ? `, median first on day ${median(first)}` : ''}\n` +
+        `         days of ${HUMAN_DAYS} it held, 25th / median / 75th: ` +
+        `${pct(days, 0.25)} / ${median(days)} / ${pct(days, 0.75)}\n` +
+        TABLES.map((def) => `         ${def.name} first opened: ${openBy(def.id)}`).join('\n'),
+    );
+  });
+
   it('opens the bottom room to everybody and the top room to almost nobody', () => {
     const t = RUNS_300.map((r) => r.newSystems.tables);
     const weeks = t.reduce((n, x) => n + x.weeks, 0);
