@@ -3168,3 +3168,111 @@ that fixed it; the gap was that it never compared the number to his wallet.
 The proactive wage lever he asks for on the crew roster — grievance is a hidden
 stat and a roster-side control that reads it would put a number on it. That is
 rule 1, and the answer is probably the meeting, which he never used.
+
+
+---
+
+## The card game becomes a game — 2026-09-06
+
+Director's call, after round 21 filed the whole system under *wanted to, was
+blocked* while two of its three rooms were open to him. **The rooms are gone.
+One table, every night, and you name the bet.**
+
+The three tiers were doing two jobs badly. They gated on Respect, which round
+21 had 223 of against a top room asking 180, and the one room open on the first
+morning advertised itself as *"Nobody here is anybody"* and *"Nobody who
+decides anything"*. A ladder whose bottom rung says there is nothing on it is a
+ladder nobody climbs.
+
+What replaces it: `ceiling(respect) = 500 x 2 ** (respect / 35)`, priced for
+the year, so what the room will take off you grows with your name — $500 at
+nothing, $2,300 at 85, $17,000 at 180, $42,000 at round 21's finishing respect
+of 223. And **the share of what you could have put up decides who is sitting
+opposite**: pocket money is a card game, and money that would hurt puts the
+people who decide things at the table. The favour route is priced accordingly —
+losing to a judge on purpose was $2,500 at a fixed table and is now most of
+what you could lose.
+
+### What the weekly clock had been holding up
+
+It ran once every seven days and that cap was doing more work than anything
+else in the file: 52 hands a year. Nightly is 365, so every per-hand constant
+went up sevenfold on the same afternoon, and three of them mattered.
+
+**The training was an outright exploit before it shipped.** `trainAttribute`
+took a flat 1.2 street smarts a hand whatever was on the table, so 365 nights
+at the two-hundred-dollar minimum was a free attribute. It scales with the
+share of what you could have put up now — a night where nothing was at risk
+teaches nothing.
+
+**Suspicion was re-clocked rather than left.** `decayPerWeek: 4` is 0.57 a day,
+which under a nightly game would have meant a nineteen-week lockout from one
+bad fortnight — a punishment that takes the game away, which is round 13's
+lay-low finding. `decayPerDay: 1.5` against `perHardHand: 8` balances at a
+sharp hand every 5.3 days, so about one a week is sustainable for ever and
+twice a week runs away to the cap. The cadence the old clock imposed is now the
+cadence the player picks, which is the whole point.
+
+**And the one that had to be measured to be found.** `CARDS.straight` gave 2
+civic standing and 1 rival trust for sitting down at all, and straight play
+loses about 1% of the stake — near enough free. Three hundred nights of that is
+six hundred points of civic standing, which walks into `owedTotal: 2` on the
+Boss gate. Paired over 36 seeds it took **Boss from 15 careers in 36 to 25**,
+while holding *less* respect, *fewer* favour-weeks and $925,260 less estate.
+
+An arm that burnt the same money every night and never sat down reached Boss in
+**0 of 36**, so it was not the bot playing a smaller, safer career for want of
+cash — DIRECTOR §5, and the reason that control exists. Re-clocked to 0.3 and
+0.15 the arm reads 3/36. Putting just those two back to their weekly values,
+with everything else corrected, reads **29/36** — which is how the note in
+`config/cards.ts` is entitled to be as specific as it is.
+
+    36 paired seeds, against the same careers not playing
+    (control)                                              Boss 15/36
+    hard       298 hands, 215 caught · estate   -712,747 · Boss  0/36
+    straight   236 hands,   0 caught · estate   -837,847 · Boss  3/36
+    burnt      191 hands,   0 caught · estate -1,270,220 · Boss  0/36
+
+**The estate bar alone would have shipped it.** Both arms were hundreds of
+thousands down while one of them was buying ten extra Boss careers. A money bar
+cannot see a strategy that buys a rank with something other than money, and a
+rank is what this game is played for. The condition now covers both.
+
+### Two faults of my own, found by reading the instrument
+
+**The curve was calibrated against the wrong axis of the right distribution.**
+I sized it against `RESPECT_BARS` — 25 to 260 — read as the range a career
+covers. That ladder is *the share of weeks spent at or above each bar*. Real
+respect at the end of a four-year career runs 565 / 666 / 807, and at 666 an
+uncapped curve offers a table of **$262,000,000**; the median 300-day career
+was measured able to bet $1,049,203. That is precisely the trap recorded when
+the three rooms were sized, repeated on the curve replacing them.
+`ceilingCap: 1_200_000` sits just above the top of the approved table and clips
+nothing inside it. Worth recording separately: the bot ends on three times the
+respect a human tester does — 666 against round 21's 223 — and every figure
+read off it should be read knowing that.
+
+**And the bands inverted the design at the top of the game.** Dividing the bet
+by the ceiling alone meant a boss whose name bought him a million-dollar table
+and who held fifty thousand could never reach the serious band — the better he
+did, the less anybody worth an evening would play him. The denominator is what
+he could actually put up, which is what the room is reading anyway.
+
+    what stopped a career betting more: its name 44% of weeks, its wallet 56%
+    the biggest bet it could have made:      2,754 / 18,668 / 87,584
+    somebody worth an evening opposite it:   90% of weeks
+    could have sat down at all:              100% (the back room used to be 100%)
+
+### The two pre-committed bars, restated
+
+They were *the bottom room has to be open most of the time* and *the top room
+has to be mostly shut*, and both passed on the build before this one. Neither
+was about rooms. The first is **anybody can sit down**, which is now a question
+about the floor and reads 100%. The second is **the good company has to be
+earned**, which is now whether the ceiling actually moves across a career — a
+curve whose end looks like its beginning is decoration in exactly the way three
+identical rooms would have been. It ends at 2,098x the base, and 35 careers in
+36 at least quadruple it.
+
+Restated rather than dropped, with what they used to read printed beside what
+they read now. The rooms went by decision, not because a bar failed.

@@ -35,7 +35,7 @@ import { canBorrow, totalOwed } from '../sim/market';
 import { canAcquire } from '../sim/business';
 
 import { BUSINESSES } from '../config/businesses';
-import { cards, tableRead } from '../sim/cards';
+import { cards, seatedAt, stakeCeiling, stakeFloor } from '../sim/cards';
 import { heldPossessions } from '../sim/possessions';
 import { liveScores } from '../sim/scores';
 import { isLayingLow } from '../sim/heat';
@@ -323,11 +323,21 @@ export const TIPS: Tip[] = [
     only: ['career', 'sandbox'],
     label: 'The game',
     text:
-      'There is a card game every week, and the cards are the least of it. Who is sitting opposite is on The City page before you commit — and losing to a man who decides things is how money reaches him without either of you having said anything. It is the fast road to a favour. The slow one is thirteen quiet weeks.',
+      'There is a card game every night, and the cards are the least of it. You name the stake, and what you are willing to lose decides who sits opposite — put up pocket money and it is a card game, put up something that would hurt and the people who decide things in this city are at the table. Losing to one of them on purpose is how money reaches them without either of you having said anything. It is the fast road to a favour. The slow one is thirteen quiet weeks.',
     panel: 'city',
-    when: (s) =>
-      cards(s).hands === 0 &&
-      tableRead(s).some((room) => room.ok && room.seat.kind !== 'nobody'),
+    /*
+       Fires when somebody worth an evening is at the biggest table this player
+       could actually sit down at tonight — the stake decides the company now,
+       so a check against a fixed room would be asking about a table that no
+       longer exists. Capped by what they can cover as well as by the ceiling,
+       because an invitation you cannot pay for is not one.
+    */
+    when: (s) => {
+      if (cards(s).hands > 0) return false;
+      const most = Math.min(stakeCeiling(s), s.org.cash + s.org.dirtyCash);
+      if (most < stakeFloor(s)) return false;
+      return seatedAt(s, most).kind !== 'nobody';
+    },
   },
   /*
      `step_up` was here, and there is no step up any more.

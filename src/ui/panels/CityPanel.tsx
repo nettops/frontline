@@ -7,8 +7,16 @@ import { PATRON, CITY_INTEL } from '../../config/perception';
 import { askForWork, civicRead, spendFavour } from '../../sim/civic';
 import { CIVIC_WORK } from '../../config/civic';
 import { Rng } from '../../sim/rng';
-import { cards, caughtOdds, sitDown, straightOdds, tableRead } from '../../sim/cards';
-import { canSit } from '../../sim/cards';
+import {
+  canSit,
+  cards,
+  caughtOdds,
+  sitDown,
+  stakeCeiling,
+  stakeFloor,
+  straightOdds,
+  tableRead,
+} from '../../sim/cards';
 import { possessionRows } from '../../sim/possessions';
 import { CARDS, STYLE_LABEL, type CardStyle } from '../../config/cards';
 
@@ -36,9 +44,24 @@ function TheGame() {
   const state = useGame();
   const [note, setNote] = useState<string | null>(null);
   const [stakeItem, setStakeItem] = useState<string | null>(null);
-  const rooms = tableRead(state);
   const play = cards(state);
   const owned = possessionRows(state);
+
+  const floor = stakeFloor(state);
+  const ceiling = stakeCeiling(state);
+  /*
+     The bet, and where it starts.
+
+     A tenth of what the room will take: enough that the first thing a player
+     sees is a real number rather than the minimum, and far enough from the
+     ceiling that raising it is visibly a decision. `null` until touched, so
+     the default follows a growing reputation instead of freezing on the day
+     the panel first rendered.
+  */
+  const [bet, setBet] = useState<number | null>(null);
+  const stake = Math.min(ceiling, Math.max(floor, bet ?? Math.round(ceiling / 10)));
+  const room = tableRead(state, stake);
+  const check = stakeItem ? canSit(state, stake, stakeItem) : room;
 
   const pct = (n: number) => `${Math.round(n * 100)}%`;
 
@@ -48,12 +71,33 @@ function TheGame() {
     { id: 'hard', hint: `Pays ${CARDS.hard.payout} to 1. About ${pct(caughtOdds(state))} that somebody says something` },
   ];
 
+  /*
+     What each step of the bet buys, named rather than left as a number.
+
+     The bands are a share of your own ceiling — see `STAKES.quietBelow` — so
+     the same $2,000 is pocket money to one boss and everything to another, and
+     a label is the only honest way to say which.
+  */
+  const company: Record<typeof room.band, string> = {
+    quiet: 'Pocket money. You will be playing whoever is in the room.',
+    middling: 'Enough that people ask who you are.',
+    serious: 'The kind of money the people who decide things play for.',
+  };
+
+  const quick: { label: string; at: number }[] = [
+    { label: 'the minimum', at: floor },
+    { label: 'a tenth', at: Math.round(ceiling / 10) },
+    { label: 'a quarter', at: Math.round(ceiling / 4) },
+    { label: 'half', at: Math.round(ceiling / 2) },
+    { label: 'everything they will take', at: ceiling },
+  ];
+
   return (
     <Panel title="The game">
       <p className="dim" style={{ marginTop: 0 }}>
-        There is a game every week. The cards are close to even in every room
-        and pay less than even money, so nobody has ever got rich at a table —
-        what you are choosing is which room, and who you spend the evening
+        There is a game every night. The cards are close to even and pay less
+        than even money, so nobody has ever got rich at a table — what you are
+        choosing is how much of yourself to put on it, and who that puts you
         opposite.
         {play.suspicion > 0 && (
           <>
@@ -64,6 +108,42 @@ function TheGame() {
           </>
         )}
       </p>
+
+      {/*
+         The bet.
+
+         A number and five ways to reach it, rather than a slider: the range
+         runs from a couple of hundred to seven figures on a long career, and
+         a linear control across that makes every small bet the same pixel.
+      */}
+      <div className="row wrap" style={{ gap: 6, alignItems: 'baseline', marginBottom: 8 }}>
+        <span className="tiny dim">You are playing for</span>
+        <input
+          className="mono"
+          type="number"
+          min={floor}
+          max={ceiling}
+          step={Math.max(1, Math.round(floor / 2))}
+          value={stake}
+          aria-label="Stake"
+          onChange={(e) => setBet(Number(e.target.value))}
+          style={{ width: 120 }}
+        />
+        {quick.map((q) => (
+          <button
+            key={q.label}
+            className={stake === q.at ? 'btn small' : 'btn small ghost'}
+            onClick={() => setBet(q.at)}
+          >
+            {q.label}
+          </button>
+        ))}
+      </div>
+      <div className="tiny faint" style={{ marginBottom: 10 }}>
+        {formatMoney(floor)} is the least anybody deals you in for and{' '}
+        {formatMoney(ceiling)} is the most this room will play you for, which goes
+        up as more people know your name.
+      </div>
 
       {owned.length > 0 && (
         <div className="tiny" style={{ marginBottom: 10 }}>
@@ -98,70 +178,64 @@ function TheGame() {
         </div>
       )}
 
+      {/*
+         Who that money puts you opposite, on the screen, before it is spent.
+
+         This is the whole feature and it is the reason the bet and the seat
+         are on the same block rather than in two panels: raise the stake and
+         this line changes, which is the sentence the design is made of.
+      */}
       <div className="table-wrap">
         <table className="data">
           <thead>
             <tr>
-              <th>Where</th>
               <th>Who is there tonight</th>
-              <th className="num">Stake</th>
+              <th>What that seat is worth</th>
               <th />
             </tr>
           </thead>
           <tbody>
-            {rooms.map((room) => {
-              const check = stakeItem ? canSit(state, room.def.id, stakeItem) : room;
-              return (
-                <tr key={room.def.id}>
-                  <td>
-                    <div className="name-cell">{room.def.name}</div>
-                    <div className="tiny faint">{room.def.blurb}</div>
-                  </td>
-                  <td>
-                    <div>{room.seat.who}</div>
-                    {/*
-                       The odds and the ceiling, per seat, instead of one
-                       string on all of them. See `throwRead` — a figure
-                       already at `CIVIC.maxOwed` buys nothing from a thrown
-                       night and used to say the same sentence as an unlucky
-                       one.
-                    */}
-                    <div className="tiny faint">{room.thrown}</div>
-                  </td>
-                  <td className="num mono">{formatMoney(room.stake)}</td>
-                  <td style={{ minWidth: 260 }}>
-                    {styles.map((style) => (
-                      <button
-                        key={style.id}
-                        className="btn small"
-                        style={{ marginRight: 4, marginBottom: 4 }}
-                        disabled={!check.ok}
-                        title={check.reason ?? style.hint}
-                        onClick={() =>
-                          mutate((g) => {
-                            setNote(
-                              sitDown(g, new Rng(g.rng), room.def.id, style.id, stakeItem)
-                                .message ?? null,
-                            );
-                          }, true)
-                        }
-                      >
-                        {STYLE_LABEL[style.id]}
-                      </button>
-                    ))}
-                    {/*
-                       The refusal in body text, not in a tooltip. Iteration 5
-                       closed F10 by taking exactly this kind of sentence out
-                       of a hover and round 13 still clicked a disabled button
-                       expecting something to happen.
-                    */}
-                    {!check.ok && (
-                      <div className="tiny faint">{check.reason}</div>
-                    )}
-                  </td>
-                </tr>
-              );
-            })}
+            <tr>
+              <td>
+                <div className="name-cell">{room.seat.who}</div>
+                <div className="tiny faint">{company[room.band]}</div>
+              </td>
+              <td>
+                {/*
+                   The odds and the ceiling, per seat. See `throwRead` — a
+                   figure already at `CIVIC.maxOwed` buys nothing from a thrown
+                   night and used to say the same sentence as an unlucky one.
+                */}
+                <div className="tiny faint">{room.thrown}</div>
+              </td>
+              <td style={{ minWidth: 260 }}>
+                {styles.map((style) => (
+                  <button
+                    key={style.id}
+                    className="btn small"
+                    style={{ marginRight: 4, marginBottom: 4 }}
+                    disabled={!check.ok}
+                    title={check.reason ?? style.hint}
+                    onClick={() =>
+                      mutate((g) => {
+                        setNote(
+                          sitDown(g, new Rng(g.rng), stake, style.id, stakeItem).message ?? null,
+                        );
+                      }, true)
+                    }
+                  >
+                    {STYLE_LABEL[style.id]}
+                  </button>
+                ))}
+                {/*
+                   The refusal in body text, not in a tooltip. Iteration 5
+                   closed F10 by taking exactly this kind of sentence out of a
+                   hover and round 13 still clicked a disabled button expecting
+                   something to happen.
+                */}
+                {!check.ok && <div className="tiny faint">{check.reason}</div>}
+              </td>
+            </tr>
           </tbody>
         </table>
       </div>
