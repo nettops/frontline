@@ -3034,3 +3034,52 @@ And the size is an upper bound, not a forecast. It is what a player who reads
 every number on every job gets. Round 19's tester was not that player, and
 whether the price is legible enough to change a human's mind is the question a
 blind round answers, not this file.
+
+
+---
+
+## Round 21 — dispatched 2026-09-06
+
+Instance `round21`, storage `mafia:run-round21:*`, url `http://localhost:38987`.
+Full round, one tester, from nothing, career on Normal, to Capo or day 300.
+**Tester model: Sonnet, pinned.** Pre-flight: `tsc` clean, 1459 tests green
+across 122 files, `npm run probe` running at dispatch.
+
+Full rather than targeted, and from nothing rather than seeded, because two of
+the three things being measured live in the climb: a seeded start voids First
+hour, Pacing, signposting and every question of the form *would a player find
+this*, and that is exactly what the tip-queue change moves.
+
+### The hypotheses, written before the dispatch
+
+Three changes have shipped since round 20 and each one names a finding that
+should close. Recorded here so that keeping any of them afterwards is a
+decision against a prediction rather than a reading of the report.
+
+**H1 — the tips.** *If the queue stops being owned by two urgent tips, then the
+finding "the card game was never reached" will not appear, because the game's
+one unprompted mention of it now reaches the strip on day 59–98 of six careers
+in six rather than never.* Closes if the tester sits down at a card table, or
+reports the game as **understood it and judged it not worth the week** — that
+third answer closes H1 as firmly as playing does, and opens a different
+finding. Does not close if the report says **never knew it was there** again.
+
+**H2 — the groove.** *If repetition on a job-and-district pair costs something,
+then the finding "my decisions stopped changing at day 110 / day 245" will move
+later or change shape, because a career that stands on the same corner is now
+told it is being watched and is worth 19 points of odds to move.* Sixty paired
+seeds say a bot that reads its odds works twice as much of the board. The bot
+is not a player, and this is the hypothesis that reading cannot settle.
+
+**H3 — the tips again, on their own terms.** *If the queue drains, then the
+round will name systems it met through the strip rather than by accident.*
+Fourteen tips of twenty-eight reach the screen in a 300-day career now, against
+five. Round 11 reported "5 OF 25 SAID" and it was still true last week.
+
+### What this round cannot answer
+
+Whether the card game is *found* is a rate, and one career cannot report a rate.
+A single tester missing it again tells us nothing about whether it is badly
+signposted or invisible — that separation needs three, and three is an
+escalation the developer signs off. Flagged before the result rather than after
+it.
