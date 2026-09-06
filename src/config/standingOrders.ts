@@ -89,6 +89,26 @@ export const PATTERN = {
    * mechanic was inert without an order, so turning it on moves all of them at
    * once, and a change that moves every baseline needs something the paired
    * sweep in `ladder.probe` can turn. See `wearing the groove by hand` there.
+   *
+   * **And measured against the complaint itself, which it had never been.**
+   * Every reading this mechanic had was an estate or a rank — what repetition
+   * *cost*, never whether anybody stopped repeating. Sixty paired seeds on a
+   * bot that reads the odds it is shown, groove against no groove:
+   *
+   *     over the last 90 days   without   with     seeds moved
+   *     distinct job/district   21        42       54 up, 6 down
+   *     share on its top 3      0.49      0.40     45 down, 15 up
+   *
+   * A career works twice as much of the board and leans nine points less on
+   * its three habits. The day it *stops* finding anything new came back 286
+   * against 294 of 300 and is not a reading — that arm re-picks a district
+   * every morning, so it never settles either way. See
+   * `says whether pricing repetition changes what a career does`.
+   *
+   * The size is an upper bound, not a forecast. It is what a player who reads
+   * every number on every job gets; round 19's tester was not that player, and
+   * whether the price is legible enough to change a human's mind is a question
+   * for a blind round, not for this file.
    */
   wornByHand: true,
 

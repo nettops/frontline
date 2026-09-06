@@ -34,6 +34,7 @@ import {
   operationCost,
   opsBoard,
   standing,
+  successBreakdown,
 } from '../operations';
 import { canOpenScore, liveScores, openScore, scoreOn, setupsLeft } from '../scores';
 import { liveTraining, startTraining } from '../training';
@@ -130,7 +131,7 @@ const SITDOWN_FROM_FEAR = 45;
 const WASH_RESERVE = 1;
 import { DRIFT, DRIFT_INTERVAL_DAYS } from '../../config/npcs';
 import { wageExpectation } from '../npc';
-import type { RankId } from '../types';
+import type { GameState, Npc, OperationDef, RankId } from '../types';
 import {
   answerCheaply,
   ev,
@@ -855,6 +856,23 @@ interface Climb {
   */
   /** Every job the bot launched, by definition id. */
   launchedBy: Record<string, number>;
+  /**
+   * Every job-and-district pair ever worked, and the day it was first worked.
+   *
+   * Round 19 stopped having decisions on day 110 and round 20 on day 245 —
+   * *"the inputs got bigger; the decision never got new"* — and both readings
+   * predate the groove, which exists to charge for exactly that. Nothing in
+   * this file could say whether pricing repetition moves the day, because
+   * nothing counted what a career worked, only how much and how often.
+   *
+   * A pair rather than a job, because the pair is the unit the groove is worn
+   * on and going and standing somewhere else is the counterplay it was built
+   * to sell. The last day a new one appears is the day after which everything
+   * the career does is a repeat.
+   */
+  pairFirstDay: Record<string, number>;
+  /** How many times each pair was worked over the career's last ninety days. */
+  pairLate: Record<string, number>;
   /** Clean + dirty at the moment tier-4 work first became available. */
   fundsAtTier4: number | null;
   /** Day that happened, and the first day $50,000 was in hand after it. */
@@ -941,6 +959,34 @@ interface Climb {
  * `active` is the other arm. Same bot, same seeds, plus the two systems a
  * player can actually operate.
  */
+/**
+ * The district a job's odds are best in, out of the ones you can reach.
+ *
+ * Read-only: `successBreakdown` is the same call the operations panel makes to
+ * fill the row a player sees, so this bot is choosing on the published number
+ * and nothing else. Ties fall to `fallback` so that an arm which has no reason
+ * to move does not wander, and the default order of the list never leaks into
+ * the reading.
+ */
+function bestDistrictFor(
+  state: GameState,
+  def: OperationDef,
+  crew: Npc[],
+  fallback: string,
+): string {
+  let best = fallback;
+  let bestChance = successBreakdown(state, def, crew, fallback).total;
+  for (const { territory } of operableTerritories(state)) {
+    if (territory.id === fallback) continue;
+    const chance = successBreakdown(state, def, crew, territory.id).total;
+    if (chance > bestChance) {
+      bestChance = chance;
+      best = territory.id;
+    }
+  }
+  return best;
+}
+
 interface Policy {
   active?: boolean;
   /**
@@ -1176,6 +1222,27 @@ interface Policy {
    * and should be said so rather than shipped on faith.
    */
   chasesGround?: boolean;
+  /**
+   * Reads the odds it is shown before deciding where to stand.
+   *
+   * Every other arm in this file works the district the expansion loop settled
+   * on that morning and sorts jobs by `ev` — payout times *`baseSuccess`*,
+   * which is a constant on the definition. That decision function cannot see
+   * heat, cannot see a district, and cannot see the groove. So no reading in
+   * this file could ever have said whether pricing repetition changes what a
+   * career does; it could only say what the same career earned afterwards.
+   * That is the same blindness recorded under `PATTERN.weight`, where every
+   * figure in a sweep came back identical to the digit because all three
+   * automation arms grind a one-day job.
+   *
+   * This arm sorts by the number the game actually puts on the screen, and
+   * picks the district that number is best in. It is therefore two departures
+   * from the hand at once, which normally is the mistake — but the comparison
+   * it exists for is paired *within* the arm, groove against no groove, so the
+   * arm's composition is a constant and not a variable. It is not a baseline
+   * and nothing balance-related should be quoted off it.
+   */
+  readsOdds?: boolean;
   /**
    * ...and the same boss, with the work handed to the shipped autopilot.
    *
@@ -1656,6 +1723,20 @@ function climb(seed: number, days: number, policy: Policy = {}): Climb {
    */
   const launchEra = [0, 0, 0];
   const launchedBy: Record<string, number> = {};
+  const pairFirstDay: Record<string, number> = {};
+  const pairLate: Record<string, number> = {};
+  /*
+     The back ninety days rather than the whole career, because the complaint
+     is about where a career ends up and every career starts narrow — there is
+     one job on the board on the first morning. `days` is a parameter, so this
+     follows the run length rather than assuming three hundred.
+  */
+  const lateFrom = days - 90;
+  const noteWorked = (defId: string, territoryId: string, day: number): void => {
+    const key = `${defId}@${territoryId}`;
+    pairFirstDay[key] ??= day;
+    if (day >= lateFrom) pairLate[key] = (pairLate[key] ?? 0) + 1;
+  };
   let fundsAtTier4: number | null = null;
   let tier4Day: number | null = null;
   let couldAffordDay: number | null = null;
@@ -2757,15 +2838,17 @@ function climb(seed: number, days: number, policy: Policy = {}): Climb {
             if (free.length < bodies) continue;
             const best = [...free].sort((a, b) => crewCompetence([b]) - crewCompetence([a]));
             const sc = scoreOn(state, def.id);
+            const at = sc ? sc.territoryId : where;
             const out = clean('jobs', () =>
               launchOperation(
                 state,
                 def.id,
                 best.slice(0, bodies).map((n) => n.id),
-                sc ? sc.territoryId : where,
+                at,
               ),
             );
             if (out) {
+              noteWorked(def.id, at, state.day);
               launchEra[state.day < 90 ? 0 : state.day < 180 ? 1 : 2] += 1;
               launchedBy[def.id] = (launchedBy[def.id] ?? 0) + 1;
               matched.launched += 1;
@@ -2802,20 +2885,31 @@ function climb(seed: number, days: number, policy: Policy = {}): Climb {
           // workaround for a real defect nobody had noticed.
           if (operationCost(state, def) > spendable) continue;
           const sc = policy.scores ? scoreOn(state, def.id) : undefined;
+          const hands = idle(state).slice(0, bodies);
+          /*
+             A prepared job runs where it was prepared. Anywhere else and the
+             gear was got ready for somewhere the crew never went.
+
+             `readsOdds` is the one arm that chooses anywhere else at all — see
+             the flag. Everything else in this file works `where`, which is the
+             district the expansion loop above settled on that morning.
+          */
+          const at = sc
+            ? sc.territoryId
+            : policy.readsOdds
+              ? bestDistrictFor(state, def, hands, where)
+              : where;
           const out = clean('jobs', () =>
             launchOperation(
               state,
               def.id,
-              idle(state)
-                .slice(0, bodies)
-                .map((n) => n.id),
-              // A prepared job runs where it was prepared. Anywhere else and
-              // the gear was got ready for somewhere the crew never went.
-              sc ? sc.territoryId : where,
+              hands.map((n) => n.id),
+              at,
               heavyNow(def) ? 'heavy' : how,
             ),
           );
           if (out) {
+            noteWorked(def.id, at, state.day);
             if (heavyNow(def)) heavyRuns += 1;
             launchEra[state.day < 90 ? 0 : state.day < 180 ? 1 : 2] += 1;
             launchedBy[def.id] = (launchedBy[def.id] ?? 0) + 1;
@@ -4038,6 +4132,8 @@ function climb(seed: number, days: number, policy: Policy = {}): Climb {
     },
     launchEra,
     launchedBy,
+    pairFirstDay,
+    pairLate,
     fundsAtTier4,
     tier4Day,
     couldAffordDay,
@@ -9097,6 +9193,106 @@ describe('sizing the apparatus cap', () => {
       lost - gained,
       'making repetition cost something costs as much of the ladder as the apparatus cap did',
     ).toBeLessThan(seeds.length / 6);
+  });
+
+  /**
+   * And whether any of it changes what a career actually does.
+   *
+   * Round 19 stopped having decisions on day 110, round 20 on day 245, and
+   * both careers predate the groove. The groove was built for that complaint
+   * and shipped without anything measuring the complaint — every reading it
+   * has is an estate or a rank, which say what repetition *cost*, never
+   * whether anybody stopped repeating.
+   *
+   * Three quantities, all off the pairs a career worked:
+   *
+   *   **settle day** — the last day it ever worked a job-and-district pair for
+   *   the first time. After it, everything is a repeat. This is the closest
+   *   thing to the sentence the testers wrote.
+   *
+   *   **late repertoire** — how many distinct pairs it worked over its final
+   *   ninety days.
+   *
+   *   **top-three share** — what fraction of those late nights went to its
+   *   three busiest pairs. *"Running the same 3-4 jobs over and over"* is a
+   *   claim about this number and nothing else.
+   *
+   * Read on `readsOdds`, which is the only arm whose decision function can see
+   * the groove at all. Reading it on the hand would be the mistake recorded
+   * under `PATTERN.weight` for the third time: a sweep that comes back
+   * identical to the digit because the bot was never choosing.
+   */
+  it('says whether pricing repetition changes what a career does', () => {
+    const seeds = Array.from({ length: 60 }, (_, i) => 700 + i);
+    const run = (): Climb[] => seeds.map((seed) => climb(seed, HUMAN_DAYS, { readsOdds: true }));
+
+    const shipped = run();
+    const was = PATTERN.wornByHand;
+    let asBefore: Climb[];
+    try {
+      (PATTERN as { wornByHand: boolean }).wornByHand = false;
+      asBefore = run();
+    } finally {
+      (PATTERN as { wornByHand: boolean }).wornByHand = was;
+    }
+
+    const settle = (r: Climb): number => {
+      const days = Object.values(r.pairFirstDay);
+      return days.length ? Math.max(...days) : 0;
+    };
+    const repertoire = (r: Climb): number => Object.keys(r.pairLate).length;
+    const topThree = (r: Climb): number => {
+      const counts = Object.values(r.pairLate).sort((a, b) => b - a);
+      const all = counts.reduce((a, b) => a + b, 0);
+      if (!all) return 0;
+      return counts.slice(0, 3).reduce((a, b) => a + b, 0) / all;
+    };
+
+    const say = (label: string, f: (r: Climb) => number, dp = 0): string => {
+      const now = median(shipped.map(f));
+      const before = median(asBefore.map(f));
+      const gaps = shipped.map((r, i) => f(r) - f(asBefore[i]));
+      const up = gaps.filter((g) => g > 0).length;
+      const down = gaps.filter((g) => g < 0).length;
+      return (
+        `        ${label.padEnd(16)} ${before.toFixed(dp)} -> ${now.toFixed(dp)}` +
+        `   (${up} up, ${down} down, ${seeds.length - up - down} unmoved)`
+      );
+    };
+
+    // eslint-disable-next-line no-console
+    console.log(
+      `does the groove change the play, ${seeds.length} paired seeds, a bot that reads its odds\n` +
+        say('settle day', settle) +
+        `\n` +
+        say('late pairs', repertoire) +
+        `\n` +
+        say('top-3 share', topThree, 2),
+    );
+
+    /*
+       The one thing here that is a claim rather than a reading.
+
+       `settle day` came back 286 against 294 out of three hundred, which is
+       not a finding about the groove — it is this arm re-picking a district
+       every morning, so a pair it has never worked before turns up almost to
+       the last week whatever the groove does. The metric is saturated at the
+       run length and cannot discriminate; it is printed because it is the
+       quantity the testers described and somebody will otherwise measure it
+       again.
+
+       What does discriminate is the repertoire. The groove exists to make a
+       career work more of the board, and if it ever stops doing that it has
+       become a tax with no counterplay — which is the exact shape the sweep
+       under `PATTERN.weight` rejected at 0.004 and 0.008. The bar is a quarter
+       of the seeds net, against a reading that came in at 54 up and 6 down.
+    */
+    const wider = shipped.filter((r, i) => repertoire(r) > repertoire(asBefore[i])).length;
+    const narrower = shipped.filter((r, i) => repertoire(r) < repertoire(asBefore[i])).length;
+    expect(
+      wider - narrower,
+      'the groove no longer moves a career off the pairs it has worn',
+    ).toBeGreaterThanOrEqual(seeds.length / 4);
   });
 
   it('says what moving the trades off the street channel costs', () => {

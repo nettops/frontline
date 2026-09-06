@@ -2944,6 +2944,23 @@ Unreproduced and recorded: the game returned to the title screen twice, both
 times immediately after a batched answer-then-advance, never on demand
 afterwards, and he could not rule out his own scripted input.
 
+**Not reproduced, and the cause is still unknown.** What could be established
+is the surface. `state` is one module-level variable, `setGame(null)` is the
+only thing that clears it, and it has two callers: "Start again" on the
+game-over screen, and "Back to title" on the saves panel. Anything that puts a
+live family back on the title screen came through that button, and it went on
+one click — the only mechanism in reach of a batched or mis-landed input. It
+asks now.
+
+The button also carried a false sentence: *"Anything not written to a slot is
+lost."* Every advance autosaves and the title screen lists that slot under
+Continue with the boss's name and the day on it, so a player who lost a career
+to a stray click was told by the screen they had thrown it away while Continue
+sat one click below. Third rule of the project. `abandon.test.ts` holds both,
+and the whole-surface claim — if a third caller of `setGame(null)` ever
+appears, the reasoning above stops covering it and that test is where it gets
+noticed.
+
 ### Still unseen after three rounds
 
 The card game. Round 18 was directed to it; 19 and 20 never reached it — the
@@ -2954,3 +2971,29 @@ And his decisions stopped changing at day 245, against round 19's day 110.
 Between the two rounds nothing was done about it; the groove change that prices
 repetition landed after this round was dispatched, so both figures are from
 before it and neither measures it.
+
+**Now measured, on an instrument that had to be built first.** Every reading
+the groove had was an estate or a rank — what repetition *cost*, never whether
+anybody stopped repeating — and no bot in the file could have said, because
+`ev` sorts on `baseSuccess`, a constant on the definition, and every arm works
+whichever district the expansion loop settled on that morning. A decision
+function that cannot see heat, a district or the groove cannot report on a
+mechanic made of all three. That is the same blindness recorded under
+`PATTERN.weight`, where a whole sweep came back identical to the digit.
+
+So `readsOdds` sorts on the number the game puts on the screen and stands where
+that number is best. Sixty paired seeds, groove against no groove, over each
+career's last ninety days: distinct job-and-district pairs 21 to 42 (54 seeds
+wider, 6 narrower), share of nights on its three busiest pairs 0.49 to 0.40 (45
+down, 15 up). A career works twice as much of the board and leans nine points
+less on its habits.
+
+The day it *stops* finding anything new — the closest quantity to the sentence
+both testers wrote — came back 286 against 294 out of 300 and is not a reading:
+that arm re-picks a district every morning, so it never settles either way. It
+is printed because somebody will otherwise go and measure it again.
+
+And the size is an upper bound, not a forecast. It is what a player who reads
+every number on every job gets. Round 19's tester was not that player, and
+whether the price is legible enough to change a human's mind is the question a
+blind round answers, not this file.
