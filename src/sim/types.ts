@@ -1934,6 +1934,21 @@ export interface GameState {
    */
   standing?: StandingOrder[];
   /**
+   * How well-read each job-and-district pair has become, 0..100.
+   *
+   * Keyed `defId@territoryId`, because that is what the mechanic was always
+   * described as being worn on: *"the answer to a groove is to go and stand
+   * somewhere else, not to stop."* It used to live on the `StandingOrder`
+   * record, which meant a player who never automated anything had no record
+   * for it to live on and repeated the same job forever for free. Round 19's
+   * tester hand-ran five jobs for three hundred days and paid nothing.
+   *
+   * Optional and self-migrating: `tickStandingOrders` folds any legacy
+   * `order.pattern` in here once and zeroes it, so an old save keeps the
+   * groove it had earned and nothing is counted twice.
+   */
+  patterns?: Record<string, number>;
+  /**
    * People who got away, and the fact that somebody is still looking.
    *
    * Optional with a lazy initialiser, so a save written before a botched

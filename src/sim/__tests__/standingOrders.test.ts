@@ -209,12 +209,74 @@ describe('the groove it wears', () => {
   /*
      The instrument. A quantity that is never zero cannot be read, and one that
      is always zero is not reading anything.
+
+     Renamed, not weakened — the assertion below is unchanged. It was called
+     "is nothing at all for somebody who never sets one", which is more than it
+     ever checked: it reads a career on which nothing has happened, and would
+     have passed whether or not an order was the only thing that could wear a
+     groove. That distinction turned out to matter, and the case it does not
+     cover is the two tests below it.
   */
-  it('is nothing at all for somebody who never sets one', () => {
+  it('is nothing at all on a street nobody has worked', () => {
     const state = game();
     expect(patternOn(state, JOB, where)).toBe(0);
     expect(patternDelta(0)).toBe(0);
     expect(patternHeat(0)).toBe(1);
+  });
+
+  /*
+     And the half the mechanic was described as having and did not have.
+
+     `config/standingOrders.ts` says the groove is "charged to anybody working
+     the pair, not only to the order — the police watch the pattern, not your
+     minutes." It was not. The number lived on the `StandingOrder` record, so a
+     player who never automated anything had nothing for it to live on.
+
+     Round 19's tester hand-ran the same five jobs from roughly day 110 to day
+     300 and reported "the inputs got bigger; the decision never got new". He
+     paid nothing for any of it. Round 18's tester, who had set an order, met
+     it on day 68 — "They know the routine −17%". Same build, opposite
+     experience, and neither of them was choosing between those.
+  */
+  it('is worn by a player who hand-runs the same job and never automates', () => {
+    const state = game();
+    expect(liveStanding(state), 'the fixture set an order, which is the other case')
+      .toHaveLength(0);
+
+    // A job out on the pair, the way a hand-run night looks to the tick.
+    state.activeOperations = {
+      op1: { defId: JOB, territoryId: where } as never,
+    };
+    tickStandingOrders(state);
+
+    expect(
+      patternOn(state, JOB, where),
+      'standing on the same corner by hand still costs nothing',
+    ).toBeGreaterThan(0);
+  });
+
+  it('and going somewhere else is still the answer to it', () => {
+    // The counterplay has to survive the move off the order, or the repair
+    // has replaced a groove nobody could earn with one nobody can shed.
+    const state = game();
+    for (let d = 0; d < 8; d++) {
+      state.activeOperations = { op1: { defId: JOB, territoryId: where } as never };
+      tickStandingOrders(state);
+      state.day += 1;
+    }
+    const worn = patternOn(state, JOB, where);
+    expect(worn).toBeGreaterThan(0);
+    expect(patternOn(state, JOB, elsewhere), 'the groove followed the job off its street')
+      .toBe(0);
+
+    // Stand somewhere else, and it fades.
+    for (let d = 0; d < 30; d++) {
+      state.activeOperations = {};
+      tickStandingOrders(state);
+      state.day += 1;
+    }
+    expect(patternOn(state, JOB, where), 'a groove nobody is wearing does not fade')
+      .toBeLessThan(worn);
   });
 
   it('wears in as the order keeps firing', () => {
