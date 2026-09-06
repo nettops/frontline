@@ -500,7 +500,9 @@ export default function OperationsPanel() {
                 <th className="num">Up front</th>
                 <th className="num">Pays</th>
                 <th className="num">Days</th>
-                <th className="num">Heat</th>
+                <th className="num" title="If it works / if it does not">
+                  Heat
+                </th>
                 {/*
                    Says whose odds these are.
 
@@ -1125,15 +1127,35 @@ function OperationRow({
       </td>
       <td className="num mono">{op.durationDays}</td>
       <td className="num mono">
+        {/*
+             Both figures, because the second is the one that surprises people.
+
+             This column showed only what a success costs, and it is the screen
+             a player scans to compare jobs against each other. Round 20's
+             tester read it across the board, was hit three times by Call In
+             Tribute's failure heat, and reported it as an outlier carrying
+             "+26 to +34 versus +2 to +12 for every other job" — which is not
+             true and was never the fault. Every job on the board fails at
+             roughly twice what it succeeds at, and tribute at 20/36 sits
+             between `financial_scheme` at 18/34 and `port_operation` at 22/40.
+             What he had actually compared was a tier-4 job against tier-0 and
+             tier-1 jobs, because the column gave him one number and the tier
+             is not in it.
+
+             The launch panel has said both all along — "+X heat if it goes
+             well, +Y if it does not" — but that is after you have chosen the
+             job. This is where the choosing happens.
+        */}
         <span
           className={quiet ? 'good' : undefined}
           title={
             quiet
               ? 'Beneath your standing — barely registers with anyone watching you'
-              : 'Attention this draws at your current standing'
+              : 'What it draws if it works, and if it does not, at your current standing'
           }
         >
           +{(op.heatOnSuccess * scale).toFixed(1)}
+          <span className="faint"> / {(op.heatOnFailure * scale).toFixed(1)}</span>
         </span>
       </td>
       <td className="num mono">

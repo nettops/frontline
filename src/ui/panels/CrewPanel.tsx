@@ -4,7 +4,9 @@ import {
   canCallEverybodyIn,
   canTakeTheWeight,
   takeTheWeight,
+  type Meeting,
 } from '../../sim/verbs';
+import { VERBS } from '../../config/verbs';
 import { hasVerb } from '../../sim/build';
 import { useGame, mutate } from '../../store';
 import { Panel, Empty, StatRead, StatusTag, KeyValue, Bar, payRead } from '../components';
@@ -68,6 +70,20 @@ export default function CrewPanel() {
   const state = useGame();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  /*
+     What came out of the room.
+
+     `callEverybodyIn` returns a `Meeting` — who was heard, what each of them
+     had been carrying, and who did not come — and the panel used to throw it
+     away and call `mutate` for its side effects. So the button promising
+     "grievances come out, and you find out who did not come" produced one log
+     line of counts and no names, and round 20's tester pressed it twice, found
+     no cash change, no modal and nothing he recognised in the log, and filed
+     it as a control that does nothing.
+
+     It was doing something. It was not showing it.
+  */
+  const [meeting, setMeeting] = useState<Meeting | null>(null);
   const crew = crewList(state);
   const recruits = Object.values(state.recruits);
   const selected = selectedId ? state.npcs[selectedId] : null;
@@ -161,9 +177,51 @@ export default function CrewPanel() {
             The whole family in one room. Grievances come out, and you find out who did
             not come.
           </p>
-          <button className="btn" onClick={() => mutate((g) => callEverybodyIn(g), true)}>
+          <button
+            className="btn"
+            onClick={() => setMeeting(mutate((g) => callEverybodyIn(g), true) ?? null)}
+          >
             Call everybody in
           </button>
+          {meeting && (
+            <div style={{ marginTop: 12 }}>
+              {/* The half the button's own description leads with. */}
+              {/*
+                  Who raised something, and not how much of it.
+
+                  `grievanceBefore` is a hidden stat, and the first rule of this
+                  game is that everything the player reads about a person goes
+                  through `perceive`. A meeting is a man saying his piece in a
+                  room, not a readout — so it names who spoke, on the same
+                  threshold the sim uses for the note it writes on their file,
+                  and quantifies nothing.
+              */}
+              {meeting.heard.filter((h) => h.grievanceBefore > VERBS.meetingClears).length === 0 ? (
+                <p className="faint" style={{ margin: 0 }}>
+                  {meeting.heard.length} came, and nobody had anything to raise.
+                </p>
+              ) : (
+                <>
+                  <p className="faint" style={{ margin: '0 0 6px' }}>
+                    What came out:
+                  </p>
+                  <ul className="tiny" style={{ margin: 0, paddingLeft: 18 }}>
+                    {meeting.heard
+                      .filter((h) => h.grievanceBefore > VERBS.meetingClears)
+                      .map((h) => (
+                        <li key={h.npc.id}>{h.npc.name} said their piece.</li>
+                      ))}
+                  </ul>
+                </>
+              )}
+              {/* And the half worth more than the first. */}
+              <p className="faint tiny" style={{ margin: '8px 0 0' }}>
+                {meeting.absent.length === 0
+                  ? 'Everybody came.'
+                  : `Did not come: ${meeting.absent.map((n) => n.name).join(', ')}.`}
+              </p>
+            </div>
+          )}
         </Panel>
       )}
 

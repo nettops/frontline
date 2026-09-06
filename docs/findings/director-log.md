@@ -2863,3 +2863,94 @@ And the thing he was told rather than shown: decisions stopped changing at day
 The game itself agreed with his Standing-in-it 6 at the end — **Obeyed 43/100,
 weakest of the four** — which is the score and the diagnosis arriving from two
 directions at once.
+
+---
+
+## Round 20 — 2026-09-06 — the second pinned round
+
+**Tester model: Sonnet**, one scorer, full round from nothing. Comparable to
+round 19 and to nothing before it.
+
+    day 30    Crew Leader · 6 crew  · $6.3K · 1 district  · 2 fronts
+    day 154   Crew Leader · 7 crew  · $15.4K · 1 district · 2 fronts
+    day 309   Underboss   · 17 crew · $43K   · 8 of 12    · 7 fronts
+
+    First hour 8 · Clarity 9 · Feedback 8 · Depth 8 · Pacing 7
+    Difficulty 8 · Writing 9 · Interface 8 · Standing in it 7 · Fun 7
+
+### The announcement fix landed, in his words
+
+`announce.ts` shipped between rounds 19 and 20 because 19's tester lost Crime
+Lord to two arrests and was never told. Round 20, unprompted, on the same
+mechanic:
+
+> "Losing Capo rank when my crew count dropped below the maintenance threshold,
+> then regaining it, was the single best feedback moment in the run — it proved
+> ranks are a live state, not a one-time unlock."
+
+It is also his WORKED #2. A fault reported in one round and named as the best
+moment in the next is the cleanest result this loop has produced.
+
+### The trade changed classification, which is the finding
+
+Round 19 filed it **wanted to, was blocked — then forgot**. Round 20 files it
+**understood it, judged it not worth the money**: *"retainer starts at $40,000
+and I had $7K at the time; would have spent that instead on fronts, which I
+did."* Which is what he did, and he reached Underboss.
+
+§4 says a system understood and correctly ignored is not an oversight to be
+surfaced better — the fix is the price or the system. So the price was measured
+rather than argued. `ladder.probe` now reports both days:
+
+    the trade appeared (2 fronts): median day 49
+    opened a product arrangement:  median day 84
+    the cheapest way in:           $40,000
+
+**And the price is not changing, on the evidence.** Round 18's directed tester
+paid the $40,000 and reported it repaid in three weeks and was *"worth it,
+overwhelmingly"*. Round 20 spent the same money on fronts and reached Underboss.
+Both lines work, which makes this a fork rather than a broken price, and tuning
+it toward the tester who declined would be ignoring the one who paid and
+profited.
+
+What was actually wrong is already fixed and still unseen: until the blockers
+work, the panel never named the retainer at all, so a player met the door 35 to
+90 days before he could open it and was never told what it would cost. He now
+learns the figure on the day it appears.
+
+### What it found
+
+**A button doing something and showing nothing.** "Call everybody in" clears
+grievance, raises regard, writes a note on every man who spoke, and returns a
+`Meeting` — who was heard, what each was carrying, and who did not come. The
+panel called it for its side effects and discarded the return, so the whole
+payload reached the player as one log line of counts. He pressed it twice,
+found no cash change, no modal and nothing he recognised in the log, and filed
+it as a no-op. It names who spoke and who stayed away now, and quantifies
+nothing, because grievance is a hidden stat.
+
+**And a heat reading he got backwards, which was still a fault.** He reported
+Call In Tribute as an outlier at "+26 to +34 versus +2 to +12 for every other
+job at similar crew size". Every job on the board fails at about twice what it
+succeeds at and the figure scales with tier; tribute at 20/36 sits between
+`financial_scheme` at 18/34 and `port_operation` at 22/40. He had compared a
+tier-4 job against tier-0 and tier-1 jobs — *by crew size*, because the Heat
+column gave him one number and the tier is not in it. The column showed only
+what a success costs, on the screen where jobs are compared against each other.
+It shows both now. The claim he got wrong is pinned in `heatShown.test.ts` so
+nobody re-derives it from the report.
+
+Unreproduced and recorded: the game returned to the title screen twice, both
+times immediately after a batched answer-then-advance, never on demand
+afterwards, and he could not rule out his own scripted input.
+
+### Still unseen after three rounds
+
+The card game. Round 18 was directed to it; 19 and 20 never reached it — the
+better rooms want Respect 180 and round 20 finished on 110. Its per-seat odds
+have shipped without a blind tester ever sitting down.
+
+And his decisions stopped changing at day 245, against round 19's day 110.
+Between the two rounds nothing was done about it; the groove change that prices
+repetition landed after this round was dispatched, so both figures are from
+before it and neither measures it.
