@@ -9,7 +9,7 @@ rails. The world plays itself — rival families compete, agencies investigate,
 districts have moods — and the player navigates it.
 
     npm test           # the gate, ~50s. Run it after every meaningful change.
-    npm run probe      # the eight measuring files, ~11min. Run if balance moved.
+    npm run probe      # the eight measuring files, ~13min. Run if balance moved.
     npx tsc -b         # types
     npm run playtest   # an isolated instance, for playing. Never the dev server.
 
