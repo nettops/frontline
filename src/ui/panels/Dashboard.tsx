@@ -8,7 +8,7 @@ import { approaches } from '../../sim/approaches';
 import { arcs } from '../../sim/arcs';
 import { rankNow, nextRank, whatItNeeds, whatHoldsIt } from '../../sim/rank';
 import { openSitdown } from '../../sim/sitdown';
-import { payrollForecast, weeklyWageBill } from '../../sim/economy';
+import { payrollForecast, totalFunds, weeklyWageBill } from '../../sim/economy';
 import { channelHeat, isLayingLow, startLayLow } from '../../sim/heat';
 import { arrestRisk, weeklyLegalCost } from '../../sim/investigation';
 import { maxCrew } from '../../sim/player';
@@ -110,6 +110,22 @@ function LayLow() {
   const paydays = LAY_LOW_DURATION_DAYS / PAYDAY_INTERVAL;
   const perPayday = weeklyWageBill(state) + weeklyLegalCost(state);
   const cost = Math.round(perPayday * paydays + (state.org.wagesOwed ?? 0));
+  /*
+     And whether that is money you have, which is the question.
+
+     The line above is a repair an earlier round already paid for: it prices
+     both paydays and the arrears, not one week. Round 21 read it, went dark on
+     day 168, and came out having missed $1,063 of payroll on the second one —
+     two soldiers quit that morning and the rank went with them. He filed it as
+     the preview pricing a single week. It priced two. What it never did was
+     the subtraction, and a fortnight of doing nothing is the one commitment in
+     the game where you cannot earn your way out of the gap you just agreed to.
+
+     `totalFunds` rather than clean money alone, because wages come out of
+     dirty first — the same order `tickEconomy` charges in.
+  */
+  const covered = totalFunds(state) >= cost;
+  const short = Math.round(cost - totalFunds(state));
   const pointless = state.org.heatBy.street < 1;
 
   /*
@@ -183,6 +199,13 @@ function LayLow() {
       <span className="tiny faint">
         {LAY_LOW_DURATION_DAYS} days idle · about {formatMoney(cost)} in wages and counsel ·{' '}
         {LAY_LOW_RESPECT_COST} respect
+        {!covered && (
+          <span className="hot">
+            {' '}
+            · you are {formatMoney(short)} short of that, and nothing earns while you are
+            dark
+          </span>
+        )}
         {pointless ? ' · nothing to cool' : ''}
         {!pointless && mostlyElsewhere && (
           <span className="hot">

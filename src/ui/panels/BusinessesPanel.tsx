@@ -479,15 +479,13 @@ export default function BusinessesPanel() {
               somebody opens a conversation — how you handle it decides the number, and what
               you agree to besides the number.
             </p>
-            {!options.some((o) => o.check.ok) && (
-              <p className="hot" style={{ margin: '0 14px 10px' }}>
-                {/* The one you are closest to being able to buy, for the same
-                    reason the header picks it: explaining the refusal on a
-                    business you could not pay for either answers a question
-                    nobody asked. */}
-                {(blockedButAffordable ?? options[0]).check.reason}
-              </p>
-            )}
+            {/*
+               The all-blocked paragraph that used to sit here is gone. It
+               printed the closest refusal once, above a table where every row
+               now carries its own, and one sentence twice on one screen reads
+               as a bug. `blockedButAffordable` is still what the header leads
+               with, which is the job it was always doing well.
+            */}
             <table className="data">
               <thead>
                 <tr>
@@ -555,6 +553,23 @@ export default function BusinessesPanel() {
                           ? `, ${territoryDef(territory.id).name}`
                           : ''}
                       </button>
+                      {/*
+                         And why not, on the row, where the button is.
+
+                         Fourth repair to the same finding. The first three all
+                         put the sentence somewhere other than the row: a
+                         tooltip on another panel, the panel header, and a
+                         paragraph that only appeared when *every* row was
+                         blocked. Round 21 held one district that would not
+                         sell while two rows elsewhere on the map were live, so
+                         that last guard was false and the reason for the rows
+                         he was staring at existed only in a `title` — which he
+                         found by reading the DOM, and a player would not.
+
+                         Same shape as the card tables in `CityPanel`, which
+                         have done it this way since they shipped.
+                      */}
+                      {!check.ok && <div className="tiny faint">{check.reason}</div>}
                     </td>
                   </tr>
                 ))}

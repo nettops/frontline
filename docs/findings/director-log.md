@@ -3083,3 +3083,88 @@ A single tester missing it again tells us nothing about whether it is badly
 signposted or invisible — that separation needs three, and three is an
 escalation the developer signs off. Flagged before the result rather than after
 it.
+
+### The result
+
+Day 311, Enforcer, 4 crew, $22,005 all in, one district, two fronts. Reached
+Crew Leader twice and was demoted twice, both times to crew loyalty collapsing.
+Never reached Capo. Scores: First hour 8, Clarity 8, Feedback 8, Depth 8,
+Pacing 6, Difficulty 7, Writing 9, Interface 7, Standing in it 6, Fun 6.
+
+**H1 — closed on its own terms, and it opened a better question.** He found the
+card game. It is under **Not used → wanted to, was blocked**, which is the
+fourth branch rather than the first: *never knew it was there* is gone after
+three rounds of it. His stated reason is *"the card-game stakes I could afford
+came with a standing requirement I never hit either"*, and that is wrong about
+the game. Reproduced at his own end position — Respect 223, $1,500 clean and
+$2,000 dirty:
+
+    The back room on Prospect    stake    400   OPEN
+    The Amaranth Club            stake  2,500   OPEN
+    The room upstairs            stake 12,000   shut: $12,000 to sit, and you have $3,500
+
+Two of the three rooms were open at the end and the back room was open on every
+day of his run. So the true branch is the second — **saw it, could not work out
+what it did** — and the mechanism is legible on the screen. On day one, the two
+rooms that look worth an evening refuse with a respect bar, and the one room he
+could always sit in advertises itself as *"Nobody here is anybody"* and *"Nobody
+who decides anything"*. Both sentences are true and in voice. Together they tell
+a player scanning the table that the open door has nothing behind it, and the
+shut ones are what he came for. He generalised the bar he could see onto the
+row he could use.
+
+That is a design finding, not a defect, and it is left alone deliberately: the
+fix is the price or the system, never a signpost, and choosing between them is
+not a call to make off one career.
+
+**H2 — did not close.** Decisions stopped changing at **day 190–200**, against
+round 20's 245 and round 19's 110, and *"I was running the same three job types
+from day 100 to day 300"* is the finding restated almost word for word. The
+groove never appears anywhere in his report. Sixty paired seeds say it works on
+a bot that reads its odds; this career says it did not reach a player who does
+not. Not reverted, because the reading is real and the confound is large — he
+finished at Enforcer with four men, half of round 20's career, and a family that
+small rotates through fewer pairs whatever the price is. But it is not evidence
+for the change, and the hypothesis is recorded as failed rather than as
+inconclusive.
+
+**H3 — held.** He credits the strip repeatedly and by day: the opening tip put
+him at Operations on day 1, and *"Attention / Lay Low — day 24, pointed at by a
+tutorial hint the moment heat first spiked"*. Systems met through the strip
+rather than by accident, which is what the queue was fixed to do.
+
+### The two he was right about
+
+**The buy row's refusal was in a tooltip, for the fourth time.** Rounds 7, 11
+and 12 each repaired this and each put the sentence somewhere other than the
+row: a tooltip on Territory, then the panel header, then a paragraph in the
+body gated on `!options.some((o) => o.check.ok)` — every row blocked. He held
+one district that would not sell while two rows elsewhere on the map were live,
+so that guard was false and nothing on the page said why. He found it by reading
+the DOM. Confirmed in source: `check.reason` appeared exactly twice in the file,
+once in that paragraph and once in a `title`. It is on the row now, the way
+`CityPanel` has always done it, and the paragraph is gone because one sentence
+twice on a screen reads as a bug.
+
+**And going dark on money he did not have.** His diagnosis was that the lay-low
+preview prices one week when the commitment spans two. It prices two — 
+`perPayday * paydays + wagesOwed`, a repair an earlier round already paid for
+and which the test now pins. What it never did was the subtraction. He read the
+bill, went quiet, and came out on day 182 having missed $1,063 of payroll: two
+soldiers quit that morning and Crew Leader went with them. The confirmation says
+how short you are now. A fortnight of doing nothing is the one commitment in
+this game where you cannot earn your way out of the gap you just agreed to.
+
+Both in `refusalShown.test.ts`, both seen to fail with the fault put back.
+
+### What he was wrong about, recorded so nobody re-derives it
+
+The standing requirement on the card tables, above. And the lay-low preview
+pricing a single week — the number was right and had been right since the round
+that fixed it; the gap was that it never compared the number to his wallet.
+
+### Not acted on
+
+The proactive wage lever he asks for on the crew roster — grievance is a hidden
+stat and a roster-side control that reads it would put a number on it. That is
+rule 1, and the answer is probably the meeting, which he never used.
