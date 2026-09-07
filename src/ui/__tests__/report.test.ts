@@ -319,7 +319,10 @@ describe('the parts of the day', () => {
     const report = buildReport(snap, state)!;
     const today = report.lines.filter((l) => l.part === 'today');
     expect(today.length, 'a memo on the desk was not filed under today').toBe(1);
-    expect(today[0].text).toMatch(/waiting for an answer/);
+    // Identifies which line it is, not what it says. The condition this test
+    // holds is the filing above; the wording moved in the writing pass and
+    // "Something is waiting for an answer" named nothing a player could act on.
+    expect(today[0].text).toMatch(/memo is open/);
   });
 
   /*

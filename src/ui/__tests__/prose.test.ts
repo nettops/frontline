@@ -54,6 +54,32 @@ const FIELDS = [
 const FIELD_RE = new RegExp(`\\b(${FIELDS.join('|')})\\s*:\\s*(['"\`])`);
 const EMITS = /addLog\(|pushEvent\(|say\(|message:|reason:/;
 
+/*
+   Added on the second pass, from patterns the first one did not think to look
+   for and a sweep of the repository found anyway.
+
+   `unnamed` is the brief's own complaint in its purest form: a sentence whose
+   subject is "something". Twelve of them were in the game, and the ones with a
+   referent available — evidence left at a scene, a memo on the desk — were
+   simply not using it. The exceptions are deliberate and are matched around:
+   a bribe that goes unspoken is *supposed* to say "Nothing was said. Something
+   was understood."
+
+   `tic` is the one rhetorical move this game reaches for when it has nothing
+   more to add — "which is its own answer", "that is the shape a thing takes".
+   Thirty-four instances, most of them earning their place. The rule catches
+   only the empty form: the move with no noun after it.
+*/
+const UNNAMED = [
+  /\bsomething (is|was) (waiting|left behind|being discussed)\b/i,
+  /\bsomething (has|had) (happened|come up|gone wrong)\b(?! that| which)/i,
+];
+
+const TIC = [
+  /\bwhich is its own (answer|kind of \w+)\b/i,
+  /\bthat is the shape (a|the) \w+ takes\b/i,
+];
+
 const VAGUE = [
   /\bsomething (has|had)?\s*(changed|shifted|is (wrong|different|off))/i,
   /\bthings (have|are) (changed|different|getting)/i,
@@ -166,6 +192,12 @@ function audit(): { findings: Finding[]; dupes: [string, number][] } {
       const where = `${path.replace('../../', 'src/')}:${line}`;
       if (VAGUE.some((re) => re.test(value))) {
         findings.push({ where, rule: 'vague', text: value, why: 'reports a change without saying what changed' });
+      }
+      if (UNNAMED.some((re) => re.test(value))) {
+        findings.push({ where, rule: 'unnamed', text: value, why: 'the subject of the sentence is "something"' });
+      }
+      if (TIC.some((re) => re.test(value))) {
+        findings.push({ where, rule: 'tic', text: value, why: 'the rhetorical move with nothing after it' });
       }
       if (HEDGE.some((re) => re.test(value))) {
         findings.push({ where, rule: 'hedged', text: value, why: 'hedges on top of the perception system' });

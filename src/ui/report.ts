@@ -429,7 +429,7 @@ export function buildReport(before: Snapshot, state: GameState): DayReport | nul
   if (state.pendingEvents.length > 0) {
     const n = state.pendingEvents.length;
     push(
-      n === 1 ? 'Something is waiting for an answer.' : `${n} things are waiting for an answer.`,
+      n === 1 ? 'A memo is open and waiting on you.' : `${n} memos are open and waiting on you.`,
       'neutral',
       null,
       'today',

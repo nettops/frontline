@@ -267,7 +267,7 @@ export default function StatBar({ onStep }: { onStep: (days: number) => void }) 
               disabled={blocked}
               title={
                 waiting
-                  ? 'Something is waiting for your answer'
+                  ? 'There is a memo open. Answer it before the clock moves'
                   : talking
                     ? 'You are in a room with somebody. The day waits.'
                   : step.days === 1

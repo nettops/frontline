@@ -205,8 +205,8 @@ const EVENT_DEFS: EventDef[] = [
       npcId: npc!.id,
       data: {},
       choices: [
-        { id: 'promote', label: 'Move them up', hint: 'Buys real loyalty — and gives them standing' },
-        { id: 'raise', label: 'Give them more money instead', hint: 'Costs cash, does not settle it' },
+        { id: 'promote', label: 'Move them up', hint: 'They will not forget it. Neither will the men who watched you do it' },
+        { id: 'raise', label: 'Give them more money instead', hint: 'The money quiets it. It does not fix it' },
         { id: 'refuse', label: 'Tell them to wait', hint: 'They will remember this' },
       ],
     }),
@@ -280,10 +280,10 @@ const EVENT_DEFS: EventDef[] = [
         {
           id: 'listen',
           label: 'Answer it in front of them',
-          hint: 'Costs nothing but time. Works better if you can lead — and the room is watching',
+          hint: 'Costs nothing but the time. Everybody in the room hears how you handle it',
         },
         { id: 'pay', label: 'Make it right with money', ...payable(state, 3000, 'settles it, mostly') },
-        { id: 'ignore', label: 'Let it sit', hint: 'It will keep growing, and it was said out loud' },
+        { id: 'ignore', label: 'Let it sit', hint: 'It gets worse, and it was said in front of people' },
       ],
     }),
   },
@@ -320,9 +320,9 @@ const EVENT_DEFS: EventDef[] = [
       npcId: npc!.id,
       data: { amount: npc!.skimTotal },
       choices: [
-        { id: 'confront', label: 'Confront them', hint: 'They return most of it. Everyone hears about it' },
-        { id: 'remove', label: 'Cut them out entirely', hint: 'Ends it. They walk out knowing things' },
-        { id: 'watch', label: 'Say nothing and watch', hint: 'Learn where the money goes. It keeps going' },
+        { id: 'confront', label: 'Confront them', hint: 'Most of the money comes back. Every man on the payroll hears how' },
+        { id: 'remove', label: 'Cut them out entirely', hint: 'It is over, and they leave knowing everything they knew' },
+        { id: 'watch', label: 'Say nothing and watch', hint: 'You find out where the money went. It keeps going there' },
       ],
     }),
   },
@@ -369,17 +369,17 @@ const EVENT_DEFS: EventDef[] = [
             `which is not what happens to people they actually want.\n\n` +
             `They mentioned it themselves, eventually, in a way that suggested they had ` +
             `spent a while deciding whether to mention it at all.`,
-          `Their brother-in-law does not work for the city and has started saying they ` +
-            `does. Somebody has been generous with somebody.\n\n` +
+          `Their brother-in-law does not work for the city and has started telling ` +
+            `people he does. Somebody has been generous with somebody.\n\n` +
             `None of it is proof. All of it is the shape proof usually arrives in.`,
       ]),
       severity: 'danger',
       npcId: npc!.id,
       data: {},
       choices: [
-        { id: 'reassure', label: 'Sit with them', hint: 'Steadies them if they trust you at all' },
+        { id: 'reassure', label: 'Sit with them', hint: 'If they trust you at all, this is enough. If not, it is words' },
         { id: 'pay', label: 'Put money in their hand', ...payable(state, 8000, 'fear is expensive') },
-        { id: 'cut', label: 'Cut them loose now', hint: 'Removes them. Guarantees they have a reason' },
+        { id: 'cut', label: 'Cut them loose now', hint: 'They are gone, and now they have a reason to talk to somebody' },
       ],
     }),
   },
@@ -419,7 +419,7 @@ const EVENT_DEFS: EventDef[] = [
       choices: [
         { id: 'side_a', label: `Back ${npc!.name}`, hint: 'One is satisfied, one is not' },
         { id: 'side_b', label: `Back ${other!.name}`, hint: 'One is satisfied, one is not' },
-        { id: 'crush', label: 'Shut both of them down', hint: 'Nobody is happy. Nobody escalates' },
+        { id: 'crush', label: 'Shut both of them down', hint: 'Both of them leave annoyed. Neither of them does anything about it' },
       ],
     }),
   },
@@ -469,7 +469,7 @@ const EVENT_DEFS: EventDef[] = [
             hint: `Lay low. Heat falls fast, respect suffers, and only quiet work moves`,
           },
         { id: 'lawyer', label: 'Put a lawyer in front of it', ...payable(state, 25_000, 'cuts the attention now') },
-        { id: 'ride', label: 'Carry on as normal', hint: 'Costs nothing. Leaves more behind' },
+        { id: 'ride', label: 'Carry on as normal', hint: 'Costs nothing tonight. Leaves more for somebody to find' },
       ],
     }),
   },
@@ -676,7 +676,7 @@ const EVENT_DEFS: EventDef[] = [
                   `you have ${freeCrew(state).length}`
                 : undefined,
           },
-          { id: 'pass', label: 'Pass', hint: 'Nothing gained, nothing noticed' },
+          { id: 'pass', label: 'Pass', hint: 'Nothing comes of it, and nobody hears about it' },
         ],
       };
     },
@@ -737,7 +737,7 @@ const EVENT_DEFS: EventDef[] = [
           {
             id: 'take',
             label: `Bring them in — ${money(fee)}`,
-            hint: 'Skilled, experienced, and an unknown',
+            hint: 'Good at the work. Nobody can tell you where they were before',
             disabledReason:
               totalFunds(state) < fee ? 'You cannot cover the fee' : undefined,
             cost: fee,
@@ -809,7 +809,7 @@ const EVENT_DEFS: EventDef[] = [
           `It has been repeated by somebody who was not there, to somebody who was not ` +
             `there either, and it came back to you through a third man who thought you ` +
             `already knew.\n\n` +
-            `That is the shape a thing takes on its way to becoming what people think.`,
+            `Nobody has said it outright yet. They will.`,
         ]),
         oneOf(rng, [
           `Two of your own were in the room this time and neither of them said anything.\n\n` +
@@ -834,12 +834,12 @@ const EVENT_DEFS: EventDef[] = [
           {
             id: 'violence',
             label: 'Answer it',
-            hint: 'Respect and fear. Attention comes with them',
+            hint: 'People will step aside for you. Police will want to know who they are',
           },
           {
             id: 'talk',
             label: 'Handle it in person, quietly',
-            hint: 'Depends on whether you can talk',
+            hint: 'Comes down to whether they believe you',
           },
           {
             id: 'ignore',
@@ -890,7 +890,7 @@ const EVENT_DEFS: EventDef[] = [
         npcId: null,
         data: { amount },
         choices: [
-          { id: 'take', label: `Take the ${money(amount)}`, hint: 'Solves today. Creates a creditor' },
+          { id: 'take', label: `Take the ${money(amount)}`, hint: 'Today is handled. Somebody now owns a piece of you' },
           { id: 'refuse', label: 'Decline', hint: 'Stay clear of them' },
         ],
       };
@@ -971,13 +971,13 @@ const EVENT_DEFS: EventDef[] = [
           {
             id: 'pay',
             label: `Pay them — ${money(demand)}`,
-            hint: 'Cheapest today. They will be back',
+            hint: 'Cheapest thing you can do today. They will be back next month',
             disabledReason:
               shortOf(state, demand),
             cost: demand,
           },
-          { id: 'refuse', label: 'Refuse', hint: 'Costs you standing in the district' },
-          { id: 'remove', label: 'Remove them', hint: 'Ends it. Attention, and the street remembers' },
+          { id: 'refuse', label: 'Refuse', hint: 'The neighbourhood watches you pay somebody off' },
+          { id: 'remove', label: 'Remove them', hint: 'It ends tonight. Police come asking, and nobody on that street forgets' },
         ],
       };
     },
@@ -1036,7 +1036,7 @@ const EVENT_DEFS: EventDef[] = [
           {
             id: 'take',
             label: `Make the introduction — ${money(cost)}`,
-            hint: 'Immediate standing in the district',
+            hint: 'People there start speaking to your men again',
             disabledReason: shortOf(state, cost),
             cost,
           },
@@ -1084,7 +1084,7 @@ const EVENT_DEFS: EventDef[] = [
         data: { territoryId: territory!.id },
         choices: [
           { id: 'money', label: 'Put money into the neighbourhood', ...payable(state, 12_000, 'buys back a great deal') },
-          { id: 'presence', label: 'Be seen, personally, for a while', hint: 'Slower, free, and it depends on you' },
+          { id: 'presence', label: 'Be seen, personally, for a while', hint: 'Takes weeks, costs nothing, and only works if you turn up' },
           { id: 'ignore', label: 'They will get over it', hint: 'They will not, quickly' },
         ],
       };
@@ -1138,7 +1138,7 @@ const EVENT_DEFS: EventDef[] = [
           {
             id: 'lawyer',
             label: `Put real counsel on them — ${money(cost)}`,
-            hint: 'The offer stops looking attractive',
+            hint: 'Whatever they were offered stops being worth taking',
             disabledReason: shortOf(state, cost),
             cost,
           },
@@ -1215,11 +1215,11 @@ const EVENT_DEFS: EventDef[] = [
           {
             id: 'accept',
             label: `Take the meeting — ${money(price)}`,
-            hint: 'You will see the file. They will know you are paying them',
+            hint: 'You get to read the file. They know exactly who is paying them',
             disabledReason: shortOf(state, price),
             cost: price,
           },
-          { id: 'refuse', label: 'Do not go', hint: 'It could be a test. Some of them are' },
+          { id: 'refuse', label: 'Do not go', hint: 'This might be somebody checking what you do. Some of them are' },
         ],
       };
     },
@@ -1283,12 +1283,12 @@ const EVENT_DEFS: EventDef[] = [
           {
             id: 'push_back',
             label: `Answer it — ${money(cost)}`,
-            hint: 'Takes ground back. Attention, and they will remember',
+            hint: 'You get the street back. Police notice, and so do they',
             disabledReason: shortOf(state, cost),
             cost,
           },
-          { id: 'concede', label: 'Let them have the block', hint: 'Costs you standing there. Cools things' },
-          { id: 'ignore', label: 'Do nothing', hint: 'They will read that as an answer' },
+          { id: 'concede', label: 'Let them have the block', hint: 'The neighbourhood sees you back off. It also stops here' },
+          { id: 'ignore', label: 'Do nothing', hint: 'Say nothing and they will take that as your answer' },
         ],
       };
     },
@@ -1374,14 +1374,14 @@ const EVENT_DEFS: EventDef[] = [
           {
             id: 'money',
             label: 'Send money instead — $40,000',
-            hint: 'Keeps your people home. Buys less goodwill than blood would',
+            hint: 'Your men stay out of it. It buys you less than turning up would have',
             disabledReason: shortOf(state, 40_000),
             cost: 40_000,
           },
           {
             id: 'refuse',
             label: 'Tell them no',
-            hint: 'The only organization on your side finds out what you are worth',
+            hint: 'The one outfit standing with you learns exactly what you are good for',
           },
         ],
       };
@@ -1435,12 +1435,12 @@ const EVENT_DEFS: EventDef[] = [
           {
             id: 'accept',
             label: `Pay the courtesy — ${money(tribute)}`,
-            hint: 'Buys goodwill that is worth something later',
+            hint: 'They owe you a courtesy, and courtesies get called in',
             disabledReason: shortOf(state, tribute),
             cost: tribute,
           },
           { id: 'decline', label: 'Decline politely', hint: 'Nothing changes, for now' },
-          { id: 'insult', label: 'Send them back with nothing', hint: 'Costs you badly with them. Standing on the street' },
+          { id: 'insult', label: 'Send them back with nothing', hint: 'They will hold it against you for years. The street thinks better of you' },
         ],
       };
     },
