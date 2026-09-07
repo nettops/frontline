@@ -21,7 +21,7 @@
 
 import { Rng, clamp } from './rng';
 import type { GameState, Id, Npc, Score } from './types';
-import { addEvidence, addLog, nextId } from './util';
+import { addEvidence, addLog, formatMoney, nextId } from './util';
 import { spend } from './economy';
 import { priced } from './market';
 import { playerInfluence, territoryDef } from './territory';
@@ -135,7 +135,10 @@ export function canOpenScore(state: GameState, defId: string): ScoreCheck {
     return { ok: false, reason: `You have ${SCORE.maxLive} on the go. Finish one.` };
   }
   if (state.org.cash + state.org.dirtyCash < scoreCost(state)) {
-    return { ok: false, reason: 'You cannot cover the stake.' };
+    return {
+      ok: false,
+      reason: `The stake is ${formatMoney(scoreCost(state))} and you hold ${formatMoney(state.org.cash + state.org.dirtyCash)}.`,
+    };
   }
   /*
      The bill that actually bites, and the panel has to be able to say so.

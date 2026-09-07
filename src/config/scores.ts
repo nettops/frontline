@@ -266,8 +266,6 @@ export const SCORE = {
   alertnessPerBotch: 14,
   /** Alertness against the odds. Two blown setups cost about five points. */
   alertnessWeight: 0.004,
-  /** Jobs below this are not worth a month of planning. */
-  minTier: 4,
 };
 
 /**

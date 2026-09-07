@@ -20,7 +20,7 @@ import type {
   LawEnforcement,
   Npc,
 } from './types';
-import { addEvidence, addLog, nextId, pushEvent, weightedPick } from './util';
+import { addEvidence, addLog, formatMoney, nextId, pushEvent, weightedPick } from './util';
 import { addHeat, channelHeat } from './heat';
 import { addNote, crewList } from './npc';
 import { nightsWorked } from './standing';
@@ -33,6 +33,9 @@ import { seizeOnePossession } from './possessions';
 import { POSSESSION_BY_ID } from '../config/possessions';
 import { gainFear, gainRespect } from './player';
 import { removePlayer } from './succession';
+import { hearsAbout } from './verbs';
+import { worldPull } from './build';
+import { WORLD } from '../config/build';
 import { worldMod } from './world';
 import { priced } from './market';
 import {
@@ -343,10 +346,30 @@ function advanceStage(state: GameState, rng: Rng, investigation: Investigation):
     return;
   }
   if (investigation.strength < next.minEvidence) return;
-  if (
-    state.day - investigation.stageSince <
-    STAGE_BY_ID[investigation.stage].minDays / (agency.pace * pressurePace(state))
-  ) {
+  const gateDays = STAGE_BY_ID[investigation.stage].minDays / (agency.pace * pressurePace(state));
+  const daysLeft = gateDays - (state.day - investigation.stageSince);
+  if (daysLeft > 0) {
+    /*
+       Instinct: "you get warned, raids reach you before they land." A man
+       planted inside the agency running this case sees the file moving
+       before it does — once per transition, in the window `WORLD.build.ts`
+       sizes, never a moment sooner and never repeated while the gate stays
+       shut. `config/build.ts`'s own header names this exact promise; nothing
+       ever kept it, which is why `deadState.test.ts` has a case for it.
+    */
+    if (
+      hearsAbout(state, investigation.agencyId) &&
+      investigation.warnedStage !== next.id &&
+      daysLeft <= worldPull(state, 'instinct') * WORLD.instinctWarnDays
+    ) {
+      investigation.warnedStage = next.id;
+      record(
+        state,
+        investigation,
+        `Your man inside ${agency.shortName} says ${next.name.toLowerCase()} is coming.`,
+        true,
+      );
+    }
     return;
   }
 
@@ -1130,7 +1153,10 @@ export function canBuyContact(state: GameState, agencyId: string): LegalAction {
     };
   }
   if (totalFunds(state) < contactCost(state, agencyId)) {
-    return { ok: false, message: 'You cannot cover it.' };
+    return {
+      ok: false,
+      message: `Somebody inside ${agency.shortName} costs ${formatMoney(contactCost(state, agencyId))} and you hold ${formatMoney(totalFunds(state))}.`,
+    };
   }
   return { ok: true, message: `Turn somebody inside ${agency.shortName}` };
 }
@@ -1172,7 +1198,10 @@ export function destroyEvidence(
     return { ok: false, message: 'There is nothing to get at.' };
   }
   if (!spend(state, DESTROY_EVIDENCE.cost, 'law')) {
-    return { ok: false, message: 'You cannot cover it.' };
+    return {
+      ok: false,
+      message: `That costs ${formatMoney(DESTROY_EVIDENCE.cost)} and you hold ${formatMoney(totalFunds(state))}.`,
+    };
   }
 
   const chance = clamp(
@@ -1212,7 +1241,10 @@ export function pressureWitness(
   const npc = state.npcs[npcId];
   if (!investigation || !npc) return { ok: false, message: 'Nobody to lean on.' };
   if (!spend(state, PRESSURE_WITNESS.cost, 'law')) {
-    return { ok: false, message: 'You cannot cover it.' };
+    return {
+      ok: false,
+      message: `That costs ${formatMoney(PRESSURE_WITNESS.cost)} and you hold ${formatMoney(totalFunds(state))}.`,
+    };
   }
 
   // What fear is actually for. A man weighing whether to testify is weighing

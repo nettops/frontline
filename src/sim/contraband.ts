@@ -45,7 +45,7 @@ import {
 } from '../config/contraband';
 import { ownedBusinesses } from './business';
 import { PAYDAY_INTERVAL } from '../config/economy';
-import { CONTROL_THRESHOLDS, type ControlLevel } from '../config/territories';
+import { CONTROL_LABEL, CONTROL_THRESHOLDS, type ControlLevel } from '../config/territories';
 import { RIVAL_IDS, type FactionId } from '../config/factions';
 import { houseShort } from './houses';
 import { note } from './ledger';
@@ -517,7 +517,10 @@ export function canBuildWorkshop(state: GameState, territoryId: string): TradeAc
   const t = state.territories[territoryId];
   if (!t) return { ok: false, message: 'No such district.' };
   if (!meetsControl(controlLevel(t), WORKSHOP.minControl)) {
-    return { ok: false, message: `You would need control of ${territoryDef(territoryId).name}.` };
+    return {
+      ok: false,
+      message: `A shop needs ${CONTROL_LABEL[WORKSHOP.minControl]} in ${territoryDef(territoryId).name}; you hold ${CONTROL_LABEL[controlLevel(t)]}.`,
+    };
   }
   if (state.contraband.workshops.length >= WORKSHOP.max) {
     return {
@@ -539,7 +542,7 @@ export function canBuildWorkshop(state: GameState, territoryId: string): TradeAc
 export function buildWorkshop(state: GameState, territoryId: string): TradeAction {
   const check = canBuildWorkshop(state, territoryId);
   if (!check.ok) return check;
-  if (!pay(state, priced(state, WORKSHOP.cost), 'premises')) return { ok: false, message: 'You cannot cover it.' };
+  if (!pay(state, priced(state, WORKSHOP.cost), 'premises')) return { ok: false, message: `You cannot cover ${formatMoney(priced(state, WORKSHOP.cost))}.` };
 
   state.contraband.workshops.push({ territoryId, since: state.day });
   addLog(
@@ -574,7 +577,7 @@ export function canBuildPlant(state: GameState, territoryId: string): TradeActio
   if (!meetsControl(controlLevel(t), PLANT.minControl)) {
     return {
       ok: false,
-      message: `You would need control of ${territoryDef(territoryId).name}. A foothold is not somewhere to put this.`,
+      message: `This needs ${CONTROL_LABEL[PLANT.minControl]} in ${territoryDef(territoryId).name}; you hold ${CONTROL_LABEL[controlLevel(t)]}. A foothold is not somewhere to put this.`,
     };
   }
   if (plantList(state).length >= PLANT.max) {
@@ -596,7 +599,7 @@ export function canBuildPlant(state: GameState, territoryId: string): TradeActio
 export function buildPlant(state: GameState, territoryId: string): TradeAction {
   const check = canBuildPlant(state, territoryId);
   if (!check.ok) return check;
-  if (!pay(state, priced(state, PLANT.cost), 'premises')) return { ok: false, message: 'You cannot cover it.' };
+  if (!pay(state, priced(state, PLANT.cost), 'premises')) return { ok: false, message: `You cannot cover ${formatMoney(priced(state, PLANT.cost))}.` };
 
   plantList(state).push({ territoryId, since: state.day });
   addLog(
@@ -615,7 +618,7 @@ export function openRoute(state: GameState, trade: TradeId, territoryId: string)
   if (!meetsControl(controlLevel(t), TRADES[trade].minControl)) {
     return {
       ok: false,
-      message: `You do not hold enough of ${territoryDef(territoryId).name}.`,
+      message: `This route needs ${CONTROL_LABEL[TRADES[trade].minControl]} in ${territoryDef(territoryId).name}; you hold ${CONTROL_LABEL[controlLevel(t)]}.`,
     };
   }
   const routes = state.contraband.routes[trade];

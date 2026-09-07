@@ -199,8 +199,6 @@ export const AI = {
      * they could build anything.
      */
     declareWarMinTargetStrength: 22,
-    /** And it takes a real grievance, not mild dislike. */
-    declareWarMaxRelationship: -45,
     /**
      * Strength lead needed before a family will start a war.
      *
@@ -505,11 +503,6 @@ export const AGENDA = {
    * difference between a rivalry and a mood.
    */
   ruinPerWeek: -1.1,
-
-  /** Their own heat decays when they are not doing anything loud. */
-  heatDecayPerWeek: 2.5,
-  /** Above this a family gets frightened of itself regardless of personality. */
-  heatAlarmAbove: 60,
 };
 
 // ---------------------------------------------------------- relationships ---

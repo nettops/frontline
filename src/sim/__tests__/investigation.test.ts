@@ -13,7 +13,7 @@ import { newGame } from '../state';
 import { grantPossession, heldPossessions } from '../possessions';
 import { runDaysSolvent } from './helpers';
 import { addEvidence } from '../util';
-import { crewList } from '../npc';
+import { crewList, generateNpc } from '../npc';
 import {
   activeCases,
   agencyOf,
@@ -34,6 +34,7 @@ import {
   worstStage,
 } from '../investigation';
 import { footprint } from '../investigation';
+import { plant } from '../verbs';
 import {
   AGENCY_BY_ID,
   CASE_CLOSED_BELOW,
@@ -369,6 +370,72 @@ describe('a case in progress', () => {
       expect(investigation.strength).toBeGreaterThanOrEqual(0);
       expect(investigation.strength).toBeLessThanOrEqual(100);
     }
+  });
+
+  /*
+     Instinct's own promise ("you get warned; raids reach you before they
+     land") had nothing behind it — `WORLD.instinctWarnDays` was read by
+     nothing, which `deadState.test.ts`'s config-key guard now catches. This
+     is the other half: proof a plant actually produces the warning, not
+     only that the number is read somewhere.
+  */
+  it('warns of the next stage through a plant, and only through one', () => {
+    /*
+       Set up identically and diverge on one thing — a plant — the same
+       shape `game()`/`stalled()` pairs use elsewhere in this suite, because
+       ticking one state twice at the same day is not a second week, it is
+       the same week asked to answer differently.
+    */
+    function primed(withPlant: boolean): { state: GameState; investigation: Investigation; next: StageId } {
+      const state = fresh();
+      const investigation = openCaseFor(state, 'city_police', 10);
+      state.player.build = { ...(state.player.build ?? {}), instinct: 10 } as GameState['player']['build'];
+
+      const next = STAGES[stageIndex(investigation.stage) + 1];
+      investigation.strength = next.minEvidence;
+      // Just inside the warning window, not at the gate itself.
+      const agency = agencyOf(investigation);
+      const gateDays = STAGES[stageIndex(investigation.stage)].minDays / agency.pace;
+      investigation.stageSince = state.day - Math.max(0, gateDays - 1);
+
+      if (withPlant) {
+        // `canPlant` wants four hands spare; `bulkUp` above is sized to trip
+        // the agency's notice threshold, not to staff a plant on top of it.
+        const rng = new Rng(state.rng);
+        for (let i = 0; i < 5; i++) {
+          const npc = generateNpc(state, rng, 'soldier');
+          npc.status = 'active';
+          state.npcs[npc.id] = npc;
+        }
+        const spy = crewList(state).find((n) => n.status === 'active')!;
+        const result = plant(state, investigation.agencyId, spy.id);
+        if (!result.ok) throw new Error(`could not plant: ${result.message}`);
+      }
+      return { state, investigation, next: next.id };
+    }
+
+    const without = primed(false);
+    tickInvestigations(without.state, new Rng(without.state.rng));
+    expect(
+      without.investigation.warnedStage,
+      'no plant inside this agency — nothing should have warned',
+    ).toBeUndefined();
+
+    const withIt = primed(true);
+    const rng = new Rng(withIt.state.rng);
+    tickInvestigations(withIt.state, rng);
+    expect(withIt.investigation.warnedStage, 'a plant heard nothing coming').toBe(withIt.next);
+    expect(
+      withIt.investigation.stage,
+      'a warning must not itself advance the stage',
+    ).not.toBe(withIt.next);
+
+    const before = withIt.investigation.history.length;
+    tickInvestigations(withIt.state, rng);
+    expect(
+      withIt.investigation.history.length,
+      'warned twice about the same transition',
+    ).toBe(before);
   });
 });
 

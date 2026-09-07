@@ -17,7 +17,7 @@ import type {
   OperationResult,
   OpsBoard,
 } from './types';
-import { addEvidence, addLog, nextId, say, weightedPick } from './util';
+import { addEvidence, addLog, formatMoney, nextId, say, weightedPick } from './util';
 import { addHeat, heatSuccessPenalty, isLayingLow } from './heat';
 import { earnDirty, refundDirty, spend, totalFunds } from './economy';
 import { ownedBusinesses } from './business';
@@ -586,7 +586,10 @@ export function canLaunch(
     }
   }
   if (totalFunds(state) < operationCost(state, def)) {
-    return { ok: false, reason: 'You cannot cover the up-front cost.' };
+    return {
+      ok: false,
+      reason: `The up-front cost is ${formatMoney(operationCost(state, def))} and you hold ${formatMoney(totalFunds(state))}.`,
+    };
   }
   return { ok: true, reason: null };
 }

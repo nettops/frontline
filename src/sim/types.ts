@@ -1005,6 +1005,13 @@ export interface Investigation {
   verdict: 'convicted' | 'acquitted' | null;
   verdictDay: number | null;
   history: CaseEvent[];
+  /**
+   * The next stage a plant has already warned about, so Instinct's promise
+   * ("raids reach you before they land") fires once per transition rather
+   * than every day the gate is still closed. Optional — absent reads as
+   * "nothing warned yet," true for every case that predates the plant verb.
+   */
+  warnedStage?: StageId;
 }
 
 /** Somebody inside an agency who tells you things and slows them down. */

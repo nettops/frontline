@@ -12,6 +12,8 @@ import {
   legalCostAt,
   weeklyLegalCost,
 } from '../../sim/investigation';
+import { canPlant, plant, pullOut } from '../../sim/verbs';
+import { crewList } from '../../sim/npc';
 import { accuse, canAccuse, readLeaks, timesPresent } from '../../sim/informants';
 import { readWhispers } from '../../sim/whispers';
 import { formatMoney, formatShortDay } from '../../sim/util';
@@ -143,6 +145,8 @@ export default function IntelligencePanel() {
                 <th className="num">Weekly</th>
                 <th>Status</th>
                 <th />
+                <th>Planted</th>
+                <th />
               </tr>
             </thead>
             <tbody>
@@ -152,6 +156,14 @@ export default function IntelligencePanel() {
                 const check = canBuyContact(state, agency.id);
                 const cost = contactCost(state, agency.id);
                 const investigating = open.some((c) => c.agencyId === agency.id);
+                /*
+                   The other route in — Instinct's, not Influence's. A plant
+                   costs a man rather than money, and tells you a stage is
+                   coming rather than what the file already says.
+                */
+                const planted = (state.org.planted ?? []).find((p) => p.where === agency.id);
+                const spy = planted ? state.npcs[planted.npcId] : null;
+                const plantCheck = canPlant(state, agency.id);
                 return (
                   <tr key={agency.id}>
                     <td>
@@ -192,6 +204,40 @@ export default function IntelligencePanel() {
                       >
                         Turn somebody
                       </button>
+                    </td>
+                    <td className={spy ? 'good' : 'faint'}>
+                      {spy ? `${spy.name}, since ${formatShortDay(planted!.since)}` : 'nobody'}
+                    </td>
+                    <td>
+                      {spy ? (
+                        <button
+                          className="btn small"
+                          onClick={() => {
+                            const result = mutate((s) => pullOut(s, agency.id), true);
+                            if (result) setMessage(result.message);
+                          }}
+                        >
+                          Pull out
+                        </button>
+                      ) : (
+                        <button
+                          className="btn small"
+                          disabled={!plantCheck.ok}
+                          title={
+                            plantCheck.ok
+                              ? 'One of your own, inside. Gone from the roster for as long as they stay.'
+                              : plantCheck.message
+                          }
+                          onClick={() => {
+                            const man = crewList(state).find((n) => n.status === 'active');
+                            if (!man) return;
+                            const result = mutate((s) => plant(s, agency.id, man.id), true);
+                            if (result) setMessage(result.message);
+                          }}
+                        >
+                          Plant somebody
+                        </button>
+                      )}
                     </td>
                   </tr>
                 );
