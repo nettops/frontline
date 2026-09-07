@@ -276,13 +276,21 @@ const frontTrouble: EventDef = {
               `${Math.round(b.health)} out of a hundred and the man running it has ` +
               `started talking about getting out. It closes on its own if you let it.`,
           ])
-        : oneOf(rng, [
-            `Somebody has been sitting across the street from it. Exposure is ` +
-              `${Math.round(b.exposure)} out of a hundred, which is the number that ` +
-              `decides whether a file gets opened with this address on it.`,
-            `A car has been parked opposite three mornings running. Exposure is ` +
-              `${Math.round(b.exposure)} out of a hundred, and that is the number a ` +
-              `warrant gets written against.`,
+        : /*
+             The observation, without the lecture that used to follow it.
+
+             Both of these opened well and then said *"Exposure is 62 out of a
+             hundred, which is the number that decides whether a file gets
+             opened"* — the game naming its own variable and then explaining
+             what the variable is for. The bar on the Businesses panel is where
+             that number lives and it is already there. What an event is for is
+             the thing that happened.
+          */
+          oneOf(rng, [
+            `Somebody has been sitting across the street from it since Monday. ` +
+              `Same car, different men. The manager has started using the back door.`,
+            `A car has been parked opposite three mornings running. Whoever is in ` +
+              `it writes down who goes in, and your name is on the lease.`,
           ]),
       severity: failing ? 'warning' : 'danger',
       npcId: null,
@@ -320,19 +328,30 @@ const streetTurning: EventDef = {
   },
   build(state, rng, ctx) {
     const t = ctx.territory!;
-    const consequence =
-      `at that number the shopkeepers stop selling, the jobs get harder, and ` +
-      `somebody eventually talks to a detective because they have no reason not to.`;
+    /*
+       Three good openers that each ended in the same sentence about a number.
+
+       The `consequence` clause was appended verbatim to all three — *"at that
+       number the shopkeepers stop selling, the jobs get harder, and somebody
+       eventually talks to a detective"* — so a player met one observation and
+       one paragraph of mechanism, three ways. It also did the arithmetic out
+       loud, which the Territory panel's bar already does honestly.
+
+       Each line now ends in the thing that follows from it. A district that has
+       turned is not a number; it is a shopkeeper who suddenly has none in the
+       back.
+    */
+    const where = territoryDef(t.id).name;
     return {
       defId: 'gen_street_turning',
-      title: `${territoryDef(t.id).name} has gone quiet on you`,
+      title: `${where} has gone quiet on you`,
       body: oneOf(rng, [
-        `Nobody says anything to your people any more. Public feeling there is ` +
-          `${Math.round(t.sentiment)} out of a hundred, and ${consequence}`,
-        `Two of your men were served last and charged first. Public feeling in the ` +
-          `district is ${Math.round(t.sentiment)} out of a hundred, and ${consequence}`,
-        `There was a meeting about you above the hardware shop. Public feeling is ` +
-          `${Math.round(t.sentiment)} out of a hundred, and ${consequence}`,
+        `Nobody says anything to your people any more. Two shops that paid without ` +
+          `being asked now want to be asked, and one of them has a lawyer.`,
+        `Two of your men were served last and charged first. The butcher told them ` +
+          `there was nothing in the back, and the window behind the counter was full.`,
+        `There was a meeting about you above the hardware shop. Forty people, and ` +
+          `nobody has told you what was said.`,
       ]),
       severity: 'warning',
       npcId: null,
@@ -1093,7 +1112,9 @@ export function resolveGenerated(
           return;
         }
         adjustSentiment(state, id, GEN_EFFECT.streetSentiment);
-        addLog(state, `${money(GEN_EFFECT.streetSpend)} spread around ${territoryDef(id).name}. Feeling is ${Math.round(t.sentiment)}.`, 'money');
+        // What the money bought, not what the meter reads. The bar on the
+        // Territory panel is where the figure lives.
+        addLog(state, `${money(GEN_EFFECT.streetSpend)} spread around ${territoryDef(id).name}. Two funerals paid for and a roof fixed.`, 'money');
         return;
       }
       if (choiceId === 'lean') {

@@ -1484,7 +1484,7 @@ const EVENT_DEFS: EventDef[] = [
         npcId: null,
         data: { businessId: business!.id },
         choices: [
-          { id: 'accountant', label: 'Put an accountant on it', ...payable(state, 15_000, 'cleans the books, cuts exposure hard') },
+          { id: 'accountant', label: 'Put an accountant on it', ...payable(state, 15_000, 'the books come back clean and the place stops being worth watching') },
           { id: 'slow', label: 'Slow everything down for a while', hint: 'Free. Stops laundering there and cools it off' },
           { id: 'shutter', label: 'Close it', hint: 'Ends the problem and most of your money' },
         ],

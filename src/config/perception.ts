@@ -56,6 +56,10 @@ export const COVERAGE: Record<CoverageKind, CoverageDef> = {
       'Man shot in {where}; police appeal for witnesses',
       'Second assault this month in {where}',
       'Businesses in {where} say they are paying somebody',
+      'Two men beaten outside a bar in {where}; no arrests',
+      'Publican in {where} declines to press charges',
+      'Assault outside a betting shop; witnesses will not be named',
+      'Man found beaten in a yard; police say he will not talk',
     ],
   },
   war: {
@@ -64,14 +68,31 @@ export const COVERAGE: Record<CoverageKind, CoverageDef> = {
     outrage: 0.075,
     notoriety: 0.05,
     tone: 'crime',
+    /*
+       Eleven rather than five, and eight of them work without a district.
+
+       `cover` filters `{where}` headlines out when the story has no district,
+       so a clash on ground neither side holds could only ever print the three
+       lines below that had no placeholder — and `scorecard.probe` duly
+       measured all three at 0.8% of everything a player reads, side by side,
+       the three loudest lines left in the game.
+
+       The rule the whole table now follows: a pool needs enough placeholder-free
+       lines to carry the case where there is nothing to name, or those few
+       become the paper.
+    */
     headlines: [
       'Open violence in {where} as gangs clash',
       '"It is a war," says councilman, of {where}',
-      // Kept free of {where} so a clash on ground neither side holds still has
-      // something a sub-editor would actually write.
+      'Second funeral this week in {where}',
+      'Shopkeepers in {where} shutting at four o\'clock',
       'Third shooting in a fortnight; commissioner under pressure',
       'Two dead as feud spills into the open',
       'Police deny losing control of the streets',
+      'Hospital reports four gunshot admissions in nine days',
+      'Councillors demand answers on "street war"',
+      'Man shot dead outside his own restaurant',
+      'Bystander hit; family says nobody has been to see them',
     ],
   },
   arrest: {
@@ -82,7 +103,10 @@ export const COVERAGE: Record<CoverageKind, CoverageDef> = {
     tone: 'law',
     headlines: [
       '{who} held in connection with {where} inquiry',
+      '{who} charged; bail opposed',
       'Arrests follow months of surveillance',
+      'Three men taken in before dawn; one released without charge',
+      'Detectives confirm arrest, decline to name the man',
     ],
   },
   raid: {
@@ -94,6 +118,9 @@ export const COVERAGE: Record<CoverageKind, CoverageDef> = {
     headlines: [
       'Dawn raids across {where}',
       'Warrants executed at four addresses',
+      'Officers remove boxes from a club on {where}',
+      'Ledgers seized; no arrests announced',
+      'Two premises sealed pending inquiry',
     ],
   },
   trial: {
@@ -105,6 +132,9 @@ export const COVERAGE: Record<CoverageKind, CoverageDef> = {
     headlines: [
       'Racketeering trial opens; gallery full',
       'Prosecutors promise "the whole structure" at trial',
+      'First witness fails to appear; judge issues warning',
+      'Defence calls the case "a filing cabinet and a grudge"',
+      'Juror discharged on day three; no reason given',
     ],
   },
   conviction: {
@@ -116,6 +146,8 @@ export const COVERAGE: Record<CoverageKind, CoverageDef> = {
     headlines: [
       'Guilty on all counts',
       'Jury returns after two days: guilty',
+      'Guilty on three of seven; sentencing next month',
+      'Convicted man says nothing as the verdict is read',
     ],
   },
   acquittal: {
@@ -127,6 +159,8 @@ export const COVERAGE: Record<CoverageKind, CoverageDef> = {
     headlines: [
       'Acquitted; prosecutors decline to comment',
       '"A humiliation," says former investigator',
+      'Case collapses after witness withdraws',
+      'Not guilty; the public gallery applauded',
     ],
   },
   corruption: {
@@ -138,6 +172,8 @@ export const COVERAGE: Record<CoverageKind, CoverageDef> = {
     headlines: [
       'Official suspended over payments',
       'Inquiry into department "ties" announced',
+      'Councillor resigns citing "family reasons"',
+      'Bank records show four payments nobody will explain',
     ],
   },
   /*

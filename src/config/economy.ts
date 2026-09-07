@@ -427,7 +427,7 @@ export const ATTRIBUTE_BLURB: Record<AttributeId, string> = {
   negotiation: 'Better terms, cheaper recruits, calmer disputes.',
   intelligence: 'Planning-heavy jobs go smoother.',
   streetSmarts: 'Reading a room, spotting a setup, staying clean.',
-  business: 'Legitimate fronts, laundering throughput and exposure.',
+  business: 'The fronts you own, what they can wash, and how hard they are to look at.',
   strategy: 'Large, complex operations.',
   /*
      The only attribute whose blurb has to say how to earn it.

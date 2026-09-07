@@ -91,15 +91,35 @@ export function refreshRecruits(state: GameState, rng: Rng, force = false): void
       say(
         `recruits_${state.day}`,
         state.day,
+        /*
+           Every variant names somebody, and that is the repair.
+
+           The first three used to be generic — *"The people asking around are
+           not the same people as last week"*, *"The list turned over"*, *"Word
+           went round that you were hiring"* — and because they were the only
+           ones that did not need a face, they were always in the pool and the
+           faces were not. `scorecard.probe` duly measured all three inside the
+           eight loudest lines in the game.
+
+           That is the structural cause rather than three bad sentences: a
+           fallback available on every draw wins every draw. So the fallback
+           names a person too, and the only line left without one is the case
+           where there is genuinely nobody on the list.
+        */
         [
-          'The people asking around are not the same people as last week.',
-          'The list turned over. None of last week is on it.',
-          'Word went round that you were hiring. Different word, different people.',
           face ? `${face.name} has been asking after you. So have ${fresh.length - 1} others.` : null,
+          face ? `${face.name} is new on the list. The men you were looking at last week are not.` : null,
+          face ? `Somebody sent ${face.name} your way and did not say who.` : null,
+          face ? `${face.name} turned up at the club asking who does the hiring.` : null,
           face
-            ? `${face.name} is new on the list, and the ones you were looking at are not.`
+            ? `${face.name} claims a connection to somebody you know. On the list either way.`
             : null,
-          face ? `Somebody sent ${face.name} your way. The old names have moved on.` : null,
+          // Not `fresh.length > 1`, which is true nearly every week and put
+          // this back at the top of the probe's loudest lines within one run.
+          face ? null : `${fresh.length} new names and nobody you would write down.`,
+          // Only when there is genuinely nobody, or it becomes the fallback
+          // that wins every draw — which is the fault this block is repairing.
+          face ? null : 'Nobody worth writing down came asking this week.',
         ].filter((x): x is string => x !== null),
       ),
       'crew',
