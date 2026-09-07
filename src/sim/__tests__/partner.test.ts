@@ -33,6 +33,7 @@ import {
   takePartner,
 } from '../partner';
 import { PARTNER } from '../../config/partner';
+import { adjustBond, bond, relationship } from '../diplomacy';
 import { rivals } from '../faction';
 import { crewList } from '../npc';
 import { recruit } from '../crew';
@@ -248,5 +249,34 @@ describe('getting out', () => {
     // than the price, so earning it is possible in principle.
     expect(price * PARTNER.share).toBeLessThan(price);
     expect(price).toBeGreaterThan(0);
+  });
+});
+
+describe('what owning a piece of you buys them', () => {
+  it('reads as real protection on the coarse relationship figure, not on their raw grudge', () => {
+    /*
+       `PARTNER.protectionTrust` existed and was read by nothing. The header
+       promises "they will not move against you while they hold a piece,"
+       and the honest version of that claim is narrower than it sounds: it
+       floors the blended `relationship()` reading that hostility, pressure
+       and expansion targeting all use, and it does not touch the raw
+       grudge a war is actually declared on. Both halves are asserted here so
+       neither drifts back to false advertising in either direction.
+    */
+    const state = stalled();
+    const offer = partnerOffer(state)!;
+    const before = relationship(state, offer.factionId, 'player');
+
+    takePartner(state, offer);
+    adjustBond(state, offer.factionId, 'player', { grudge: 40 });
+
+    expect(
+      relationship(state, offer.factionId, 'player'),
+      'a partner reads no warmer than an ordinary family at the same grudge',
+    ).toBeGreaterThan(before);
+    expect(
+      bond(state, offer.factionId, 'player').grudge,
+      'the floor must not be laundering the grudge itself',
+    ).toBe(40);
   });
 });
