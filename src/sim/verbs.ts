@@ -165,18 +165,26 @@ export function takeOffCard(state: GameState, territoryId: string): Check {
   return yes();
 }
 
+/*
+   What one district on the card pays, at what you are worth right now.
+
+   Every district pays the same figure — it is fear that moves it, not the
+   ground itself — so this is also the honest preview for a district not yet
+   on the card. Split out because the panel's own caption used to print the
+   *total across whatever is already on the card*, which reads identically
+   to "this is worthless" whether that is true or the card is simply still
+   empty. A round-16 playtester read it exactly that way on a district they
+   had not added yet and never returned to the mechanic.
+*/
+export function cardPerDistrict(state: GameState): number {
+  const feared = clamp(state.org.fear / 100, 0, 1);
+  return Math.round(VERBS.cardPerDistrict * (VERBS.cardFloor + feared * (1 - VERBS.cardFloor)));
+}
+
 /** What the card is worth this week, and what it costs the street. */
 export function cardTake(state: GameState): number {
-  const card = state.org.card ?? [];
-  if (card.length === 0) return 0;
-  const feared = clamp(state.org.fear / 100, 0, 1);
-  return Math.round(
-    card.reduce((sum, id) => {
-      const t = state.territories[id];
-      if (!t) return sum;
-      return sum + VERBS.cardPerDistrict * (VERBS.cardFloor + feared * (1 - VERBS.cardFloor));
-    }, 0),
-  );
+  const card = (state.org.card ?? []).filter((id) => state.territories[id]);
+  return card.length * cardPerDistrict(state);
 }
 
 /**
