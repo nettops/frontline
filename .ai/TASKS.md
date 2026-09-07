@@ -106,12 +106,19 @@ new-instrument work, and this round spent its remaining budget on the blind
 round instead, per its own governing question — "nothing a probe measures
 changes what a human notices tonight."
 
-## The blind round
+## The blind round, and what came of it
 
 `round16`, dispatched to a fresh subagent with no source access, the same
-brief `PLAYTEST.md` has used since round 8. Its result — scores, findings,
-and whether F1 (decisions stop changing ~day 90-119) still appears — is in
-`.ai/FINAL_REPORT.md`.
+brief `PLAYTEST.md` has used since round 8. No MUST FIX items; decisions
+held novel to ~day 220-230, well past F1's three-round-confirmed ~day
+90-119. Full report in `.ai/FINAL_REPORT.md`.
+
+Three of its SHOULD FIX items were fixed the same session — the card
+mechanic's misleading "$0 a week" caption, the favour-network tip's queue
+priority (29th to 9th — it existed and was never shown in 305 days), and
+district-tier thresholds shown as real numbers for the first time. All
+three are legibility fixes, none touches a balance number, all three
+verified test-first and live in the browser.
 
 ## Why nothing else made the list
 

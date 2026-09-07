@@ -27,7 +27,7 @@ the pressure dial, or anything from tonight's changes. **Result: no MUST FIX
 items, and the point where decisions stopped changing moved from a
 three-round-confirmed ~day 90–119 (F1) to ~day 220–230** — a real, measured
 improvement on the project's single largest standing finding, though not a
-closure of it. Two SHOULD FIX items from that round were fixed before this
+closure of it. Three SHOULD FIX items from that round were fixed before this
 report was written; the rest are recorded as findings for the next session.
 
 ## Gameplay
@@ -64,6 +64,15 @@ report was written; the rest are recorded as findings for the next session.
 - **The favour network (The City) is far more likely to be found.** Also a
   round-16 finding: its tip existed but sat behind thirteen others in queue
   priority and was never shown in a 305-day career. Moved up the list.
+- **District tiers say what they need.** The round's clearest, most
+  specific complaint — "guessing throughout the run" what raises a district
+  from Foothold to Control. The district panel now names the next tier, the
+  number, and — for the top two tiers, which also require leading the
+  district outright — whether that lead is already held.
+
+All three round-16 fixes above are UI/legibility changes only — none
+touches a balance number, and all three were verified live in the browser
+in addition to their new tests.
 
 ## Longevity
 
@@ -145,10 +154,10 @@ ordinary play rather than a scripted event chain.
   Operations panel occasionally needing a second click) — per the round's
   own reproduction-gate rule, neither qualifies as a finding without a
   second occurrence, and none is claimed as fixed here.
-- **Not fixed, a real gap:** district-tier thresholds (Presence → Foothold
-  → Control → Dominance) are never shown as numbers anywhere on screen —
-  the round's tester reported "guessing throughout the run." Scoped but not
-  attempted this session; see Recommended Next Steps.
+- **Fixed:** district-tier thresholds (Presence → Foothold → Control →
+  Dominance) were never shown as numbers anywhere on screen — the round's
+  tester reported "guessing throughout the run." `nextControlThreshold()`
+  added to `territory.ts` and wired into the district panel; verified live.
 
 ## Tests
 
@@ -161,11 +170,12 @@ ordinary play rather than a scripted event chain.
 - After the two round-16 fixes (card clarity, tip reorder): full suite run
   a third time; see `.ai/TEST_RESULTS.md` for the exact command and count.
 - `npm run build` succeeded after every batch of changes.
-- Two UI-only changes (Word/Ledger's build-screen honesty note, the
-  Intelligence panel's Planted column) were checked live in a running
-  browser via the `mafia-verify` launch config — not only asserted in
-  tests — including confirming the disabled-button gate message renders
-  exactly as `verbs.ts` writes it.
+- Three UI-only changes (Word/Ledger's build-screen honesty note, the
+  Intelligence panel's Planted column, and the district-tier threshold
+  display) were checked live in a running browser via the `mafia-verify`
+  launch config — not only asserted in tests — including confirming the
+  disabled-button gate message renders exactly as `verbs.ts` writes it, and
+  that a district at influence 20 correctly reads "Foothold at 25, 5 more."
 - A full blind playtest round (round16, an isolated instance on port 5316,
   a subagent with no source access) played day 1 to day 305. Full report
   quoted throughout this document and archived in this session's transcript.
@@ -186,6 +196,7 @@ Plus, from the round-16 findings:
 
     fad73ac  The card mechanic explains itself
     e6e8d10  Move the favour-network tip where it can be seen
+    ce77107  District-tier thresholds, said out loud
 
 ## Files changed
 
@@ -201,7 +212,9 @@ Plus, from the round-16 findings:
   Instinct's blurb corrected; four dead keys resolved.
 - `src/ui/panels/IntelligencePanel.tsx` — the Planted column.
 - `src/ui/panels/PlayerPanel.tsx` — the Word/Ledger honesty note.
-- `src/ui/panels/TerritoryPanel.tsx` — the card mechanic's clarity fix.
+- `src/ui/panels/TerritoryPanel.tsx` — the card mechanic's clarity fix and
+  the district-tier threshold display.
+- `src/sim/territory.ts` — `nextControlThreshold()`.
 - `src/ui/tips.ts` — the autopilot tip; the favour-network tip's reorder.
 - Seven test files updated or extended, all test-first per the project's
   standing instruction.
@@ -214,8 +227,6 @@ Plus, from the round-16 findings:
 
 ## Known issues
 
-- **District-tier thresholds are still invisible** — the round's clearest
-  SHOULD FIX not acted on this session. See Recommended Next Steps.
 - **"Let It Run" has no risk setting** — the round's automation directly
   caused its one real financial crisis by picking high-heat, high-cost jobs
   during a cash crunch. A real feature request, not a bug; not attempted.
@@ -234,21 +245,22 @@ Plus, from the round-16 findings:
 
 Ranked:
 
-1. **Show district-tier thresholds as numbers.** The round's clearest,
-   most specific, most repeatable complaint ("guessing throughout the
-   run"), and `CONTROL_THRESHOLDS` already exists in `config/territories.ts`
-   with the exact numbers needed — this is a read-and-display fix, not new
-   design, likely under 30 minutes including a test.
-2. **Run another blind round now that the favour network sits earlier in
-   the tip queue.** The single highest-value validation available: does
-   moving "The City" into reach mid-career (rather than at day 305) push
-   F1's plateau later again, or was the plateau about something else
-   entirely? This is the most direct test of this session's own central
-   finding.
-3. **The rival-heat probe for F5**, still owed across two sessions now.
-4. **An adversarial round** (`DIRECTOR.md` §10 condition 6), never attempted
+1. **Run another blind round now that the favour network sits earlier in
+   the tip queue and district tiers say their own numbers.** The single
+   highest-value validation available: does moving "The City" into reach
+   mid-career (rather than at day 305), plus removing the district-tier
+   guesswork, push F1's plateau later again, or was the plateau about
+   something else entirely? This is the most direct test of this session's
+   own central finding, and unlike everything else in this list it is a
+   measurement rather than a change.
+2. **The rival-heat probe for F5**, still owed across two sessions now.
+3. **An adversarial round** (`DIRECTOR.md` §10 condition 6), never attempted
    in this project's history, and the brief this session was run under
    asks for exactly this kind of check (the "do-nothing test").
+4. **"Let It Run" needs a risk-tolerance setting.** A real feature request
+   from the round, not a bug — the automation's one financial crisis was
+   entirely its own doing, picking the highest-crew job regardless of a
+   cash crunch.
 5. **Reconcile HANDOFF.md and director-log.md against `main`** in a session
    with room to do it carefully.
 
@@ -268,6 +280,6 @@ this codebase's actual risk sits.
 | Economy | 8 | The round ended feeling "actually wealthy," survived a real crisis without the game ending, and no balance number was touched on a hunch this session — every change was wiring or legibility. |
 | Player agency | 8 | The round's most specific praise (the job odds breakdown, the front-haggling dialogue, the informant decision) are all real agency; Instinct joining the list of functional verbs and the card mechanic's fix both extend it. |
 | Run variety | 7 | The round's path (counsel-and-intelligence-heavy, diplomatic rather than warlike) is genuinely different from the standard probe bot's path; F5's rival passivity still caps how much a hostile world can vary a run. |
-| Clarity | 7 | Up from where seven newly-fixed silent refusals and the card mechanic's confusion suggest it was; still capped by district-tier thresholds being invisible, this round's clearest remaining gap. |
-| Technical quality | 9 | 1,367 tests (unchanged by the round-16 fixes, which were a refactor and a reorder rather than new coverage), a self-correcting test-first process followed rigorously across two sessions, zero regressions, every claim in this report checked against actual code or actual test output before being written down. |
+| Clarity | 8 | Up from where seven newly-fixed silent refusals, the card mechanic's confusion, and invisible district-tier thresholds suggest it was — all three of the round's specific clarity complaints were fixed same session. Capped below 9 because none of the three fixes has yet been seen by a human tester. |
+| Technical quality | 9 | 1,368 tests, up three across the whole round (one of them from tonight's last fix), a self-correcting test-first process followed rigorously across two sessions, zero regressions, every claim in this report checked against actual code or actual test output before being written down. |
 | Overall readiness | 7 | Closer to `DIRECTOR.md` §10's release conditions than at the start of this session — no MUST FIX in the latest round — but two of its six conditions (an adversarial round, two consecutive clean rounds) remain entirely unattempted across both sessions now, and should be the next priority ahead of further feature work.
