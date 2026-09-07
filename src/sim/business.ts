@@ -49,6 +49,8 @@ import {
   EXPOSURE_EVIDENCE_ABOVE,
   EXPOSURE_EVIDENCE_CHANCE,
   EXPOSURE_HEAT_AT_MAX,
+  FRONT_UPKEEP_NEGLECT_HEALTH_HIT,
+  FRONT_UPKEEP_RATE,
   LAUNDER_CUT_BASE,
   LAUNDER_CUT_MIN,
   BUSINESS_FROM,
@@ -907,6 +909,70 @@ export function tickBusinesses(
   }
 
   return { revenue, laundered, cut };
+}
+
+/**
+ * What owning the fronts costs, before anybody has tried to pay it.
+ *
+ * A share of what they actually took this week rather than a flat number, so
+ * the bill scales with what is actually being run — one struggling laundromat
+ * owes little, ten thriving nightclubs owe a lot. See config/businesses.ts's
+ * FRONT_UPKEEP_RATE for the reasoning.
+ */
+export function weeklyFrontUpkeep(state: GameState): number {
+  return Math.round(totalWeeklyRevenue(state) * FRONT_UPKEEP_RATE);
+}
+
+/**
+ * Payday's other bill. Same shape as `tickEconomy`'s wages: dirty first,
+ * then clean, the shortfall carried rather than a cliff, run after
+ * `tickBusinesses` has already credited what the fronts took so the bill is
+ * priced on the real week rather than an estimate.
+ *
+ * The consequence is health rather than loyalty, because a front has none to
+ * lose — a building nobody is maintaining degrades, which reuses a penalty
+ * the game already applies for a hostile neighbourhood or a laundry running
+ * hot rather than inventing a second one. See FRONT_UPKEEP_NEGLECT_HEALTH_HIT.
+ */
+export function tickFrontUpkeep(state: GameState): void {
+  if (state.day % PAYDAY_INTERVAL !== 0) return;
+
+  const owned = ownedBusinesses(state);
+  if (owned.length === 0) return;
+
+  const due = weeklyFrontUpkeep(state) + (state.org.frontUpkeepOwed ?? 0);
+  if (due <= 0) {
+    state.org.frontUpkeepOwed = 0;
+    return;
+  }
+
+  // Same partial-payment shape as wages in economy.ts: dirty first, then
+  // clean only if clean alone can cover what dirty could not — draining part
+  // of the clean balance on a short week stalls rank, which is gated on it.
+  const fromDirty = Math.min(due, state.org.dirtyCash);
+  const remainder = due - fromDirty;
+  const fromClean = remainder > 0 && remainder <= state.org.cash ? remainder : 0;
+  const paid = fromDirty + fromClean;
+  if (paid > 0) spend(state, paid, 'premises');
+  state.org.frontUpkeepOwed = Math.max(0, Math.round(due - paid));
+
+  if (state.org.frontUpkeepOwed === 0) return;
+
+  const severity = due > 0 ? 1 - paid / due : 1;
+  const hit = FRONT_UPKEEP_NEGLECT_HEALTH_HIT * severity;
+  for (const b of owned) {
+    b.health = clamp((b.health ?? HEALTH.start) - hit, 0, 100);
+  }
+
+  addLog(
+    state,
+    paid > 0
+      ? `Upkeep on the fronts came up short — $${Math.round(due).toLocaleString('en-US')} due, ` +
+        `$${Math.round(paid).toLocaleString('en-US')} paid. The buildings show it.`
+      : `Nothing paid to keep the fronts up. $${Math.round(due).toLocaleString('en-US')} owed, ` +
+        `and it is starting to look like it.`,
+    'failure',
+  );
 }
 
 /** Everything the player could buy right now, for the businesses panel. */

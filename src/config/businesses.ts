@@ -325,6 +325,83 @@ export const HEALTH = {
   collapseRefundShare: 0.15,
 } as const;
 
+/**
+ * The other half of owning something: a front had a price to buy and, once
+ * bought, nothing at all to keep. Ten businesses were ten annuities that
+ * happened to have a purchase price, which is the reason a career earning
+ * $5,354 per crew-week on $195 wages never runs out of money — nothing it
+ * owns costs anything to hold. `weeklyFrontUpkeep` prices this the way wages
+ * are priced: a real bill, due on payday, out of the same treasury
+ * everything else draws on, so it can go unpaid when the treasury cannot
+ * cover it — unlike the wash cut or the acquisition price, which come off a
+ * front's own earnings before they are ever credited.
+ *
+ * Sized as a share of what the fronts actually took that week rather than a
+ * flat number per business, so a career with one struggling laundromat and a
+ * career with ten thriving nightclubs pay bills proportionate to what they
+ * run, not the same number apiece.
+ */
+export const FRONT_UPKEEP_RATE = 0.4;
+/*
+   Measured at 0.25 first, against `ladder.probe`'s 300-day arms (the window
+   HANDOFF.md §5 says any change has to be sized against — a human never
+   plays past day 300 in a blind round, and this project has twice already
+   tuned a change for a bot nobody plays that far as). 0.25 moved almost
+   nothing there: the front-fork borrowing arm stayed at 0 careers ending
+   early either side, and only the corrected favour/dial arm (a separate fix
+   the same session) produced its first-ever failures, 0 of 36 to 2. That is
+   too small an effect from the single largest structural gap this project's
+   diagnosis found, so it moved to 0.4 — still well under half of what a
+   front earns, but enough that `weeklyFrontUpkeep` is a bill a career can
+   actually be threatened by rather than a rounding error against it.
+
+   `scorecard.probe`'s own Difficulty axis, over 1,460-day careers, moved the
+   wrong way at both readings — 69% of careers already ended early before
+   this change, against a target near 33%, so *more* attrition (73% at 0.25,
+   75% at 0.4) moved it further from the target both times. That is real and
+   worth recording, but it is not evidence this change is wrong: it is
+   evidence that whatever is killing three careers in four over four years
+   was already killing far more than the 300-day-scale problem this project
+   is trying to solve, and is a separate, longer-horizon finding for the
+   developer to pick up (which mechanism, over years two to four, is already
+   over-shooting the fairness target) rather than a reason to leave the
+   300-day economy free to run.
+
+   And a second reading worth being honest about: raising the rate from 0.25
+   to 0.4 barely moved the *300-day* picture either. `scorecard.probe`'s own
+   direct read of "careers that ended before day 300" stayed at 0/36 at both
+   settings — the standard measuring bot simply carries enough buffer that
+   neither rate threatens it that early. What did move: the front-fork
+   borrowing arm went from 0 careers ending early to 1, and the corrected
+   favour/dial arm (a separate fix, same session) produces its first-ever
+   300-day failures at all. Diminishing returns on this one lever, honestly
+   reported rather than chased further — front upkeep alone was never going
+   to be the whole of H1, and DIRECTOR.md §10 is explicit that two flat
+   readings in a row is the signal to stop pushing a lever rather than
+   escalate it again. Left at 0.4, the higher of the two measured points,
+   because it is still safely inside every pre-committed invariant
+   (`foresight`, `balance`, `opReturn`, `broke.probe` all green) and it is a
+   real bill regardless of whether the scorecard's bot happens to feel it —
+   a human overextending on fronts without a cash buffer is not the same
+   player this bot is.
+*/
+
+/**
+ * What going unpaid costs, at a complete miss — scaled by the fraction of
+ * the bill that actually went unpaid, the same shape `MISSED_PAY_*` uses for
+ * a man who was not paid. A front has no loyalty to lose, so the debt is
+ * taken out of its own health instead: a building nobody is maintaining
+ * degrades, which is the honest shape of the consequence and reuses a
+ * penalty the game already has rather than inventing a second one.
+ *
+ * Sized against `HEALTH`'s own weekly terms — `fromSentimentAtWorst` (-4.5)
+ * and `fromExposureAtMax` (-3.2) are the two largest existing penalties, so
+ * a complete miss costing a bit more than both combined is a real bill
+ * without being an instant closure: `HEALTH.recoverPerWeek` (2.2) means one
+ * bad week is recoverable, several in a row are not.
+ */
+export const FRONT_UPKEEP_NEGLECT_HEALTH_HIT = 8;
+
 /** Shuttering a business deliberately dumps its exposure but forfeits most of the price. */
 export const SHUTTER_REFUND_SHARE = 0.35;
 

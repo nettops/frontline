@@ -99,3 +99,45 @@ Three SHOULD FIX items fixed the same session, each verified test-first
 Final state: `tsc -b` clean, 1,368 tests passing (+7 across the whole
 round), 0 failed, `npm run build` succeeds. Ten commits total this session,
 none pushed.
+
+---
+
+# Progress — 2026-09-07, round 17 (full-day round, Opus deciding / Sonnet building)
+
+Developer commissioned this round explicitly to attack the two things every
+prior session deferred — **run variety** and **economic balance** (F1/F5/F7/
+F15/F20/F21) — with a stated goal of every blind-playtest score and every
+QA/probe axis at 9 or 10. Budget: until 9pm EST (~9.5 hours from start,
+11:36am EDT). Developer is checking in periodically; free to add features
+that enhance the experience, not just fix findings.
+
+## Baseline
+
+- `git status` clean, HEAD `baedfce` (autopilot risk-tolerance, this
+  morning's prior session).
+- `tsc -b` clean; last known full suite 1,374 passed / 11 skipped (from the
+  autopilot session's run).
+- Three background agents dispatched immediately, all running against fresh
+  namespaced `npm run playtest` instances (never the developer's save):
+  1. **Opus diagnosis** — full HANDOFF/DIRECTOR read plus live grep/probe
+     verification, tasked with root-causing the run-variety and
+     economic-balance clusters and producing ranked, falsifiable hypotheses.
+     Not implementing anything.
+  2. **Blind playtest, round17** (port from `npm run playtest --id round17`)
+     — baseline read of the *current* state (after the risk-tolerance/
+     HANDOFF fixes from this morning), same brief as every prior round.
+  3. **Adversarial round** (port from `npm run playtest --id round17adv`) —
+     `DIRECTOR.md` §10 condition 6, never once run in this project's
+     history. Told to break the game rather than play it.
+- Re-running `ladder.probe.test.ts` + `scorecard.probe.test.ts` myself in
+  parallel for fresh numbers to work from once the diagnosis lands.
+
+## In progress
+
+Waiting on the three background agents. Next: read the Opus diagnosis,
+cross-check its claims against source before acting (per HANDOFF §3's
+standing rule), rank the implementation queue, and start fixing — test
+first, verify each change, then decide whether it needs a probe or a
+targeted/full blind round per `DIRECTOR.md` §4's sizing rule.
+
+See `.ai/TASKS.md` for the ranked queue as it fills in.

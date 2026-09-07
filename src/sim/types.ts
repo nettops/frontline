@@ -143,6 +143,20 @@ export interface Org {
    */
   wagesOwed?: number;
   /**
+   * Front upkeep owed and not yet paid, on the same shape as `wagesOwed`.
+   *
+   * Fronts had a purchase price and, once bought, no ongoing cost at all —
+   * the one recurring line missing from an economy that otherwise costs
+   * money at every turn. `weeklyFrontUpkeep` in `economy.ts` prices it as a
+   * share of what the fronts actually earned that week, paid the same way
+   * wages are: dirty first, then clean, shortfall carried rather than a
+   * cliff. What a carried shortfall costs is every owned front's health,
+   * proportional to what went unpaid — a neglected building, not a person,
+   * so it has no loyalty to lose. Optional so every save written before this
+   * loads with nothing owed.
+   */
+  frontUpkeepOwed?: number;
+  /**
    * Whoever handles the money, and what they think of you.
    *
    * Optional with no initialiser, the same idiom as `partner` below and the
