@@ -6,9 +6,11 @@ import {
   activeCases,
   allCases,
   destroyEvidence,
+  destroyEvidenceChance,
   hasContact,
   looseEvidence,
   pressureWitness,
+  pressureWitnessChance,
   readCase,
   weeklyLegalCost,
   worstStage,
@@ -22,6 +24,7 @@ import {
   HEAT_CHANNEL_LABEL,
 } from '../../config/heat';
 import { channelHeat } from '../../sim/heat';
+import { civicRoster } from '../../sim/civic';
 import { canContract, openContract, type ContractTarget } from '../../sim/contract';
 import { CONTRACT } from '../../config/contract';
 import type { Investigation } from '../../sim/types';
@@ -263,6 +266,25 @@ function CaseDetail({
         {read.agency.blurb}
       </p>
 
+      {/*
+         A round 17 finding: a banked favour that buries exactly this case
+         sat unused for months because nothing on this page mentioned it —
+         found only by accident, on the last day of a 300-day career. The
+         favour is spent from The City, not from here, so the most this page
+         can do is say the door exists.
+      */}
+      {(() => {
+        const captain = civicRoster(state).find((c) => c.id === 'captain');
+        if (!captain || captain.owed <= 0) return null;
+        return (
+          <p className="faint tiny" style={{ marginBottom: 12 }}>
+            A police captain owes you {captain.owed}. Spent from The City, it
+            takes weight off a case like this one and leaves it cold for a
+            while.
+          </p>
+        );
+      })()}
+
       <div className="grid-2">
         <div>
           <div className="row between" style={{ marginBottom: 4 }}>
@@ -301,6 +323,17 @@ function CaseDetail({
             >
               Get at what they have — {formatMoney(DESTROY_EVIDENCE.cost)}
             </button>
+            {/*
+               A round 17 finding: the risk was real and only ever said in a
+               hover. Same fix this project has made for a refusal before —
+               the figure goes in text under the button, not a tooltip nobody
+               is guaranteed to see before they press it.
+            */}
+            <p className="faint tiny" style={{ margin: '-4px 0 4px' }}>
+              {Math.round(destroyEvidenceChance(state) * 100)}% it works. If it
+              does not, it is a charge of its own — the case gets stronger and
+              it costs heat.
+            </p>
 
             {suspects.length > 0 && (
               <>
@@ -319,6 +352,10 @@ function CaseDetail({
                     {npc.name}
                   </button>
                 ))}
+                <p className="faint tiny" style={{ margin: '-4px 0 4px' }}>
+                  {Math.round(pressureWitnessChance(state) * 100)}% it works. If
+                  they go to them instead, this gets much worse.
+                </p>
 
                 {/*
                    And what happens when leaning is not enough.
