@@ -78,12 +78,24 @@ succeeds. The two UI-visible changes (Word/Ledger's honesty note, the
 Planted column) were checked live in the browser via the `mafia-verify`
 launch config, not only in tests.
 
-## In progress
+## The blind round, and three more fixes from what it found
 
-A blind playtest round (round16, port 5316, via
-`node scripts/playtest-run.mjs --id round16 --port 5316`) was dispatched to
-a fresh subagent to validate the accumulated
-changes from both sessions — the first human-shaped look at contracts, the
-armoury, the favour network, the pressure dial, and now Instinct and the
-refusal fixes, none of which any blind round has ever seen. See
-`.ai/FINAL_REPORT.md` for its results once it lands.
+`round16` (port 5316) played day 1 to day 305. Result: no MUST FIX items;
+decisions held novel to ~day 220-230, against F1's three-round-confirmed
+~day 90-119. Full report in `.ai/FINAL_REPORT.md`.
+
+Three SHOULD FIX items fixed the same session, each verified test-first
+(reverted and re-run to confirm red) and live in the browser:
+
+7. **`fad73ac`** The card mechanic explains itself — `cardPerDistrict` split
+   out of `cardTake`, previewing what a district would pay before commit.
+8. **`e6e8d10`** The favour-network tip moved from 29th to 9th in queue
+   priority — it existed but was never shown in a 305-day career.
+9. **`ce77107`** District-tier thresholds shown as numbers for the first
+   time — `nextControlThreshold()` in `territory.ts`, naming the next tier,
+   the influence number, and whether the top two tiers' lead requirement is
+   already met.
+
+Final state: `tsc -b` clean, 1,368 tests passing (+7 across the whole
+round), 0 failed, `npm run build` succeeds. Ten commits total this session,
+none pushed.
