@@ -418,3 +418,47 @@ an open defect. Re-litigating settled findings would be busywork with this
 project's own name for it: an instrument returning a believable number about
 itself. The one thing this session found that nobody had checked yet was the
 tips gap, and it is what got fixed.
+
+## Round18's blind report — a real death, and two real signposting gaps
+
+The good news first: **a career died permanently at day 280**, killed by a
+mismanaged war, after a genuine cash crisis (sold savings, took a
+loan-shark loan just to make payroll). First recorded death-by-play in
+this project's blind-round history at anything near day 300. Scores,
+uncontaminated (no source edits during this round): First hour 8, Clarity
+8, Feedback 8, Depth 7, Pacing 6, Difficulty 5, Writing 9, Interface 6,
+**Standing in it 8 (new high), Fun 7 (tied high)**.
+
+Fixed same session, both test-first and mutation-verified:
+- **Succession never gets surfaced during a live war**, and the death
+  screen named exactly this as the cause ("nobody senior enough to take
+  it"). `attention.ts` gains a war+no-heir line naming the most senior
+  eligible man and pointing at Succession.
+- **The existing "teaching" (pairing/mentorship) hint named the situation,
+  not the door** — round 18 hit it twice and never found the actual
+  button. Now names both men and the button by name.
+- **Normal's difficulty blurb overpromised** ("mistakes cost, but they do
+  not end you") against a mechanic (war) that killed the tester outright.
+  Rewritten to promise only what the difficulty numbers actually soften.
+
+`round19` dispatched to check whether these move Difficulty/Interface on
+a fresh, uncontaminated round. No source edits while it runs.
+
+## Not attempted this session, and why — for the next one
+
+- **Pacing's day-180-200 wall is unmoved across every round in this
+  project's history**, including round18 after H4's gate resize. Root
+  cause per Opus: EV per crew-day is monotone in job tier, so nothing below
+  the frontier job is ever worth taking once it unlocks — a structural
+  property of the job table, not a bug. The fix needs either new job kinds
+  or a job that pays in something other than money (Opus's feature idea
+  (c)); both are content-shaped work this session deliberately left alone
+  rather than rush under time pressure. **This is the single most
+  load-bearing remaining item for Pacing and Depth's breadth term.**
+- Opus's other feature ideas ((a) a payroll shortfall with a name attached,
+  (b) a district that costs more than it gives, (d) a reachable deposition
+  threat) — none attempted. (b) is the natural next step if a future
+  session wants more 300-day economic bite than front upkeep alone
+  provided.
+- H6 (`propose_alliance` at 0/36) — diagnosed, not attempted; needs a real
+  design call about passive trust accrual, not a rushed addition.
