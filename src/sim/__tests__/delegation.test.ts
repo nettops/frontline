@@ -223,6 +223,44 @@ describe('what he does with it', () => {
       'a well-paid, well-regarded man should not be stealing as freely',
     ).toBeLessThan(sore.skimTotal);
   });
+
+  it('backs up what the build screen promises Grip does', () => {
+    /*
+       `config/build.ts`'s WORLD.gripSkim existed and was read by nothing —
+       the allocation screen told a player at Grip 3+ that "stewards report
+       honestly" while this file never looked at the stat. Everything but
+       `player.build.grip` held identical between the two worlds, including
+       authority, so the gap this measures is Grip's alone.
+    */
+    const loose = game();
+    const gripped = game();
+
+    for (const [state, grip] of [
+      [loose, 1],
+      [gripped, 10],
+    ] as const) {
+      const rng = new Rng(state.rng);
+      const { t, npc } = setup(state);
+      npc.stats.greed = 95;
+      npc.stats.loyalty = 10;
+      npc.stats.grievance = 70;
+      npc.stats.respectForBoss = 20;
+      npc.wage = 100;
+      state.player.build = { ...(state.player.build ?? {}), grip } as GameState['player']['build'];
+      putInCharge(state, npc.id, t.id);
+      for (let w = 1; w <= 16; w++) {
+        state.day = w * DELEGATION.intervalDays;
+        tickDelegation(state, rng);
+      }
+    }
+
+    const looseTake = crewList(loose)[0].skimTotal;
+    const grippedTake = crewList(gripped)[0].skimTotal;
+    expect(
+      grippedTake,
+      'a boss at full Grip should not be skimmed as freely as one at the floor',
+    ).toBeLessThan(looseTake);
+  });
 });
 
 describe('the record you read him from', () => {
