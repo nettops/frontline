@@ -885,7 +885,8 @@ function resolveOperation(state: GameState, rng: Rng, op: ActiveOperation): void
     result.payout = payout;
     result.heat = heat;
     earnDirty(state, payout, 'jobs');
-    addHeat(state, heat, 'street', def.name);
+    // A cause, not a label: `addHeat` makes this the first half of a sentence.
+    addHeat(state, heat, 'street', `somebody talked about the ${def.name.toLowerCase()}`);
     gainRespect(state, def.respect * approach.respect);
     /*
        Doing it loudly buys a different currency.
@@ -938,7 +939,7 @@ function resolveOperation(state: GameState, rng: Rng, op: ActiveOperation): void
       kitHeat(score) *
       patternHeat(patternOn(state, def.id, territory.id));
     result.heat = heat;
-    addHeat(state, heat, 'street', `${def.name} went wrong`);
+    addHeat(state, heat, 'street', `the ${def.name.toLowerCase()} went wrong`);
     gainRespect(state, -Math.ceil(def.respect / 3));
     /*
        Being feared is a claim about what happens to people who cross you.
@@ -1243,17 +1244,39 @@ function applyFailureConsequence(
       return say(
         `clean_${def.id}_${territoryId}`,
         state.day,
+        /*
+           The generic three used to be unconditional, so they won every draw.
+
+           `scorecard.probe` measured *"It was over before it started. Everybody
+           got home."* and the tail *"That was the problem."* inside the eight
+           loudest lines in the game, for the same structural reason the recruit
+           list had: a variant that needs no data is available on every roll and
+           the ones that name a man or a street are not. Every line here now
+           names one of the three things a night actually had in it, and the
+           bare pair at the end only appear when there was nobody and nowhere.
+        */
         [
-          'It came apart, but everyone walked away.',
-          'Nothing to show for it, and nothing left behind either.',
-          'It was over before it started. Everybody got home.',
           who ? `${who} called it off early. Nobody argued.` : null,
           who ? `${who} said afterwards it was never going to work.` : null,
+          who ? `${who} got there, turned straight round, and will not say why.` : null,
+          /*
+             Five street lines rather than two, because a solo job has no
+             `who` and the street variants were the only ones drawing. The
+             probe measured *"Whatever was supposed to happen in Little Sicily
+             did not."* at 1.2% of every sentence-ending inside one run of the
+             first repair — the same fault, one layer down.
+          */
           street ? `Whatever was supposed to happen in ${street} did not.` : null,
-          street ? `${street} was quiet, and stayed quiet. That was the problem.` : null,
+          street ? `${street} stayed quiet all night. Nobody came out.` : null,
+          street ? `Two hours in ${street} and the door never opened.` : null,
+          street ? `The man in ${street} who was expecting you did not turn up.` : null,
+          street ? `Somebody in ${street} had already been told. Nothing to do but leave.` : null,
+          street && who ? `${who} waited in ${street} for two hours and came home.` : null,
           crew.length > 1
             ? `${crew.length} of yours stood about for an hour and came back.`
             : null,
+          !who && !street ? 'It came apart, and everybody walked away.' : null,
+          !who && !street ? 'Nothing to show for it, and nothing left behind either.' : null,
         ].filter((x): x is string => x !== null),
       );
     }

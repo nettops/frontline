@@ -23,7 +23,7 @@
  */
 
 import { Rng } from './rng';
-import { addLog, formatMoney } from './util';
+import { addLog, formatMoney, say } from './util';
 import { priced } from './market';
 import { cover } from './perception';
 import { note } from './ledger';
@@ -203,7 +203,22 @@ export function grantPossession(state: GameState, rng: Rng, defId: string): Poss
   };
   possessions(state).push(possession);
 
-  addLog(state, `${def.name} came back with them. Nobody asked whose it was.`, 'money');
+  /*
+     One sentence for every thing that ever came home, which the probe measured
+     at 0.9% of every sentence-ending in the game. The item is right here and
+     was being used only as a subject.
+  */
+  addLog(
+    state,
+    say(`possession_${def.id}`, state.day, [
+      `${def.name} came back with them. Nobody asked whose it was.`,
+      `Somebody put ${def.name.toLowerCase()} in the back of the car and nobody mentioned it again.`,
+      `${def.name} was in the boot when they got back. It is yours now.`,
+      `Nobody has claimed ${def.name.toLowerCase()}, and nobody is going to.`,
+      `${def.name} came off the job. Whoever owned it has not been in touch.`,
+    ]),
+    'money',
+  );
 
   // And whatever the city makes of it, through `cover` like every other story.
   if (def.visibility > 0) {

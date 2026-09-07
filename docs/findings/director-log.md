@@ -3276,3 +3276,111 @@ identical rooms would have been. It ends at 2,098x the base, and 35 careers in
 
 Restated rather than dropped, with what they used to read printed beside what
 they read now. The rooms went by decision, not because a bar failed.
+
+
+---
+
+## The writing pass — 2026-09-07
+
+A full player-facing language audit, directed rather than found: the brief was
+to remove cryptic, vague and generated-sounding language without sanding off the
+voice. **What the audit actually found is that this game does not have the
+problem it was asked to look for, and does have a structural one nobody had
+named.**
+
+### What was looked for and was not there
+
+The brief listed the usual generated-prose tells — *"something has shifted"*,
+*"tensions are rising"*, *"the streets are talking"*, *"only time will tell"*.
+A rule per pattern, run over every player-facing string in 172 files:
+**nine hits, and all nine were false positives** — *"The city is building
+again. Cranes on the north side and nobody counting closely"*, *"Nobody in the
+room is dressed better"*. Good concrete sentences that happened to contain the
+word *city* or *room*. The rules were tightened until they had none, which is
+the only state a prose linter is worth keeping in.
+
+### What was there instead
+
+**One structural fault, in five places, and it is not about sentences.** Where
+the game varies a line, it picks from a list where some variants need data — a
+name, a district — and some do not. The ones that need nothing are available on
+every draw. The ones that name somebody are not. So the generic variant wins
+almost every time and the specific writing, which is the good writing, is the
+part the player never sees.
+
+`scorecard.probe` had been measuring the consequence for months: 36% of
+everything read across 48 careers was a line already read, with eight named
+offenders. Every one of them turned out to be a data-free fallback in a list
+that also contained better lines:
+
+    crew.ts        3 of 6 recruit variants needed no name  -> all 6 name somebody
+    operations.ts  3 of 8 job-outcome variants needed none -> street and crew named
+    perception.ts  3 of 5 war headlines had no {where}     -> 11 headlines, 8 standalone
+    faction.ts     1 fixed sentence per rival action       -> 4-5, naming a district
+    possessions.ts 1 fixed sentence for every item ever    -> 5, naming the thing
+
+**And the loudest line in the game was a status report.** `Attention on the
+organization has risen: Major Investigation. (Enforce the Peace went wrong)` —
+measured as the single loudest sentence-ending at 1.2% of everything read. It
+named a meter, wrote like a department, and parked its one piece of real
+information in brackets at the end. The tier descriptions in `tuning/heat.json`
+were already the writing it needed — *"Someone has been assigned to you"* — and
+had never been shown to anybody at the moment they became true.
+
+    before  Attention on the organization has risen: Major Investigation.
+            (Enforce the Peace went wrong)
+    after   The truck hijacking went wrong. Somebody wrote your name down.
+            A body turned up. Two of your men have been stopped and searched
+            this week for nothing.
+
+The first repair appended the static description to the cause, which was better
+and introduced a smaller version of the same fault — seven fixed strings.
+`scorecard.probe` measured *"Nothing more."* at **2.2%**, the loudest in the
+game, within one run of shipping it. Each tier carries three observations now.
+
+### Measured
+
+    scorecard.probe, 48 careers        before   after
+    lines already read                   36%      31%
+    loudest single sentence               2%       1%
+    days saying nothing new              16%      13%
+    lines above 0.5% of everything    4 (0.9)  none
+
+The distribution is the finding rather than the total. Some repetition in a
+four-year daily log is correct — a payday should look like a payday. What was
+wrong was one sentence dominating, and no sentence now clears 0.5%.
+
+### What was deliberately not changed
+
+**Public feeling and heat stay numbers where they gate something.**
+`refusals.test.ts` requires every gate to name the figure it enforces, and
+"Public feeling in Dockside is 27; nobody there sells below 30" is that rule
+working. What was removed is the same number appearing in an *event body* with
+a paragraph explaining what the number does — the panel has the bar, and an
+event is for the thing that happened.
+
+**The perception system is untouched.** Nothing about what the game hides
+moved. `perceive()` has the same eleven call sites and fogs the same stats.
+
+**No simulation, balance or probability changed.** Every edit is a string, with
+two exceptions that are both text plumbing: `addHeat` composes its reason into
+a sentence instead of a bracket, and the briefing reads `heatTier` to say which
+tier was crossed.
+
+### The instrument
+
+`src/ui/__tests__/prose.test.ts` — the linter, in the gate, because the failure
+mode of a prose rule is silence. The strings still render, the types still
+check, and the game slowly goes back to sounding like a report. It carries a
+guard on itself as well: a scanner that stopped matching would report zero
+findings for ever, which is indistinguishable from success and is the mistake
+this project calls an instrument reporting a fact about itself.
+
+Seen to fail with an AI-slop line put back, on both the vague and portent rules.
+
+### The one the guard caught on me
+
+The gendered-pronoun test failed four times during this work. Every player-facing
+line I wrote reached for *he* — *"He said he did not know"*, *"a name he had
+never heard"*. The game deliberately never decides anybody's gender and has a
+pre-committed test for it; without that test all four would have shipped.
