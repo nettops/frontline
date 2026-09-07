@@ -3384,3 +3384,59 @@ The gendered-pronoun test failed four times during this work. Every player-facin
 line I wrote reached for *he* — *"He said he did not know"*, *"a name he had
 never heard"*. The game deliberately never decides anybody's gender and has a
 pre-committed test for it; without that test all four would have shipped.
+
+
+### Character voice — the second half of the writing pass
+
+The one objective the first pass did not deliver, and it needed reading rather
+than rules: *a capo should not sound like a narrator, a nervous associate
+should not sound like a philosopher.*
+
+**The sit-down had no dialogue in it.** It is the system the design calls the
+second verb — the one place where somebody is in the room with you — and the
+man opposite never spoke. `says` is your line, `asks` is a question he puts to
+you, and everything else came back as narration: *"They do not count it in
+front of you, which is manners, and they do not put it away either, which is an
+answer."* That is good writing and it belongs to the **register**, not to the
+person, so a hot-headed enforcer and a calculating bookkeeper produced the same
+sentence in the same cadence. One writer doing every part.
+
+`config/voice.ts` gives all sixteen traits a voice, split by whether the move
+landed, and `inHisVoice` puts his words over the narration. Same register, same
+beat, three different men:
+
+    Matteo Rizzo   loyalist   "I am not going anywhere, if that is what this
+                              is about."
+    Paolo Amato    brutal     "Talk is what got it this far."
+    Rocco Falcone  greedy     "Everybody wants something from me for free
+                              this month."
+
+**Keyed on traits and not on stats, and that is the load-bearing choice.** The
+obvious thing was to write the angry line off `loyalty` — he snaps because
+loyalty is 22 — which is the hidden number leaking out dressed as character and
+worse than printing it, because it looks like writing. A trait is *manner*: how
+somebody talks is the most observable thing about them, you hear it the moment
+they open their mouth, and it says nothing about where any figure sits.
+
+Unread traits are preferred on purpose. A man whose sheet says nothing while he
+talks like a gambler is the inference the whole system exists to sell.
+
+Several of the lines are deliberately worse writing than the narration beside
+them, because people are: they repeat themselves, start again, answer a
+different question, say more than they meant to. *"Yeah, no, definitely.
+Definitely. What was the first bit again?"* is a sloppy man and could not be
+moved to any other trait, which is the test each line was written against.
+
+**Two faults found by testing rather than by reading.** A loyalist said the
+same sentence twice in one conversation, two beats apart, because keying on the
+man and the register was not enough on its own — what he has already said is in
+`beats` and is now checked rather than hoped for. And the first version of the
+rule-1 guard asserted his words do not move when a hidden stat moves, put one
+man at 5 and another at 95, and **failed correctly**: stats decide whether the
+move lands, landing decides which half of the voice is drawn, and the player
+watched the landing happen. The line following the outcome is not a leak, it is
+the outcome. The guard now holds the real invariant — whatever he says belongs
+to one of his own traits, in the half matching what the player just saw.
+
+Four guards in `voice.test.ts`, three seen to fail with the fault put back: one
+voice for everybody, a man repeating himself, and a trait shipping mute.

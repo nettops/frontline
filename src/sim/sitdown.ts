@@ -35,7 +35,8 @@ import {
   SITDOWN,
   type RegisterDef,
 } from '../config/sitdown';
-import { STAT_BANDS } from '../config/npcs';
+import { STAT_BANDS, TRAIT_BY_ID } from '../config/npcs';
+import { VOICES } from '../config/voice';
 import { addLog } from './util';
 import { addNote, isOutOfReach, somethingGood } from './npc';
 import { remember } from './memory';
@@ -253,6 +254,74 @@ export function sitdownOptions(state: GameState): Option[] {
     }));
 }
 
+/**
+ * The narration, with him talking over the top of it.
+ *
+ * `landed` and `missed` belong to the *register*, so before this a hot-headed
+ * enforcer and a calculating bookkeeper produced identical prose in identical
+ * cadence — the same measured, ironic sentence whoever was in the chair. The
+ * narration is good and stays; what it was missing is that nobody in it had a
+ * voice of their own.
+ *
+ * Keyed on a trait rather than on a stat, and that is the load-bearing choice.
+ * Writing an angry line because `loyalty` is 22 would be the hidden number
+ * leaking out dressed as character, which is worse than printing it. A trait is
+ * *manner* — how somebody talks is the most observable thing about them, you
+ * hear it the moment they open their mouth, and it says nothing about where any
+ * number sits. `hot_headed` snaps on a hit and on a miss; which of those
+ * happened is still carried entirely by the sentence beside it.
+ *
+ * Unread traits are preferred on purpose. A man whose sheet says nothing while
+ * he talks like a gambler is the inference this whole system exists to sell —
+ * it hands the player something to be wrong about, and reveals no figure.
+ */
+function inHisVoice(
+  state: GameState,
+  sit: Sitdown,
+  reg: RegisterDef,
+  landed: boolean,
+): string {
+  const narration = landed ? reg.landed : reg.missed;
+  const npc = sit.npcId ? state.npcs[sit.npcId] : null;
+  if (!npc) return narration;
+
+  /*
+     The trait a player is least likely to have read comes first. `obvious`
+     traits are already on the crew sheet, so hearing one of those tells them
+     something they had; hearing an unread one is new.
+  */
+  const withVoice = npc.traits.filter((t) => VOICES[t]);
+  if (!withVoice.length) return narration;
+  const hidden = withVoice.filter((t) => !TRAIT_BY_ID[t]?.obvious);
+  const pool = hidden.length ? hidden : withVoice;
+
+  /*
+     Keyed on the man and the beat rather than the day, so the same person does
+     not say the same thing twice in one conversation and two men in the same
+     week do not say it in chorus. `stableNoise` because this only reports.
+  */
+  const beat = sit.beats.length;
+  const trait = pool[Math.floor(Rng.stableNoise(`voice:${npc.id}`, beat) * pool.length) % pool.length];
+  const lines = landed ? VOICES[trait].landed : VOICES[trait].missed;
+
+  /*
+     Nothing he has already said tonight.
+
+     Keying on the man, the register and the beat was not enough on its own —
+     two different keys landed on the same index two beats apart and a loyalist
+     said *"I am not going anywhere, if that is what this is about"* twice in
+     one conversation, which is the one thing a voice layer must not do. What
+     he has already said is right here in `beats`, so it is checked rather than
+     hoped for.
+  */
+  const already = new Set(sit.beats.map((b) => b.text.split('\n')[0]));
+  const fresh = lines.filter((l) => !already.has(l));
+  const pick = fresh.length ? fresh : lines;
+  const line =
+    pick[Math.floor(Rng.stableNoise(`voiceline:${npc.id}:${reg.id}`, beat) * pick.length) % pick.length];
+  return `${line}\n\n${narration}`;
+}
+
 /** The ones you could actually say. */
 export function availableRegisters(state: GameState): RegisterDef[] {
   return sitdownOptions(state)
@@ -306,7 +375,11 @@ export function chooseRegister(state: GameState, _rng: Rng, registerId: string):
   }
 
   const landed = lands(state, sit, reg);
-  sit.beats.push({ registerId: reg.id, landed, text: landed ? reg.landed : reg.missed });
+  sit.beats.push({
+    registerId: reg.id,
+    landed,
+    text: inHisVoice(state, sit, reg, landed),
+  });
 
   /*
      Answering clears the question, whether or not the answer landed. He asked,
