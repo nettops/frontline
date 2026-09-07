@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { canPutOnCard, cardTake, putOnCard, takeOffCard } from '../../sim/verbs';
+import { canPutOnCard, cardPerDistrict, cardTake, putOnCard, takeOffCard } from '../../sim/verbs';
 import { hasVerb } from '../../sim/build';
 import { useGame, mutate } from '../../store';
 import { Panel, Bar, KeyValue } from '../components';
@@ -138,7 +138,11 @@ export default function TerritoryPanel() {
                 return (
                   <tr key={t.id}>
                     <td>{territoryDef(t.id).name}</td>
-                    <td className="dim">{on ? 'paying' : 'not on the card'}</td>
+                    <td className="dim">
+                      {on
+                        ? `paying ${formatMoney(cardPerDistrict(state))} a week`
+                        : `not on the card — ${formatMoney(cardPerDistrict(state))} a week if it were`}
+                    </td>
                     <td>
                       <button
                         className="btn small"
@@ -160,7 +164,13 @@ export default function TerritoryPanel() {
             </tbody>
           </table>
           <p className="faint tiny" style={{ marginBottom: 0 }}>
-            {formatMoney(cardTake(state))} a week at what you are worth now.
+            {(state.org.card ?? []).length > 0
+              ? `${formatMoney(cardTake(state))} a week, across ${(state.org.card ?? []).length} ${
+                  (state.org.card ?? []).length === 1 ? 'district' : 'districts'
+                }.`
+              : 'Nothing on the card yet.'}{' '}
+            Every district pays the same {formatMoney(cardPerDistrict(state))} — fear moves that
+            figure, not the ground itself.
           </p>
         </Panel>
       )}
