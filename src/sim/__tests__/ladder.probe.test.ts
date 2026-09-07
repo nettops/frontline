@@ -8290,7 +8290,7 @@ describe('the other families', () => {
     console.log(
       `        the three bars, 40th / median / 75th of the best any career reached:
 ` +
-        `          standing (alliance wants 40)  ` +
+        `          standing (alliance wants ${DIPLOMATIC_ACTION_BY_ID['propose_alliance'].minRelationship})  ` +
         `${Math.round(pct(RUNS_300.map((r) => r.rivals.peakStanding), 0.4))} / ` +
         `${Math.round(median(RUNS_300.map((r) => r.rivals.peakStanding)))} / ` +
         `${Math.round(pct(RUNS_300.map((r) => r.rivals.peakStanding), 0.75))}
