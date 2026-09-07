@@ -44,6 +44,8 @@ import { playerInfluence, territoryList } from '../sim/territory';
 import { caposOf } from '../sim/capos';
 import { canContract } from '../sim/contract';
 import { RIVAL_IDS } from '../config/factions';
+import { availableCrew } from '../sim/npc';
+import { autopilotOn } from '../sim/autopilot';
 
 export interface Tip {
   id: string;
@@ -520,6 +522,27 @@ export const TIPS: Tip[] = [
           (c) => canContract(s, { kind: 'capo', factionId: f, capoId: c.id }).ok,
         ),
       ),
+  },
+  {
+    /*
+       The autopilot switch. `autopilot.ts`'s own header records that its bar
+       was reversed on purpose so that letting the crew run itself is a
+       supported way to play rather than a worse one — 20 of 36 careers come
+       out ahead doing it. Round 14's Fun score of 5 was explained as "the
+       last hundred and eighty were grinding a position I could not win, with
+       the same four jobs," which is exactly the state this switch exists to
+       relieve, and nothing in the tip strip had ever mentioned it.
+
+       Gated on the roster being big enough for the loop to actually be a
+       chore, not on day one — a one-man crew has nothing to hand off.
+    */
+    id: 'autopilot',
+    only: ['career', 'sandbox'],
+    label: 'The grind',
+    text:
+      'Running every job yourself gets old. Operations has a switch that lets the crew work itself — it plays cautiously and it is not free, but it is a real way to play rather than a worse one.',
+    panel: 'operations',
+    when: (s) => availableCrew(s).length >= 4 && !autopilotOn(s),
   },
   {
     id: 'heir',
