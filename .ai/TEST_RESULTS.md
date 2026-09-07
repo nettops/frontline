@@ -113,7 +113,20 @@ Using the `mafia-verify` launch config (port 5310) and the page's own
 A full blind playtest round (`round16`, isolated instance on port 5316, a
 fresh subagent with no source access) was dispatched to validate the
 accumulated changes from both sessions against an actual human-shaped read.
-Its full report is in `.ai/FINAL_REPORT.md`.
+Result: no MUST FIX items; decisions held novel to ~day 220-230 against
+F1's three-round-confirmed ~day 90-119. Full report in `.ai/FINAL_REPORT.md`.
+
+## Two more fixes from what the round found, and the final verification
+
+    npx tsc -b         clean
+    npx vitest run     1,367 passed, 11 skipped, 0 failed — unchanged count,
+                       both fixes are a refactor (cardTake/cardPerDistrict)
+                       and a reorder (the favours tip), not new coverage
+    npm run build      succeeds, 3.46s, same pre-existing chunk-size warning
+
+Committed as `fad73ac` (the card mechanic) and `e6e8d10` (the tip reorder).
+No further changes after this — see `.ai/FINAL_REPORT.md` for the full
+session account and `git log` for the complete commit list.
 
 ## Not run this round, and why
 
