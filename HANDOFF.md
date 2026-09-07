@@ -21,13 +21,17 @@ operations, crew, territory, rival families, and law enforcement.
     npx tsc -b         # types
     npm run playtest   # namespaced instance for blind testers
 
-**Current verified state, 2026-09-07: `tsc` clean, 1,368 tests, 109 files, all
-passing — nothing failing on purpose right now.** 101,522 lines across 289
-source files. The rank-ladder pacing questions this paragraph used to argue
-with itself about (three overlapping, partly contradictory sentences, left
-exactly as a warning about editing this file by appending rather than
-revising) were resolved somewhere in the nine days this file stopped
-tracking — see §1a.
+**Current verified state, 2026-09-07 (afternoon, round 17): `tsc` clean,
+1,380 tests, 110 files, all passing except one documented, unattributed
+finding — see §6's newest reconciliation block.** The rank-ladder pacing
+questions this paragraph used to argue with itself about (three overlapping,
+partly contradictory sentences, left exactly as a warning about editing this
+file by appending rather than revising) were resolved somewhere in the nine
+days this file stopped tracking — see §1a. **Read §6's "round 17" block
+before trusting anything else in this file about the economy** — F15 and F2
+closed, F11 and F13 were already fixed, and the favour network and pressure
+dial were never decoration, all discovered the same afternoon because
+nobody had re-measured since they changed.
 
 ### 1a. The gap this file did not track, 2026-08-21 to 2026-09-06
 
@@ -463,6 +467,163 @@ director log entry "Developer decision — 2026-08-21".
 ## 6. Open findings
 
 Ranked. F10 outranks everything else in this list.
+
+### Reconciled 2026-09-07, round 17 (afternoon) — read this before the block below it
+
+A full-day round, developer-commissioned to attack run variety and economic
+balance specifically. Opus diagnosed against live code and fresh probe runs
+rather than this file's own prose — which was the right call, because this
+file was **materially wrong about the economy** by the time it was read.
+Everything below is what changed; the block under this one (this morning's
+reconciliation) is superseded wherever the two disagree.
+
+**F15 and F2 are CLOSED, not "improved."** Verified by a fresh `ladder.probe`
+run rather than assumed: 36/36 careers compound, median 10 fronts, first
+front bought day 14, no career finishes flat. Somewhere in the last ~70
+commits the front-gate fork this file spent a full section on stopped
+existing. **Do not plan a session around F15 without re-measuring first** —
+this is now the second time in two sessions this file described a game that
+had already changed.
+
+**HANDOFF §7a's four "deliberately failing" tests: three are green.** The
+back-half-supply bar (0.3311 → now hovers at the bar, statistically
+inconclusive either way — see below), the alderman-reachability bar
+(35/36 → 15/36, passes), and the scorecard axis-collapse guard all resolve
+now. Only the Pacing/`grok.probe` bar (59 vs ≥60) is still definitively red.
+Nobody had re-run these and noticed.
+
+**F13 (a refused memo option doesn't look refused) and F11 (the death
+screen has no post-mortem) are BOTH ALREADY FIXED**, contradicting their
+listing below and in this morning's reconciliation. Verified by reading the
+actual components: `MemoModal.tsx` renders a blocked choice in
+`.memo-choice-blocked` (red, ✕ prefix, `theme.css:1216`) with its own
+explanatory comment describing exactly this fix; `App.tsx`'s game-over
+screen renders `careerShape`, `postMortem()` and the full succession line
+(`App.tsx:173-229`), also with a comment naming F11 as what it closed.
+Neither fix was ever crossed off this file's list. **This is the pattern to
+take away, not the two instances**: findings get fixed and this file does
+not get told.
+
+**F5 — improved again, honestly only a little.** `AI.consolidate.wealthGain`
+12,000 → 1,500 (was already 12,000, down from an original 40,000).
+Consolidate's share of rival-weeks moved 61% → 59%. Root cause found by
+reading `scoreConsolidate`, not guessed: wealthGain never appears in the
+score formula at all (`caution*heatPressure + alarmed + broke`), so it only
+ever moved the *payoff* for going quiet, not the *frequency* of choosing it.
+Frequency is the heat term, untouched this session on purpose — see
+`config/factions.ts`'s own comment on `wealthGain` for the full reasoning
+and TASKS.md for why a fourth pass on this file needs its own session.
+
+**F20/F21 — the favour network and pressure dial were never decoration.
+The instrument measuring them was broken, and once fixed they are the best
+lever this session found.** `ladder.probe.test.ts`'s `active` bot policy
+triggered "go clean" on an organization-wide case stage and heat, which is
+not what `config/pressure.ts`'s `clean` setting defends (a front's own
+exposure). Rewritten to react to `exposure > EXPOSURE_ALARMING_ABOVE`, per
+front. Corrected `pairedGap` reading: **+$749,645 estate, +$1,937,207
+laundered**, against the old (verified-real, not an artifact)
+**-$896,499 / -$1,047,987** the broken policy produced. F20's "hard" gating
+was not touched — the corrected policy simply uses the state the dial
+actually protects against, and that alone was the whole fix.
+
+**A new structural gap in the economy, found and partly closed: fronts had
+a purchase price and no ongoing cost.** No weekly tick anywhere deducted
+anything for owning a business — verified by reading `tickEconomy` and
+`tickBusinesses` line by line, not inferred from a symptom. Rivals have had
+the equivalent (`upkeepPerBusiness`, `upkeepPerDistrict`) since early in
+the project; the player never did. `weeklyFrontUpkeep`/`tickFrontUpkeep`
+(`sim/business.ts`) now charges 40% of a front's actual weekly revenue on
+payday, same partial-payment shape as wages, unpaid arrears costing front
+health. **Only a first slice**: at either rate tested (0.25, 0.4) the
+scorecard's own "careers ended before day 300" reading stayed at 0/36 — the
+standard measuring bot simply has enough buffer that front upkeep alone
+does not threaten it that early. The 1,460-day Difficulty axis (see below)
+moved the wrong way from this change and was partly offset by the job-gate
+change that followed it. `ROLE_WAGE` (crew wages) and a player-side
+district-holding cost — the two other halves of Opus's "cost of scale"
+diagnosis — are untouched.
+
+**The job table's two top-tier gates were resized, carefully, after the
+first attempt broke a hard floor.** `citywide_network` and
+`enforce_the_peace` both gated on `districtsControlled >= 3` against a
+measured 300-day median of 4 — cleared with over a hundred days still on
+the clock. Raising both to `>= 6` (citywide) / `>= 5` (enforce) collapsed
+`ladder.probe`'s "Boss is out of reach in a human career" from 36/36 to
+2/36 — `citywide_network`'s payout turned out to be load-bearing for
+reaching that rank inside 300 days at all, a coupling the gate-only
+diagnosis had not accounted for. **Caught by the pre-committed test exactly
+as it exists to do.** Settled one point above the median (`>= 4` for both)
+instead of two. Depth ~flat (8.2→8.1), Pacing 6.4→6.5, Difficulty 4.7→5.1 on
+the 1,460-day scorecard axes.
+
+**Difficulty is a release-blocking regression nobody had noticed, and this
+session's own changes cut both ways on it.** `scorecard.probe`'s Difficulty
+axis reads **4.7 at the start of this session** — the lowest ever measured,
+and DIRECTOR.md §10 condition 4 ("no measured axis below 6") is failing
+right now. Root arithmetic: 0/36 careers end inside 300 days, and 69-75% end
+early over the full 1,460-day arc the axis is actually measured on — two
+facts that look contradictory until you notice they describe different
+windows. The `fairness` term wants `endedEarly` near 33%; the population was
+already at 69% (too much attrition, on the *long* horizon) before this
+session touched anything, so front upkeep's extra attrition made it worse
+(69%→75% across two rate tests) while the job-gate resize's extra
+rank-holding partly offset it back (75%→65%, axis 4.2→5.1 combined). **The
+thing actually killing two careers in three over four years is still
+unfound** — it long predates this session and is a separate, real,
+longer-horizon finding, not something either of today's changes was aimed
+at. Whether the 1,460-day axis is even the right instrument for a game
+whose own §5 sizing rule says to size against the first 300 days is a
+question for the developer, not a bar to keep chasing with more attrition.
+
+**A second, unrelated two-medians bug found the same way as F20/F21's**:
+"running both trades... leaves a family no better off" compared
+`median(RUNS_TRADING)` against `median(RUNS_300)` directly — HANDOFF §3
+rule 1's exact error. Converted to `pairedGap`; the corrected reading is a
+per-seed gap of **-$12,651, indistinguishable from zero**, not the
+"trading helps" the raw-medians comparison implied. **Attribution checked
+and resolved**: reran the same paired assertion against factions.ts as it
+stood before this session (`wealthGain: 12,000`) and it read **+219,304,
+comfortably positive**. So the trade's own effect was genuinely positive
+before today and the consolidate/wealthGain change reshuffled the shared
+rng stream enough to flip a near-zero paired reading across the sign line —
+real collateral from a kept, independently-justified change, not a new
+defect in the trade economy and not evidence the wealthGain change was
+wrong. **Left failing rather than restated a second time** (`pairedGap`
+was this test's one allowed exception, per DIRECTOR.md §5) — the honest
+fact is that this specific comparison is noise-dominated at 36 seeds
+regardless of which side of zero it lands on, and the fix, if the developer
+wants one, is the `resolves()` significance helper this file already
+uses elsewhere for exactly this shape of claim, not another threshold
+guess.
+
+**An adversarial round ran for the first time in this project's history**
+(`DIRECTOR.md` §10 condition 6). No severe, cleanly-reproducible exploit
+found — double-submission, race conditions, save-scumming and
+forced-payment bypass all held. One real structural finding, not acted on
+this session: `considerOpening()` in `investigation.ts` gates a case on
+heat **and** accumulated evidence **and** footprint — heat alone never
+opens one, so a sufficiently successful (low-failure-rate) player can sit
+at very high heat indefinitely with zero real law-enforcement consequence.
+Plausibly by design (skill should reduce legal risk) but it is one more
+contributor to the 0%-ended-early-by-day-300 reading above, and worth a
+probe check (does `casesOpened` correlate with job failure rate rather than
+heat?) once the cost-of-scale work continues.
+
+**Not touched, not chased, deliberately:** the favour-network effects
+remain pure negation (`bury_a_case`, `open_the_door`, `quiet_the_street`,
+`lose_the_paperwork`) — this was on the table as an H2 follow-up before the
+corrected dial-policy measurement showed the systems already earning
++$749,645; `config/civic.ts`'s own header states "a favour is spent on a
+problem, not on a stat" as a deliberate design rule, so adding a
+money-earning favour would reverse a documented decision for a problem the
+corrected measurement no longer shows exists. `propose_alliance` (F17
+remainder) is still open in 0/36 careers — the gate (`minRelationship: 20`)
+was already lowered once from 40 and the quantity it watches has since
+drifted *further* below it (peak standing now 3/3/14 at 40th/median/75th,
+against 9/9/21 when the gate was set) — repeating "lower the bar again"
+would be the third time on this exact quantity; HANDOFF's own F17 entry
+already says the quantity needs fixing, not the bar, and that is still
+correct and still undone.
 
 ### Reconciled 2026-09-07 — read this before trusting a status below
 

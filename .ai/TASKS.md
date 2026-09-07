@@ -96,7 +96,14 @@ worth a hard push.
   outside H1-H4's scope) — left failing and documented, which is what a
   failing pre-committed condition is for. **Owed**: attribute this properly
   (revert factions.ts alone, re-run just this arm) before anyone acts on it
-  as a trade-economy finding.
+  as a trade-economy finding. **RESOLVED**: reran the same paired
+  assertion against pre-session `factions.ts` (`wealthGain: 12,000`) — it
+  read +$219,304, comfortably positive. So this is real collateral from the
+  wealthGain change reshuffling the rng stream, not a new trade-economy
+  defect and not evidence against keeping wealthGain at 1,500. Left
+  failing, documented, not restated a second time per DIRECTOR.md §5 — the
+  honest fix is `resolves()`, this file's own significance helper, not
+  another threshold guess.
 
 ## H1 — the missing cost of scale, first slice shipped
 
