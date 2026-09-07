@@ -9,6 +9,114 @@ still saying it long after both had stopped being true.
 
 ---
 
+## 0. Where this stands — 2026-09-07
+
+**Everything below section 7 is history.** §7 "What comes next" still owes round
+14; round 21 has been run and scored. Read this section for the state and the
+rest for how it got here.
+
+`main` is at `dff114a`, clean and pushed. Gate 1470 tests green across 125
+files, `tsc` clean, `npm run probe` 13.0 minutes, all 8 files green.
+
+### What shipped since round 21
+
+**The card game was rebuilt.** The three rooms are gone. One table, every night,
+and the player names the bet: `ceiling = 500 x 2 ** (respect / 35)`, priced,
+capped at 1.2M, and the share of what you could put up decides who is sitting
+opposite. Round 21 had cleared every respect bar in the game and still filed the
+whole system under *wanted to, was blocked*.
+
+**Two writing passes**, on a directed brief to remove cryptic, abstract and
+generated-sounding language. Repetition measured 36% -> 30% of everything a
+player reads, no line now above 0.5%, no sentence-ending above 1.1%.
+
+**The man opposite got a voice.** `config/voice.ts` gives all sixteen traits
+spoken lines in the sit-down, keyed on trait rather than on any stat.
+
+### Four things are unfinished. Three need the developer.
+
+**1. Round 22 is owed, and it is the big one. NEEDS THE DEVELOPER.**
+Three passes and a system redesign have landed since round 21 and none of it is
+scoreable from inside. Blind, on Sonnet, pinned, model recorded — DIRECTOR §4.
+The specific questions:
+
+- Does a tester now sit down at the card table? Round 21 found it and filed it
+  *wanted to, was blocked*, which was **factually wrong about the game** — two
+  of three rooms were open to him. The real branch was *saw it, could not work
+  it out*. That is a signposting finding and the rebuild is the answer to it.
+- Writing scored 9 in round 21 against a measured 36% repetition. Those two
+  facts sat beside each other because only one had an instrument. It is 30% now.
+- Does the sit-down read as people rather than one narrator?
+
+**2. Blackjack: prototype only, not in the build. NEEDS THE DEVELOPER.**
+The published artifact — https://claude.ai/code/artifact/9ffe0caa-44d4-43fb-af68-49d1133b259c
+— is a fully playable blackjack table with dealt cards and a real deal
+animation. The developer chose "artifact only" when asked; the shipped game
+still resolves a night on one roll. Porting it is real work, not a swap:
+`baseWin` / `maxWin` / `hard.win` / `payout` come out, blackjack probabilities
+go in, **"straight play cannot be made profitable" has to be re-established from
+the rules rather than asserted from `maxWin x payout`**, and the anti-grind
+needs re-measuring on `ladder.probe`. Do not start it without the developer
+saying so.
+
+**3. Licensing, dropped by the developer, resumable in one command.**
+`git revert 3504718` restores MIT plus the docs removal in one step. The
+developer's instruction, verbatim: *"MIT, and dont include any docs just code.
+dont push any .mds or any documents that arent directly related to either the
+game engine or how to get started."* **The copyright name was never confirmed** —
+"Cory Williams" was inferred and must be checked before anything is pushed.
+
+**4. `sitdown.ts`'s narration is still one voice.**
+The character lines sit on top of it now, but the `landed` / `missed` prose in
+`config/sitdown.ts` (786 lines) belongs to the register rather than to the
+person. Needs a reading pass, not a linter. No decision required — just work.
+
+### The trap this session fell into four times
+
+**A variant that needs no data wins every draw.** Where the game varies a line,
+some variants need a name or a district and some need nothing; the ones that
+need nothing are available on every roll, so the generic line dominates and the
+specific writing — the good writing — is what nobody sees. It was the cause of
+every one of the eight loudest lines `scorecard.probe` had been naming for
+months.
+
+It has three disguises, and each one was shipped and then caught by measurement:
+
+1. A generic variant in a list beside better ones (`crew.ts`, `operations.ts`).
+2. A **static string appended to a varying one** — the heat tier description,
+   which went straight to 2.2% of every sentence-ending, louder than the line it
+   replaced.
+3. A **fixed suffix** — `That is ${agency.shortName}.` on the investigation
+   stage line, which became the loudest ending in the game inside one run.
+
+If you add prose that varies, check `scorecard.probe`'s Writing block afterwards.
+It is the only thing that catches this.
+
+### Instruments added, and what they are for
+
+- `src/ui/__tests__/prose.test.ts` — the writing linter, in the gate. Seven
+  rules over every player-facing string. **It has a guard on its own scanner**,
+  because a scanner that stopped matching would report zero for ever, which is
+  indistinguishable from success. Tuned to zero false positives; the first
+  version had nine, all on good writing.
+- `src/sim/__tests__/voice.test.ts` — four guards on the sit-down voices,
+  including that nothing a man says can move with a hidden stat.
+- `ladder.probe`: `readsOdds` (a bot that sorts on the number the game shows,
+  the only arm whose decision function can see the groove), `cards` and
+  `burnsNightly` (the card-grind arms and their DIRECTOR §5 money-sink control).
+
+### Two things measured and deliberately not changed
+
+- **The trade's $40,000 retainer.** Round 18 paid it and profited; round 20
+  spent the same on fronts and reached Underboss. A fork, not a broken price.
+- **The bot ends on three times the respect a human tester does** — 666 against
+  round 21's 223. Pre-existing, not chased, and **every bar sized off the bot
+  inherits it**. It is why the stake curve was first mis-calibrated: it was
+  sized against `RESPECT_BARS` read as a career's range, when that ladder is a
+  share-of-weeks distribution.
+
+---
+
 ## 1. What the project is
 
 Frontline is a crime-family management simulator. React 18 + TypeScript 5.7 +
@@ -1212,7 +1320,12 @@ plus front value, clean cash is a rounding error in every arm, and $71,269 a
 career saved from the cut moves peak estate by 3.8%. The wash is no longer the
 biggest leak. **Stock at 43% of revenue now is**, and nothing has looked at it.
 
-## 7. What comes next
+## 7. What comes next — SUPERSEDED, see section 0
+
+This section owes round 14. Rounds 14 to 21 have been run. It is kept because
+the reasoning in it is still how the loop is supposed to be sized, and because
+two of its "owed regardless" items are still owed: the rival-heat probe, and an
+adversarial round.
 
 **Two unmeasured iterations are now stacked.** Iteration 6 (lay-low, F14, F13)
 was never scored, and iterations 7 and 8 landed on top of it. **A round now
