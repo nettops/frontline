@@ -32,6 +32,8 @@ import { addLog } from './util';
 import { addNote, crewList, somethingGood, wageExpectation } from './npc';
 import { authority } from './authority';
 import { AUTHORITY } from '../config/authority';
+import { worldPull } from './build';
+import { WORLD } from '../config/build';
 import { remember } from './memory';
 import { earnDirty } from './economy';
 import {
@@ -190,6 +192,15 @@ function appetite(state: GameState, npc: Npc, t: Territory, action: StewardActio
        out what his districts are worth to him.
     */
     score -= (authority(state) / 100) * AUTHORITY.skimBrake;
+
+    /*
+       Grip. `config/build.ts`'s WORLD table promises the allocation screen
+       reads "Stewards report honestly" at three points in — and until now
+       nothing in this file read it, so the promise was false for every player
+       who ever put a point there. Same shape as the authority brake just
+       above: a share taken off the temptation, not a wall in front of it.
+    */
+    score -= worldPull(state, 'grip') * WORLD.gripSkim;
   }
 
   // A district that already hates you is a poor place to squeeze harder.
