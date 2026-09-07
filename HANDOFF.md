@@ -3,8 +3,10 @@
 Read this, then read `DIRECTOR.md` and `PLAYTEST.md`. This file is the state;
 those two are the rules.
 
-Project root: `C:\Users\cory\Desktop\mafia`. Not a git repo. Windows 11,
-PowerShell 5.1 (no `&&`, no `||`, no ternary — use `;` or `if ($?) { }`).
+Project root: `C:\Users\cory\Desktop\mafia`. A git repo now — `main`, remote
+`nettops/frontline` — which the section below this paragraph did not know
+when it was written. Windows 11, PowerShell 5.1 (no `&&`, no `||`, no
+ternary — use `;` or `if ($?) { }`).
 
 ---
 
@@ -19,17 +21,35 @@ operations, crew, territory, rival families, and law enforcement.
     npx tsc -b         # types
     npm run playtest   # namespaced instance for blind testers
 
-**Current verified state: `tsc` clean, 740 tests, 63 files — 739 passing and
-one failing on purpose** — `ladder.probe`'s pre-committed pacing target, which
-the rank table has never met. Both pre-commits written during the Mafia-boss
-build are met, and `scorecard.probe`'s Pacing axis is back above its floor. Both are the same finding seen from two angles: the rank ladder
-is slow. `ladder.probe`'s pre-committed pacing target reads Capo in 13 careers
-of 36 against a target of 24, and `scorecard.probe`'s Pacing axis reads 2.7
-against a floor of 3 because a bot that has run every job kind, worked every
-district and stopped gaining rank has no firsts left. **The two pre-commits
-written during the Mafia-boss build are now met** — see section 6. `ladder.probe.test.ts` carries a pre-committed pacing
-target the rank table does not meet; see §9. 62,453 lines
-across 183 source files, counted 2026-08-22.
+**Current verified state, 2026-09-07: `tsc` clean, 1,368 tests, 109 files, all
+passing — nothing failing on purpose right now.** 101,522 lines across 289
+source files. The rank-ladder pacing questions this paragraph used to argue
+with itself about (three overlapping, partly contradictory sentences, left
+exactly as a warning about editing this file by appending rather than
+revising) were resolved somewhere in the nine days this file stopped
+tracking — see §1a.
+
+### 1a. The gap this file did not track, 2026-08-21 to 2026-09-06
+
+This file and `docs/superpowers/findings/director-log.md` both went quiet
+after "the four absent systems, built" on 2026-08-21. Roughly seventy commits
+landed in the nine days after that with no entry in either — the middle game
+(dynamic obstacles, real estate, gambling), the heat ratchet, evidence going
+stale, money sinks, manufacture and orders, scores and setups (heists with
+gear and disposal), portraits and the boss's own build, street scenes, guns
+as provenance, contracts (the first jobs that leave a body), and the One
+Sheet skin replacing the ledger look. None of that reasoning is lost — it
+lives in `docs/superpowers/specs/`, one dated file per feature, each already
+written in the "what the measurement says, what shipped, what it cost"
+shape this file uses. Read the spec before touching the feature it names;
+do not take this paragraph's one-line summary as the reasoning.
+
+Two sessions on 2026-09-06 and 2026-09-07 are logged properly in
+`director-log.md` ("Three systems shipped invisible, again" and "Five
+sessions in one") and in `.ai/*.md` in the repo root, which is where a
+session run under an explicit time budget keeps its own notes rather than
+rewriting this file's history under pressure. Read those for anything from
+the last two days; this file's §6 below has been reconciled against them.
 
 ---
 
@@ -443,6 +463,76 @@ director log entry "Developer decision — 2026-08-21".
 ## 6. Open findings
 
 Ranked. F10 outranks everything else in this list.
+
+### Reconciled 2026-09-07 — read this before trusting a status below
+
+The two sessions logged in `director-log.md`'s last two entries touched
+several of the findings below without this section being updated at the
+time. Rather than silently edit forty scattered bullets under a time budget
+and risk losing the nuance in each, here is what changed, and everything not
+named here should still be read as this section states it.
+
+**Closed or materially advanced:**
+
+- **F1 — the loop closes.** Not closed, but round 16 (2026-09-07, to day
+  305) is the first time this finding has moved: decisions held novel to
+  roughly day 220-230, against three prior rounds all landing on day
+  90-119. Cause not isolated — the round's own account names running out of
+  new districts (~day 240) and finding the favour network only in its last
+  moves, and both of those specific gaps were fixed the same session (the
+  favour-network tip's queue priority, district-tier thresholds shown as
+  numbers). Whether either alone accounts for the shift, or whether it is
+  the accumulated 2026-08-21 through 09-07 work generally, is untested —
+  the next blind round is the way to find out, and it is the standing
+  recommendation in `.ai/FINAL_REPORT.md`.
+- **F7 — every instrument plays the same narrow game.** Largely closed as a
+  general complaint. `ladder.probe.test.ts` gained roughly thirty arms across
+  the 2026-08-21 to 08-30 work (scores, training, autopilot, cuts, pieces,
+  contracts, ground, books, leaning) that did not exist when F7 was written.
+  What remains uninstrumented as of 2026-09-07: the rival-heat mechanism
+  behind F5 specifically, and no arm exercises `askForWork` (civic.ts) even
+  though `spendFavour` has one.
+- **F16, F11, F22, F23** — already marked CLOSED / REPAIRED below and
+  confirmed still true; no regression found.
+- **Four dead config keys resolved 2026-09-07**, found by a new automated
+  guard (`deadState.test.ts`'s config-object scan) rather than by manual
+  audit: `WORLD.gripSkim` (wired — Grip's steward-honesty promise did
+  nothing), `PARTNER.protectionTrust` (wired — F15's silent-partner repair
+  promised protection nothing applied), `POACH.evidenceStrength` (wired to
+  an existing hardcoded duplicate), `CONTRACT.cooldownDays` (wired — a
+  missed contract had no cooldown at all). `AI.weights.
+  declareWarMaxRelationship`, `SCORE.minTier`, `AGENDA.heatDecayPerWeek`/
+  `heatAlarmAbove` deleted as superseded or duplicate. See
+  `director-log.md`'s "Five sessions in one" entry for the reasoning on
+  each.
+- **Instinct, the single most expensive verb in the build table, did
+  nothing at all below or above its threshold.** Not a numbered finding
+  before 2026-09-07 because nobody had checked; `WORLD.instinctWarnDays`
+  was the dead key that led to it. Now wired end-to-end — see the entry
+  below, filed as a new finding rather than folded into the F-numbering
+  since nothing above named it.
+
+**New findings, 2026-09-07:**
+
+- **Word and Ledger are not wiring gaps.** `canCallATable`'s gate protects a
+  restriction that does not exist — a rival house sit-down is already open
+  to everybody from Diplomacy regardless of the Word stat, so there is
+  nothing for the verb to unlock. `canBuyIn`/`buyIn` resolve only against
+  `state.businesses`, which holds the player's own fronts; there is no
+  rival-business entity anywhere in the sim for "take a piece of somebody
+  else's business" to address. Both need a developer decision — should a
+  house sit-down actually be gated behind Word now that it exists; what
+  would a referenceable rival business even be, and is it worth the state
+  it would add — not a wiring fix. `PlayerPanel` says plainly that neither
+  verb is reachable yet, so a player at least is not misled about it.
+  Recorded here rather than assigned a number because the two questions are
+  genuinely open, not diagnosed to a specific repair the way an F-number
+  usually implies.
+
+**Explicitly not touched, still exactly as stated below:** F2's remaining
+open half (F17), F5, F6, F9, F12's blind-round confirmation, F13, F14, F15,
+F18-F21 (civic/whispers), the informants.probe 29/30 guard. An adversarial
+round (`DIRECTOR.md` §10 condition 6) has still never been run.
 
 - **F10 — CLOSED by iteration 5, round 13.** Kept. See §4.
 
