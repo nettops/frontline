@@ -89,3 +89,48 @@ redundant with work already done and dated:
   of several of the above and a single session's worth of work was not going
   to close it outright; the tips fix is the highest-confidence, lowest-risk
   piece of it available without a redesign.
+
+---
+
+## Addendum — 2026-09-07, the 5-hour round
+
+Continuation session. An Opus-model pass re-audited the codebase against
+this file plus the areas nobody had verified line-by-line yet (the
+2026-08-24 through 08-30 specs, `authority.ts`, `personal.ts`,
+`delegation.ts`, `civic.ts`, `capos.ts`, `pressure.ts`, `contract.ts`,
+`pieces.ts`, `autopilot.ts`) and confirmed most of the previous session's
+"already fine" claims while producing a fresh, evidence-backed priority
+list. Five fixes shipped from it — see `docs/superpowers/findings/
+director-log.md`'s "Five sessions in one" entry and `.ai/TASKS.md` for the
+full account.
+
+**The pattern repeats.** Last session found three systems (contracts, the
+favour network, the pressure dial) with real, complete logic and no way to
+discover them. This session found the same shape one layer down: config
+keys with real balance intent and no reader (`gripSkim`, `protectionTrust`,
+`cooldownDays`, `evidenceStrength`), and one verb — Instinct, the single
+most expensive one in the build table — with complete sim logic
+(`plant`/`pullOut`/`hearsAbout`) and no UI anywhere at all. Between the two
+sessions, "a real system nobody can reach" is now the single most common
+defect class found in this codebase, ahead of any balance question.
+
+**A genuine limit found, not just fixed.** Auditing Instinct's neighbours
+(Word, Ledger) for the same defect found something different: both verbs'
+underlying mechanism is not merely unwired, it does not have anywhere to
+attach. Word's gate protects a restriction that was never built; Ledger's
+buy-in function can only ever address the player's own businesses, because
+no rival-business entity exists in the sim to be the "somebody else" in
+"buy into somebody else's business." Building either is a design decision,
+not a fix, and both are recorded honestly on the build screen and in the
+next-steps list rather than built badly under a deadline.
+
+**One recommendation checked and declined.** Retuning `CONTRACT.
+cooldownDays` down from 300 was recommended and found, on inspection, to
+match an already-shipped sibling mechanic (`CAPO_APPROACH.cooldownDays` at
+400) that `contract.ts`'s own header says is deliberately mirrored. Left
+alone; reasoning recorded in the director log rather than silently applied
+or silently dropped.
+
+A blind playtest round (`round16`) was dispatched after the five fixes
+landed, to give a human-shaped read to changes across two sessions that no
+round has ever seen. Its results are in `.ai/FINAL_REPORT.md`.
