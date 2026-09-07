@@ -98,7 +98,7 @@ export const STATS: StatDef[] = [
     blurb: 'Reading a room, and knowing which of them is already talking.',
     verb: 'Plant somebody',
     verbBlurb: 'Your own man inside a rival house, or inside the department.',
-    world: 'You get warned. Raids and defections reach you before they land.',
+    world: 'You get warned. A file moving toward its next stage reaches you before it lands.',
   },
   {
     id: 'word',

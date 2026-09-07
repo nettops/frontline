@@ -1,7 +1,25 @@
 import { useGame, mutate } from '../../store';
 import { buildRead, canSpendPoint, pointsLeft, spendPoint } from '../../sim/build';
 import { nicknameRead } from '../../sim/nicknames';
-import { BUILD, STAT_BY_ID } from '../../config/build';
+import { BUILD, STAT_BY_ID, type StatId } from '../../config/build';
+
+/**
+ * Verbs with a config entry, real sim logic, and nowhere on any screen to
+ * press them. `canCallATable` gates a sit-down that has never actually been
+ * gated — houses are reachable from Diplomacy regardless of Word — and
+ * `canBuyIn`/`buyIn` only ever resolve against `state.businesses`, which
+ * holds the player's own fronts and nothing belonging to a rival, so "take a
+ * piece of somebody else's business" cannot address the business it names.
+ * Both are real design gaps, not missing buttons, and building either
+ * properly is bigger than a session's worth of wiring — see the session
+ * report. Naming them here stops the allocation screen promising an action
+ * that does not exist, which is worse than saying plainly that it does not
+ * exist yet.
+ */
+const VERB_NOT_YET_REACHABLE: Partial<Record<StatId, string>> = {
+  word: 'Nowhere on any screen does this yet — a house sit-down is already open to everybody.',
+  ledger: 'Nowhere on any screen does this yet — there is no rival business to name.',
+};
 import { Panel, Bar, KeyValue } from '../components';
 import { estate } from '../../sim/estate';
 import { careerShape, legitimacy } from '../../sim/legacy';
@@ -408,14 +426,16 @@ export default function PlayerPanel() {
                      thing round 12 spent ninety days not understanding.
                   */}
                 <p
-                  className={row.verb ? 'tiny' : 'faint tiny'}
+                  className={row.verb && !VERB_NOT_YET_REACHABLE[row.id] ? 'tiny' : 'faint tiny'}
                   style={{ margin: '0 0 4px' }}
                 >
-                  {row.verb
-                    ? `${def.verb} — ${def.verbBlurb}`
-                    : `${def.verb} at ${row.level + row.toVerb}. ${
-                        row.toVerb === 1 ? 'One more point.' : `${row.toVerb} more points.`
-                      }`}
+                  {VERB_NOT_YET_REACHABLE[row.id]
+                    ? `${def.verb} — ${VERB_NOT_YET_REACHABLE[row.id]}`
+                    : row.verb
+                      ? `${def.verb} — ${def.verbBlurb}`
+                      : `${def.verb} at ${row.level + row.toVerb}. ${
+                          row.toVerb === 1 ? 'One more point.' : `${row.toVerb} more points.`
+                        }`}
                 </p>
                 <p className={row.noticed ? 'tiny dim' : 'faint tiny'} style={{ margin: 0 }}>
                   {row.noticed ? def.world : 'Nobody has noticed yet.'}

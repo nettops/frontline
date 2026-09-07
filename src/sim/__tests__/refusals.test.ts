@@ -55,9 +55,45 @@ const SOURCES = import.meta.glob('../*.ts', {
  * whole subject, and this one had one for about ten minutes.
  */
 const COMPARISON = /[<>]=?/;
-const NAMED_CONSTANT = /\b[A-Z][A-Z0-9_]{2,}\b|\b[A-Z][A-Za-z]*\.[a-zA-Z]+/;
+/*
+   Widened to catch `!fn(...)` guards below, and that widening put a builtin
+   through the door the config-constant pattern was built for: `JSON.stringify`
+   in a storage-write guard read as `X.y` and reported a save-quota refusal as
+   an unnamed threshold. It has no threshold to name — "Could not write save."
+   is a state, the file's own header's example of what this must not flag.
+   Builtins excluded by name rather than by narrowing the pattern, because the
+   pattern is correct for `WORKSHOP.cost` and the miss was specifically these.
+*/
+const BUILTIN = /^(JSON|Math|Object|Array|Number|String|Date|Boolean|RegExp|Promise|Symbol)$/;
+const NAMED_CONSTANT = {
+  test: (line: string) =>
+    [...line.matchAll(/\b([A-Z][A-Z0-9_]{2,})\b/g)].some((m) => !BUILTIN.test(m[1])) ||
+    [...line.matchAll(/\b([A-Z][A-Za-z]*)\.[a-zA-Z]+/g)].some((m) => !BUILTIN.test(m[1])),
+};
+/*
+   A call whose own name says it returns a threshold, for the comparison that
+   names no constant at the site at all.
+
+   `totalFunds(state) < contactCost(state, agencyId)` has an operator and
+   nothing this file could once call a constant — the number lives inside
+   `contactCost`'s own body, not at the call site. Four sites gated the
+   police-contact price, evidence destruction and a contract exactly this way
+   and were invisible to the original detector, which is the same class of
+   miss `priced(state, WORKSHOP.cost)` was two years ago: the defect wrapped
+   in one more layer of function call than the check was reading through.
+*/
+const PRICED_CALL = /\b[a-z][A-Za-z]*(?:Cost|Price|Fee|Owed)\s*\(/;
 const THRESHOLD = {
-  test: (line: string) => COMPARISON.test(line) && NAMED_CONSTANT.test(line),
+  test: (line: string) =>
+    (COMPARISON.test(line) && (NAMED_CONSTANT.test(line) || PRICED_CALL.test(line))) ||
+    /*
+       `!spend(state, COLD.cost, 'other_out')` has a named constant and no
+       comparison operator at all — the threshold is inside `spend`, and the
+       call site only ever sees pass or fail. Same class again: a guard that
+       names its number and is still invisible because it is spelled as a
+       negated call rather than a comparison.
+    */
+    (/!\s*[a-zA-Z]+\(/.test(line) && NAMED_CONSTANT.test(line)),
 };
 
 /** The refusal's text, however this file happens to spell the field. */
@@ -80,8 +116,15 @@ const IS_REFUSAL = /ok:\s*false|\.\.\.none/;
  * a named constant, a rounding, or a length. HANDOFF §3, instance 23, and the
  * first one that was an instrument built to prevent §3.
  */
+/*
+   `formatMoney(contactCost(state, agencyId))` renders a real figure and has
+   no ALL-CAPS token anywhere in it — the cost is computed by a camelCase
+   function, same as the guard it is fixing. `formatMoney` is only ever used
+   to render currency (checked: every call in `src/sim` wraps an amount), so
+   its presence is as strong a signal as a bare digit.
+*/
 const NAMES_A_NUMBER =
-  /\d|\$\{[^}]*(?:[A-Z][A-Z0-9_]{2,}|Math\.round|Math\.max|Math\.min|\.length)/;
+  /\d|formatMoney\(|\$\{[^}]*(?:[A-Z][A-Z0-9_]{2,}|Math\.round|Math\.max|Math\.min|\.length)/;
 
 interface Silent {
   where: string;
