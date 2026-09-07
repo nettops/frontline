@@ -22,6 +22,56 @@ export const AUTOPILOT = {
 } as const;
 
 /**
+ * A setting, not a strategy — round 16's own finding.
+ *
+ * The autopilot's one real financial crisis in a blind round traced to a
+ * single omission: the jobs pass spends against `totalFunds`, which has no
+ * idea payroll exists. Two risky jobs failed back to back, the loop kept
+ * spending because the money was technically there, and the crew came due
+ * on a Friday it could not meet. The heat sense already answers "how loud is
+ * too loud" — this answers "how broke is too broke", and it is the same
+ * shape of answer: crude, three settings, and the number line is `AUTOPILOT`
+ * above, not a new idea next to it.
+ *
+ * `normal` **is** `AUTOPILOT` above, verbatim — an existing save with
+ * autopilot already on gets the exact behaviour it already had, because
+ * `autopilotRisk` is optional and absent reads as `normal`. `cautious` moves
+ * both heat thresholds down by the same fifteen points `quietAbove` sits
+ * below `stopAbove` today, and adds the one thing that was actually missing:
+ * it will not spend into the coming payday. `aggressive` moves them up by
+ * the same amount and changes nothing else — a player who wants the loop to
+ * run hotter is asking for exactly the risk this file already prices,
+ * further out.
+ *
+ * Reported, not yet asserted, in `ladder.probe.test.ts`'s autopilot-risk
+ * arms — the numbers are a first cut sized off the existing gap between the
+ * two thresholds, the same way the original two were sized off measurement
+ * rather than guessed twice.
+ */
+export type AutopilotRisk = 'cautious' | 'normal' | 'aggressive';
+
+export const AUTOPILOT_RISK: Record<
+  AutopilotRisk,
+  { quietAbove: number; stopAbove: number; reservesPayroll: boolean }
+> = {
+  cautious: { quietAbove: 25, stopAbove: 50, reservesPayroll: true },
+  normal: { quietAbove: AUTOPILOT.quietAbove, stopAbove: AUTOPILOT.stopAbove, reservesPayroll: false },
+  aggressive: { quietAbove: 55, stopAbove: 80, reservesPayroll: false },
+};
+
+export const AUTOPILOT_RISK_LABEL: Record<AutopilotRisk, string> = {
+  cautious: 'Cautious',
+  normal: 'Normal',
+  aggressive: 'Aggressive',
+};
+
+export const AUTOPILOT_RISK_BLURB: Record<AutopilotRisk, string> = {
+  cautious: `Eases off at ${AUTOPILOT_RISK.cautious.quietAbove} heat, stops at ${AUTOPILOT_RISK.cautious.stopAbove}, and never spends into what payday costs.`,
+  normal: `Eases off at ${AUTOPILOT_RISK.normal.quietAbove} heat, stops at ${AUTOPILOT_RISK.normal.stopAbove}. What this always did.`,
+  aggressive: `Eases off at ${AUTOPILOT_RISK.aggressive.quietAbove} heat, stops at ${AUTOPILOT_RISK.aggressive.stopAbove}. Spends everything it has.`,
+};
+
+/**
  * Whether the loop is allowed to send people after somebody.
  *
  * Contracts gave a hand player a verb the autopilot did not have, and the bar

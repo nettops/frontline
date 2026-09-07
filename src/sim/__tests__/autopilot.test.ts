@@ -25,12 +25,14 @@ import { describe, expect, it } from 'vitest';
 import { newGame } from '../state';
 import { Rng } from '../rng';
 import { crewList, generateNpc } from '../npc';
-import { autopilotOn, setAutopilot, tickAutopilot } from '../autopilot';
+import { autopilotOn, autopilotRisk, setAutopilot, setAutopilotRisk, tickAutopilot } from '../autopilot';
 import { advanceDay } from '../clock';
 import { SAVE_VERSION } from '../state';
 import { availableOperations } from '../operations';
 import { OPERATION_BY_ID } from '../../config/operations';
-import { AUTOPILOT } from '../../config/autopilot';
+import { AUTOPILOT, AUTOPILOT_RISK } from '../../config/autopilot';
+import { payrollForecast } from '../economy';
+import { PAYDAY_INTERVAL } from '../../config/economy';
 import type { GameState } from '../types';
 
 function game(seed = 7): GameState {
@@ -258,6 +260,126 @@ describe('where it sends them', () => {
     expect(
       live.every((op) => typeof op.territoryId === 'string' && op.territoryId.length > 0),
       'with nothing left to open the autopilot stopped picking anywhere at all',
+    ).toBe(true);
+  });
+});
+
+/*
+   How hard the loop is allowed to push. Round 16's own finding: the jobs
+   pass spends against the whole treasury with no idea payroll exists, and a
+   blind career's one real financial crisis was exactly that — two failed
+   jobs plus a due Friday left nothing to cover it.
+
+   `normal` has to be a no-op, checked directly, because it is what every
+   career that has ever turned this on has been running — a regression here
+   silently reruns every measurement in `ladder.probe`'s autopilot arms.
+*/
+describe('how hard it is allowed to push', () => {
+  it('is normal by default, and normal is a no-op', () => {
+    const state = game();
+    expect(autopilotRisk(state)).toBe('normal');
+    expect(AUTOPILOT_RISK.normal.quietAbove).toBe(AUTOPILOT.quietAbove);
+    expect(AUTOPILOT_RISK.normal.stopAbove).toBe(AUTOPILOT.stopAbove);
+    expect(AUTOPILOT_RISK.normal.reservesPayroll).toBe(false);
+  });
+
+  it('eases off and stops sooner when set to cautious', () => {
+    const state = game();
+    setAutopilot(state, true);
+    setAutopilotRisk(state, 'cautious');
+    // Between cautious's stop line and normal's — normal would still work,
+    // cautious should already have gone dark.
+    state.org.heat = AUTOPILOT_RISK.cautious.stopAbove;
+
+    tickAutopilot(state, new Rng(state.rng));
+    expect(
+      Object.keys(state.activeOperations),
+      'cautious kept working past its own stop line',
+    ).toHaveLength(0);
+  });
+
+  it('tolerates more heat when set to aggressive', () => {
+    const state = game();
+    setAutopilot(state, true);
+    setAutopilotRisk(state, 'aggressive');
+    // Past normal's stop line, short of aggressive's — normal would already
+    // be dark here.
+    state.org.heat = AUTOPILOT.stopAbove + 5;
+    expect(state.org.heat).toBeLessThan(AUTOPILOT_RISK.aggressive.stopAbove);
+
+    tickAutopilot(state, new Rng(state.rng));
+    expect(
+      Object.keys(state.activeOperations).length,
+      'aggressive stopped at the same line normal does',
+    ).toBeGreaterThan(0);
+  });
+
+  it('never ends a tick owing more than it started with once payday is a day away', () => {
+    /*
+       The actual promise, checked directly rather than through which one
+       job happened to be picked — pass one's budget check is a pre-filter
+       against the *starting* total, not a running balance, so asserting on
+       a specific job risks asserting on an implementation detail rather
+       than the guarantee. What must always hold is the total afterwards.
+    */
+    const state = game();
+    while ((state.day + 1) % PAYDAY_INTERVAL !== 0) advanceDay(state);
+    const due = payrollForecast(state).due;
+    expect(due, 'the fixture has to actually owe something').toBeGreaterThan(0);
+
+    // Just over what payday costs — a normal boss has room to spend on jobs
+    // and nothing stops it eating into this.
+    state.org.cash = due + 100;
+    state.org.dirtyCash = 0;
+
+    setAutopilot(state, true);
+    setAutopilotRisk(state, 'cautious');
+    tickAutopilot(state, new Rng(state.rng));
+
+    expect(
+      state.org.cash + state.org.dirtyCash,
+      'cautious spent below what the forecast says payday needs',
+    ).toBeGreaterThanOrEqual(due);
+  });
+
+  it('the reserve is not free — the same setup spends further under normal', () => {
+    // The contrast that makes the test above worth having, checked directly
+    // rather than assumed: identical setup, only the setting differs, and
+    // cautious is left with strictly more than normal.
+    function endingFunds(riskLevel: 'normal' | 'cautious'): number {
+      const state = game();
+      while ((state.day + 1) % PAYDAY_INTERVAL !== 0) advanceDay(state);
+      const due = payrollForecast(state).due;
+      state.org.cash = due + 100;
+      state.org.dirtyCash = 0;
+      setAutopilot(state, true);
+      setAutopilotRisk(state, riskLevel);
+      tickAutopilot(state, new Rng(state.rng));
+      return state.org.cash + state.org.dirtyCash;
+    }
+
+    expect(
+      endingFunds('cautious'),
+      'cautious must never end up holding less than normal in the same spot',
+    ).toBeGreaterThanOrEqual(endingFunds('normal'));
+  });
+
+  it('still runs a job that costs nothing even with the reserve at zero', () => {
+    const state = game();
+    while ((state.day + 1) % PAYDAY_INTERVAL !== 0) advanceDay(state);
+    // Deep in the hole — the reserve clamps to zero rather than going
+    // negative, which would refuse a free job for a shortfall it cannot see.
+    state.org.cash = 1;
+    state.org.dirtyCash = 0;
+
+    setAutopilot(state, true);
+    setAutopilotRisk(state, 'cautious');
+    tickAutopilot(state, new Rng(state.rng));
+
+    const out = Object.values(state.activeOperations);
+    expect(
+      out.some((op) => OPERATION_BY_ID[op.defId].investment === 0),
+      'a free job was refused for money the reserve only imagines it needs',
     ).toBe(true);
   });
 });

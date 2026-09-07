@@ -8,6 +8,7 @@
 import type { RngState } from './rng';
 import type { FactionId, FactionPersonality } from '../config/factions';
 import type { LawyerLevel, StageId } from '../config/lawEnforcement';
+import type { AutopilotRisk } from '../config/autopilot';
 import type { TieCause } from '../config/ties';
 import type { PressureId } from '../config/pressure';
 import type { IncidentKind } from '../config/beliefs';
@@ -1998,6 +1999,12 @@ export interface GameState {
    * measured as a convenience rather than a strategy, and ships as one.
    */
   autopilot?: boolean;
+  /**
+   * How hard the loop is allowed to push. Optional, absent reads as
+   * `'normal'` — see `config/autopilot.ts`'s `AUTOPILOT_RISK` for what each
+   * setting actually moves.
+   */
+  autopilotRisk?: AutopilotRisk;
 
   /** Counters and one-off markers. Cheaper than adding a field per flag. */
   flags: Record<string, number>;

@@ -37,6 +37,15 @@
  * it still respects laying low through the same `canLaunch` as everything
  * else.
  *
+ * **A fourth pass, and it is a setting rather than a smarter loop.** Round 16
+ * (2026-09-07) handed the work over and it ran the treasury straight into a
+ * missed payday — the jobs pass has never known payroll exists, so two failed
+ * jobs plus a due Friday left nothing to cover it. `AUTOPILOT_RISK` in
+ * `config/autopilot.ts` is the same two numbers moved up or down together,
+ * plus the one behaviour that was actually missing: `cautious` will not spend
+ * into what payday costs. `normal` is what shipped before this and is the
+ * default, so an existing save changes nothing until the player asks it to.
+ *
  * **And a third pass, added when contracts shipped.** A hand player gained a
  * verb the loop did not have, which is exactly the gap the bar above exists to
  * close. It sends people after a rival capo — but *only inside a war the
@@ -53,7 +62,7 @@ import { Rng } from './rng';
 import { addLog } from './util';
 import { availableCrew } from './npc';
 import { isLayingLow } from './heat';
-import { totalFunds } from './economy';
+import { payrollForecast, totalFunds } from './economy';
 import {
   availableOperations,
   crewCompetence,
@@ -63,7 +72,7 @@ import {
 } from './operations';
 import { scoreOn, setupsLeft } from './scores';
 import { controlLevel, operableTerritories } from './territory';
-import { AUTOPILOT, AUTOPILOT_CONTRACTS } from '../config/autopilot';
+import { AUTOPILOT_CONTRACTS, AUTOPILOT_RISK, type AutopilotRisk } from '../config/autopilot';
 import { CONTRACT } from '../config/contract';
 import { canContract, contractCost, openContract, openContracts } from './contract';
 import { caposOf } from './capos';
@@ -93,6 +102,15 @@ export function setAutopilot(state: GameState, on: boolean): void {
       : 'You are picking the crews again.',
     'neutral',
   );
+}
+
+/** How hard the loop is set to push. Absent reads as `'normal'`. */
+export function autopilotRisk(state: GameState): AutopilotRisk {
+  return state.autopilotRisk ?? 'normal';
+}
+
+export function setAutopilotRisk(state: GameState, risk: AutopilotRisk): void {
+  state.autopilotRisk = risk;
 }
 
 /**
@@ -155,14 +173,25 @@ function tonightsGround(state: GameState): string | undefined {
 export function tickAutopilot(state: GameState, _rng: Rng): void {
   if (!autopilotOn(state) || state.gameOver) return;
   if (isLayingLow(state)) return;
+  const risk = AUTOPILOT_RISK[autopilotRisk(state)];
   // The heat sense, upper lever: past the stop line nothing goes out until
-  // it cools. See config/autopilot.ts for where both numbers come from.
-  if (state.org.heat >= AUTOPILOT.stopAbove) return;
+  // it cools. See config/autopilot.ts for where the three settings differ.
+  if (state.org.heat >= risk.stopAbove) return;
 
   const where = tonightsGround(state);
   if (!where) return;
 
-  const spendable = totalFunds(state);
+  /*
+     Cautious only: round 16's own crisis traced to this exact gap. The jobs
+     pass spent against the whole treasury with no idea payroll existed, so
+     two failed jobs plus a due Friday left nothing to cover it. Reserving
+     what payday costs is the one thing "cautious" actually promises beyond
+     a lower heat line — `normal` and `aggressive` are unchanged from what
+     this always did.
+  */
+  const spendable = risk.reservesPayroll
+    ? Math.max(0, totalFunds(state) - payrollForecast(state).due)
+    : totalFunds(state);
   let bodiesLeft = availableCrew(state).length;
 
   /*
@@ -188,7 +217,7 @@ export function tickAutopilot(state: GameState, _rng: Rng): void {
   for (const def of [...availableOperations(state)].sort((a, b) => worth(b) - worth(a))) {
     if (SETUP_BY_ID[def.id] || def.crewRequired <= 0) continue;
     // Lower lever: once they are already looking, only the quieter work goes.
-    if (state.org.heat >= AUTOPILOT.quietAbove && BY_RISK[def.risk] > 1) continue;
+    if (state.org.heat >= risk.quietAbove && BY_RISK[def.risk] > 1) continue;
     const score = scoreOn(state, def.id);
     if (score && setupsLeft(state, score).length > 0 && state.day < score.dueDay - 3) continue;
 
