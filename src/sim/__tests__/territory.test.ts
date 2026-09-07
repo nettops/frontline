@@ -11,6 +11,7 @@ import { launchOperation, canLaunch, successBreakdown } from '../operations';
 import {
   canOperateIn,
   controlLevel,
+  nextControlThreshold,
   controlledTerritories,
   isContested,
   operableTerritories,
@@ -134,6 +135,39 @@ describe('territory', () => {
 
     t.influence.player = 80;
     expect(controlLevel(t)).toBe('dominance');
+  });
+
+  it('names the next tier, the number, and the lead a top tier also needs', () => {
+    /*
+       Round 16's own words: "guessing throughout the run" what raises a
+       district from Foothold to Control. The number alone is not the whole
+       answer for the top two tiers — a player sitting on a big number
+       against a bigger rival is still short — so both halves are asserted.
+    */
+    const state = fresh();
+    const t = state.territories['downtown'];
+    for (const id of RIVAL_IDS) t.influence[id] = 0;
+
+    t.influence.player = 5;
+    expect(nextControlThreshold(t)).toMatchObject({ level: 'presence', min: 10 });
+
+    // At the door of Control, but a rival still leads.
+    t.influence.player = 60;
+    t.influence[RIVAL_IDS[0]] = 62;
+    const short = nextControlThreshold(t)!;
+    expect(short.level).toBe('control');
+    expect(short.needsLead).toBe(true);
+    expect(short.leading, 'a rival at 62 against 60 is still ahead').toBe(false);
+
+    // Same influence, nobody bigger — Control is reached outright now, so
+    // the next open door is the one above it.
+    t.influence[RIVAL_IDS[0]] = 0;
+    expect(controlLevel(t)).toBe('control');
+    expect(nextControlThreshold(t)).toMatchObject({ level: 'dominance', min: 75, leading: true });
+
+    // Nothing above dominance.
+    t.influence.player = 100;
+    expect(nextControlThreshold(t)).toBeNull();
   });
 
   it('counts only districts actually held toward rank', () => {
