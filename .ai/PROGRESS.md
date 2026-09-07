@@ -132,12 +132,74 @@ that enhance the experience, not just fix findings.
 - Re-running `ladder.probe.test.ts` + `scorecard.probe.test.ts` myself in
   parallel for fresh numbers to work from once the diagnosis lands.
 
-## In progress
+## Checkpoint, ~15:20 EDT (session started 11:36am, deadline 9pm)
 
-Waiting on the three background agents. Next: read the Opus diagnosis,
-cross-check its claims against source before acting (per HANDOFF §3's
-standing rule), rank the implementation queue, and start fixing — test
-first, verify each change, then decide whether it needs a probe or a
-targeted/full blind round per `DIRECTOR.md` §4's sizing rule.
+All three initial background agents completed and were acted on. Two
+commits landed (`fea1820` the H1-H4 economic-balance batch, `db3548d` the
+HANDOFF.md reconciliation), plus a third (`a181fd0`) from round17's blind
+report. Full reasoning for every change is in `.ai/TASKS.md` and
+`HANDOFF.md` §6's newest block — this file stays a high-level log.
 
-See `.ai/TASKS.md` for the ranked queue as it fills in.
+**Opus diagnosis** (background agent): found HANDOFF.md stale on the
+economy (F15/F2 actually closed) and named the real problem — no cost of
+scale, 17/19 measurable behaviours net-negative, Difficulty axis at 4.7
+(release-blocking, nobody had noticed). Ranked hypotheses H1-H6 in
+TASKS.md. Explicitly warned the "every axis 9-10" mandate conflicts with
+DIRECTOR.md's own anti-score-chasing rules and named two axes (Pacing,
+Difficulty) with arithmetic ceilings — taken seriously, not used as an
+excuse to stop.
+
+**Adversarial round** (background agent): no severe exploits in 300+
+in-game days of deliberate attack attempts. One structural finding
+(case-opening needs evidence + heat + footprint, not heat alone) folded
+into the Difficulty work rather than fixed separately.
+
+**Implemented and measured, in order**: H2 (fixed the probe's own broken
+dial-policy — the favour network/pressure dial were never decoration, the
+instrument measuring them was), H3 (rival consolidate payoff, partial),
+H1 (front upkeep — a real structural gap: fronts cost nothing to hold,
+ever, until today), H4 (job-table gate resize, caught and fixed one
+attempt that broke a hard "Boss reachable in 300 days" floor). Two
+pre-existing two-medians instrument bugs found and fixed the same way.
+Full suite 1,380 passed throughout.
+
+**Round17's blind report**: opened with a MUST FIX (view reverting to
+title screen) that turned out to be caused by my own concurrent source
+edits triggering Vite HMR full-reloads on the tester's shared dev server —
+confirmed conclusively via the server's own timestamped log, not guessed.
+Not a game defect; documented in TASKS.md so it doesn't get misattributed
+later. First hour/Clarity/Interface scores from that round are
+contaminated by this and should be discounted; the rest (Depth 8, Pacing
+5, Difficulty 6, Writing 8, Standing in it 7, Fun 6) and two real,
+uncontaminated findings are not — both fixed same session (odds disclosed
+in visible text on two Law Enforcement actions; a banked favour that
+buries a case now signposted on the page that has the case).
+
+**Process correction adopted**: no more editing source files while a
+dispatched blind/adversarial round has a live browser session running —
+every `npm run playtest` instance shares one filesystem watcher, so a
+source edit anywhere reloads every open instance. Documentation-only edits
+(`.md` files, not in the Vite module graph) remain safe during a round.
+
+**Now**: `round18` dispatched (fresh instance, port in this session's
+history) to measure the H1-H4 batch cumulatively. No source edits until it
+reports back. Using the wait for documentation and planning only.
+
+## Queued for after round18 reports
+
+- H6 (`propose_alliance` still 0/36) — diagnosed (the quantity it watches
+  has no passive accrual, only explicit tribute actions feed it) but not
+  attempted; a real design call (should peace passively build trust?)
+  bigger than a rushed addition should make alone.
+- F9 (fear near the ceiling) — Opus's own note: fixing the *display*
+  moves nothing; the real lever is the same "dominated strategies" shape
+  H2 already addressed for the favour/dial pair. Not re-opened this
+  session.
+- Opus's feature ideas (a)-(d) (payroll with a name attached, a district
+  that costs more than it gives, a job that pays in ground/standing, a
+  reachable deposition threat) — none attempted; (b) is the most natural
+  next step after H1's front-upkeep work if round18 says the economy still
+  needs more bite.
+- The trading-arm pairedGap test (-$12,651, attributed to this session's
+  own wealthGain change) — left failing and documented, not chased a
+  second time.
