@@ -41,6 +41,9 @@ import { liveScores } from '../sim/scores';
 import { isLayingLow } from '../sim/heat';
 import { eligibleStewards } from '../sim/delegation';
 import { playerInfluence, territoryList } from '../sim/territory';
+import { caposOf } from '../sim/capos';
+import { canContract } from '../sim/contract';
+import { RIVAL_IDS } from '../config/factions';
 
 export interface Tip {
   id: string;
@@ -186,6 +189,24 @@ export const TIPS: Tip[] = [
       'A loan repays itself out of your money every week, on time, whether the week went well or not. Finances has what is still owed and to whom.',
     panel: 'finances',
     when: (s) => totalOwed(s) > 0,
+  },
+  {
+    /*
+       The pressure dial. It sits inside each front's own row in Businesses —
+       a settings toggle rather than a headline number — and nothing else on
+       screen says it exists. `config/pressure.ts`'s own header is the reason
+       it matters: one dial standing in for gambling, staff and inspections at
+       once, and a front left on `normal` behaves exactly as it always did, so
+       a player who never finds this is not playing a worse game, only a
+       narrower one.
+    */
+    id: 'lean_on_it',
+    only: ['career', 'sandbox'],
+    label: 'Money',
+    text:
+      'Every front has a dial on Businesses for how hard you lean on it. Clean earns less and draws nothing; hard washes more and ages the place faster. Left alone it behaves exactly as it always has.',
+    panel: 'businesses',
+    when: (s) => ownedBusinesses(s).length > 0,
   },
 
   // ------------------------------------------------------------- pressure ---
@@ -474,6 +495,33 @@ export const TIPS: Tip[] = [
     urgent: true,
   },
   {
+    /*
+       The other verb on the same man. `approachCapo` buys one; a contract on
+       the same row removes him — his share of the family, his hold on his
+       district, or the family itself if he is the one at the top. It sits one
+       button beside a name on a table the player has been reading for years,
+       and nothing points at it.
+
+       Gated on `canContract` actually returning ok for a real target rather
+       than on a day or a relationship, for the same reason `borrow_a_front`
+       is: a tip advertising a door the player cannot yet walk through is
+       advice reachable by luck. Fires once there is genuinely somebody to
+       send and the crew and the money to send them.
+    */
+    id: 'contract',
+    only: ['career', 'sandbox'],
+    label: 'Rivals',
+    text:
+      'A name on the Rivals table is not only somebody to approach. Sending people after him is the other option on the same row — it can go wrong, and if it does, they know somebody tried.',
+    panel: 'rivals',
+    when: (s) =>
+      RIVAL_IDS.some((f) =>
+        caposOf(s, f).some(
+          (c) => canContract(s, { kind: 'capo', factionId: f, capoId: c.id }).ok,
+        ),
+      ),
+  },
+  {
     id: 'heir',
     only: ['career', 'sandbox'],
     label: 'After you',
@@ -490,6 +538,23 @@ export const TIPS: Tip[] = [
       'You have premises now, so people will deal with you. The Trade runs on a standing arrangement and districts to move through — steady money, and the one thing on your books a warrant can physically take.',
     panel: 'contraband',
     when: (s) => tradeUnlocked(s, 'product') && !s.contraband.supplierId,
+  },
+  {
+    /*
+       The favour network. Four figures on The City who owe you for how the
+       family is run rather than for anything bought — standing drifts on its
+       own from day one, so a player who never opens the page is still
+       building it and has no way to know that. Set on a day rather than on
+       something owed, the way `why` is: the point is to send the player to
+       look, not to wait for the state that would make looking unmissable.
+    */
+    id: 'favours',
+    only: ['career', 'sandbox'],
+    label: 'The city',
+    text:
+      'Somewhere in The City, a police captain, a union boss, a judge and somebody in office are keeping score of how you run this — not what you buy them, what you are. Standing with them cannot be purchased, only spent.',
+    panel: 'city',
+    when: (s) => s.day >= 45,
   },
   {
     id: 'why',
