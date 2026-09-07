@@ -21,6 +21,7 @@ import {
   foundingPeople,
   foundingWealth,
   leadingFaction,
+  nextControlThreshold,
   people,
   operableTerritories,
   playerInfluence,
@@ -522,6 +523,23 @@ function DistrictDetail({
             {CONTROL_LABEL[level]}
             {isContested(territory) && ' — and somebody is pushing back'}
           </p>
+          {(() => {
+            const next = nextControlThreshold(territory);
+            if (!next) return null;
+            const short = Math.max(0, next.min - Math.round(playerInfluence(territory)));
+            return (
+              <p className="faint tiny" style={{ marginTop: 2 }}>
+                {CONTROL_LABEL[next.level]} at {next.min}
+                {short > 0 ? `, ${short} more` : ''}
+                {next.needsLead && !next.leading
+                  ? ' — and you would need to be the strongest faction here, which you are not yet'
+                  : next.needsLead
+                    ? ' — you already lead here'
+                    : ''}
+                .
+              </p>
+            );
+          })()}
 
           <div style={{ marginTop: 12 }}>
             <div className="tiny" style={{ marginBottom: 6 }}>

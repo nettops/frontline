@@ -116,6 +116,35 @@ export function controlLevel(t: Territory): ControlLevel {
   return 'none';
 }
 
+/**
+ * What the next tier up actually needs, or null already at the top.
+ *
+ * `controlLevel` answers "what do I hold"; this answers the question round
+ * 16's blind tester asked and never found an answer to — "guessing
+ * throughout the run" trying to work out what raises a district from
+ * Foothold to Control. The two top tiers need more than the number: a
+ * player sitting on 60 against a rival's 70 is still merely Foothold, and a
+ * threshold that only quoted the influence figure would be a different kind
+ * of unnamed bar than the ones `refusals.test.ts` already guards against.
+ */
+export function nextControlThreshold(
+  t: Territory,
+): { level: ControlLevel; min: number; needsLead: boolean; leading: boolean } | null {
+  const mine = playerInfluence(t);
+  const rival = strongestRival(t);
+  const leading = !rival || mine > rival.value;
+  const ranked = [...CONTROL_THRESHOLDS].reverse(); // none, presence, foothold, control, dominance
+  const current = ranked.findIndex((tier) => tier.level === controlLevel(t));
+  const next = ranked[current + 1];
+  if (!next) return null;
+  return {
+    level: next.level,
+    min: next.min,
+    needsLead: CONTROL_REQUIRES_LEAD.includes(next.level),
+    leading,
+  };
+}
+
 export function isContested(t: Territory): boolean {
   const mine = playerInfluence(t);
   const rival = strongestRival(t);
