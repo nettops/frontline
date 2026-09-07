@@ -26,9 +26,14 @@ import {
   setupsLeft,
 } from '../../sim/scores';
 import { SCORE, SETUP_BY_ID } from '../../config/scores';
-import { AUTOPILOT } from '../../config/autopilot';
+import {
+  AUTOPILOT_RISK,
+  AUTOPILOT_RISK_BLURB,
+  AUTOPILOT_RISK_LABEL,
+  type AutopilotRisk,
+} from '../../config/autopilot';
 import { PATTERN } from '../../config/standingOrders';
-import { autopilotOn, setAutopilot } from '../../sim/autopilot';
+import { autopilotOn, autopilotRisk, setAutopilot, setAutopilotRisk } from '../../sim/autopilot';
 import {
   cancelStanding,
   liveStanding,
@@ -58,6 +63,8 @@ import {
 import { CONTROL_LABEL, SENTIMENT_HOSTILE_BELOW } from '../../config/territories';
 import { ROLE_LABEL } from '../../config/economy';
 import type { OperationDef } from '../../sim/types';
+
+const RISKS = Object.keys(AUTOPILOT_RISK) as AutopilotRisk[];
 
 export default function OperationsPanel() {
   const state = useGame();
@@ -326,12 +333,28 @@ export default function OperationsPanel() {
             {autopilotOn(state) ? 'Take it back' : 'Let it run'}
           </button>
         </div>
+        {/*
+           How hard it is allowed to push. Round 16's own crisis — the loop
+           spent into a payday it did not know was coming — is the reason a
+           third setting exists at all. `normal` is what shipped before this
+           and stays selected by default, so an existing save changes nothing
+           until the player asks it to.
+        */}
+        <div className="btn-row" style={{ marginTop: 8 }}>
+          {RISKS.map((r) => (
+            <button
+              key={r}
+              className={autopilotRisk(state) === r ? 'btn small primary' : 'btn small'}
+              title={AUTOPILOT_RISK_BLURB[r]}
+              onClick={() => mutate((st) => setAutopilotRisk(st, r), true)}
+            >
+              {AUTOPILOT_RISK_LABEL[r]}
+            </button>
+          ))}
+        </div>
         <p className="faint tiny" style={{ margin: '8px 0 0' }}>
           It changes who goes, never what runs — the jobs are the ones you would have
-          taken anyway. It watches the heat the way a careful hand does: past{' '}
-          {AUTOPILOT.quietAbove} only the quiet work goes out, past {AUTOPILOT.stopAbove}{' '}
-          nothing does until it cools. Measured, it plays level with a careful hand —
-          a real way to run the outfit, not a way to beat it.
+          taken anyway. {AUTOPILOT_RISK_BLURB[autopilotRisk(state)]}
         </p>
       </Panel>
 
