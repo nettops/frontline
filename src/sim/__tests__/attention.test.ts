@@ -21,6 +21,8 @@ import { crewList, generateNpc } from '../npc';
 import { openScore } from '../scores';
 import { startTraining } from '../training';
 import { setStanding } from '../standingOrders';
+import { declareWar } from '../diplomacy';
+import { eligibleHeirs, nameHeir } from '../succession';
 import { HOME_TERRITORY } from '../../config/territories';
 import { PATTERN } from '../../config/standingOrders';
 import { territoryList } from '../territory';
@@ -135,6 +137,52 @@ describe('what wants you today', () => {
     crew[1].stats.skill = 20;
     startTraining(state, crew[0].id, crew[1].id);
     expect(attention(state).some((l) => l.id === 'teaching')).toBe(false);
+  });
+
+  /*
+     Round 18's blind report: the prompt named the situation and not the
+     door. "Your best man is free" sent the tester looking at the Crew
+     screen itself, not at the one man's page the action actually lives on.
+     Naming both men is the same repair `pattern` above already makes.
+  */
+  it('names the pairing rather than only announcing one exists', () => {
+    const state = game();
+    const crew = crewList(state).filter((n) => n.status === 'active');
+    crew[0].stats.skill = 80;
+    crew[1].stats.skill = 20;
+    const line = attention(state).find((l) => l.id === 'teaching');
+    expect(line).toBeTruthy();
+    expect(line!.text).toContain(crew[0].name);
+    expect(line!.text).toContain(crew[1].name);
+  });
+
+  /*
+     Round 18's blind report, the whole reason this exists: a tester fought
+     a war for a hundred days, died in it, and the death screen named the
+     cause — "there was nobody senior enough to take it." Nothing had ever
+     pointed back at Succession while the war was still winnable.
+  */
+  it('names a war with nobody able to take over if it goes wrong', () => {
+    const state = game();
+    declareWar(state, 'player', 'kestler');
+    const line = attention(state).find((l) => l.id === 'heir');
+    expect(line).toBeTruthy();
+    expect(line!.panel).toBe('succession');
+    expect(line!.text, 'named nobody the player could actually go and name').toMatch(
+      new RegExp(eligibleHeirs(state)[0].name),
+    );
+  });
+
+  it('says nothing about an heir once one is named', () => {
+    const state = game();
+    declareWar(state, 'player', 'kestler');
+    nameHeir(state, eligibleHeirs(state)[0].id);
+    expect(attention(state).some((l) => l.id === 'heir')).toBe(false);
+  });
+
+  it('says nothing about an heir at peace', () => {
+    const state = game();
+    expect(attention(state).some((l) => l.id === 'heir')).toBe(false);
   });
 
   it('keeps the list short enough to read', () => {

@@ -31,6 +31,8 @@ import { totalFunds } from './economy';
 import { isLayingLow } from './heat';
 import { liveStanding, patternOn } from './standingOrders';
 import { territoryDef } from './territory';
+import { playerWars } from './diplomacy';
+import { eligibleHeirs, heirOf } from './succession';
 import { OPERATION_BY_ID } from '../config/operations';
 import { PATTERN } from '../config/standingOrders';
 
@@ -107,6 +109,31 @@ export function attention(state: GameState): Wanting[] {
   }
 
   /*
+     A war with nobody named to survive you.
+
+     Round 18's blind report is the reason this exists: a tester fought a
+     war for a hundred days, was killed in it, and the death screen named
+     the exact cause — "there was nobody senior enough to take it." Nothing
+     on the war screen, the overview, or anywhere else had pointed back at
+     Succession while it still mattered, and by the time the war made it
+     urgent it was too late to do anything about it.
+
+     Gated on there being somebody who actually could be named, the same
+     discipline `steward` and `teaching` use above — a badge demanding
+     something the player has no way to satisfy is worse than no badge.
+  */
+  if (playerWars(state).length > 0 && !heirOf(state)) {
+    const candidate = eligibleHeirs(state)[0];
+    out.push({
+      id: 'heir',
+      text: candidate
+        ? `You are at war and nobody is named to take this if it goes wrong. ${candidate.name} is senior enough.`
+        : 'You are at war and nobody is named to take this if it goes wrong.',
+      panel: 'succession',
+    });
+  }
+
+  /*
      An order that has been on the same corner long enough to be a routine.
 
      This is the line that makes the pattern playable. Nobody should have to
@@ -136,12 +163,23 @@ export function attention(state: GameState): Wanting[] {
      not, and only when the bench can carry it.
   */
   if (liveTraining(state).length === 0 && spare.length >= 4) {
-    const skills = spare.map((n) => n.stats.skill);
-    const gap = Math.max(...skills) - Math.min(...skills);
+    const best = [...spare].sort((a, b) => b.stats.skill - a.stats.skill)[0];
+    const worst = [...spare].sort((a, b) => a.stats.skill - b.stats.skill)[0];
+    const gap = best.stats.skill - worst.stats.skill;
     if (gap >= 20) {
+      /*
+         Round 18's blind report, twice: a prompt naming the situation
+         ("your best man is free") and not the door ("open his profile,
+         find Put them with somebody") sent the tester looking at the Crew
+         list itself rather than at the one man's page the action actually
+         lives on — this file's own header names exactly this failure for
+         the succession badge and the fix is the same rule applied here.
+         Naming the two men gives the player something to click on rather
+         than a screen to search.
+      */
       out.push({
         id: 'teaching',
-        text: 'Your best man is free, and so is somebody who could learn from him.',
+        text: `${worst.name} could learn from ${best.name}, and neither is doing anything today. Open ${worst.name}'s page and look for "Put them with somebody."`,
         panel: 'crew',
       });
     }
