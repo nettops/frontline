@@ -46,7 +46,16 @@ export const DIFFICULTIES: DifficultyDef[] = [
   {
     id: 'normal',
     name: 'Normal',
-    blurb: 'The intended experience. Mistakes cost, but they do not end you.',
+    /*
+       Was "Mistakes cost, but they do not end you" — round 18's blind
+       report took that as a promise and read a war it treated as
+       background noise as a mistake the game had said would not be fatal.
+       It was fatal. The line was true of heat and money, which is
+       everything this file's own numbers actually soften on Normal, and
+       silent about a war, which none of them touch at all. Rewritten to
+       promise only what the numbers promise.
+    */
+    blurb: 'The intended experience. Ordinary mistakes cost you, not the whole thing — a war is not an ordinary mistake.',
     heatGain: 1,
     heatDecay: 1,
     successModifier: 0,
