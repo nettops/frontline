@@ -11,7 +11,7 @@ import { availableOperations } from './operations';
 import type { GameState } from './types';
 import { addEvidence, addLog } from './util';
 import { tickOperations } from './operations';
-import { tickBusinesses } from './business';
+import { tickBusinesses, tickFrontUpkeep } from './business';
 import { tickContraband } from './contraband';
 import { tickOrders } from './orders';
 import { tickScores } from './scores';
@@ -123,6 +123,12 @@ export function advanceDay(state: GameState): void {
   }
   // 3a. Wages out.
   tickEconomy(state);
+  // 3a2. The other standing bill — what owning the fronts costs, priced on
+  //      what they took this same morning. After wages deliberately: a
+  //      family that cannot make payroll should not also be asked to fund
+  //      upkeep out of the same empty pocket in the same breath, and the
+  //      shortfall this carries is a front's health, not a man's loyalty.
+  tickFrontUpkeep(state);
   // 3b. What the boss keeps, and what keeping it does for him.
   //
   //     After wages, because the upkeep on a yacht is a standing bill and

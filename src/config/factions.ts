@@ -345,10 +345,35 @@ export const AI = {
      *
      * Was 40,000 — more than a district produces — which made sitting still
      * the single most profitable thing a family could do and was the largest
-     * single contributor to the measured $137M. It should be a saving, not a
-     * salary.
+     * single contributor to the measured $137M. Brought to 12,000 to fix that,
+     * and it was still a salary: `collectIncome` nets a family roughly $2,190
+     * a week once upkeep is paid, so 12,000 on top of that let one week of
+     * doing nothing outearn two and a half weeks of running the organization
+     * — "consolidate.wealthGain puts that right in a fortnight" was this
+     * file's own comment, describing a family recovering from a $20,000 push
+     * faster by sitting still afterward than by ever having made the push
+     * pay for itself. Measured: consolidate 61% of rival-weeks, pressure 6%.
+     *
+     * Down to 1,500 — comfortably under the organic weekly net, so it reads
+     * as what the doc comment always meant: a cushion for a bad week, not a
+     * reason to stay in one. `AI.consolidate.heatReduction` and
+     * `influenceGain` are untouched; consolidate still does something even at
+     * a wealthGain of zero.
+     *
+     * This moves the *payoff*, not the *choice*. `scoreConsolidate` never
+     * reads wealthGain — its score is `caution * heatPressure + alarmed +
+     * broke`, so a cautious family sitting on real heat scores consolidate
+     * highly whether or not it pays anything at all. wealthGain only feeds
+     * back into next week's `broke` term through the wealth it leaves behind.
+     * Measured moving this alone: consolidate 61% of rival-weeks to 59%, at
+     * 3,000; a further cut to 1,500 is not expected to move that share much
+     * further; it should not — the frequency lever is the heat term above,
+     * a separate, larger change this session is deliberately not making. See
+     * `ladder.probe.test.ts`'s "does not pay a family more to do nothing
+     * than to work" for the measured reading and TASKS.md for why the score
+     * formula itself is left for a dedicated pass.
      */
-    wealthGain: 12_000,
+    wealthGain: 1_500,
   },
 
   /** Baseline weekly income before fronts, scaled by districts held. */

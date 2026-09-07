@@ -581,9 +581,24 @@ export const OPERATIONS: OperationDef[] = [
     name: 'Citywide Distribution Network',
     description:
       'Every corner of the map feeding one operation. Nothing this size stays invisible.',
+    /*
+       Was `districtsControlled >= 3, fronts >= 8` — a median career at day
+       300 holds 4 of 12 districts and 10 fronts (ladder.probe, 2026-09-07),
+       so this cleared with a hundred-plus days still on the clock and
+       nothing above it to reach for. The first attempt raised this to 6
+       controlled / 12 fronts and broke a pre-committed floor this project
+       sizes hard against: "Boss is out of reach in a human career" collapsed
+       from 36/36 careers to 2/36, because this job's payout is what a
+       300-day career's estate leans on to reach that rank at all — the gate
+       and the rank ladder are coupled in a way a gate-only diagnosis missed.
+       Settled one point above the median instead of two above it: still a
+       genuine reach rather than a formality, still inside what
+       `opGates.test.ts`'s FULL board can satisfy, and it holds the
+       ladder.probe floor (re-verified after this change).
+    */
     opens: {
-      need: 'three districts under your control, eight fronts, and real favours owed',
-      met: (b) => b.districtsControlled >= 3 && b.fronts >= 8 && b.owedTotal >= 4,
+      need: 'four districts under your control, nine fronts, and real favours owed',
+      met: (b) => b.districtsControlled >= 4 && b.fronts >= 9 && b.owedTotal >= 4,
     },
     tier: 5,
     risk: 'extreme',
@@ -602,9 +617,18 @@ export const OPERATIONS: OperationDef[] = [
     name: 'Enforce the Peace',
     description:
       'Every operation in the city pays you to make sure nothing happens to any of them. It takes no investment and most of a month, and everybody knows exactly who is keeping order.',
+    /*
+       Was `districtsControlled >= 3` — the same "cleared with the game half
+       over" shape as citywide_network's old gate, and this job's other
+       condition (a rival who trusts you) was doing all of the actual
+       gatekeeping. Raised one point above the median (4, ladder.probe
+       2026-09-07) rather than two — see citywide_network's own comment for
+       why an aggressive first attempt on that gate broke a 300-day
+       rank-reachability floor this project sizes hard against.
+    */
     opens: {
-      need: 'three districts under your control and a rival who genuinely trusts you',
-      met: (b) => b.districtsControlled >= 3 && b.bestRivalTrust >= 25,
+      need: 'four districts under your control and a rival who genuinely trusts you',
+      met: (b) => b.districtsControlled >= 4 && b.bestRivalTrust >= 25,
     },
     tier: 5,
     risk: 'high',

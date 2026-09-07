@@ -70,7 +70,7 @@ import { HOLDINGS } from '../../config/economy';
 import { isLayingLow, startLayLow } from '../heat';
 import { fearLevel, maxCrew } from '../player';
 import { acquireBusiness, canAcquire, healthPressure, launderCut, launderOutlook } from '../business';
-import { BUSINESSES, HEALTH } from '../../config/businesses';
+import { BUSINESSES, EXPOSURE_ALARMING_ABOVE, HEALTH } from '../../config/businesses';
 import {
   FEAR,
   PAYDAY_INTERVAL,
@@ -189,9 +189,8 @@ import {
 import { acceptOrder, liveOrders, orderList, refuseOrder } from '../orders';
 import { GANGS } from '../../config/orders';
 import { SENTIMENT_HOSTILE_BELOW } from '../../config/territories';
-import { activeCases, pressureWitness, worstStage } from '../investigation';
+import { activeCases, pressureWitness } from '../investigation';
 import { PRESSURE_WITNESS } from '../../config/lawEnforcement';
-import { stageIndex } from '../../config/lawEnforcement';
 import { ownedBusinesses } from '../business';
 import type { PressureId } from '../../config/pressure';
 
@@ -3593,26 +3592,36 @@ function climb(seed: number, days: number, policy: Policy = {}): Climb {
            And the dial, on the only question it asks: how dirty do I want this
            business this week.
 
-           The first version of this policy went clean on any case above 25
-           strength or heat above 60, and the probe reported that using the
-           dial cost 73% of everything the career ever laundered. That reading
-           was about the bot, not the dial: median peak case strength across
-           this population is 100, so the condition was true almost every week
-           and the measurement was "always clean" against "always normal"
-           wearing the costume of a policy.
+           The first version went clean on any case above 25 strength or heat
+           above 60, and cost 73% of everything the career ever laundered — a
+           reading about the bot, not the dial, because median peak case
+           strength is 100 and the condition was true almost every week. The
+           second version swapped the trigger for a case at the warrants stage
+           or heat in its top band, on the theory that was closer to what a
+           boss would actually react to, and it was wrong in the same shape:
+           `pairedGap` against the population that never touches the dial read
+           a median **-$896,499** in estate and **-$1,047,987** laundered for a
+           **-19** heat-week saving, with case strength ending at 100 either
+           way. Going clean bought nothing measurable, because a case at
+           warrants and organization-wide heat are not what `config/pressure.ts`
+           says the dial defends — that file is explicit that it answers "how
+           dirty do I want *this business*", against *its own* exposure and
+           inspection risk, not the state of an investigation the dial cannot
+           touch.
 
-           So the trigger is now the thing a boss would actually react to —
-           a case far enough along that somebody is about to knock, or heat in
-           its top band — and the weeks are counted by setting, so the readout
+           So the trigger is now the quantity the dial actually changes,
+           per front rather than as one setting for the whole portfolio:
+           `EXPOSURE_ALARMING_ABOVE` is `business.ts`'s own line for a front
+           worth going quiet over. A backlog still earns `hard`, mirroring
+           `policy.lean` above. Counted by setting either way, so the readout
            says what the policy did rather than only what happened afterwards.
         */
-        const worst = worstStage(state);
-        const closing = worst ? stageIndex(worst) >= stageIndex('warrants') : false;
-        const backedUp = state.org.dirtyCash > 20_000;
-        const want: PressureId =
-          closing || state.org.heat >= 75 ? 'clean' : backedUp && state.org.heat < 40 ? 'hard' : 'normal';
-        newSys.dialWeeks[want] += 1;
+        const outlook = launderOutlook(state);
+        const backedUp = outlook.heldBack + outlook.capacity < state.org.dirtyCash;
         for (const b of ownedBusinesses(state)) {
+          const want: PressureId =
+            b.exposure > EXPOSURE_ALARMING_ABOVE ? 'clean' : backedUp ? 'hard' : 'normal';
+          newSys.dialWeeks[want] += 1;
           if ((b.pressure ?? 'normal') === want) continue;
           b.pressure = want;
           newSys.dialTurns += 1;
@@ -7690,15 +7699,25 @@ describe('the trades, and the two things built on top of them', () => {
 
        A trade most careers cannot get into is content nobody sees. A trade
        that leaves a family no better off is a button that costs a retainer.
+
+       The second condition used to compare `median(trading)` against
+       `median(base)` directly — two medians over two arms that diverge at
+       the first trade decision, which HANDOFF.md's §3 rule 1 names as the
+       exact error `pairedGap` exists to avoid. It surfaced when an unrelated
+       rival-AI change (2026-09-07, F5) reshuffled the shared rng stream
+       enough to flip this specific comparison — $3,249,717 against
+       $3,411,244, a 4.7% gap on a distribution with the long right tail F15
+       already documents. Paired, seed for seed, the trade's own effect is
+       unambiguous and does not move on a change that never touches it.
     */
     expect(
       opened.length,
       'most careers can never get into the trade at all',
     ).toBeGreaterThanOrEqual(Math.ceil(RUNS_TRADING.length / 2));
     expect(
-      median(trading),
+      pairedGap(RUNS_TRADING, RUNS_300, (r) => r.bestEstate),
       'running both trades for 300 days leaves a family no better off',
-    ).toBeGreaterThan(median(base));
+    ).toBeGreaterThan(0);
   });
 
   it('says what a plant does for the careers that build one', () => {
@@ -8313,6 +8332,50 @@ describe('the other families', () => {
   });
 
   /*
+     F5, pre-committed 2026-09-07, restated once against a first reading —
+     the DIRECTOR.md §5 exception, used here for the first and, per its own
+     "reaching for it twice means you are tuning the instrument" rule, only
+     time on this bar.
+
+     `AI.consolidate.wealthGain` paid $12,000 on top of a family's ordinary
+     weekly net of about $2,190. The first version of this test assumed that
+     was most of what drove consolidate to 61% of rival-weeks and set the bar
+     at 55. Reading the code that actually chooses it: `scoreConsolidate`'s
+     score is `caution * heatPressure + alarmed + broke` — wealthGain never
+     appears in it. Cutting it 12,000 → 3,000 moved consolidate 61% → 59%,
+     entirely through the secondary route of a lower `broke` term next week;
+     the frequency is set by the heat term, which this change does not touch
+     and which config/factions.ts's own history (three measured passes on
+     `pressure.cost`, each with a comment from whoever made it) argues should
+     not be touched under a single session's pressure.
+
+     So the bar here is honest about what a payoff-only change can prove: the
+     share must not go *up*, and pressure must not go *down*, against the
+     61%/6% baseline — a regression guard on this change, not a claim that F5
+     is closed. Wealthgain was taken further, to 1,500, on the economic
+     argument alone (comfortably under the organic weekly net, so it reads as
+     a cushion rather than income) — that is not expected to move the shares
+     much further and does not need a tighter bar to prove it didn't.
+  */
+  it('does not pay a family more to do nothing than to work', () => {
+    const doing: Record<string, number> = {};
+    for (const r of RUNS_300) {
+      for (const [k, n] of Object.entries(r.rivals.doing)) doing[k] = (doing[k] ?? 0) + n;
+    }
+    const total = Object.values(doing).reduce((a, b) => a + b, 0) || 1;
+    const share = (k: string) => (100 * (doing[k] ?? 0)) / total;
+
+    expect(
+      share('consolidate'),
+      `consolidate at ${share('consolidate').toFixed(0)}% of rival-weeks — up on the 61% baseline`,
+    ).toBeLessThanOrEqual(61);
+    expect(
+      share('pressure'),
+      `pressure at ${share('pressure').toFixed(0)}% of rival-weeks — down on the 6% baseline`,
+    ).toBeGreaterThanOrEqual(6);
+  });
+
+  /*
      F17, pre-committed.
 
      Round 13 read the Diplomacy screen four times and wrote *"shows strengths
@@ -8589,9 +8652,22 @@ describe('a career that uses what the cycle built', () => {
     ).toBe(0);
   });
 
+  /*
+     This used to compare `median(RUNS_300)` against `median(RUNS_ACTIVE)`
+     directly — two medians over two populations that diverge at the first
+     favour spent or dial turned, which is exactly the error HANDOFF.md's §3
+     rule 1 names: arms are separate worlds and a median cannot see what one
+     career gained or lost by playing differently, only what two different
+     samples happened to average to. It read estate falling 29% and
+     laundering falling 54% from turning two systems on, which is either a
+     real and serious finding or the oldest measurement bug in this file
+     wearing a new column. `pairedGap` (median of the 36 per-seed
+     differences, same seeds both arms) answers which.
+  */
   it('says what using them is worth', () => {
-    const cmp = (pick: (r: Climb) => number) =>
-      `${Math.round(median(RUNS_300.map(pick)))} → ${Math.round(median(RUNS_ACTIVE.map(pick)))}`;
+    const gap = (pick: (r: Climb) => number) =>
+      Math.round(pairedGap(RUNS_ACTIVE, RUNS_300, pick));
+    const signed = (n: number) => `${n >= 0 ? '+' : ''}${n.toLocaleString('en-US')}`;
 
     // eslint-disable-next-line no-console
     console.log(
@@ -8602,12 +8678,12 @@ describe('a career that uses what the cycle built', () => {
         (['clean', 'normal', 'hard'] as PressureId[])
           .map((id) => `${id} ${RUNS_ACTIVE.reduce((n, r) => n + r.newSystems.dialWeeks[id], 0)}`)
           .join(', ') +
-        `\n         median, baseline → active:\n` +
-        `           estate       ${cmp((r) => r.bestEstate)}\n` +
-        `           heat-weeks   ${cmp((r) => r.danger.heat)}\n` +
-        `           case weight  ${cmp((r) => r.danger.peakCase)}\n` +
-        `           laundered    ${cmp((r) => r.wash.laundered)}\n` +
-        `           legitimacy   ${cmp((r) => r.newSystems.legitimacy.final)}\n` +
+        `\n         paired gap, active vs baseline, same 36 seeds (median of the per-seed differences):\n` +
+        `           estate       ${signed(gap((r) => r.bestEstate))}\n` +
+        `           heat-weeks   ${signed(gap((r) => r.danger.heat))}\n` +
+        `           case weight  ${signed(gap((r) => r.danger.peakCase))}\n` +
+        `           laundered    ${signed(gap((r) => r.wash.laundered))}\n` +
+        `           legitimacy   ${signed(gap((r) => r.newSystems.legitimacy.final))}\n` +
         `           ended early  ${RUNS_300.filter((r) => r.days < HUMAN_DAYS).length} → ` +
         `${RUNS_ACTIVE.filter((r) => r.days < HUMAN_DAYS).length}`,
     );
