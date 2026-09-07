@@ -14,6 +14,7 @@
 import { Rng, clamp } from './rng';
 import { armsStrength, spendWarStock } from './contraband';
 import type { Faction, FactionBond, GameState, Npc } from './types';
+import { PARTNER } from '../config/partner';
 import { addEvidence, addLog, formatMoney } from './util';
 import { addHeat } from './heat';
 import { addNote, crewList } from './npc';
@@ -40,6 +41,7 @@ import {
   PEACE_GRUDGE,
   DIPLOMACY,
   DIPLOMATIC_ACTION_BY_ID,
+  POACH,
   WAR,
   type DiplomaticActionId,
 } from '../config/diplomacy';
@@ -92,7 +94,26 @@ export function bond(state: GameState, from: FactionId, to: FactionId): FactionB
 export function relationship(state: GameState, from: FactionId, to: FactionId): number {
   if (from === to) return 100;
   const b = bond(state, from, to);
-  return clamp(b.trust * BOND.weightTrust - b.grudge * BOND.weightGrudge, -100, 100);
+  /*
+     `PARTNER.protectionTrust` existed and was read by nothing — a family
+     that bought a piece of the player was written up in `config/partner.ts`
+     as protected "while they hold a piece", and nothing ever applied it.
+     A floor here rather than a mutation of the stored figure, so the real
+     trust value keeps drifting underneath it exactly as it always has and
+     nothing has to be undone in `buyOutPartner`.
+
+     This does not by itself block a war: `faction.ts` declares one off raw
+     `grudge`, which this floor never touches, so a partner who racks up
+     enough grievance can still cross that gate. What it does do is damp
+     every *coarse* reading of the relationship — hostility, pressure and
+     expansion targeting all read this figure — which is the "genuinely
+     useful" the comment in `config/partner.ts` actually claims, not a
+     guarantee of immunity it never promised in those words.
+  */
+  const partner = state.org.partner?.factionId;
+  const floor =
+    partner && (from === partner && to === 'player') ? PARTNER.protectionTrust : -Infinity;
+  return clamp(Math.max(b.trust, floor) * BOND.weightTrust - b.grudge * BOND.weightGrudge, -100, 100);
 }
 
 export interface BondDelta {
@@ -792,7 +813,10 @@ export function defectToRival(
   addEvidence(state, {
     day: state.day,
     source: 'informant',
-    strength: 14,
+    // Was a bare 14 duplicating `POACH.evidenceStrength` by coincidence —
+    // wired to the config it was always meant to read, per that key's own
+    // comment: "a man who changes sides knows things about both."
+    strength: POACH.evidenceStrength,
     npcIds: [npc.id],
     detail: `${npc.name} changed organizations and knows how both of them work.`,
   });
