@@ -189,6 +189,31 @@ export function canContract(state: GameState, target: ContractTarget): ContractC
     return { ...none, message: `Somebody is already out looking for ${name}.` };
   }
 
+  /*
+     `CONTRACT.cooldownDays` existed and was read by nothing — the "already
+     out looking" guard above only ever sees a contract while it is *open*,
+     so the same man could be sent for again the day after a botched attempt
+     came home, with nothing charged for it but the second attempt's own
+     price. The comment on the key says what it is for: "he will be careful
+     for a long time afterwards."
+
+     Only `missed` counts. A `landed` contract means the man is gone — a
+     `boss` slot refilled by `replaceLeader` is a different person wearing
+     the same key, and he has not been shot at yet.
+  */
+  const settled = contractList(state)
+    .filter((c) => c.status === 'missed' && targetKeyOf(c) === targetKey(target))
+    .sort((a, b) => (b.settledDay ?? b.endDay) - (a.settledDay ?? a.endDay))[0];
+  if (settled) {
+    const since = state.day - (settled.settledDay ?? settled.endDay);
+    if (since < CONTRACT.cooldownDays) {
+      return {
+        ...none,
+        message: `${name} is watching their back after last time. Try again in ${CONTRACT.cooldownDays - since} days.`,
+      };
+    }
+  }
+
   const free = available(state);
   if (free.length < CONTRACT.crew) {
     /*

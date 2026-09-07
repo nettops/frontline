@@ -109,6 +109,44 @@ describe('sending somebody', () => {
     openContract(state, target);
     expect(canContract(state, target).ok).toBe(false);
   });
+
+  it('keeps a hand off a man who just lived through one', () => {
+    /*
+       `CONTRACT.cooldownDays` existed and was read by nothing: the
+       "already out looking" guard above only ever sees a contract while it
+       is open, so a missed attempt left the same man reachable again the
+       very next morning for nothing but the second attempt's own price.
+
+       Runs seeds until the roll misses — asserting on one seed would be
+       asserting that seed misses, the shape of every false pass this file's
+       own header warns about.
+    */
+    let state!: GameState;
+    let target!: ContractTarget;
+    let rng!: Rng;
+    for (let seed = 1; seed <= 30; seed++) {
+      state = ready(seed);
+      target = aCapo(state);
+      rng = new Rng(state.rng);
+      openContract(state, target);
+      playOut(state, rng);
+      const settled = contractList(state)[0];
+      if (settled.status === 'missed') break;
+    }
+    const settled = contractList(state)[0];
+    expect(settled.status, 'no seed in range ever missed').toBe('missed');
+
+    expect(
+      canContract(state, target).ok,
+      'refused a fresh contract on the same man the day after a miss',
+    ).toBe(false);
+
+    state.day += CONTRACT.cooldownDays;
+    expect(
+      canContract(state, target).ok,
+      'still refusing once the cooldown has actually run out',
+    ).toBe(true);
+  });
 });
 
 describe('what it does when it lands', () => {
