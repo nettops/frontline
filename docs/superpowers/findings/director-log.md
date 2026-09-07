@@ -2130,3 +2130,57 @@ of the remainder. Round 13's lesson applied — the row height was the real dama
 and is now 57px, matching its neighbours; the wrap scrolls horizontally by design.
 
 `tsc` clean. 687 tests, 60 files, 686 passing and one failing on purpose.
+
+---
+
+## Three systems shipped invisible, again — 2026-09-06
+
+This log stopped at the four absent systems on 2026-08-21. In the nine days
+since, contracts, the armoury and provenance, the two street scenes and the
+autopilot heat check landed — 144 commits deep now, 1,361 tests, all green.
+None of that work is recorded here; it lives in `docs/superpowers/specs/`
+instead and this entry does not attempt to back-fill it.
+
+What it does record is one thing found by reading the newest of it against
+`ui/tips.ts` rather than by playing it: **the favour network, the pressure
+dial and contracts all shipped with zero lines in the tips strip.** That is
+the exact failure "The fourth playtest, and the systems nobody could find"
+(README) already named once — the sit-down, delegation and promises all
+launched the same way, invisible until a blind tester spent a whole round
+never finding them, and all three needed the identical fix.
+
+Checked before assuming: `grep` for `contract`, `civic`, `favour`, `pressure`
+and `armoury` across `ui/tips.ts` returned nothing. The armoury is left out —
+it sits on the Rail as its own page and `config/armoury.ts`'s own design
+note argues against a tutorial for it; a rail item is not the buried-inside-
+a-panel shape the other three are.
+
+Three tips added, each gated on the state actually being true rather than on
+a day, matching `borrow_a_front`'s rule that a tip advertising a door the
+player cannot yet walk through is advice reachable by luck:
+
+- `lean_on_it` — fires once a front is owned. The dial is per-business and
+  off the beaten path; left untouched it is provably a no-op.
+- `contract` — fires once `canContract` actually returns `ok` against a real
+  capo, so it is never advertising a door the player cannot afford or crew.
+- `favours` — fires on day 45, the same shape `why` already uses, because
+  standing there accrues from day one whether or not the page is ever opened
+  and the point is to send the player to look rather than to wait for
+  something owed.
+
+`tips.reach.test.ts`'s bot — plain recruiting, buying whatever front is for
+sale, running whatever job is available — reaches all three without being
+taught to do anything new, so they went into `ORDINARY` rather than
+`NEEDS_AN_ACTION`. Verified rather than assumed: added to `ORDINARY` first
+and the reachability test passed on the first run.
+
+Measured in passing, not touched: `ladder.probe`'s contract arms (`only at
+war` / `freely`) already exist and already assert what this session would
+otherwise have asked for — going after rivals unprovoked must not make every
+career richer, and it does not (9/36 ahead, median $-288,425 against never
+sending). At war the same act roughly breaks even (17/36 ahead, median $0).
+No balance change made; the system was already tuned, only unfindable.
+
+`tsc` clean. 1,361 tests passing, 11 skipped — unchanged from before this
+entry, since the new coverage sits inside `tips.reach.test.ts`'s existing
+cases rather than adding new ones.
