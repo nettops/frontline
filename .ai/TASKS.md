@@ -1,3 +1,40 @@
+# Round 17's blind playtest — a MUST FIX that is not a game bug
+
+`round17`'s blind report opens with a 🔴 MUST FIX: the whole view
+"repeatedly and unpredictably reverted to the title screen," including once
+during plain scrolling with no click at all. The tester ruled out their own
+automation carefully — the right instinct on the evidence they had.
+
+**It is not a defect in the game.** `round17`'s own Vite server log
+(`/tmp/round17-server.output`, still on disk this session) shows 18
+`hmr update` events between 12:07pm and 1:44pm, each cascading through
+essentially the entire UI component tree (`App.tsx` plus every panel) —
+because I was editing `business.ts`, `factions.ts`, `operations.ts`,
+`types.ts` and `clock.ts` on this exact schedule, for H1-H4. `npm run
+playtest` starts a plain `vite --port <port> --strictPort`, which watches
+the *whole repo*, not a scoped directory — every playtest instance this
+session (round17, round17adv, mafia-verify) shares one filesystem watcher.
+A shared-module edit with no React Fast Refresh boundary (all of `sim/`)
+forces Vite to fall back to a full page reload, which drops `store.ts`'s
+in-memory `state` to `null`, `App.tsx` renders `<TitleScreen>`, and the
+always-current autosave is sitting right there under "Continue" — exactly
+matching the tester's own description of the recovery step. The timestamps
+line up with my edit history to the minute.
+
+**Consequence for reading this report**: First hour (6), Clarity (5) and
+Interface (4) are all well below this project's recent 8-9 range on those
+exact axes, and this is almost certainly why — a game that appears to
+crash to the title screen a dozen times will tank First hour and Interface
+regardless of anything else. Treat those three scores as contaminated, not
+as a reading of the current build. The rest (Depth 8, Pacing 5, Difficulty
+6, Writing 8, Standing in it 7, Fun 6) and every non-crash finding in
+Parts 3-5 are uncontaminated and worth acting on normally.
+
+**Process correction, binding for the rest of this session**: do not edit
+source files while a dispatched blind/adversarial round has a live browser
+session running. The next round gets dispatched only once a batch of
+changes is committed and I am not mid-edit on the next one.
+
 # Round 17 — 2026-09-07, full-day session (Opus diagnosis / Sonnet build)
 
 Opus diagnosis complete (see full report in session transcript / director-log

@@ -1185,6 +1185,25 @@ export function buyContact(state: GameState, agencyId: string): LegalAction {
 }
 
 /**
+ * The odds `destroyEvidence` will actually run at, read before it is tried.
+ *
+ * Round 17's blind report named this exactly: the button's title already
+ * said "works more often the sharper you are... when it fails it becomes a
+ * charge of its own", but a tooltip is not a number and it is not always
+ * seen — the tester hit the failure state twice with nothing to weigh it
+ * against beforehand. Same fix this file has made before for a refusal: the
+ * figure goes in body text, not a hover.
+ */
+export function destroyEvidenceChance(state: GameState): number {
+  return clamp(
+    DESTROY_EVIDENCE.baseSuccess +
+      state.player.attributes.streetSmarts * DESTROY_EVIDENCE.successPerStreetSmarts,
+    0.1,
+    0.9,
+  );
+}
+
+/**
  * Getting at what they have already collected. Works often enough to be worth
  * trying and fails badly enough to make it a real decision.
  */
@@ -1204,12 +1223,7 @@ export function destroyEvidence(
     };
   }
 
-  const chance = clamp(
-    DESTROY_EVIDENCE.baseSuccess +
-      state.player.attributes.streetSmarts * DESTROY_EVIDENCE.successPerStreetSmarts,
-    0.1,
-    0.9,
-  );
+  const chance = destroyEvidenceChance(state);
 
   if (rng.chance(chance)) {
     const removed = rng.float(DESTROY_EVIDENCE.removed[0], DESTROY_EVIDENCE.removed[1]);
@@ -1228,6 +1242,17 @@ export function destroyEvidence(
   record(state, investigation, 'Somebody tried to get at the file. That is a charge of its own.', true);
   addLog(state, 'It went wrong, and now that is part of the case too.', 'failure');
   return { ok: false, message: 'It went wrong.' };
+}
+
+/** The odds `pressureWitness` will actually run at. Same reasoning as `destroyEvidenceChance`. */
+export function pressureWitnessChance(state: GameState): number {
+  return clamp(
+    PRESSURE_WITNESS.baseSuccess +
+      state.player.attributes.intimidation * PRESSURE_WITNESS.successPerIntimidation +
+      clamp(state.org.fear / FEAR.max, 0, 1) * FEAR.witnessBonusAtMax,
+    0.1,
+    0.9,
+  );
 }
 
 /** Leaning on somebody they have lined up to testify. */
@@ -1249,13 +1274,7 @@ export function pressureWitness(
 
   // What fear is actually for. A man weighing whether to testify is weighing
   // it against what he has watched happen to other people.
-  const chance = clamp(
-    PRESSURE_WITNESS.baseSuccess +
-      state.player.attributes.intimidation * PRESSURE_WITNESS.successPerIntimidation +
-      clamp(state.org.fear / FEAR.max, 0, 1) * FEAR.witnessBonusAtMax,
-    0.1,
-    0.9,
-  );
+  const chance = pressureWitnessChance(state);
 
   if (rng.chance(chance)) {
     const removed = rng.float(PRESSURE_WITNESS.removed[0], PRESSURE_WITNESS.removed[1]);
