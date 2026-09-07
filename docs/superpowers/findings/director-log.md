@@ -2184,3 +2184,92 @@ No balance change made; the system was already tuned, only unfindable.
 `tsc` clean. 1,361 tests passing, 11 skipped — unchanged from before this
 entry, since the new coverage sits inside `tips.reach.test.ts`'s existing
 cases rather than adding new ones.
+
+---
+
+## Five sessions in one, Opus deciding and Sonnet building — 2026-09-07
+
+A different arrangement this time: an Opus-model pass read the project cold
+and decided what deserved fixing; a Sonnet-model pass implemented, tested and
+committed each item, then handed back to Opus once for a second, narrower
+pass — verify what shipped, decide what's next. Five commits, all
+test-first, all measured before being called done.
+
+### What Opus found, verified before acting on any of it
+
+- `WORLD.gripSkim` (config/build.ts) — the build screen promised "stewards
+  report honestly" at Grip 3+ and `delegation.ts` never read the stat.
+- `PARTNER.protectionTrust` — the silent-partner repair for F15 promised
+  protection "while they hold a piece" and nothing applied it.
+- `CONTRACT.cooldownDays` — a missed contract left the same man reachable
+  again the next morning; the comment says "careful for a long time."
+- Seven refusal sites the widened `refusals.test.ts` detector had never been
+  able to see: a `!fn(...)` guard with a named constant and no comparison
+  operator, and a comparison between two camelCase cost-shaped calls with no
+  visible constant at the call site. Both classes, not instances — the file's
+  own rule.
+- Three verbs with complete sim logic and no way to reach them at all:
+  Instinct's `plant`/`pullOut`/`hearsAbout`, Word's `canCallATable`, Ledger's
+  `canBuyIn`/`buyIn`. Instinct was fixable this session. Word and Ledger
+  turned out to be design gaps rather than wiring gaps — see below — and
+  were labelled honestly instead of built badly under time pressure.
+- Four more dead config keys, caught by a new guard modelled on
+  `deadState.test.ts`'s existing one for `Org` fields, scanning every plain
+  settings object in `config/` instead.
+
+### Instinct, and why Word and Ledger were not also fixed
+
+`hearsAbout()` existed in `verbs.ts`, was fully correct, and was called by
+nothing. Wired into `investigation.ts`'s stage gate: a plant inside the
+agency running a case now earns one warning per stage transition, in the
+window `WORLD.instinctWarnDays` sizes, before the gate opens. `plant`/
+`pullOut` had sim logic and no UI at all — a Planted column on
+IntelligencePanel's existing agency table, mirroring the contact-buying row
+already there.
+
+Investigating why `canCallATable` and `canBuyIn` had never been wired either
+found they are not the same defect. A rival house sit-down is already open
+to everybody from Diplomacy — `canCallATable`'s gate has nothing to remove,
+because the restriction it was meant to lift was never built. `canBuyIn`
+resolves against `state.businesses`, which holds only the player's own
+fronts; there is no rival-business entity anywhere in the sim for "take a
+piece of somebody else's business" to address. Both are real design
+questions — does a house sit-down need gating at all now that Word exists;
+what would a referenceable rival business even be — not missing buttons, and
+building either under a few hours' pressure would have been the wrong kind
+of fast. `PlayerPanel` now says plainly that neither is reachable yet,
+before a player spends the points, not after.
+
+### The dead-key guard, tightened twice in the same session
+
+First version substring-matched against `sim/**` and `ui/**` including
+`__tests__/` and comments — Opus's second pass caught it cold: the guard's
+own doc comment named `WORLD.gripSkim` and `SCORE.minTier` as examples,
+which would have kept both "read" forever regardless of what the game
+actually does. Comments stripped (reusing `voice.test.ts`'s `stripComments`
+rather than a new heuristic), `__tests__` excluded from the production
+corpus. Tightening it surfaced two more candidates — `HANDOVER.ranksLost`
+and `DEAL.moveOnMiss` — and both turned out to be deliberate identity
+functions with a comment at the definition site already explaining why nothing
+reads them. Named as exceptions with that comment quoted, not deleted and not
+silently allowed: the round-11 audit's own distinction between a key nobody
+remembers and one somebody consciously chose to keep.
+
+### One recommendation from Opus not taken
+
+Retune `CONTRACT.cooldownDays` down from 300 — reads as broken, "try again
+in 287 days." Checked before acting: `CAPO_APPROACH.cooldownDays` in
+`config/capos.ts` is 400 and produces the identical pattern
+(`Ask again in ${...} days`), and `contract.ts`'s own header says a contract
+is deliberately `approachCapo`'s mirror image "in every column." Retuning one
+without the other would make two intentionally-parallel mechanics disagree
+about how long a rival remembers being crossed. Left at 300; recorded here
+rather than silently declined.
+
+### Verified
+
+`tsc` clean. Full suite green — 1,367 tests, up six, zero regressions
+outside what this session added. `npm run build` succeeds. The two UI
+changes (Word/Ledger's honesty note, the Planted column and its disabled
+state) were checked live in the browser, not only in tests — screenshotted
+and read back through the harness at `mafia-verify`.
