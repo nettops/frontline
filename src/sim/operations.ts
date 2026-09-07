@@ -1213,13 +1213,20 @@ function applyFailureConsequence(
             crewTraitEffect(crew, 'exposure'),
         ),
         npcIds: crew.map((n) => n.id),
-        detail: `Something was left behind at the ${def.name}.`,
+        detail: `Something of yours was left at the ${def.name.toLowerCase()}.`,
       });
+      /*
+         "Something was left behind" names nothing, and the other three in this
+         list all do. It went, and the list gained the things a crew actually
+         leaves at a scene.
+      */
       return say(`left_${def.id}`, state.day, [
-        'Something was left behind.',
         'Something of yours is in a box with a number on it now.',
         'Nobody swept up afterwards. Somebody else did.',
         'There is a bag somewhere that should not exist.',
+        'One of them dropped a glove and did not go back for it.',
+        'A car was seen leaving. Not the plate, but the car.',
+        'Whatever they wiped down, they did not wipe down the door.',
       ]);
     }
 

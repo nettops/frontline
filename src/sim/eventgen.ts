@@ -139,7 +139,7 @@ const wantsAWord: EventDef = {
     const ask = Math.max(500, Math.round(npc.wage * GEN_EFFECT.payWages));
     const carrying = about
       ? `They have not forgotten it: they ${about}.`
-      : `They will not say what it is about, which is its own answer.`;
+      : `They will not say what it is about. They will not say who asked, either.`;
     const who = `${ROLE_LABEL[npc.role]}, ${npc.daysInCrew} days with you.`;
     return {
       defId: 'gen_wants_a_word',
@@ -819,7 +819,7 @@ const theNameStuck: EventDef = {
           `to your face, the way you would use somebody's actual name. ` +
           `Everybody waited to see what you did about it.`,
         `A message came in addressed to ${name}. ${npc.name} brought it through ` +
-          `and put it down without a word, which is its own kind of question.`,
+          `and put it down without a word. Nobody has asked you for anything yet.`,
       ]),
       severity: 'opportunity',
       npcId: npc.id,

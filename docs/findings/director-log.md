@@ -3440,3 +3440,67 @@ to one of his own traits, in the half matching what the player just saw.
 
 Four guards in `voice.test.ts`, three seen to fail with the fault put back: one
 voice for everybody, a man repeating himself, and a trait shipping mute.
+
+
+### The second sweep — 2026-09-07
+
+Directed as an execution pass. What it found is the same structural fault as
+the first, three more times, plus one class of writing the first pass had not
+looked at.
+
+**The event hints were where the simulation nouns had all gone.** The bodies in
+`events.ts` are the strongest writing in the game — *"A car outside their place
+two nights running. A conversation at their sister's restaurant that they did
+not mention"* — and the choice hints under them, which is what a player reads
+*before committing*, were the model's own vocabulary: `Buys real loyalty — and
+gives them standing`, `Respect and fear. Attention comes with them`, `Ends it.
+Attention, and the street remembers`. Thirty-one rewritten into what actually
+happens.
+
+    before  Costs you standing in the district
+    after   The neighbourhood watches you pay somebody off
+
+    before  Ends it. Attention, and the street remembers
+    after   It ends tonight. Police come asking, and nobody on that street forgets
+
+**A grammar bug had been shipping since the pronoun work**: *"Their
+brother-in-law does not work for the city and has started saying they does."*
+
+**And three fixed sentences that a real career showed within twelve log lines.**
+The debt line fired *"They were very understanding about it"* four times in a
+row while saying nothing about how close the player was to somebody being sent;
+`loan.missed` and `graceMissed` were both in scope and neither was used. It
+escalates now — pleasant, then *"said it was the last time they would be"*,
+then *"Somebody will be sent."*
+
+The wage line said *"Every one of them is further from you than they were"*,
+which is `loyalty` going down, described. It names the man who stopped speaking
+to you. And a case moving up a stage printed `City Police: Surveillance.` — a
+file's own header, aimed at a person.
+
+**I introduced the same fault twice more while fixing it.** Appending `That is
+${agency.shortName}.` to the stage line put *"That is City Police."* at 1.5%
+and *"That is Task Force."* at 1.2% — the two loudest sentence-endings in the
+game — inside one run. A fixed tail is a fallback that wins every draw, the
+same shape as a data-free variant, and it is now the third time this pass has
+produced it. The agency went to the front, as the subject, where a different
+agency makes a different sentence.
+
+    scorecard.probe                    r21    pass 1   pass 2
+    lines already read                 36%      31%      30%
+    loudest single sentence             2%       1%       1%
+    days saying nothing new            16%      13%      12%
+    lines above 0.5% of everything   4 (0.9)    none     none
+    loudest tail                      1.2%     1.1%     1.1%
+
+Two rules added to `prose.test.ts` from patterns the first pass did not think
+to look for: `unnamed`, a sentence whose subject is *something* — twelve of
+them, most with a referent sitting unused — and `tic`, the one rhetorical move
+this game reaches for with nothing after it. Both seen to fail with a line put
+back. The deliberate cases are matched around: a bribe that goes unspoken is
+supposed to say *"Nothing was said. Something was understood."*
+
+One pre-existing test was updated rather than worked around: `report.test.ts`
+matched `/waiting for an answer/` to identify which line it was checking. Its
+condition — that a memo files under *today* — is untouched; the regex now
+matches the new wording, and the change is noted in the test.

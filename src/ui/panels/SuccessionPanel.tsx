@@ -65,7 +65,7 @@ export default function SuccessionPanel() {
       </p>
 
       {unrest && (
-        <Panel title="Something is being discussed">
+        <Panel title="People are talking about who comes next">
           {/*
              Says that it is happening. Never who.
 

@@ -698,7 +698,7 @@ function executeConsolidate(state: GameState, faction: Faction): void {
         held
           ? `${def.shortName} replaced the man running ${held} with somebody nobody knows.`
           : `${def.shortName} paid off two of their own debts this week. In cash.`,
-        `${def.shortName} have not been seen doing anything for a fortnight, which is its own kind of news.`,
+        `${def.shortName} have not been seen doing anything for a fortnight. Their people are still being paid.`,
       ]),
     },
     factionIntel(state, faction.id) >= FACTION_INTEL_ROUGH_ABOVE,

@@ -521,8 +521,14 @@ export function tickEconomy(state: GameState): void {
     state,
     crew.length === 1
       ? `${crew[0].name} is owed money, and they are holding it against you.`
-      : `${crew.length} men are owed. Every one of them is further from you than they were` +
-        (worst ? `, ${worst.name} furthest.` : '.'),
+      /*
+         "Every one of them is further from you than they were" is `loyalty`
+         going down, described. What a boss would actually notice is who has
+         stopped talking to him, and `worst` is already the man.
+      */
+      : worst
+        ? `${crew.length} men went unpaid. ${worst.name} has stopped speaking to you first.`
+        : `${crew.length} men went unpaid and every one of them knows who else was not paid.`,
     'crew',
   );
 }
