@@ -194,6 +194,30 @@ export const TIPS: Tip[] = [
   },
   {
     /*
+       The favour network. Four figures on The City who owe you for how the
+       family is run rather than for anything bought — standing drifts on its
+       own from day one, so a player who never opens the page is still
+       building it and has no way to know that. Set on a day rather than on
+       something owed, the way `why` is: the point is to send the player to
+       look, not to wait for the state that would make looking unmissable.
+
+       Moved up from near the end of this list after a blind round never
+       found The City in 305 days — the condition was true from day 45, but
+       thirteen other tips sat ahead of it in queue order and this game gives
+       most careers plenty to keep several of them alive at once. List order
+       is priority for a non-urgent tip; a whole panel losing to the queue
+       for the length of a career is a priority problem, not a wording one.
+    */
+    id: 'favours',
+    only: ['career', 'sandbox'],
+    label: 'The city',
+    text:
+      'Somewhere in The City, a police captain, a union boss, a judge and somebody in office are keeping score of how you run this — not what you buy them, what you are. Standing with them cannot be purchased, only spent.',
+    panel: 'city',
+    when: (s) => s.day >= 45,
+  },
+  {
+    /*
        The pressure dial. It sits inside each front's own row in Businesses —
        a settings toggle rather than a headline number — and nothing else on
        screen says it exists. `config/pressure.ts`'s own header is the reason
@@ -561,23 +585,6 @@ export const TIPS: Tip[] = [
       'You have premises now, so people will deal with you. The Trade runs on a standing arrangement and districts to move through — steady money, and the one thing on your books a warrant can physically take.',
     panel: 'contraband',
     when: (s) => tradeUnlocked(s, 'product') && !s.contraband.supplierId,
-  },
-  {
-    /*
-       The favour network. Four figures on The City who owe you for how the
-       family is run rather than for anything bought — standing drifts on its
-       own from day one, so a player who never opens the page is still
-       building it and has no way to know that. Set on a day rather than on
-       something owed, the way `why` is: the point is to send the player to
-       look, not to wait for the state that would make looking unmissable.
-    */
-    id: 'favours',
-    only: ['career', 'sandbox'],
-    label: 'The city',
-    text:
-      'Somewhere in The City, a police captain, a union boss, a judge and somebody in office are keeping score of how you run this — not what you buy them, what you are. Standing with them cannot be purchased, only spent.',
-    panel: 'city',
-    when: (s) => s.day >= 45,
   },
   {
     id: 'why',
