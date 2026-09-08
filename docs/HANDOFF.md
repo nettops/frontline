@@ -883,33 +883,33 @@ particular career's smaller footprint, and Difficulty's rise is a
 genuinely good, uncontaminated reading in the opposite direction from
 round 18's.
 
-**Two new MUST FIX candidates from round 19, checked against source, not
-yet resolved live:**
-- *"Lay low silently blocks a loud launch"* — checked, and the code is
-  already correct: `operations.ts:535` gates exactly this and the tester's
-  own quoted refusal string is the literal string in the code, rendered as
-  visible text under a properly `disabled` button. Very likely a testing
-  artifact (a real disabled `<button>` does not fire a click). **Owed**: a
-  live screenshot check before this goes near a code change.
-- *"Event dialogs render visually overlapped"* — a specific, plausible
-  mechanism was found: `.receipt` (`theme.css:2517`, z-index 60) renders
-  above `.memo-backdrop` (z-index 50) by design (`MemoModal.tsx`'s own
-  comment: "the next memo can open on top of it"), so a receipt still
-  inside its 6-second window can float over a tightly-queued next memo.
-  Not confirmed live — depends on viewport height and card length. **Owed**:
-  reproduce (queue two memos inside the receipt window, screenshot) before
-  deciding whether the fix is a lower z-index, a shorter window, or
-  standing the receipt down the moment a new event arrives.
+**Two round-19 MUST FIX candidates — CLOSED 2026-09-08, both non-issues.**
+- *"Lay low silently blocks a loud launch"* — confirmed correct on both
+  launch paths, not just the one first checked: the main Launch button
+  disables on `!check.ok` (`OperationsPanel.tsx:955`) and the "Same again"
+  quick-action returns `null` entirely when the same check fails
+  (`OperationsPanel.tsx:1098`), so there is no path a real click could take.
+  Testing-harness artifact, not a defect.
+- *"Event dialogs render visually overlapped"* — the receipt sitting above
+  the memo backdrop (`theme.css:2517` vs `:1009`) is deliberate, per the
+  CSS's own comment: it stays legible while a new memo can open behind it,
+  and takes itself away on its own timer. The receipt is also the smallest
+  surface in the game by design (no header, no buttons) and pinned to the
+  top of the viewport while memos render centered, which limits how much
+  real overlap is even geometrically possible. Not pursued further; revisit
+  only if a future blind round reproduces actual illegible overlap.
 
-**The single most load-bearing item left, confirmed unmoved by both
-rounds despite the job-gate resize above:** the highest-paying job is
-always the best job once it unlocks, so nothing below it is ever worth
-doing — the root of both rounds' "decisions stop changing around day
-180-200," unchanged from every prior round this project has ever measured.
-Needs new job content or a job that pays in something other than money,
-neither attempted this session. See `.ai/FINAL_REPORT.md` for the full
-account of why this specific thing is the next session's highest-leverage
-target.
+**The "highest-paying job is always best" framing — CLOSED, stale.** True
+against the pre-merge code; the *other* merged branch's `perFireByHand` fix
+(`10f2ee6`, 2026-09-06, "make repetition cost something for a player who
+never automates") already repaired exactly this, and re-measuring rather
+than trusting the old note found it: `scorecard.probe`'s bot — which does
+nothing but pick the highest-EV job every day — now reads **Depth 9.5,
+"best job changed 44% of weeks, 13 kinds used."** Full reasoning moved to
+`.ai/TASKS.md` item 1, which also names what's still actually open: a
+late-game content flatline (nothing new after day 970 of a 1,460-day
+career) that is a different, lower-urgency finding than the one this
+paragraph used to describe.
 
 ### Reconciled 2026-09-07 — read this before trusting a status below
 

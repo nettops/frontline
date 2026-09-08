@@ -9,16 +9,27 @@ list rather than staying here as a second, aging copy of the same fact.
 Ranked, highest-leverage first. See `HANDOFF.md` §6 for the full findings
 ledger (F-numbers) these reference.
 
-## 1. Job-table breadth / the Pacing wall
+## 1. The late-game flatline, day 970+ of a 1,460-day career (was: job-table breadth)
 
-The single most load-bearing open item. Confirmed unmoved across two blind
-rounds (2026-09-07) despite a real gate resize: the highest-paying job is
-always the best job once it unlocks, so nothing below it is ever worth
-doing. Root of "decisions stop changing around day 180-200," unchanged
-across every round this project has ever measured. Needs new job kinds or
-a job that pays in something other than money — content work, not a
-config change. Do not attempt as a same-day rider on another change; size
-and measure it on its own.
+**Re-measured 2026-09-08, and the framing this item carried since round 17
+is stale — closed by a fix from the other merged branch neither round knew
+about.** "The highest-paying job is always the best job once it unlocks" was
+true against the pre-merge code; `perFireByHand` (commit `10f2ee6`,
+2026-09-06) now prices repeating a job by hand the same way a standing order
+already was, and `scorecard.probe`'s own bot — which does nothing but pick
+the best-EV job every day — now reads **Depth 9.5, "best job changed 44% of
+weeks, 13 kinds used."** That is not a bot that grinds one job for 100 days.
+
+What the same reading still shows, and is a different, longer-horizon
+finding: **Pacing 8, "nothing was new after day 970 — 34% of the career."**
+Content runs out late, not because one job dominates but because the pool of
+firsts (job kinds, districts, ranks) is finite and a four-year bot exhausts
+it. Lower urgency than the old framing — day 970 is far past the 300-day
+window a human blind round ever reaches (see `FRONT_UPKEEP_RATE`'s own
+comment on why this project sizes changes against 300 days, not 1,460) — but
+real, and the next blind round should be asked directly whether decisions
+still feel like they stop changing, since a bot's 44% weekly churn number
+and a human's felt experience are not guaranteed to agree.
 
 ## 2. A district-holding cost for the player
 
