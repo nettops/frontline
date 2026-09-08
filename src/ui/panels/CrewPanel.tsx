@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   callEverybodyIn,
   canCallEverybodyIn,
@@ -84,6 +84,16 @@ export default function CrewPanel() {
      It was doing something. It was not showing it.
   */
   const [meeting, setMeeting] = useState<Meeting | null>(null);
+  /*
+     Round 24's blind report, reproduced on essentially every visit: clicking a
+     row opens the detail panel below the table, not in a modal, and on a
+     roster long enough to fill the viewport that reveal lands off-screen with
+     no cue it happened at all. The click worked; nothing said so.
+  */
+  const detailRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (selectedId) detailRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }, [selectedId]);
   const crew = crewList(state);
   const recruits = Object.values(state.recruits);
   const selected = selectedId ? state.npcs[selectedId] : null;
@@ -325,7 +335,11 @@ export default function CrewPanel() {
         )}
       </Panel>
 
-      {selected && <CrewDetail npc={selected} onClose={() => setSelectedId(null)} />}
+      {selected && (
+        <div ref={detailRef}>
+          <CrewDetail npc={selected} onClose={() => setSelectedId(null)} />
+        </div>
+      )}
 
       {/*
          People who got away, and are still out there talking.

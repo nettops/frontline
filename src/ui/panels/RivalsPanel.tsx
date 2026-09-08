@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useGame, mutate } from '../../store';
 import { Panel, Empty, KeyValue, Bar } from '../components';
 import {
@@ -61,6 +61,12 @@ export default function RivalsPanel() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const all = rivals(state);
   const selected = selectedId ? state.factions[selectedId] : null;
+  // Same fix as CrewPanel, same round-24 finding: the reveal lands below the
+  // table with no cue on a roster tall enough to fill the viewport.
+  const detailRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (selectedId) detailRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }, [selectedId]);
 
   return (
     <>
@@ -135,7 +141,11 @@ export default function RivalsPanel() {
         </div>
       </Panel>
 
-      {selected && <RivalDetail faction={selected} onClose={() => setSelectedId(null)} />}
+      {selected && (
+        <div ref={detailRef}>
+          <RivalDetail faction={selected} onClose={() => setSelectedId(null)} />
+        </div>
+      )}
     </>
   );
 }

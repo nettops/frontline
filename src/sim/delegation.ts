@@ -420,9 +420,24 @@ export function eligibleStewards(state: GameState): Npc[] {
  * exclusively to people who could not act on it.
  */
 export function needsSteward(state: GameState): boolean {
-  if (eligibleStewards(state).length === 0) return false;
-  return territoryList(state).some(
-    (t) => playerInfluence(t) > DELEGATION.promptAboveInfluence && !t.stewardId,
+  return stewardCandidateDistrict(state) !== null;
+}
+
+/**
+ * The specific district `needsSteward` found, so a hint can name it.
+ *
+ * Round 24's blind report is `needsSteward`'s own doc comment happening
+ * again one level up: the Wanting hint said "a district" for over a
+ * hundred days without saying which one or naming a candidate, and the
+ * tester never found the control it was pointing at. Split out rather than
+ * have the hint re-run the predicate, so the two cannot disagree.
+ */
+export function stewardCandidateDistrict(state: GameState): Territory | null {
+  if (eligibleStewards(state).length === 0) return null;
+  return (
+    territoryList(state).find(
+      (t) => playerInfluence(t) > DELEGATION.promptAboveInfluence && !t.stewardId,
+    ) ?? null
   );
 }
 
