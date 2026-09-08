@@ -13,6 +13,22 @@ report (`.ai/FINAL_REPORT.md`, `.ai/TASKS.md`) says something closed,
 found, or fixed, that has to land here too before the session is over, in
 the same pass — not deferred to "whenever this next comes up stale."
 
+**And this cuts both ways — reconciling means trimming, not only adding.**
+A 2026-09-07 audit found `.ai/TASKS.md` at 520 lines and
+`director-log.md` at 2,275, both mostly session narrative that had already
+been folded into this file and was now a second, aging copy of the same
+facts — the exact thing a diagnosis pass has to read past to find what's
+actually current. The fix that day was archiving the closed 90% (see
+`director-log-archive-iterations-0-3.md`) and cutting `.ai/TASKS.md` down
+to a current-only queue. **Keep them that size.** Before adding a new
+session's narrative to `.ai/TASKS.md`, `.ai/PROGRESS.md`, or an entry to
+`director-log.md`: state the finding once, here or there, not in three
+places: fold a closed finding into this file's §6, drop it from
+`.ai/TASKS.md`'s queue, and let `director-log.md` hold only the entry's
+own reasoning, not a restatement of what §6 already says plainly. If a
+document is accumulating without anything ever leaving it, that is the
+bloat coming back, not a thorough record.
+
 Project root: `C:\Users\cory\Desktop\mafia`. A git repo now — `main`, remote
 `nettops/frontline` — which the section below this paragraph did not know
 when it was written. Windows 11, PowerShell 5.1 (no `&&`, no `||`, no

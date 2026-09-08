@@ -345,6 +345,17 @@ and keep it short enough that somebody reads it:
 The log's purpose is to make it obvious when the game has stopped improving.
 Read it before starting each iteration.
 
+**"Short enough that somebody reads it" is a standing size target, not a
+one-time wish.** It stopped being true once (2,275 lines by 2026-09-07)
+and was fixed by archiving the closed stretch whose only durable
+conclusion was already repeated in a later entry — see
+`docs/superpowers/findings/director-log-archive-iterations-0-3.md` for the
+pattern. When an old run of entries is fully superseded (every finding it
+named is either closed and in `HANDOFF.md`, or restated by a later entry),
+archive that stretch the same way rather than letting the live file grow
+without bound. `HANDOFF.md`'s own header carries the matching rule for
+itself and for `.ai/`.
+
 ---
 
 ## 10. When to stop
