@@ -9,86 +9,82 @@ list rather than staying here as a second, aging copy of the same fact.
 Ranked, highest-leverage first. See `HANDOFF.md` §6 for the full findings
 ledger (F-numbers) these reference.
 
-## 1. Pacing 6, held across two consecutive blind rounds (r23, r24)
+## 1. Pacing 6, held across three consecutive blind rounds (r23, r24, r25*)
 
-**Confirmed, not a one-off.** Both post-merge blind rounds independently
-scored Pacing 6 and named the same shape: a mid-late-game stretch (r23:
-day ~180+; r24: day ~220-330) of "dismiss digest → handle one recurring
-crew conversation → advance time" that reads as maintenance rather than
-new decisions, even though Depth scored 9 both times — the systems
-underneath are rich, but the *moment-to-moment loop* on top of them
-repeats. This is the answer to the question the old version of this item
-asked (was the bot's 44% weekly churn number matched by a human's felt
-experience?): not quite — churn in *which job* does not read as new
-*content* to a human the way a new system or a new kind of situation does.
+**Confirmed, not a one-off.** r23 and r24 independently scored Pacing 6 and
+named the same shape: a mid-late-game stretch of "dismiss digest → handle
+one recurring crew conversation → advance time" that reads as maintenance
+rather than new decisions, even though Depth scored 9 both times — the
+systems underneath are rich, but the *moment-to-moment loop* on top of them
+repeats. (*r25 didn't score this axis under its own name — see its entry in
+`HANDOFF.md` §6 — so it isn't a clean third data point, but its own account
+of a quiet, uneventful 221 days is at least consistent with the pattern.)
 
 **Partially diagnosed, 2026-09-08 — the "dominant register" hypothesis is
 ruled out; a harder one is left standing.** Checked `config/sitdown.ts`'s
-four crew registers (Press/Offer/Listen/Level) directly rather than
-guessing: they read four different stats (fear/greed/grievance/respect),
-at different thresholds, different costs, and reward different training —
-there is no single register that is simply best regardless of who you are
-talking to. `npc.ts`'s `perceive()` also genuinely varies the signal shown
-before a choice, banded and noisy in a way that sharpens with familiarity.
-This system is not shallow, and Depth 9 across both rounds agrees with
-that reading.
+four crew registers (Press/Offer/Listen/Level) directly: they read four
+different stats at different thresholds, costs, and training rewards —
+no single register is simply best regardless of who you are talking to.
+`npc.ts`'s `perceive()` genuinely varies the pre-choice signal, sharpening
+with familiarity. This system is not shallow, and Depth 9 across every
+round agrees.
 
 What's left standing, unconfirmed: the repetition may be about **format**
-rather than **content** — the same modal shape appearing over and over
-reads as "here we go again" even when the decision underneath genuinely
-varies, purely from how often the interaction type recurs. That is a
-harder, more fundamental question (reduce sit-down frequency? vary the
-UI presentation? accept it as a property of a working mechanic used
-often?) that needs a developer call on the trade-off, not a code fix
-picked unilaterally. Do not attempt a fix here without that call; the
-next useful step is confirming the format-fatigue hypothesis specifically
-(does Pacing move if sit-down frequency is throttled, holding everything
-else fixed?) before deciding what if anything to change.
+(the same modal shape recurring often) rather than **content**. That is a
+developer-level trade-off (reduce sit-down frequency? vary presentation?
+accept it?), not a code fix to pick unilaterally. Next useful step: confirm
+the format-fatigue hypothesis specifically before changing anything.
 
-## 1a. Interface 6, held across two consecutive blind rounds — partially addressed 2026-09-08
+## 2. Interface 6 across three rounds — two concrete causes fixed, unvalidated
 
-Two concrete, reproduced-every-visit sub-causes fixed this session:
-roster detail panels revealing off-screen (`CrewPanel.tsx`,
-`RivalsPanel.tsx`), and the steward-delegation hint naming the situation
-instead of the door (`attention.ts`, `Rail.tsx`, `delegation.ts`). Neither
-fix has been validated by a fresh blind round yet — do that before
-assuming Interface has moved. The Rail's badge system itself is already
-extensive and well-designed (checked this session); if Interface stays at
-6 after the two fixes above are validated, the remaining gap is more
-likely the multi-panel information-architecture complexity both testers
-described (checking Overview, Operations, Diplomacy and Intelligence
-separately) than a missing badge, and that is a bigger design question,
-not a quick fix.
+Three sub-causes found and fixed across r24/r25, all reproduced on nearly
+every visit: roster detail panels revealing off-screen (`CrewPanel.tsx`,
+`RivalsPanel.tsx`, live-verified in-browser), the steward-delegation hint
+naming the situation instead of the door (`attention.ts`, `Rail.tsx`,
+`delegation.ts`, mutation-tested), and the laying-low job panel defaulting
+to the loud approach instead of the only legal one (`OperationsPanel.tsx`,
+logic-verified, not live-browser-checked — no jsdom in this project).
+**None of the three validated by a fresh blind round yet.** The Rail's
+badge system itself is already extensive and well-designed (checked
+2026-09-08); if Interface stays at 6 after these are confirmed, the
+remaining gap is more likely the multi-panel information-architecture
+complexity multiple testers have described than a missing badge — a
+bigger design question, not a quick fix.
 
-## 2. A district-holding cost for the player
+## 3. A district-holding cost for the player
 
 Rivals already pay `upkeepPerDistrict`/`upkeepDistrictScale`
 (`config/factions.ts`); the player never did, the same gap front upkeep
-just closed for businesses (2026-09-07). Natural next step if a future
-session wants more 300-day economic bite than front upkeep alone
-provided — see `HANDOFF.md`'s round-17 block for what front upkeep did
-and didn't move.
+closed for businesses (2026-09-07). Deliberately not attempted alongside
+today's F24 work — a second new economy tax risked repeating the exact
+cross-system interaction (favour-network reachability) F24 spent hours
+untangling, without a tester-validated need for it yet. Size and measure
+on its own, and re-check favour-network reachability specifically before
+committing to a rate.
 
-## 3. The rival "going quiet" frequency term
+## Closed today, 2026-09-08
 
-`AI.consolidate.wealthGain` was fixed (the *payoff*, 2026-09-07); the
-*frequency* of going quiet is set by a different term in
-`scoreConsolidate` (`caution * heatPressure + alarmed + broke`) that
-session deliberately left alone. `config/factions.ts`'s own history —
-three prior measured passes on `pressure.cost`, each with a developer
-comment — argues this needs its own careful session, not a rider. Now has
-a concrete, currently-red regression guard attached to it: F24's fourth
-bar (`ladder.probe.test.ts`, "does not pay a family more to do nothing
-than to work"), consolidate share at 61.4% against a ≤61% bar, confirmed
-not caused by front upkeep and already past its one-time restatement
-exception. Whoever picks this up should make that bar the acceptance test.
-
-## 4. `propose_alliance`, unreachable in every measured career
-
-Diagnosed, not attempted: the relationship quantity it gates on has no
-passive growth, only explicit tribute actions feed it, and the gate has
-already been lowered twice on the same quantity. Needs a real design
-call (should peace passively build trust?), not a third bar-lowering.
+- **F24's fourth bar (rival "going quiet" frequency) — CLOSED.** See
+  `HANDOFF.md` §6. `scoreConsolidate`'s `alarmed` step smoothed;
+  `AI.consolidate.whenBroke` moved 0.45 → 0.42. Real player corroboration
+  arrived the same day: round 25's tester played 221 days with zero rival
+  activity of any kind.
+- **`propose_alliance` reachability — a real fix attempted, not a third
+  bar-lowering.** Confirmed `tickBonds` already builds trust passively
+  (`trustPerPeacefulWeek`) but at 0.22/week, reaching the alliance gate
+  (relationship ≥20) from a clean slate took ~91 weeks — past any career
+  this project has measured one played. Raised to 0.5/week: ~40 weeks
+  (280 days) from zero trust and no grudge, inside a human blind round's
+  actual window; full alliance status (`allianceTrust`, 40) stays roughly
+  double that, so it isn't also handed out early. Unvalidated by a blind
+  round — there is no pre-committed bar for this (the relevant
+  `ladder.probe` test is diagnostic-only), so watch `peakStanding` in the
+  next round's report rather than assuming this worked.
+- **The Trade's zero signposting — fixed.** Corroborated independently by
+  r24 and r25. New `attention()` hint fires once `tradeUnlocked(state,
+  'product')` and no supplier has ever been retained; mutation-tested.
+- **A round-25 MUST FIX — fixed.** Laying-low job panel defaulted to the
+  loud approach; now lazily initializes to quiet when laying low at mount.
 
 ## Smaller, lower-priority
 
@@ -97,3 +93,8 @@ call (should peace passively build trust?), not a third bar-lowering.
   strategies" shape already partly addressed for the favour/dial pair.
 - Opus's feature ideas (a) a payroll shortfall with a name attached, (d) a
   reachable deposition threat — neither attempted, both still just ideas.
+- Promotion silently fixing loyalty problems the game's own text says
+  money can't touch (r25) — possibly a discoverable "aha" working as
+  intended, possibly a missed hint. Not diagnosed.
+- Confronting a skimming steward being a one-way trust cliff (r25) — a
+  design question (is there meant to be a softer option?), not a bug.

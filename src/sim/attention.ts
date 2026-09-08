@@ -35,6 +35,7 @@ import { playerWars } from './diplomacy';
 import { eligibleHeirs, heirOf } from './succession';
 import { activeCases } from './investigation';
 import { ownedBusinesses, businessDef } from './business';
+import { tradeUnlocked } from './contraband';
 import { promisesTo, daysLeft } from './promises';
 import { crewList } from './npc';
 import { PROMISE, PROMISES } from '../config/promises';
@@ -304,6 +305,28 @@ export function attention(state: GameState): Wanting[] {
           ? `${first.npc.name} ${PROMISES[first.pr.kind].outstanding.toLowerCase()}, and you have ${first.left} ${first.left === 1 ? 'day' : 'days'}.`
           : `${dueSoon.length} things you said are about to stop being true.`,
       panel: 'crew',
+    });
+  }
+
+  /*
+     A trade you qualify for and have never opened.
+
+     Rounds 24 and 25's blind reports both named the same gap independently:
+     "The Trade has the highest revenue ceiling in the game and zero
+     signposting toward it" — one tester never opened the tab in 220+ days,
+     the other found the numbers late and declined for unrelated reasons.
+     `tradeUnlocked` is a real gate (fronts, per `config/contraband.ts`), not
+     a cosmetic one, so this only fires once the player could actually act
+     on it — the same discipline `steward` and `heir` use above.
+
+     One-shot rather than persistent: once a supplier arrangement exists,
+     the player has found the door, whatever they did with it next.
+  */
+  if (tradeUnlocked(state, 'product') && !state.contraband?.supplierId) {
+    out.push({
+      id: 'trade',
+      text: 'You have enough fronts to run product through them. Look at The Trade.',
+      panel: 'contraband',
     });
   }
 

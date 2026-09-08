@@ -84,7 +84,16 @@ export default function OperationsPanel() {
      as long as the panel is mounted, and the heat line under the buttons says
      what the standing choice costs on this particular job.
   */
-  const [approach, setApproach] = useState<ApproachId>(DEFAULT_APPROACH);
+  /*
+     Round 25's blind report, reproduced twice: opening the panel while
+     laying low started on the loud default, which quiet work is the only
+     legal answer to — so Launch sat disabled until the player noticed and
+     clicked Quiet by hand. The persistence above is still right; this only
+     changes what the first click of a fresh mount lands on.
+  */
+  const [approach, setApproach] = useState<ApproachId>(() =>
+    isLayingLow(state) ? 'quiet' : DEFAULT_APPROACH,
+  );
 
   const open = availableOperations(state);
   const locked = lockedOperations(state);
