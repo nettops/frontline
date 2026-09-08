@@ -697,6 +697,26 @@ crew retention as a rank-maintenance activity") — one demotion, not a
 back-to-back thrash, which is exactly what `rank.ts`'s design intends and
 further evidence against adding hysteresis.
 
+**Two more round-24 items checked after the fact, 2026-09-08 morning:**
+
+- **A bookkeeper "stopped acting for you. No explanation" with no visible
+  trigger.** Checked `launderers.ts`/`BusinessesPanel.tsx`: the walk chance
+  is driven entirely by trust (heat quietness + weeks retained), and a live
+  "They walk" column already shows the exact weekly percentage for the
+  current arrangement — the odds were never hidden, only the specific week
+  it fires on. Matches the informant/contact system's own established
+  voice ("you find out by watching what they do"). Not a bug.
+- **A district event fired for ground lost the same digest cycle**, single
+  occurrence, not confirmed reproducible. A plausible mechanism exists:
+  `shakedown_demand`'s `applies()` gate reads control level at the moment
+  the event is *generated*, and a generated memo can queue and be
+  *delivered* later — the same staleness class `MemoModal.tsx`'s own
+  comment already documents for a choice's cost, just not yet checked for
+  a whole event's eligibility. Not fixed — cosmetic severity (a line of
+  flavor text, not a broken mechanic) and unconfirmed does not clear the
+  bar for a systemic staleness audit this session had time for. Worth
+  a real repro attempt before touching it.
+
 Verification: `tsc` clean, `npm test` green (130 files, 1,559 passing).
 
 ### Round 23 — first blind round on the merged code, 2026-09-08

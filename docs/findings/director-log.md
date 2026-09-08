@@ -1712,3 +1712,27 @@ first reliable read on which axes are stable since the merge.** Pacing
 and Interface are confirmed real, repeated findings (6 both rounds) and
 the next round's most likely place to look; Depth is confirmed strong (9
 both rounds) and should not be where effort goes next.
+
+---
+
+## Closing out round 24's last two items — 2026-09-08 morning
+
+Checked the two SHOULD FIX items from round 24 not yet addressed:
+
+- The bookkeeper's silent walk-away has a live, visible weekly-odds column
+  (`BusinessesPanel.tsx`'s "They walk") already — the mechanic discloses
+  its risk, it just doesn't narrate which week fires, matching the
+  informant system's own established voice. Not a bug.
+- A district event firing after the district was lost has a plausible,
+  specific mechanism (`shakedown_demand`'s `applies()` gate reads state at
+  generation time, and a memo can be delivered later than it's generated —
+  the same staleness class already documented for a choice's cost) but is
+  single-occurrence, unconfirmed, and cosmetic. Not fixed this session;
+  named precisely for whoever reproduces it next rather than guessed at.
+
+No code changed. Both rounds' findings are now fully accounted for —
+either fixed, closed as correct-by-design, or named with a specific
+mechanism and left for confirmation.
+
+**Result: KEPT.** Session complete for this round's time budget. Summary
+of the whole session is in `.ai/FINAL_REPORT.md`.
