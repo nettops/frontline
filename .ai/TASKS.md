@@ -9,82 +9,83 @@ list rather than staying here as a second, aging copy of the same fact.
 Ranked, highest-leverage first. See `HANDOFF.md` §6 for the full findings
 ledger (F-numbers) these reference.
 
-## 1. Pacing 6, held across three consecutive blind rounds (r23, r24, r25*)
+## 1. Interface 6, four rounds running (r19, r23, r24, r26) — three fixes made, score unmoved
 
-**Confirmed, not a one-off.** r23 and r24 independently scored Pacing 6 and
-named the same shape: a mid-late-game stretch of "dismiss digest → handle
-one recurring crew conversation → advance time" that reads as maintenance
-rather than new decisions, even though Depth scored 9 both times — the
-systems underneath are rich, but the *moment-to-moment loop* on top of them
-repeats. (*r25 didn't score this axis under its own name — see its entry in
-`HANDOFF.md` §6 — so it isn't a clean third data point, but its own account
-of a quiet, uneventful 221 days is at least consistent with the pattern.)
+Four sub-causes found and fixed across r24/r25/r26, all reproduced on
+nearly every visit: roster detail panels revealing off-screen
+(`CrewPanel.tsx`, `RivalsPanel.tsx`, live-verified in-browser), the
+steward-delegation hint naming the situation instead of the door
+(`attention.ts`, `Rail.tsx`, `delegation.ts`, mutation-tested), the
+laying-low job panel defaulting to the loud approach instead of the only
+legal one (`OperationsPanel.tsx`, logic-verified, no jsdom in this
+project), and the "Carry on / Leave it" banner explaining itself only on
+hover (`App.tsx`). **r26, the first round to play after three of the four
+fixes landed, still scored Interface 6.** That is now real evidence, not
+just a prediction: the remaining gap is the multi-panel information-
+architecture complexity multiple testers have independently described
+(checking Overview, Operations, Diplomacy and Intelligence separately to
+know what needs attention), not a missing affordance. This is a bigger
+design question — do not keep chasing it with one-off UI patches; the
+next session should treat it as its own diagnosis, not a rider.
 
-**Partially diagnosed, 2026-09-08 — the "dominant register" hypothesis is
-ruled out; a harder one is left standing.** Checked `config/sitdown.ts`'s
-four crew registers (Press/Offer/Listen/Level) directly: they read four
-different stats at different thresholds, costs, and training rewards —
-no single register is simply best regardless of who you are talking to.
-`npc.ts`'s `perceive()` genuinely varies the pre-choice signal, sharpening
-with familiarity. This system is not shallow, and Depth 9 across every
-round agrees.
+## 2. Pacing — inconsistent across rounds, format-fatigue hypothesis unconfirmed
 
-What's left standing, unconfirmed: the repetition may be about **format**
-(the same modal shape recurring often) rather than **content**. That is a
-developer-level trade-off (reduce sit-down frequency? vary presentation?
-accept it?), not a code fix to pick unilaterally. Next useful step: confirm
-the format-fatigue hypothesis specifically before changing anything.
-
-## 2. Interface 6 across three rounds — two concrete causes fixed, unvalidated
-
-Three sub-causes found and fixed across r24/r25, all reproduced on nearly
-every visit: roster detail panels revealing off-screen (`CrewPanel.tsx`,
-`RivalsPanel.tsx`, live-verified in-browser), the steward-delegation hint
-naming the situation instead of the door (`attention.ts`, `Rail.tsx`,
-`delegation.ts`, mutation-tested), and the laying-low job panel defaulting
-to the loud approach instead of the only legal one (`OperationsPanel.tsx`,
-logic-verified, not live-browser-checked — no jsdom in this project).
-**None of the three validated by a fresh blind round yet.** The Rail's
-badge system itself is already extensive and well-designed (checked
-2026-09-08); if Interface stays at 6 after these are confirmed, the
-remaining gap is more likely the multi-panel information-architecture
-complexity multiple testers have described than a missing badge — a
-bigger design question, not a quick fix.
+r23 and r24 both scored Pacing 6 and named the same shape (a mid-late-game
+maintenance loop). r26 scored it 7 and named new content still arriving
+through day 284. Not yet resolved which reading is more representative —
+possibly both are correct for different play styles, possibly it's
+genuinely improved (nothing was changed that should affect it), possibly
+it's tester variance. `config/sitdown.ts`'s registers are confirmed not
+shallow (see prior diagnosis, still holds). Needs a fourth reading before
+concluding anything; do not chase the format-fatigue hypothesis further
+without one.
 
 ## 3. A district-holding cost for the player
 
 Rivals already pay `upkeepPerDistrict`/`upkeepDistrictScale`
 (`config/factions.ts`); the player never did, the same gap front upkeep
-closed for businesses (2026-09-07). Deliberately not attempted alongside
-today's F24 work — a second new economy tax risked repeating the exact
-cross-system interaction (favour-network reachability) F24 spent hours
-untangling, without a tester-validated need for it yet. Size and measure
-on its own, and re-check favour-network reachability specifically before
-committing to a rate.
+closed for businesses (2026-09-07). Deliberately still not attempted —
+no tester across five post-merge rounds has named "districts cost nothing
+to hold" as a felt problem, and a second economy tax carries real risk of
+repeating F24's own cross-system interaction. Size and measure on its own
+if attempted, and re-check favour-network reachability specifically
+before committing to a rate.
 
-## Closed today, 2026-09-08
+## 4. A negotiation/case sub-option shown blocked for every candidate, no reason given
 
-- **F24's fourth bar (rival "going quiet" frequency) — CLOSED.** See
-  `HANDOFF.md` §6. `scoreConsolidate`'s `alarmed` step smoothed;
-  `AI.consolidate.whenBroke` moved 0.45 → 0.42. Real player corroboration
-  arrived the same day: round 25's tester played 221 days with zero rival
-  activity of any kind.
-- **`propose_alliance` reachability — a real fix attempted, not a third
-  bar-lowering.** Confirmed `tickBonds` already builds trust passively
-  (`trustPerPeacefulWeek`) but at 0.22/week, reaching the alliance gate
-  (relationship ≥20) from a clean slate took ~91 weeks — past any career
-  this project has measured one played. Raised to 0.5/week: ~40 weeks
-  (280 days) from zero trust and no grudge, inside a human blind round's
-  actual window; full alliance status (`allianceTrust`, 40) stays roughly
-  double that, so it isn't also handed out early. Unvalidated by a blind
-  round — there is no pre-committed bar for this (the relevant
-  `ladder.probe` test is diagnostic-only), so watch `peakStanding` in the
-  next round's report rather than assuming this worked.
-- **The Trade's zero signposting — fixed.** Corroborated independently by
-  r24 and r25. New `attention()` hint fires once `tradeUnlocked(state,
-  'product')` and no supplier has ever been retained; mutation-tested.
-- **A round-25 MUST FIX — fixed.** Laying-low job panel defaulted to the
-  loud approach; now lazily initializes to quiet when laying low at mount.
+r26, single occurrence, not reproduced: a "send somebody, 2 of your people
+for 5 days" option showed disabled for all four named crew in a
+case-detail panel with no stated reason. Not located in the source in the
+time available this session — the exact string didn't match anything in
+`LawPanel.tsx`, `events.ts`'s `SHORT_NOTICE` memo, or an obvious contract-
+crew-assignment path. Whoever picks this up next: get the exact panel and
+context from a fresh reproduction first, since guessing at the file wasted
+real time this session.
+
+## Closed 2026-09-08
+
+- **F24's fourth bar (rival "going quiet" frequency) — CLOSED**, and
+  confirmed valuable the same day: round 25 played 221 days with zero
+  rival activity of any kind, the exact failure this bar exists to catch.
+- **`propose_alliance` reachability — a real fix, not a third
+  bar-lowering.** `trustPerPeacefulWeek` raised 0.22 → 0.5/week; reaching
+  the alliance gate from a clean slate now takes ~40 weeks instead of ~91.
+  Still unvalidated by a blind round (no pre-committed bar exists for
+  this) — watch `peakStanding` in future reports.
+- **The Trade's zero signposting — fixed and confirmed working.**
+  Corroborated by r24 and r25; the new `attention()` hint was explicitly
+  named as a WORKED item in r26's very next report: *"successfully pulled
+  me into a system I'd been correctly priced out of for 250+ days, right
+  at the moment it became viable."*
+- **A round-25 MUST FIX — fixed.** Laying-low job panel now defaults to
+  quiet at mount.
+- **The rank-promotion crew-count line reading as static — fixed.**
+  `rank.ts`'s `whatItNeeds` now appends "right now" to the crew
+  requirement specifically, since crew (unlike districts and fronts) can
+  fall as well as rise and a tester read 90 unchanging days of "needs 2
+  more" as a stuck counter rather than a live gate.
+- **The "Carry on / Leave it" banner explaining itself only on hover —
+  fixed.** Both buttons now say what they do in the visible label.
 
 ## Smaller, lower-priority
 
@@ -98,3 +99,11 @@ committing to a rate.
   intended, possibly a missed hint. Not diagnosed.
 - Confronting a skimming steward being a one-way trust cliff (r25) — a
   design question (is there meant to be a softer option?), not a bug.
+- "Decide it was them" giving no visible right/wrong confirmation (r26) —
+  checked and left alone: by design, the same "you find out over months"
+  principle `contract.ts` states explicitly. Real effects land (crew
+  loyalty/fear/respect) but aren't narrated as attributable either way.
+- Flavour-text repetition surfacing over a long run (r26) — a specific
+  line ("It was loud. It did not need to be loud.") recurred often enough
+  by day 200+ to be noticed. Not measured against `prose.test.ts`'s
+  thresholds this session.

@@ -1815,3 +1815,54 @@ backlog items (Trade signposting, propose_alliance) genuinely attempted
 rather than deferred again.** District-holding cost deliberately still not
 attempted, on the same reasoning as this morning: no tester-validated need
 yet, and real risk of repeating F24's own cross-system interaction.
+
+---
+
+## Round 26 — the Trade hint confirmed, two more Clarity/Interface fixes — 2026-09-08
+
+Full round, Sonnet, pinned, explicitly told to follow the exact ten-axis
+rubric after round 25's deviation. Day 284, Capo, 9 crew, 9 districts, 7
+fronts, $141,445 net worth. No war, no crisis, fourth consecutive round
+with no MUST FIX (round 25 had one, fixed the same day it was found).
+
+Scores: First hour 6, Clarity 5, Feedback 7, Depth 7 (partial coverage,
+tester's own caveat), Pacing 7, Difficulty 6, Writing 9, Interface 6,
+Standing in it 6, Fun 7.
+
+**Direct confirmation the Trade hint (shipped this morning after r24/r25
+both flagged it) works exactly as intended** — listed under WORKED,
+quoted verbatim in HANDOFF.md §6. The fastest possible validation of a
+same-day fix.
+
+Two more fixes, both cheap wording changes rather than mechanism changes:
+
+- Clarity's lowest reading yet (5) traced to the rank-promotion crew-count
+  line reading as a cumulative counter rather than a live gate. `rank.ts`'s
+  `whatItNeeds` now says "right now" on the crew line specifically, since
+  crew (unlike districts and fronts) genuinely falls as well as rises.
+- The "Carry on / Leave it" banner explained itself only in a hover title;
+  testing "Leave it" against no visible change read as a possible bug.
+  Both buttons now say what they do in the visible label (`App.tsx`).
+
+Two items checked and deliberately left alone: "Decide it was them" giving
+no visible right/wrong confirmation is the same "you find out over months"
+principle `contract.ts` already states explicitly for a different verb —
+real effects land, just not narrated as attributable. A blocked
+negotiation sub-option with no stated reason was reported once and not
+located in the source this session; named precisely in `.ai/TASKS.md` for
+whoever reproduces it next, rather than guessed at.
+
+**The signal that matters most**: Interface has now read 6 in four
+different rounds (r19, r23, r24, r26) despite three concrete, reproduced
+sub-causes fixed across the intervening sessions. That is no longer a
+prediction that the remaining gap is bigger than any single fix — it is
+observed. `.ai/TASKS.md` item 1 reflects this; the next session should
+treat Interface as its own diagnosis rather than another one-off patch.
+
+Verification: `tsc` clean, `npm test` green (130 files, 1,560 passing),
+`npm run probe` 96/99 (unrelated pre-existing skips only).
+
+**Result: KEPT — one fix validated same-day, two more real Clarity/
+Interface fixes made, and Interface's repeated-but-unmoved score is now
+a confirmed finding rather than a guess about where effort should go
+next.**
