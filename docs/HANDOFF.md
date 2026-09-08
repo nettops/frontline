@@ -492,17 +492,17 @@ in §6's newest reconciliation block.
 
 ### Blind round scores
 
-    axis           r10   r11   r12   r13   r14   r15   r17   r18   r19   r23   r24
-    First hour       8     8     8     8     9     9     6†    8     6     6‡    7
-    Clarity          9     6     6     9     8     8     5†    8     5     7     7
-    Feedback         9     7     8     8     8     9     7     8     8     9     8
-    Depth            8     6     8     8     8     8     8     7     7     9     9
-    Pacing           6     4     5     5     6     7     5     6     5     6     6
-    Difficulty       8     6     6     7     7     8     6     5     7     7     6
-    Writing          9     8     9     9     9    10     8     9     9    10     9
-    Interface        8     6     7*    7     8     9     4†    6     4     6     6
-    Standing in it   -     5     6     6     7     -     7     8     7     8     7
-    Fun              7     6     6     6     5     7     6     7     5     7     7
+    axis           r10   r11   r12   r13   r14   r15   r17   r18   r19   r23   r24   r26
+    First hour       8     8     8     8     9     9     6†    8     6     6‡    7     6
+    Clarity          9     6     6     9     8     8     5†    8     5     7     7     5
+    Feedback         9     7     8     8     8     9     7     8     8     9     8     7
+    Depth            8     6     8     8     8     8     8     7     7     9     9     7§
+    Pacing           6     4     5     5     6     7     5     6     5     6     6     7
+    Difficulty       8     6     6     7     7     8     6     5     7     7     6     6
+    Writing          9     8     9     9     9    10     8     9     9    10     9     9
+    Interface        8     6     7*    7     8     9     4†    6     4     6     6     6
+    Standing in it   -     5     6     6     7     -     7     8     7     8     7     6
+    Fun              7     6     6     6     5     7     6     7     5     7     7     7
 
 Round 16 (2026-09-07 morning) is not in this table — that round's brief
 asked only for a MUST FIX check and a novelty-day finding, not a full
@@ -513,18 +513,24 @@ source-edit contamination affected these three columns specifically (see
 Writing/Standing in it/Fun for r17 as the real reading, not the marked
 ones. ‡ = the tester's own working notes were lost to a mid-session
 context handoff, not a game defect — read as unscored rather than a real
-First Hour reading (see §6's round 23 block).
+First Hour reading (see §6's round 23 block). § = the tester's own caveat:
+never touched Diplomacy's aggressive options, Rivals, Succession,
+Contracts, or the Arms Trade this run, so this is a partial-coverage score,
+not a reading that Depth itself declined.
 
-**r20-r22 do not appear here.** A separately-developed branch used the
-same numbers for entirely different rounds before the two histories were
-merged (2026-09-08) — see `docs/findings/director-log.md`'s "log forks
-here" banner. Round 22 in *this* table's lineage is a diagnosis-only
-session (F24), not a blind playtest, and has no scores to add. r23 and r24
-are the first two blind rounds run on the merged code, and the first
-genuinely comparable, consecutive points since the merge — no MUST FIX in
-either, and Depth/Pacing/Interface each held the same score across both,
-which is the strongest evidence yet for which axes are real and stable
-versus which move on a single tester's read.
+**r20-r22 and r25 do not appear here.** r20-r22: a separately-developed
+branch used the same numbers for entirely different rounds before the two
+histories were merged (2026-09-08) — see `docs/findings/director-log.md`'s
+"log forks here" banner; round 22 in *this* table's lineage is a
+diagnosis-only session (F24), not a blind playtest. r25: that round's own
+tester used its own 8-axis grouping instead of the ten named axes, so its
+numbers are not comparable column-for-column — its qualitative findings
+are still in §6's round-25 block and were acted on. r23, r24 and r26 are
+the three genuinely comparable points since the merge — no MUST FIX in any
+of the three (r25's one MUST FIX is the exception, fixed the same day),
+and Pacing and Interface between them show the clearest repeated pattern:
+Interface has now read 6 four times in a row (r19 aside) across four
+different rounds.
 
 **Round 14 was the high-water mark on seven axes against r10-r13 — it no
 longer is, against the full table.** The tester was explicit about why:
@@ -650,6 +656,67 @@ director log entry "Developer decision — 2026-08-21".
 ## 6. Open findings
 
 Ranked. F10 outranks everything else in this list.
+
+### Round 26 — the Trade hint confirmed working; three more Clarity/Interface fixes, 2026-09-08
+
+Full round, Sonnet, pinned, fresh isolated instance, explicitly told to
+follow the exact ten-axis Part 2 rubric this time (round 25 hadn't). Day
+284, Capo, 9 crew, 9 districts, 7 fronts, $141,445 net worth — no war, no
+crisis, similar in shape to round 25.
+
+**Scores**: First hour 6, Clarity 5, Feedback 7, Depth 7 (tester's own
+caveat: never touched Diplomacy's aggressive options, Rivals, Succession,
+Contracts, or Arms Trade — a partial score), Pacing 7, Difficulty 6,
+Writing 9, Interface 6, Standing in it 6, Fun 7. **No MUST FIX** — the
+fourth consecutive clean round (25 had one, now fixed).
+
+**Direct, explicit confirmation the Trade hint works as designed.** Listed
+under WORKED: *"The Overview line 'You have enough fronts to run product
+through them. Look at The Trade' successfully pulled me into a system I'd
+been correctly priced out of for 250+ days, right at the moment it became
+viable."* This is this session's own fix from round 25's report, validated
+by the very next round.
+
+**Clarity's low point (5, the lowest of any post-merge round) has a
+specific, named cause**: the rank-promotion requirement text ("needs 2
+more bodies on the books") reads as a cumulative counter, not a live
+headcount gate — the tester watched it sit "unchanged" for 90 days while
+crew fluctuated 4-6, never realizing it would resolve the instant crew
+count actually crossed the line. **Fixed**: `rank.ts`'s `whatItNeeds` now
+appends "right now" to the crew line specifically (the one quantity here
+that visibly moves both ways, unlike districts and fronts) — a minimal
+wording change to the one place a career's own rank-demotion history says
+this already happens.
+
+**A second Interface papercut, also fixed**: the "Carry on — N more days /
+Leave it" banner (shown when a memo interrupts a multi-day advance) was
+only explained via a hover tooltip; testing "Leave it" against no visible
+world-state change read as a possible bug rather than the correct,
+unremarkable answer (it doesn't undo anything, it just stops asking to
+continue). Both buttons now say what they do in the visible label, not
+only on hover.
+
+**Two items surfaced and left alone, matching this game's own established
+voice on purpose**: "Decide it was them" (the informant-accusation verb)
+giving no visible confirmation of whether the accusation was correct — by
+design, the same "you find out over months" principle `contract.ts`
+already states explicitly; real effects do land (crew loyalty/fear/
+respect, a log line) but not narrated as attributable to being right or
+wrong, and changing that would undo a deliberate choice. A negotiation
+sub-option shown blocked for every candidate with no stated reason —
+single occurrence, not reproduced, and not located in the time available
+this session; flagged for whoever hits it next to find rather than guessed
+at.
+
+**Interface still reads 6** despite three fixes now landed against it
+across two rounds (roster scroll, steward hint, this round's banner and
+rank-text fixes) — consistent with `.ai/TASKS.md`'s own prediction that
+the remaining gap is broader information-architecture complexity rather
+than any single missing affordance. Depth's drop to 7 (from 9 twice) is
+explicitly a coverage artifact (the tester's own caveat), not a finding
+about the systems it didn't touch.
+
+Verification: `tsc` clean, `npm test` green (130 files, 1,560 passing).
 
 ### Round 25 — a real MUST FIX, and rival passivity confirmed at the table, 2026-09-08
 

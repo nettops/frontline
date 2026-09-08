@@ -113,7 +113,18 @@ export function whatItNeeds(state: GameState): string[] {
     out.push(short(board.fronts, n.fronts, 'front', 'fronts'));
   }
   if (n.crew !== undefined && board.crew < n.crew) {
-    out.push(short(board.crew, n.crew, 'body on the books', 'bodies on the books'));
+    /*
+       "Right now" earns its place only on this one line.
+
+       Round 26's blind report read "needs 2 more bodies on the books" as a
+       cumulative counter and watched it sit unchanged for 90 days while
+       crew fluctuated 4-6 from arrests and departures, never noticing the
+       number was live the whole time — a rank that has already gone *down*
+       once for the same reason (§ this file's own header) is the one
+       quantity here that visibly moves both ways, unlike districts and
+       fronts, which a career mostly only adds to.
+    */
+    out.push(`${short(board.crew, n.crew, 'body on the books', 'bodies on the books')} right now`);
   }
   if (n.owedTotal !== undefined && board.owedTotal < n.owedTotal) {
     out.push(

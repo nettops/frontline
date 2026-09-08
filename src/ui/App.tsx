@@ -307,6 +307,15 @@ export default function App() {
         */}
         {remaining > 0 && state.pendingEvents.length === 0 && !state.sitdown && (
           <div className="btn-row" style={{ margin: '0 0 12px' }}>
+            {/*
+               Round 26's blind report, seen on three different tabs: both
+               buttons made sense once explained (the hover title did say so)
+               but neither said anything without it, and testing "Leave it"
+               against nothing changing read as a possible bug rather than
+               the correct, unremarkable answer — it does not undo what the
+               interruption already did, it just stops asking to continue.
+               Said in the label now, not only on hover.
+            */}
             <button
               className="btn small primary"
               onClick={() => step(remaining)}
@@ -316,13 +325,14 @@ export default function App() {
             </button>
             <button
               className="btn small"
+              title="Stops here. What already happened stands; you just stop asking to go further."
               onClick={() => {
                 setRemaining(0);
                 spanFrom.current = null;
                 stoppedFor.current = null;
               }}
             >
-              Leave it
+              Leave it — stop here
             </button>
           </div>
         )}
