@@ -14,8 +14,10 @@ import {
 } from '../../sim/investigation';
 import { canPlant, plant, pullOut } from '../../sim/verbs';
 import { crewList } from '../../sim/npc';
-import { accuse, canAccuse, readLeaks, timesPresent } from '../../sim/informants';
-import { readWhispers } from '../../sim/whispers';
+import { accuse, canAccuse, readAftermath, readLeaks, timesPresent } from '../../sim/informants';
+import { readWhispers, canLookInto, lookInto } from '../../sim/whispers';
+import { civicRoster, canSpendFavour } from '../../sim/civic';
+import { CIVIC_BY_ID } from '../../config/civic';
 import { formatMoney, formatShortDay } from '../../sim/util';
 import { AGENCIES, LAWYERS, CONTACT } from '../../config/lawEnforcement';
 
@@ -26,8 +28,20 @@ export default function IntelligencePanel() {
   const open = activeCases(state);
   const leaks = readLeaks(state);
   const present = timesPresent(state);
+  const after = readAftermath(state);
   const size = footprint(state);
   const whispers = readWhispers(state);
+  /*
+     Who could be sent to ask, most owed first.
+
+     The button offers one name rather than a picker, because the choice that
+     matters is whether to spend a favour at all — and the panel already has a
+     list of who owes you on the City screen if the player wants to pick.
+  */
+  const askable = civicRoster(state)
+    .filter((f) => canSpendFavour(state, f.id).ok)
+    .sort((a, b) => b.owed - a.owed)
+    .map((f) => f.id);
 
   return (
     <>
@@ -67,6 +81,7 @@ export default function IntelligencePanel() {
                   <th>Heard</th>
                   <th className="num">How sure</th>
                   <th>Reading</th>
+                  <th />
                 </tr>
               </thead>
               <tbody>
@@ -80,6 +95,34 @@ export default function IntelligencePanel() {
                     <td className="tiny faint">
                       {w.certainty}
                       {w.corroborated && ' · and heard again since'}
+                    </td>
+                    {/*
+                       The decision the feed never offered.
+
+                       Waiting for a second whisper was the only move against a
+                       rumour, so this panel was a thing that happened to the
+                       player. A favour buys a second opinion — and it is an
+                       opinion, not an answer: the contact is right three times
+                       in four, which is the same fallibility the feed already
+                       has on the way in.
+                    */}
+                    <td className="num">
+                      {askable.length > 0 && (
+                        <button
+                          className="btn tiny"
+                          disabled={!canLookInto(state, w.id, askable[0]).ok}
+                          title={canLookInto(state, w.id, askable[0]).reason ?? ''}
+                          onClick={() => {
+                            let said = '';
+                            mutate((s) => {
+                              said = lookInto(s, w.id, askable[0]).message;
+                            }, true);
+                            setMessage(said);
+                          }}
+                        >
+                          Ask {CIVIC_BY_ID[askable[0]]?.title ?? 'somebody'}
+                        </button>
+                      )}
                     </td>
                   </tr>
                 ))}
@@ -253,6 +296,39 @@ export default function IntelligencePanel() {
         </p>
       )}
 
+      {/*
+         What has happened since the last time you decided it was somebody.
+
+         The record going quiet is the only confirmation this system offers —
+         INFORMANT.cautiousDays makes the real informant stop for eight weeks
+         rather than stop — and until this line existed nothing tracked the
+         page from the day of the accusation, so a quiet page and a solved
+         problem looked identical, and so did a page that had started filling
+         up again. A blind tester killed two men and reported that neither
+         outcome was observable.
+
+         It counts and it does not adjudicate. A night coming back after a
+         correct call is possible; somebody else can always start.
+      */}
+      {after && (
+        <Panel title={`Since you decided it was ${after.name}`}>
+          <KeyValue
+            label="Days"
+            value={`${after.daysSince}`}
+          />
+          <KeyValue
+            label="Nights that have come back"
+            value={after.sinceCount === 0 ? 'none' : `${after.sinceCount}`}
+            tone={after.sinceCount === 0 ? 'good' : 'hot'}
+          />
+          <p className="faint tiny" style={{ margin: '10px 0 0' }}>
+            {after.sinceCount === 0
+              ? 'Nothing has come back since. That is the only answer you are going to get, and it is not one.'
+              : 'It has not stopped. Which means either you were wrong, or somebody else has started.'}
+          </p>
+        </Panel>
+      )}
+
       {leaks.length > 0 && (
         <Panel title="What they turned out to know" flush>
           <div className="table-wrap">
@@ -303,10 +379,25 @@ export default function IntelligencePanel() {
                 {present.map((row) => {
                   const check = canAccuse(state, row.id);
                   return (
-                    <tr key={row.id}>
-                      <td className="name-main">{row.name}</td>
-                      <td className="num mono hot">{row.leaks}</td>
-                      <td className="num mono dim">{row.jobs}</td>
+                    <tr key={row.id} className={row.gone ? 'faint' : undefined}>
+                      <td>
+                        <div className="name-cell">
+                          <span className="name-main">{row.name}</span>
+                          {/*
+                             Gone men stay on the page — a night they were on
+                             is a night they were on — but they are labelled
+                             and sorted under everybody you can still do
+                             something about. A tester ended a career with 6 of
+                             16 rows belonging to the dead, at the top, two of
+                             them killed by him and reading "5 nights / 0
+                             worked": a zero denominator on the one comparison
+                             this screen exists for.
+                          */}
+                          {row.gone && <span className="name-sub">no longer with you</span>}
+                        </div>
+                      </td>
+                      <td className={row.gone ? 'num mono dim' : 'num mono hot'}>{row.leaks}</td>
+                      <td className="num mono dim">{row.gone ? '—' : row.jobs}</td>
                       <td>
                         {accusing === row.id ? (
                           <button

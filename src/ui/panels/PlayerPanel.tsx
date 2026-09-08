@@ -1,3 +1,4 @@
+import { rankNow, nextRank, whatItNeeds, whatHoldsIt } from '../../sim/rank';
 import { useGame, mutate } from '../../store';
 import { buildRead, canSpendPoint, pointsLeft, spendPoint } from '../../sim/build';
 import { nicknameRead } from '../../sim/nicknames';
@@ -313,6 +314,26 @@ export default function PlayerPanel() {
             tone={houseNow.neglect >= 50 ? 'hot' : undefined}
           />
           {/*
+             And what it is costing, which the counter never said.
+
+             Round 15 got a button here because a rising counter with no way to
+             act on it is a demand with no answer. Round 17 found the other half
+             of the same fault: the counter had a way to act on it and still
+             never said why you would. One scorer played 137 days from home and
+             wrote that the family "never cost me anything" and was therefore
+             "set dressing" — while neglect was quietly multiplying the odds
+             their own people would remove them, up to 1.9.
+
+             Only when there is something to say. `neglectRisk` is flat at 1
+             until `HOME.depositionFrom`, so a boss who goes home occasionally
+             reads nothing here at all.
+          */}
+          {houseNow.costing && (
+            <p className="hot tiny" style={{ margin: '2px 14px 0' }}>
+              {houseNow.costing}
+            </p>
+          )}
+          {/*
              And a way to actually go.
 
              There was no button here at first, on the reasoning that a pull
@@ -336,6 +357,29 @@ export default function PlayerPanel() {
             <p className="faint tiny" style={{ marginTop: 6, marginBottom: 0 }}>
               {goingHome.reason}
             </p>
+          )}
+          {/*
+             Rank above shape, because a tester read the shape as the rank.
+
+             "Shaping into: A Name On A Short List" is a reading of how the
+             career is being played and it changes back and forth; round 16
+             had a tester take it for their rank and conclude the game had
+             stopped tracking them. Printing the actual rung directly above it
+             is what tells the two apart.
+          */}
+          <KeyValue label="They call you" value={rankNow(state).name} tone="brass" />
+          {/* And at the top, what is keeping you there. See `whatHoldsIt`. */}
+          {!nextRank(state) && whatHoldsIt(state).length > 0 && (
+            <KeyValue
+              label="What holds it"
+              value={whatHoldsIt(state).join(' · ')}
+            />
+          )}
+          {nextRank(state) && whatItNeeds(state).length > 0 && (
+            <KeyValue
+              label={`To be ${nextRank(state)!.name}`}
+              value={whatItNeeds(state).join(', ')}
+            />
           )}
           <KeyValue label="Shaping into" value={careerShape(state).name} tone="brass" />
           <KeyValue label="Operations completed" value={player.opsCompleted} tone="good" />
@@ -387,9 +431,25 @@ export default function PlayerPanel() {
         )}
 
         <div className="row between" style={{ marginTop: 0, marginBottom: 8 }}>
+          {/*
+               And what they are not, which is the half that misled three
+               scorers.
+
+               All three read this screen as a stat allocation and expected the
+               odds on a job to move. One measured it: nine points placed, "Your
+               ability" unchanged on the same job the same day, filed as points
+               doing nothing. The odds row reads `player.attributes`, which
+               grows by doing the work and is a different field entirely — it is
+               the panel that used to live here and was replaced by this one.
+
+               Points buy verbs and how the world behaves toward you. Saying so
+               costs one sentence and is the difference between an irreversible
+               choice that feels arbitrary and one that feels deliberate.
+            */}
           <p className="dim" style={{ margin: 0 }}>
             Points are placed, not earned. What you leave at the bottom is a thing you
-            will never be able to do.
+            will never be able to do. They buy what you are <em>able</em> to do and how the
+            city treats you — not the odds on tonight's job, which come from doing the work.
           </p>
           <span className="mono brass" style={{ whiteSpace: 'nowrap' }}>
             {left} to place

@@ -462,6 +462,54 @@ export function tickNpcs(state: GameState): void {
  * This is deliberately not visible to the player. You find out what happened
  * here through behaviour, not through a report.
  */
+/**
+ * A man's nerve comes back, toward whatever it was to begin with.
+ *
+ * Every other number on the weekly drift has a way down — grievance decays,
+ * loyalty is pushed both ways by the six terms around it, the organization's
+ * own fear bleeds off every payday in `tickFear`. A man's fear did not:
+ * seventeen places add to it, five event choices take from it, and nothing
+ * else touched it ever again. Rolled between 15 and 70, the median man read 76
+ * by day 91 and about 90 for the rest of a four-year career.
+ *
+ * **The settle that was added to fix that only ever delivered half of itself**,
+ * because it sat below the `arrested` skip at the top of `driftNpcs`. Measured
+ * across twelve careers a working crew spends 31% of its man-days in a cell,
+ * and arrest is the largest fear source in the game, so the biggest inflow was
+ * also the switch that turned the outflow off:
+ *
+ *     per man per week        in    off    net
+ *     grinds them daily     2.67   0.80   +1.86
+ *     works them every 3rd  2.30   0.73   +1.57
+ *     never sends anybody   1.11   0.49   +0.62
+ *
+ * A nominal 1.5 delivering 0.80. Lifted out into its own function and called
+ * above the skip, so a man inside calms down at the same rate as everybody
+ * else while nothing else the drift does starts happening to him.
+ *
+ * Saves written before `fearBase` existed have no record of who anybody was,
+ * so they settle toward the middle of the roll instead. That is a guess, and
+ * it is a better one than leaving an existing crew pinned.
+ */
+export function settleFear(npc: Npc): void {
+  const settled = npc.fearBase ?? (STAT_RANGE.fear[0] + STAT_RANGE.fear[1]) / 2;
+  const gap = settled - npc.stats.fear;
+  if (gap === 0) return;
+  /*
+     A share of the distance, with the old flat rate as a floor.
+
+     The share is what gives the stat an equilibrium at all — see
+     `DRIFT.fearSettleShare`. The floor is kept so a man a point or two off his
+     own nerve still closes it rather than approaching it forever, which is the
+     one thing the flat rate was good at.
+  */
+  const step = Math.min(
+    Math.abs(gap),
+    Math.max(Math.abs(gap) * DRIFT.fearSettleShare, DRIFT.fearSettlePerTick),
+  );
+  npc.stats.fear = clamp(npc.stats.fear + Math.sign(gap) * step, 0, 100);
+}
+
 export function driftNpcs(state: GameState, rng: Rng): void {
   const diff = DIFFICULTY_BY_ID[state.difficulty];
   const leadershipResist =
@@ -488,7 +536,31 @@ export function driftNpcs(state: GameState, rng: Rng): void {
   const held = worldPull(state, 'grip');
 
   for (const npc of Object.values(state.npcs)) {
-    if (isFormerCrew(npc) || npc.status === 'arrested') continue;
+    if (isFormerCrew(npc)) continue;
+    /*
+       A man in a cell still calms down, and until now he was the one man who
+       did not.
+
+       The whole per-person drift below skips the arrested, which is right for
+       everything it governs — somebody inside is not re-reading his goals,
+       drifting his loyalty or reconsidering his ties. Fear was inside that
+       skip by accident, and it is the one number where being arrested is not a
+       reason to freeze the clock.
+
+       It is also the exact place the ratchet lived. Measured across twelve
+       careers, a working crew spends **31% of its man-days under arrest** and
+       arrest is the largest single fear source in the game
+       (`ARREST_FEAR_INCREASE` is 15), so the thing that raised fear most also
+       switched off the only thing that lowered it. The settle is nominally 1.5
+       a week and was delivering 0.80 against an inflow of 2.67 — a standing
+       surplus of 1.86 a week, which is 80 points over a 43-week career from a
+       base of 43, and is why every crew ended pinned at the ceiling.
+
+       Charged before the skip rather than by removing it, so nothing else the
+       drift does starts happening to men who are not there.
+    */
+    settleFear(npc);
+    if (npc.status === 'arrested') continue;
 
     // What he wants, re-read before it is allowed to affect anything.
     reviewGoal(state, rng, npc, board);
@@ -555,34 +627,6 @@ export function driftNpcs(state: GameState, rng: Rng): void {
       0,
       100,
     );
-
-    /*
-       And his nerve comes back, toward whatever it was to begin with.
-
-       Every other number on this list has a way down. Grievance decays on the
-       line above, loyalty is pushed both ways by the six terms around it, and
-       the organization's own fear bleeds off every payday in `tickFear`. A
-       man's fear did not: seventeen places add to it, five event choices take
-       from it, and nothing else touched it ever again.
-
-       So it went one way. Rolled between 15 and 70, the median man on the crew
-       sheet read 76 by day 91 and about 90 for the rest of a four-year career.
-       `heatFearLoyalty` scales entirely on `fear / 100`, so every crew in the
-       game was taking close to the maximum weekly drain from it no matter who
-       was in the room or how the boss played — and the crew sheet said
-       "terrified of something" about a man hired as hard to rattle, with no
-       route back for the player to find.
-
-       Saves written before `fearBase` existed have no record of who anybody
-       was, so they settle toward the middle of the roll instead. That is a
-       guess, and it is a better one than leaving an existing crew pinned.
-    */
-    const settled = npc.fearBase ?? (STAT_RANGE.fear[0] + STAT_RANGE.fear[1]) / 2;
-    const gap = settled - npc.stats.fear;
-    if (gap !== 0) {
-      const step = Math.min(Math.abs(gap), DRIFT.fearSettlePerTick);
-      npc.stats.fear = clamp(npc.stats.fear + Math.sign(gap) * step, 0, 100);
-    }
 
     // Your leadership only resists losses; it does not manufacture devotion.
     if (loyaltyDelta < 0) {

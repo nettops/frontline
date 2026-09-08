@@ -479,15 +479,13 @@ export default function BusinessesPanel() {
               somebody opens a conversation — how you handle it decides the number, and what
               you agree to besides the number.
             </p>
-            {!options.some((o) => o.check.ok) && (
-              <p className="hot" style={{ margin: '0 14px 10px' }}>
-                {/* The one you are closest to being able to buy, for the same
-                    reason the header picks it: explaining the refusal on a
-                    business you could not pay for either answers a question
-                    nobody asked. */}
-                {(blockedButAffordable ?? options[0]).check.reason}
-              </p>
-            )}
+            {/*
+               The all-blocked paragraph that used to sit here is gone. It
+               printed the closest refusal once, above a table where every row
+               now carries its own, and one sentence twice on one screen reads
+               as a bug. `blockedButAffordable` is still what the header leads
+               with, which is the job it was always doing well.
+            */}
             <table className="data">
               <thead>
                 <tr>
@@ -501,6 +499,23 @@ export default function BusinessesPanel() {
                 </tr>
               </thead>
               <tbody>
+                {/*
+                     Every row said "Go and see" and nothing else.
+
+                     Round 19: *"the AVAILABLE TO BUY table lists up to ten
+                     rows, several sharing the exact label 'Go and see' for
+                     different businesses in different districts distinguishable
+                     only by a narrow district column. This isn't just an
+                     automation problem — a mouse player skimming that list is
+                     one misclick away from opening a negotiation for the wrong
+                     property."* He also saw, once, a negotiation open for a
+                     business he had not clicked, and could not separate it from
+                     this.
+
+                     So the button names its own row. The district is appended
+                     only when the same premises appear twice in the list, which
+                     keeps the common case short and makes every label unique.
+                  */}
                 {options.slice(0, 24).map(({ def, territory, check }) => (
                   <tr key={`${def.id}-${territory.id}`}>
                     <td>
@@ -533,8 +548,28 @@ export default function BusinessesPanel() {
                         title={check.reason ?? 'Go and talk to whoever owns it'}
                         onClick={() => mutate((s) => openDeal(s, def.id, territory.id), true)}
                       >
-                        Go and see
+                        See the {def.name}
+                        {options.filter((o) => o.def.id === def.id).length > 1
+                          ? `, ${territoryDef(territory.id).name}`
+                          : ''}
                       </button>
+                      {/*
+                         And why not, on the row, where the button is.
+
+                         Fourth repair to the same finding. The first three all
+                         put the sentence somewhere other than the row: a
+                         tooltip on another panel, the panel header, and a
+                         paragraph that only appeared when *every* row was
+                         blocked. Round 21 held one district that would not
+                         sell while two rows elsewhere on the map were live, so
+                         that last guard was false and the reason for the rows
+                         he was staring at existed only in a `title` — which he
+                         found by reading the DOM, and a player would not.
+
+                         Same shape as the card tables in `CityPanel`, which
+                         have done it this way since they shipped.
+                      */}
+                      {!check.ok && <div className="tiny faint">{check.reason}</div>}
                     </td>
                   </tr>
                 ))}

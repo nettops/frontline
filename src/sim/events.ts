@@ -21,7 +21,8 @@ import type {
 import { addEvidence, addLog, pushEvent, weightedPick, withArticle } from './util';
 import { askable, money, oneOf, payable, shortOf } from './memo';
 import { GEN_DEFS, isGenerated, resolveGenerated } from './eventgen';
-import { GEN_CHANCE_PER_DAY } from '../config/eventgen';
+import { GEN_CHANCE_PER_DAY, GEN_WHEN } from '../config/eventgen';
+import { endConditionEarly } from './world';
 import { addNote, creditOperation, crewList, generateNpc } from './npc';
 import { informFromMemory, remember } from './memory';
 import { recordTie } from './ties';
@@ -204,19 +205,53 @@ const EVENT_DEFS: EventDef[] = [
       npcId: npc!.id,
       data: {},
       choices: [
-        { id: 'promote', label: 'Move them up', hint: 'Buys real loyalty — and gives them standing' },
-        { id: 'raise', label: 'Give them more money instead', hint: 'Costs cash, does not settle it' },
+        { id: 'promote', label: 'Move them up', hint: 'They will not forget it. Neither will the men who watched you do it' },
+        { id: 'raise', label: 'Give them more money instead', hint: 'The money quiets it. It does not fix it' },
         { id: 'refuse', label: 'Tell them to wait', hint: 'They will remember this' },
       ],
     }),
   },
 
+  /*
+     A grudge that comes out in front of everybody.
+
+     **This and `gen_wants_a_word` were one memo wearing two coats**, and round
+     16's tester said so: same man, same complaint, "Hear them out" as the
+     first option on both, one of them titled *wants a word* and the other
+     *is carrying something*.
+
+     They were also unequal in a way nobody could see. Round 15's second MUST
+     FIX was this exact situation becoming a subscription — a tester paid one
+     man on days 202, 215 and 225 against an option that read "and the matter
+     is closed" — and the repair was `GEN_WHEN.askedAgainAfterDays`, a
+     *per-person* cooldown. It was applied to the generated half only. The
+     authored twin kept its ten-day per-shape cooldown and no memory of the
+     person at all, so the fixed memo and the unfixed one sat side by side
+     drawing from two different halves of `tickEvents` and never blocking each
+     other.
+
+     So the two now share one guard: dealing with somebody deals with them,
+     whichever memo asked. And what is left is a real difference rather than a
+     reskin — **this one happened in front of the room.** The prose always said
+     so ("a comment in front of others", "going round the room before it came
+     to you") and nothing in the effects ever did. The crew who watched now
+     learn what the boss does when somebody says it out loud, in the idiom
+     `skim_discovered` already uses six blocks down.
+  */
   {
     id: 'grievance_raised',
     weight: 18,
     cooldownDays: 10,
     applies: (state, rng) =>
-      wrap(pickWhere(state, rng, (n) => n.stats.grievance > 40)),
+      wrap(
+        pickWhere(
+          state,
+          rng,
+          (n) =>
+            n.stats.grievance > 40 &&
+            state.day - (state.flags[`asked_${n.id}`] ?? -9999) >= GEN_WHEN.askedAgainAfterDays,
+        ),
+      ),
     build: (state, rng, { npc }) => ({
       defId: 'grievance_raised',
       title: oneOf(rng, [
@@ -242,9 +277,13 @@ const EVENT_DEFS: EventDef[] = [
       npcId: npc!.id,
       data: {},
       choices: [
-        { id: 'listen', label: 'Hear them out', hint: 'Costs nothing but time. Works better if you can lead' },
+        {
+          id: 'listen',
+          label: 'Answer it in front of them',
+          hint: 'Costs nothing but the time. Everybody in the room hears how you handle it',
+        },
         { id: 'pay', label: 'Make it right with money', ...payable(state, 3000, 'settles it, mostly') },
-        { id: 'ignore', label: 'Let it sit', hint: 'It will keep growing' },
+        { id: 'ignore', label: 'Let it sit', hint: 'It gets worse, and it was said in front of people' },
       ],
     }),
   },
@@ -281,9 +320,9 @@ const EVENT_DEFS: EventDef[] = [
       npcId: npc!.id,
       data: { amount: npc!.skimTotal },
       choices: [
-        { id: 'confront', label: 'Confront them', hint: 'They return most of it. Everyone hears about it' },
-        { id: 'remove', label: 'Cut them out entirely', hint: 'Ends it. They walk out knowing things' },
-        { id: 'watch', label: 'Say nothing and watch', hint: 'Learn where the money goes. It keeps going' },
+        { id: 'confront', label: 'Confront them', hint: 'Most of the money comes back. Every man on the payroll hears how' },
+        { id: 'remove', label: 'Cut them out entirely', hint: 'It is over, and they leave knowing everything they knew' },
+        { id: 'watch', label: 'Say nothing and watch', hint: 'You find out where the money went. It keeps going there' },
       ],
     }),
   },
@@ -330,17 +369,17 @@ const EVENT_DEFS: EventDef[] = [
             `which is not what happens to people they actually want.\n\n` +
             `They mentioned it themselves, eventually, in a way that suggested they had ` +
             `spent a while deciding whether to mention it at all.`,
-          `Their brother-in-law does not work for the city and has started saying they ` +
-            `does. Somebody has been generous with somebody.\n\n` +
+          `Their brother-in-law does not work for the city and has started telling ` +
+            `people he does. Somebody has been generous with somebody.\n\n` +
             `None of it is proof. All of it is the shape proof usually arrives in.`,
       ]),
       severity: 'danger',
       npcId: npc!.id,
       data: {},
       choices: [
-        { id: 'reassure', label: 'Sit with them', hint: 'Steadies them if they trust you at all' },
+        { id: 'reassure', label: 'Sit with them', hint: 'If they trust you at all, this is enough. If not, it is words' },
         { id: 'pay', label: 'Put money in their hand', ...payable(state, 8000, 'fear is expensive') },
-        { id: 'cut', label: 'Cut them loose now', hint: 'Removes them. Guarantees they have a reason' },
+        { id: 'cut', label: 'Cut them loose now', hint: 'They are gone, and now they have a reason to talk to somebody' },
       ],
     }),
   },
@@ -380,7 +419,7 @@ const EVENT_DEFS: EventDef[] = [
       choices: [
         { id: 'side_a', label: `Back ${npc!.name}`, hint: 'One is satisfied, one is not' },
         { id: 'side_b', label: `Back ${other!.name}`, hint: 'One is satisfied, one is not' },
-        { id: 'crush', label: 'Shut both of them down', hint: 'Nobody is happy. Nobody escalates' },
+        { id: 'crush', label: 'Shut both of them down', hint: 'Both of them leave annoyed. Neither of them does anything about it' },
       ],
     }),
   },
@@ -430,7 +469,7 @@ const EVENT_DEFS: EventDef[] = [
             hint: `Lay low. Heat falls fast, respect suffers, and only quiet work moves`,
           },
         { id: 'lawyer', label: 'Put a lawyer in front of it', ...payable(state, 25_000, 'cuts the attention now') },
-        { id: 'ride', label: 'Carry on as normal', hint: 'Costs nothing. Leaves more behind' },
+        { id: 'ride', label: 'Carry on as normal', hint: 'Costs nothing tonight. Leaves more for somebody to find' },
       ],
     }),
   },
@@ -530,6 +569,29 @@ const EVENT_DEFS: EventDef[] = [
       const cost = askable(state, Math.round(rng.float(scale * 0.35, scale * 0.6)), 400);
       const reward = Math.round(cost * rng.float(2.2, 3.6));
       const heat = rng.int(6, 16);
+      /*
+         The odds, decided here and carried on the memo.
+
+         Round 19 called this family of memos the one place in the game where a
+         shown-odds number arrives with no picture behind it: *"the choice is
+         'Take it — $X, roughly even odds' with no description of what the job
+         actually is, who's involved, or what failure costs beyond money. Every
+         other financial decision in the game states its terms."* He was right,
+         and the design rule he was standing on is the second one: shown odds
+         are real odds, and the breakdown that produced them is itemised.
+
+         The figures existed the whole time. `staked` is
+         `0.5 + streetSmarts * 0.012`, the send branch is that minus
+         `oddsPenalty`, and `heat` was already rolled and stored. Nothing was
+         hidden on purpose; it simply was never said.
+
+         Decided at build time rather than recomputed in the resolver, for the
+         same reason the lawyer's days off are: a memo can sit in the queue
+         while street smarts move, and a screen that quotes one number and
+         serves another is worse than one that quotes nothing.
+      */
+      const odds = 0.5 + state.player.attributes.streetSmarts * 0.012;
+      const sendOdds = Math.max(0.05, odds - SHORT_NOTICE.oddsPenalty);
       return {
         defId: 'opportunity_score',
         title: oneOf(rng, [
@@ -562,12 +624,14 @@ const EVENT_DEFS: EventDef[] = [
         ]),
         severity: 'opportunity',
         npcId: null,
-        data: { cost, reward, heat },
+        data: { cost, reward, heat, odds, sendOdds },
         choices: [
           {
             id: 'take',
             label: `Take it — ${money(cost)}`,
-            hint: 'Roughly even odds. Significant attention either way',
+            hint:
+              `${Math.round(odds * 100)}% it holds. ${heat} attention if it does not, ` +
+              `${Math.round(heat * 0.6)} if it does, and the stake is gone either way`,
             disabledReason:
               totalFunds(state) < cost ? 'You cannot cover the up-front cost' : undefined,
             cost: cost,
@@ -591,16 +655,28 @@ const EVENT_DEFS: EventDef[] = [
             */
             id: 'send',
             label: 'Send your own people instead',
+            /*
+               Said as a share rather than a figure, and that is not
+               cosmetic. `priced.test.ts` reads the largest dollar amount in a
+               label or hint as what the choice is asking for, and refuses an
+               enabled option quoting more than the player holds — which is
+               right, and which a free option naming its payout in dollars
+               would trip. The share is the more useful sentence anyway: what
+               this answer costs is people, and the money is a proportion of an
+               amount already on the memo two lines up.
+            */
             hint:
-              `No money up front. A smaller cut, worse odds, and it is ` +
-              `${SHORT_NOTICE.crewNeeded} of your own people in the room`,
+              `${Math.round(sendOdds * 100)}% it holds, for ` +
+              `${Math.round(SHORT_NOTICE.rewardShare * 100)}% of the money. ` +
+              `${SHORT_NOTICE.crewNeeded} of your own in the room, and one of them ` +
+              `hurt for ${SHORT_NOTICE.hurtDays} days if it goes wrong`,
             disabledReason:
               freeCrew(state).length < SHORT_NOTICE.crewNeeded
                 ? `You would need ${SHORT_NOTICE.crewNeeded} people free tonight; ` +
                   `you have ${freeCrew(state).length}`
                 : undefined,
           },
-          { id: 'pass', label: 'Pass', hint: 'Nothing gained, nothing noticed' },
+          { id: 'pass', label: 'Pass', hint: 'Nothing comes of it, and nobody hears about it' },
         ],
       };
     },
@@ -661,7 +737,7 @@ const EVENT_DEFS: EventDef[] = [
           {
             id: 'take',
             label: `Bring them in — ${money(fee)}`,
-            hint: 'Skilled, experienced, and an unknown',
+            hint: 'Good at the work. Nobody can tell you where they were before',
             disabledReason:
               totalFunds(state) < fee ? 'You cannot cover the fee' : undefined,
             cost: fee,
@@ -733,7 +809,7 @@ const EVENT_DEFS: EventDef[] = [
           `It has been repeated by somebody who was not there, to somebody who was not ` +
             `there either, and it came back to you through a third man who thought you ` +
             `already knew.\n\n` +
-            `That is the shape a thing takes on its way to becoming what people think.`,
+            `Nobody has said it outright yet. They will.`,
         ]),
         oneOf(rng, [
           `Two of your own were in the room this time and neither of them said anything.\n\n` +
@@ -758,12 +834,12 @@ const EVENT_DEFS: EventDef[] = [
           {
             id: 'violence',
             label: 'Answer it',
-            hint: 'Respect and fear. Attention comes with them',
+            hint: 'People will step aside for you. Police will want to know who they are',
           },
           {
             id: 'talk',
             label: 'Handle it in person, quietly',
-            hint: 'Depends on whether you can talk',
+            hint: 'Comes down to whether they believe you',
           },
           {
             id: 'ignore',
@@ -814,7 +890,7 @@ const EVENT_DEFS: EventDef[] = [
         npcId: null,
         data: { amount },
         choices: [
-          { id: 'take', label: `Take the ${money(amount)}`, hint: 'Solves today. Creates a creditor' },
+          { id: 'take', label: `Take the ${money(amount)}`, hint: 'Today is handled. Somebody now owns a piece of you' },
           { id: 'refuse', label: 'Decline', hint: 'Stay clear of them' },
         ],
       };
@@ -895,13 +971,13 @@ const EVENT_DEFS: EventDef[] = [
           {
             id: 'pay',
             label: `Pay them — ${money(demand)}`,
-            hint: 'Cheapest today. They will be back',
+            hint: 'Cheapest thing you can do today. They will be back next month',
             disabledReason:
               shortOf(state, demand),
             cost: demand,
           },
-          { id: 'refuse', label: 'Refuse', hint: 'Costs you standing in the district' },
-          { id: 'remove', label: 'Remove them', hint: 'Ends it. Attention, and the street remembers' },
+          { id: 'refuse', label: 'Refuse', hint: 'The neighbourhood watches you pay somebody off' },
+          { id: 'remove', label: 'Remove them', hint: 'It ends tonight. Police come asking, and nobody on that street forgets' },
         ],
       };
     },
@@ -960,7 +1036,7 @@ const EVENT_DEFS: EventDef[] = [
           {
             id: 'take',
             label: `Make the introduction — ${money(cost)}`,
-            hint: 'Immediate standing in the district',
+            hint: 'People there start speaking to your men again',
             disabledReason: shortOf(state, cost),
             cost,
           },
@@ -1008,7 +1084,7 @@ const EVENT_DEFS: EventDef[] = [
         data: { territoryId: territory!.id },
         choices: [
           { id: 'money', label: 'Put money into the neighbourhood', ...payable(state, 12_000, 'buys back a great deal') },
-          { id: 'presence', label: 'Be seen, personally, for a while', hint: 'Slower, free, and it depends on you' },
+          { id: 'presence', label: 'Be seen, personally, for a while', hint: 'Takes weeks, costs nothing, and only works if you turn up' },
           { id: 'ignore', label: 'They will get over it', hint: 'They will not, quickly' },
         ],
       };
@@ -1062,7 +1138,7 @@ const EVENT_DEFS: EventDef[] = [
           {
             id: 'lawyer',
             label: `Put real counsel on them — ${money(cost)}`,
-            hint: 'The offer stops looking attractive',
+            hint: 'Whatever they were offered stops being worth taking',
             disabledReason: shortOf(state, cost),
             cost,
           },
@@ -1139,11 +1215,11 @@ const EVENT_DEFS: EventDef[] = [
           {
             id: 'accept',
             label: `Take the meeting — ${money(price)}`,
-            hint: 'You will see the file. They will know you are paying them',
+            hint: 'You get to read the file. They know exactly who is paying them',
             disabledReason: shortOf(state, price),
             cost: price,
           },
-          { id: 'refuse', label: 'Do not go', hint: 'It could be a test. Some of them are' },
+          { id: 'refuse', label: 'Do not go', hint: 'This might be somebody checking what you do. Some of them are' },
         ],
       };
     },
@@ -1207,12 +1283,12 @@ const EVENT_DEFS: EventDef[] = [
           {
             id: 'push_back',
             label: `Answer it — ${money(cost)}`,
-            hint: 'Takes ground back. Attention, and they will remember',
+            hint: 'You get the street back. Police notice, and so do they',
             disabledReason: shortOf(state, cost),
             cost,
           },
-          { id: 'concede', label: 'Let them have the block', hint: 'Costs you standing there. Cools things' },
-          { id: 'ignore', label: 'Do nothing', hint: 'They will read that as an answer' },
+          { id: 'concede', label: 'Let them have the block', hint: 'The neighbourhood sees you back off. It also stops here' },
+          { id: 'ignore', label: 'Do nothing', hint: 'Say nothing and they will take that as your answer' },
         ],
       };
     },
@@ -1298,14 +1374,14 @@ const EVENT_DEFS: EventDef[] = [
           {
             id: 'money',
             label: 'Send money instead — $40,000',
-            hint: 'Keeps your people home. Buys less goodwill than blood would',
+            hint: 'Your men stay out of it. It buys you less than turning up would have',
             disabledReason: shortOf(state, 40_000),
             cost: 40_000,
           },
           {
             id: 'refuse',
             label: 'Tell them no',
-            hint: 'The only organization on your side finds out what you are worth',
+            hint: 'The one outfit standing with you learns exactly what you are good for',
           },
         ],
       };
@@ -1359,12 +1435,12 @@ const EVENT_DEFS: EventDef[] = [
           {
             id: 'accept',
             label: `Pay the courtesy — ${money(tribute)}`,
-            hint: 'Buys goodwill that is worth something later',
+            hint: 'They owe you a courtesy, and courtesies get called in',
             disabledReason: shortOf(state, tribute),
             cost: tribute,
           },
           { id: 'decline', label: 'Decline politely', hint: 'Nothing changes, for now' },
-          { id: 'insult', label: 'Send them back with nothing', hint: 'Costs you badly with them. Standing on the street' },
+          { id: 'insult', label: 'Send them back with nothing', hint: 'They will hold it against you for years. The street thinks better of you' },
         ],
       };
     },
@@ -1408,7 +1484,7 @@ const EVENT_DEFS: EventDef[] = [
         npcId: null,
         data: { businessId: business!.id },
         choices: [
-          { id: 'accountant', label: 'Put an accountant on it', ...payable(state, 15_000, 'cleans the books, cuts exposure hard') },
+          { id: 'accountant', label: 'Put an accountant on it', ...payable(state, 15_000, 'the books come back clean and the place stops being worth watching') },
           { id: 'slow', label: 'Slow everything down for a while', hint: 'Free. Stops laundering there and cools it off' },
           { id: 'shutter', label: 'Close it', hint: 'Ends the problem and most of your money' },
         ],
@@ -1709,6 +1785,20 @@ export function resolveEvent(
   }
 
   switch (event.defId) {
+    /*
+       The city's weather, and the one thing that can be done about it.
+
+       Every world condition used to carry a single button saying there was
+       nothing to decide, and for most of them that is true. Five can be
+       reached by a boss with money — see `WorldConditionDef.endEarly` — and
+       the spending, the clearing and the log line all belong to `world.ts`,
+       which is the only other place `conditionId` is written.
+    */
+    case 'world_condition': {
+      if (choiceId === 'end_early') endConditionEarly(state);
+      return;
+    }
+
     // ----------------------------------------------------- crew pressure --
     case 'promotion_demand': {
       if (!npc) return;
@@ -1738,6 +1828,32 @@ export function resolveEvent(
 
     case 'grievance_raised': {
       if (!npc) return;
+      /*
+         Dealt with, on the same flag `gen_wants_a_word` writes.
+
+         Set before the branches for the reason that file records: a branch
+         added later cannot forget it, and forgetting it is how this became a
+         subscription. Shared rather than parallel so that hearing a man out
+         here also stops the other memo asking the same thing next week —
+         these are one situation, and it should take one answer.
+
+         Written even on the branch where the money was not there, because the
+         complaint was still made and still answered; being told no is being
+         dealt with, and the effects below charge for it.
+      */
+      state.flags[`asked_${npc.id}`] = state.day;
+
+      /*
+         Everybody who heard it, which is what makes this memo its own thing.
+
+         The prose has always said this happened in public and the effects
+         never did — the same fault `skim_discovered` avoids by moving the
+         onlookers when somebody is made to give money back. Small numbers on
+         purpose: the man himself is the event, and the room is the difference
+         between saying a thing out loud and saying it in a doorway.
+      */
+      const watched = crewList(state).filter((n) => n.id !== npc.id && n.status === 'active');
+
       if (choiceId === 'listen') {
         // Leadership decides whether talking actually works.
         const effect = 10 + state.player.attributes.leadership * 2;
@@ -1746,12 +1862,21 @@ export function resolveEvent(
         trainAttribute(state, 'leadership', 1.2);
         remember(npc, state.day, 'was_believed');
         addNote(npc, state.day, 'Was listened to.', 'good');
+        // They watched a complaint get an answer. That is worth something to
+        // people who are carrying one of their own.
+        for (const other of watched) {
+          other.stats.respectForBoss = clamp(other.stats.respectForBoss + 3, 0, 100);
+        }
       } else if (choiceId === 'pay') {
         if (spend(state, 3_000, 'world')) {
           npc.stats.grievance = clamp(npc.stats.grievance - 25, 0, 100);
           npc.stats.greed = clamp(npc.stats.greed + 3, 0, 100);
           addNote(npc, state.day, 'Was paid to let something go.', 'neutral');
           addLog(state, `${money(3_000)} to ${npc.name}, and the matter is closed. They will remember that it worked.`, 'money');
+          // And so will everybody who saw what closed it.
+          for (const other of watched) {
+            other.stats.greed = clamp(other.stats.greed + 2, 0, 100);
+          }
         } else {
           addLog(state, 'You did not have it to give.', 'failure');
           npc.stats.grievance = clamp(npc.stats.grievance + 8, 0, 100);
@@ -1759,6 +1884,11 @@ export function resolveEvent(
       } else {
         npc.stats.grievance = clamp(npc.stats.grievance + 12, 0, 100);
         npc.stats.loyalty = clamp(npc.stats.loyalty - 5, 0, 100);
+        // Letting it sit in private is a decision. Letting it sit after it has
+        // been said in front of the room is a statement about all of them.
+        for (const other of watched) {
+          other.stats.respectForBoss = clamp(other.stats.respectForBoss - 2, 0, 100);
+        }
       }
       return;
     }
@@ -1982,8 +2112,9 @@ export function resolveEvent(
         }
         const sent = free.slice(0, SHORT_NOTICE.crewNeeded);
         const names = sent.map((n) => n.name).join(' and ');
-        const odds =
-          0.5 + state.player.attributes.streetSmarts * 0.012 - SHORT_NOTICE.oddsPenalty;
+        // What the memo quoted, not a fresh reading of a stat that may have
+        // moved while it sat in the queue.
+        const odds = (event.data.sendOdds as number) ?? 0.5 - SHORT_NOTICE.oddsPenalty;
 
         if (rng.chance(odds)) {
           const paid = Math.round(reward * SHORT_NOTICE.rewardShare);
@@ -2034,8 +2165,9 @@ export function resolveEvent(
         addLog(state, 'The money was not there when it came to it.', 'failure');
         return;
       }
-      // Deliberately close to a coin flip — street smarts tilt it slightly.
-      const staked = 0.5 + state.player.attributes.streetSmarts * 0.012;
+      // Deliberately close to a coin flip — street smarts tilt it slightly —
+      // and it is the figure the memo put in front of the player.
+      const staked = (event.data.odds as number) ?? 0.5;
       if (rng.chance(staked)) {
         earnDirty(state, reward);
         addHeat(state, heat * 0.6, 'street', 'short-notice job');

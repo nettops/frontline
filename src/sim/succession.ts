@@ -31,6 +31,7 @@ import { addNote, crewList, isOutOfReach, perceive } from './npc';
 import { goalEffect } from './goals';
 import { passedOver, recordTie } from './ties';
 import { claimFromMemory } from './memory';
+import { keepPromise } from './promises';
 import { territoryList } from './territory';
 import { ATTRIBUTE_IDS, ROLE_LABEL, ROLE_ORDER } from '../config/economy';
 import { TIE_SUCCESSION } from '../config/ties';
@@ -223,6 +224,16 @@ export function nameHeir(state: GameState, npcId: string | null): NameResult {
 
   state.succession.heirId = npcId;
   state.succession.heirNamedDay = state.day;
+
+  /*
+     If he was told he was next, he is now next.
+
+     The one promise in the table that can be kept by an announcement rather
+     than by a thing arriving, which is exactly why it needed a deadline: "you
+     are next" was previously a sentence with no consequence attached to never
+     saying it again.
+  */
+  keepPromise(state, npcId, 'next_in_line');
 
   npc.stats.ambition = clamp(npc.stats.ambition + NAMING.heirAmbition, 0, 100);
   npc.stats.respectForBoss = clamp(

@@ -26,7 +26,7 @@ import type {
   GameState,
   Territory,
 } from './types';
-import { addLog, formatMoneyShort, pushEvent } from './util';
+import { addLog, formatMoneyShort, pushEvent, say } from './util';
 import {
   adjustRelationship,
   atWar,
@@ -504,13 +504,25 @@ function record(
   faction: Faction,
   action: Omit<FactionAction, 'day' | 'observed'>,
   observed: boolean,
+  /**
+   * The caller has already written a log line for this.
+   *
+   * `declareWar` and `endWar` in `diplomacy.ts` each log the event themselves,
+   * and both of the diplomacy branches below then recorded it a second time
+   * with `observed: true` — so every AI war and every AI peace reached the
+   * player's log twice, in two different phrasings, on the same day. That is
+   * two of the three lines in the triple a blind tester reported six times.
+   * The history entry is still wanted, and `observed` still means what it
+   * meant; this only suppresses the duplicate line.
+   */
+  alreadyLogged = false,
 ): void {
   const entry: FactionAction = { ...action, day: state.day, observed };
   faction.history.unshift(entry);
   if (faction.history.length > 40) faction.history.length = 40;
 
   // The player only hears about what happens where they have people.
-  if (observed) {
+  if (observed && !alreadyLogged) {
     addLog(state, entry.detail, 'crew');
   }
 }
@@ -620,7 +632,22 @@ function executeInvest(state: GameState, faction: Faction): void {
       kind: 'invest',
       territoryId: null,
       targetFactionId: null,
-      detail: `${def.shortName} have bought into something legitimate.`,
+      /*
+         What a watcher would actually see them buy.
+
+         This was `${def.shortName} have bought into something legitimate` —
+         true, and describing a `businessCount += 1` rather than a thing that
+         happened on a street. A rival buying a front is one of the few moves
+         of theirs a player can physically see, and naming the premises is what
+         makes the family feel like it is doing business in the same city.
+      */
+      detail: say(`invest_${faction.id}`, state.day, [
+        `${def.shortName} money bought the laundry on the corner. New name over the door, same machines.`,
+        `${def.shortName} bought a haulage yard. Nobody asked where the money came from.`,
+        `There is a ${def.shortName} name on the deeds of a restaurant that was not for sale.`,
+        `${def.shortName} took over a bakery that had been in one family for forty years.`,
+        `${def.shortName} bought a garage and put two of their own on the books there.`,
+      ]),
     },
     // Only visible if you are close enough to them to hear about it.
     factionIntel(state, faction.id) >= FACTION_INTEL_ROUGH_ABOVE,
@@ -640,6 +667,8 @@ function executeConsolidate(state: GameState, faction: Faction): void {
   }
 
   const def = houseDef(state, faction.id);
+  const theirs = districtsHeld(state, faction.id);
+  const held = theirs.length ? territoryDef(theirs[0].id).name : null;
   record(
     state,
     faction,
@@ -647,7 +676,30 @@ function executeConsolidate(state: GameState, faction: Faction): void {
       kind: 'consolidate',
       territoryId: null,
       targetFactionId: null,
-      detail: `${def.shortName} have gone quiet and are counting their money.`,
+      /*
+         The loudest line in the game, measured.
+
+         `${def.shortName} have gone quiet and are counting their money` was
+         0.9% of everything a player reads across 48 careers in
+         `scorecard.probe` — one sentence, for every family, every time they
+         consolidated, for four years. It also said nothing a player could act
+         on: going quiet is not an observation, it is the absence of one.
+
+         `consolidate` raises their influence in the districts they already
+         hold, so the district is the observable thing and it is right here.
+      */
+      detail: say(`consolidate_${faction.id}`, state.day, [
+        held
+          ? `${def.shortName} put more people on the street in ${held}. Nobody is being hit; they are just there.`
+          : `${def.shortName} pulled their people off the corners and nobody has seen them since.`,
+        held
+          ? `Every shop on the main road in ${held} is paying ${def.shortName} now. Quietly, and on time.`
+          : `${def.shortName} stopped taking new work. Whatever they have, they are holding it.`,
+        held
+          ? `${def.shortName} replaced the man running ${held} with somebody nobody knows.`
+          : `${def.shortName} paid off two of their own debts this week. In cash.`,
+        `${def.shortName} have not been seen doing anything for a fortnight. Their people are still being paid.`,
+      ]),
     },
     factionIntel(state, faction.id) >= FACTION_INTEL_ROUGH_ABOVE,
   );
@@ -712,6 +764,7 @@ function executeDiplomacy(state: GameState, faction: Faction, option: Option): v
         detail: `${def.shortName} and ${houseShort(state, target)} have made peace.`,
         },
       factionIntel(state, faction.id) >= FACTION_INTEL_ROUGH_ABOVE,
+      true,
     );
     return;
   }
@@ -729,6 +782,7 @@ function executeDiplomacy(state: GameState, faction: Faction, option: Option): v
           ? `${def.shortName} have declared war on you.`
           : `${def.shortName} have declared war on ${houseShort(state, target)}.`,
     },
+    true,
     true,
   );
 }

@@ -20,7 +20,7 @@ import type {
   LawEnforcement,
   Npc,
 } from './types';
-import { addEvidence, addLog, formatMoney, nextId, pushEvent, weightedPick } from './util';
+import { addEvidence, addLog, formatMoney, nextId, pushEvent, say, weightedPick } from './util';
 import { addHeat, channelHeat } from './heat';
 import { addNote, crewList } from './npc';
 import { nightsWorked } from './standing';
@@ -377,7 +377,32 @@ function advanceStage(state: GameState, rng: Rng, investigation: Investigation):
   investigation.stageSince = state.day;
 
   const obvious = OBVIOUS_STAGES.includes(next.id);
-  record(state, investigation, `${agency.shortName}: ${next.name}. ${next.blurb}`, obvious);
+  /*
+     `Agency: Stage. Blurb.` is a case file's own header, printed at a person.
+     The blurb was already the observation — "Cars that do not belong. Your
+     people are being followed and photographed" — and it was sitting behind a
+     colon and a stage name nobody outside the department uses.
+  */
+  record(
+    state,
+    investigation,
+    /*
+       The agency has to be in it — who is doing this is half the news — and it
+       cannot be a suffix. Appending `That is ${agency.shortName}.` was the
+       first attempt and `scorecard.probe` measured the two commonest agencies
+       as the loudest two sentence-endings in the game inside one run, which is
+       the third time this pass a fixed tail has done that. It goes at the
+       front, as the subject, where a different agency makes a different
+       sentence.
+    */
+    say(`stage_${investigation.id}`, state.day, [
+      `${agency.shortName} have moved it up a stage. ${next.blurb}`,
+      `Somebody at ${agency.shortName} signed off on more of this. ${next.blurb}`,
+      `${agency.shortName} are not treating it as routine any more. ${next.blurb}`,
+      `The file at ${agency.shortName} has a new name on the front of it. ${next.blurb}`,
+    ]),
+    obvious,
+  );
 
   // Everyone in the organization feels the pressure rise.
   for (const npc of crewList(state)) {
@@ -608,8 +633,31 @@ function applyStageEffect(
         severity: 'danger',
         npcId: null,
         data: { caseId: investigation.id },
+        /*
+           And what actually happens next, which depends on who indicted you.
+
+           This hint was the flat string "The trial begins" for every agency,
+           and two of the four cannot hold one: `state_taskforce` and financial
+           crimes are both `maxStage: 'indictment'`, and only the Bureau reads
+           `maxStage: 'trial'`. A round-17 tester was indicted by the Task Force,
+           pressed the one button under a promise of a trial, and found the case
+           sitting at Indictment indefinitely — with the Law Enforcement panel
+           three inches away correctly saying the Task Force can take it no
+           further. They reproduced it twice and filed it as the moment the
+           whole law-enforcement arc stopped paying off.
+
+           Read off `maxStage` rather than restated, so an agency whose reach
+           changes cannot leave this sentence behind.
+        */
         choices: [
-          { id: 'acknowledge', label: 'There is nothing else to say', hint: 'The trial begins' },
+          {
+            id: 'acknowledge',
+            label: 'There is nothing else to say',
+            hint:
+              agency.maxStage === 'trial'
+                ? 'The trial begins'
+                : `${agency.shortName} take it no further than this. Somebody else would have to.`,
+          },
         ],
       });
       return;
@@ -688,7 +736,12 @@ function closeCase(state: GameState, investigation: Investigation, reason: strin
     trace.attachedTo = trace.attachedTo.filter((id) => id !== investigation.id);
     if (trace.attachedTo.length === 0) delete state.evidence[trace.id];
   }
-  addLog(state, `${agencyOf(investigation).shortName}: ${reason}`, 'success');
+  /*
+     `Agency: reason` is a label and a colon, which is how a system reports to
+     another system. It says who and what and never that the thing is over,
+     which is the whole news.
+  */
+  addLog(state, `${agencyOf(investigation).shortName} closed the file. ${reason}`, 'success');
 }
 
 // ------------------------------------------------------------------ tick ---
@@ -1229,7 +1282,23 @@ export function destroyEvidence(
     const removed = rng.float(DESTROY_EVIDENCE.removed[0], DESTROY_EVIDENCE.removed[1]);
     investigation.strength = Math.max(0, investigation.strength - removed);
     record(state, investigation, 'Something they were relying on is no longer available.', false);
-    addLog(state, 'What they had is not what they have.', 'success');
+    /*
+       The player destroyed evidence and was told a riddle about it.
+
+       "What they had is not what they have" is cryptic for the sake of it:
+       something worked, and the sentence declines to say what. The two things
+       a player needs are that the file got thinner and that nobody knows it
+       was them, and both are facts this branch already has.
+    */
+    addLog(
+      state,
+      say(`destroyed_${investigation.id}`, state.day, [
+        'A box of paperwork went missing between two offices. Nobody has reported it.',
+        'Whatever was in that file is not in it any more, and nobody has asked why.',
+        'A statement they were relying on has come off the record. It cost you nothing.',
+      ]),
+      'success',
+    );
     return { ok: true, message: 'It is gone.' };
   }
 
@@ -1240,7 +1309,15 @@ export function destroyEvidence(
   );
   addHeat(state, DESTROY_EVIDENCE.backfireHeat, 'inside', 'tampering');
   record(state, investigation, 'Somebody tried to get at the file. That is a charge of its own.', true);
-  addLog(state, 'It went wrong, and now that is part of the case too.', 'failure');
+  addLog(
+    state,
+    say(`tamper_failed_${investigation.id}`, state.day, [
+      'Your man was seen going through the wrong drawer. That is a charge on its own now.',
+      'Somebody watched him do it. What he tried to take is now the first page of the file.',
+      'He got into the room and out again, and there is a note in the log with the time on it.',
+    ]),
+    'failure',
+  );
   return { ok: false, message: 'It went wrong.' };
 }
 

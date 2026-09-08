@@ -165,8 +165,28 @@ export const BOND = {
  */
 export const AT_WAR_BELOW = -70;
 
-/** Grudge a war leaves behind when peace is made. Nobody forgets. */
-export const PEACE_GRUDGE = 52;
+/**
+ * Grudge a war leaves behind when peace is made. Nobody forgets.
+ *
+ * Below `BOND.warGrudge`, and it has to be. It was 52 against a bar of
+ * 45, which meant peace capped the grudge *above* the figure the rival AI
+ * needs to start a war — so a pair that stopped fighting re-qualified to fight
+ * on the same tick, and did. A blind tester logged six dated occurrences of
+ * this triple, all three lines stamped the same day:
+ *
+ *     The Castellan and the Delgado have stopped fighting.
+ *     Delgado have declared war on Castellan.
+ *     The Delgado and the Castellan are at war.
+ *
+ * and read "0 WARS IN THE CITY — Nobody is fighting anybody" on the Diplomacy
+ * panel three days later. He adjusted his own diplomacy spending twice on the
+ * belief a war had just started.
+ *
+ * Seven points of room, so peace holds until something new happens rather than
+ * until the next tick. Grudge decays from here and grows on clashes and
+ * betrayals, so the way back to a war is the way it should be: another reason.
+ */
+export const PEACE_GRUDGE = 38;
 
 // ------------------------------------------------------------------- war ---
 

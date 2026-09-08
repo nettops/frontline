@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { canCase, caseJob } from '../../sim/verbs';
 import { hasVerb } from '../../sim/build';
+import { STAT_BY_ID } from '../../config/build';
 import { useGame, mutate } from '../../store';
 import { Panel, Empty, Bar, StatRead } from '../components';
 import {
@@ -12,6 +13,7 @@ import {
   crewNeeded,
   heatScale,
   launchOperation,
+  approachOf,
   successBreakdown,
   sentimentOutlook,
 } from '../../sim/operations';
@@ -61,7 +63,7 @@ import {
   type ApproachId,
 } from '../../config/operations';
 import { CONTROL_LABEL, SENTIMENT_HOSTILE_BELOW } from '../../config/territories';
-import { ROLE_LABEL } from '../../config/economy';
+import { ATTRIBUTE_LABEL, ROLE_LABEL } from '../../config/economy';
 import type { OperationDef } from '../../sim/types';
 
 const RISKS = Object.keys(AUTOPILOT_RISK) as AutopilotRisk[];
@@ -230,7 +232,9 @@ export default function OperationsPanel() {
           {free.length} available · {formatMoney(totalFunds(state))} on hand
         </span>
       </div>
+      {/* Same door, same silence. See `DiplomacyPanel`. */}
       <p className="page-sub">
+        <strong>Open a job to put a crew on it.</strong>{' '}
         Every job takes people off the street for its duration and adds to what the
         world knows about you. The odds you are shown are the odds you get.
       </p>
@@ -366,8 +370,23 @@ export default function OperationsPanel() {
               <div key={o.id} className="kv">
                 <span className="kv-key">
                   <span className="name-main">{d?.name ?? 'A job'}</span>{' '}
+                  {/*
+                     The approach it is running, which used to be the one thing
+                     about a standing order the player could not find out.
+
+                     It is recorded at set-time from the picker below and then
+                     kept for the life of the order — so changing the picker
+                     afterwards moves the next hand-run job and leaves this one
+                     where it was. A round-16 tester set an order while working
+                     quiet, later switched to Heavy for a score, and spent the
+                     rest of the career believing every automated night was
+                     going out loud. Nothing on screen could have told them
+                     otherwise. `approachOf` rather than `o.approach`, because
+                     orders written before the field existed have none.
+                  */}
                   <span className="faint tiny">
-                    in {territoryDef(o.territoryId)?.name} · {o.how === 'best' ? 'best people' : 'whoever is rested'} ·
+                    in {territoryDef(o.territoryId)?.name} · {APPROACH_BY_ID[approachOf(o)].name.toLowerCase()} ·{' '}
+                    {o.how === 'best' ? 'best people' : 'whoever is rested'} ·
                     fired {o.launched} {o.launched === 1 ? 'time' : 'times'} ·{' '}
                     {groove(patternOn(state, o.defId, o.territoryId))}
                   </span>
@@ -507,7 +526,9 @@ export default function OperationsPanel() {
                 <th className="num">Up front</th>
                 <th className="num">Pays</th>
                 <th className="num">Days</th>
-                <th className="num">Heat</th>
+                <th className="num" title="If it works / if it does not">
+                  Heat
+                </th>
                 {/*
                    Says whose odds these are.
 
@@ -552,6 +573,14 @@ export default function OperationsPanel() {
                Offered on the assemble screen because that is where a boss is
                already deciding about this job in this district, and the verb is
                about this pair and no other.
+
+               Label and blurb are read from `config/build.ts` rather than
+               written here, and that is the fix rather than a tidy-up. The
+               Yourself panel sells this point as "Case a job"; this button
+               used to be called "Spend the week on it", and a round-16 tester
+               bought the point, searched five screens for the word "case",
+               and found the button on day 94 — 69 days of owning an ability
+               they could not locate. One ability, one name, in one place.
             */}
           {hasVerb(state, 'method') && (
             <p className="tiny" style={{ margin: '0 0 8px' }}>
@@ -561,11 +590,9 @@ export default function OperationsPanel() {
                 title={canCase(state, territoryId).message}
                 onClick={() => mutate((g) => caseJob(g, def.id, territoryId), false)}
               >
-                Spend the week on it
+                {STAT_BY_ID.method.verb}
               </button>{' '}
-              <span className="faint">
-                A week watching the place, and it runs like a planned job.
-              </span>
+              <span className="faint">{STAT_BY_ID.method.verbBlurb}</span>
             </p>
           )}
 
@@ -839,7 +866,35 @@ export default function OperationsPanel() {
                   </div>
                   <Term label="Base for this job" value={breakdown.base} />
                   <Term label="Crew you picked" value={breakdown.crew} signed />
-                  <Term label="Your ability" value={breakdown.attribute} signed />
+                  {/*
+                       Which ability, and it is not one you place points into.
+
+                       This row read "Your ability" and three round-17 scorers
+                       took it for the build screen's output. One measured it
+                       properly — same job, same crew, same day, nine points
+                       placed, no movement — and filed it as points doing
+                       nothing. They were right about the row and wrong about
+                       the cause: `successBreakdown` reads
+                       `player.attributes[def.attribute]`, and the build writes
+                       `player.build`. Different fields.
+
+                       That is not two rival systems. The attributes panel used
+                       to be on Yourself and was replaced by the build, for the
+                       reason recorded there — two of its eight were read by
+                       nothing. What nobody noticed is that this row still
+                       points at the half that lost its screen, so the player
+                       met a number they could neither find nor move.
+
+                       Naming the attribute is the whole repair. "Your
+                       negotiation" is a thing a boss can believe grows by
+                       negotiating; "your ability" is a thing he reasonably
+                       assumes he just bought.
+                    */}
+                  <Term
+                    label={`Your ${ATTRIBUTE_LABEL[def.attribute].toLowerCase()}`}
+                    value={breakdown.attribute}
+                    signed
+                  />
                   <Term label="Current heat" value={breakdown.heat} signed />
                   {breakdown.watched !== 0 && (
                     <Term label="Being watched" value={breakdown.watched} signed />
@@ -1098,15 +1153,35 @@ function OperationRow({
       </td>
       <td className="num mono">{op.durationDays}</td>
       <td className="num mono">
+        {/*
+             Both figures, because the second is the one that surprises people.
+
+             This column showed only what a success costs, and it is the screen
+             a player scans to compare jobs against each other. Round 20's
+             tester read it across the board, was hit three times by Call In
+             Tribute's failure heat, and reported it as an outlier carrying
+             "+26 to +34 versus +2 to +12 for every other job" — which is not
+             true and was never the fault. Every job on the board fails at
+             roughly twice what it succeeds at, and tribute at 20/36 sits
+             between `financial_scheme` at 18/34 and `port_operation` at 22/40.
+             What he had actually compared was a tier-4 job against tier-0 and
+             tier-1 jobs, because the column gave him one number and the tier
+             is not in it.
+
+             The launch panel has said both all along — "+X heat if it goes
+             well, +Y if it does not" — but that is after you have chosen the
+             job. This is where the choosing happens.
+        */}
         <span
           className={quiet ? 'good' : undefined}
           title={
             quiet
               ? 'Beneath your standing — barely registers with anyone watching you'
-              : 'Attention this draws at your current standing'
+              : 'What it draws if it works, and if it does not, at your current standing'
           }
         >
           +{(op.heatOnSuccess * scale).toFixed(1)}
+          <span className="faint"> / {(op.heatOnFailure * scale).toFixed(1)}</span>
         </span>
       </td>
       <td className="num mono">

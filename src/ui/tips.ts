@@ -35,7 +35,7 @@ import { canBorrow, totalOwed } from '../sim/market';
 import { canAcquire } from '../sim/business';
 
 import { BUSINESSES } from '../config/businesses';
-import { cards, tableRead } from '../sim/cards';
+import { cards, seatedAt, stakeCeiling, stakeFloor } from '../sim/cards';
 import { heldPossessions } from '../sim/possessions';
 import { liveScores } from '../sim/scores';
 import { isLayingLow } from '../sim/heat';
@@ -241,7 +241,7 @@ export const TIPS: Tip[] = [
     only: ['career', 'sandbox'],
     label: 'Attention',
     text:
-      'Heat is how hard the city is looking at you. It makes every job worse, and it barely falls while you are working. Laying low drops it fast, and only quiet work moves while you are dark.',
+      'Heat is how hard the city is looking at you. It makes every job worse. It barely falls while you keep working. Laying low drops it fast, and only quiet work moves while you are dark.',
     panel: 'dashboard',
     when: (s) => s.org.heat >= 35 && !isLayingLow(s),
     urgent: true,
@@ -251,7 +251,7 @@ export const TIPS: Tip[] = [
     only: ['career', 'sandbox'],
     label: 'The law',
     text:
-      'Somebody has opened a file on you. A case builds on the evidence your failures leave behind — Law Enforcement shows how far along it is, and what a lawyer, a friend inside or a quiet month would do about it.',
+      'Somebody has opened a file on you. Cases are built out of the jobs that went wrong, so every failure adds to it. Law Enforcement shows how far along it is. A lawyer, a friend inside, or a quiet month each buy you something different.',
     panel: 'law',
     when: (s) => activeCases(s).length > 0,
     urgent: true,
@@ -294,7 +294,7 @@ export const TIPS: Tip[] = [
     only: ['career', 'sandbox'],
     label: 'The difference',
     text:
-      'A front pays into holdings, and holdings compound — which is why the second one is the one that matters, and why the money is always the thing in the way. Somebody on Delacroix will advance the difference against nothing but your word. It is expensive and it is not the worst idea you have had.',
+      'A front pays into holdings, and holdings compound. That is why the second one matters more than the first, and why money is always the thing in the way. Somebody on Delacroix will lend you the difference against your word. It is expensive. It is not the worst idea you have had.',
     panel: 'finances',
     when: (s) =>
       ownedBusinesses(s).length <= 1 &&
@@ -339,7 +339,7 @@ export const TIPS: Tip[] = [
     only: ['career', 'sandbox'],
     label: 'Yours',
     text:
-      'The fronts belong to the organization. Nothing belongs to you. Things that are yours turn up when a score comes home — a car, a watch, three rooms with your own name on the door. They count toward what the family is worth exactly as money put away does, and what people can see makes you look more legitimate and puts your name in the paper, which are not the same thing. The law can take one off you when a case lands.',
+      'The fronts belong to the organization. Nothing belongs to you. Things that are yours turn up when a score comes home: a car, a watch, three rooms with your own name on the door. They count toward what the family is worth, exactly as money put away does. The ones people can see also make you look legitimate and put your name in the paper, which are not the same thing. The law can take one off you when a case lands.',
     panel: 'player',
     /*
        Fires on the first thing that ever arrives, not on the first thing the
@@ -370,11 +370,21 @@ export const TIPS: Tip[] = [
     only: ['career', 'sandbox'],
     label: 'The game',
     text:
-      'There is a card game every week, and the cards are the least of it. Who is sitting opposite is on The City page before you commit — and losing to a man who decides things is how money reaches him without either of you having said anything. It is the fast road to a favour. The slow one is thirteen quiet weeks.',
+      'There is a card game every night, and the cards are the least of it. You name the stake, and what you are willing to lose decides who sits opposite. Pocket money gets you a card game. Money that would hurt puts the people who decide things in this city at the table. Losing to one of them on purpose is how money reaches them without either of you saying a word. It is the fast road to a favour. The slow one is thirteen quiet weeks.',
     panel: 'city',
-    when: (s) =>
-      cards(s).hands === 0 &&
-      tableRead(s).some((room) => room.ok && room.seat.kind !== 'nobody'),
+    /*
+       Fires when somebody worth an evening is at the biggest table this player
+       could actually sit down at tonight — the stake decides the company now,
+       so a check against a fixed room would be asking about a table that no
+       longer exists. Capped by what they can cover as well as by the ceiling,
+       because an invitation you cannot pay for is not one.
+    */
+    when: (s) => {
+      if (cards(s).hands > 0) return false;
+      const most = Math.min(stakeCeiling(s), s.org.cash + s.org.dirtyCash);
+      if (most < stakeFloor(s)) return false;
+      return seatedAt(s, most).kind !== 'nobody';
+    },
   },
   /*
      `step_up` was here, and there is no step up any more.
@@ -423,7 +433,7 @@ export const TIPS: Tip[] = [
     only: ['career', 'sandbox'],
     label: 'The room',
     text:
-      'Somebody is carrying something. A sit-down is the only way to find out what, and the only way to put it down — and what you say to settle it is a thing they will hold you to.',
+      'Somebody is carrying something. A sit-down is the only way to find out what it is, and the only way to put it down. What you say to settle it, they will hold you to.',
     panel: 'crew',
     when: (s) =>
       crewList(s).some(
@@ -454,7 +464,7 @@ export const TIPS: Tip[] = [
     only: ['career', 'sandbox'],
     label: 'Your word',
     text:
-      'You told somebody something. It is on their sheet with a date on it, and it runs out — a promise you meant at the time and then forgot is worse than one you never made.',
+      'You told somebody something. It is on their sheet with a date on it, and it runs out. A promise you meant at the time and then forgot costs you more than one you never made.',
     panel: 'crew',
     when: (s) => (s.promises ?? []).length > 0,
   },
@@ -463,7 +473,7 @@ export const TIPS: Tip[] = [
     only: ['career', 'sandbox'],
     label: 'Ground',
     text:
-      'You cannot be in two districts at once, and a district nobody works goes quiet. Open one in Territory and put a man in charge of it — then read what they do with it, because that is the only thing you will ever be told about them.',
+      'You cannot be in two districts at once, and a district nobody works goes quiet. Open one in Territory and put somebody in charge of it. Then read what they do with it. That is the only account of them you will ever get.',
     panel: 'territory',
     when: (s) =>
       eligibleStewards(s).length > 0 &&
@@ -475,7 +485,7 @@ export const TIPS: Tip[] = [
     only: ['career', 'sandbox'],
     label: 'Ground',
     text:
-      'They have been filing weeks. Two of the things they can do are written down identically, and the only difference between them is what the district earned — so read the money against the claim, not the claim on its own.',
+      'They have been filing weeks. Two of the things a steward can do read identically on the page. The only difference is what the district earned. Read the money against the claim, never the claim on its own.',
     panel: 'territory',
     when: (s) => territoryList(s).some((t) => (t.ledger ?? []).length >= 4),
   },
@@ -494,7 +504,7 @@ export const TIPS: Tip[] = [
     only: ['career', 'sandbox'],
     label: 'After you',
     text:
-      'There has been a meeting you were not at. Somebody senior wants this and enough of the room is carrying something to let them — all of it readable on the crew sheet, in the usual amount of fog, if you go and look now.',
+      'There has been a meeting you were not at. Somebody senior wants something, and enough of the room is carrying a grievance to let them have it. It is all on the crew sheet, in the usual amount of fog, if you go and look now.',
     panel: 'crew',
     when: (s) => (s.flags['unrest_told'] ?? 0) > 0,
     urgent: true,
@@ -506,7 +516,7 @@ export const TIPS: Tip[] = [
     only: ['career', 'sandbox'],
     label: 'Rivals',
     text:
-      'One of the families has taken against you. They decide for themselves, on their own goals — Rivals has what they hold and how they read you, and Diplomacy is where you deal with it before it costs you.',
+      'One of the families has taken against you. They act on their own goals, not yours. Rivals shows what they hold and how they read you. Diplomacy is where you deal with it, before it costs you.',
     panel: 'rivals',
     when: (s) => !!mostHostile(s) && !playerIsAtWar(s),
   },
@@ -697,10 +707,31 @@ export function nextTip(state: GameState): Tip | null {
     if (tip.only && !tip.only.includes(state.mode)) continue;
     if (tip.ceiling !== undefined && state.day > tip.ceiling) continue;
     if (!tip.when(state)) continue;
-    if (tip.urgent) return tip;
     // Had its turn. It stays on the Advice page; it stops holding the slot.
     const shown = state.flags[shownKey(tip.id)];
-    if (shown !== undefined && state.day - shown >= TIP_LINGER_DAYS) continue;
+    const spent = shown !== undefined && state.day - shown >= TIP_LINGER_DAYS;
+    /*
+       Urgency jumps the queue. It does not own it.
+
+       `if (tip.urgent) return tip` sat above the linger check, so an urgent
+       tip whose condition kept holding held the strip for the rest of the
+       career — and the five urgent conditions are `heat >= 35`, an open case,
+       a leak, unrest and a war. The first two are the steady state of a
+       working family, not emergencies. Measured over six ordinary 300-day
+       careers, THE LAW and the case tip alternated at the head from day 19 to
+       the end and **five tips of twenty-eight ever reached the screen**, with
+       eleven predicates true at day 300 that had never been shown once.
+
+       That is round 11's report — "5 OF 25 SAID" — still true four rounds
+       after `TIP_LINGER_DAYS` was added to fix it. The linger did fix one tip
+       starving the rest; it never applied to the ones that jump.
+
+       So the same twelve days apply to everything. A war still takes the strip
+       on the day it breaks out, ahead of whatever was queued. It just does not
+       still be doing that in six months.
+    */
+    if (tip.urgent && !spent) return tip;
+    if (spent) continue;
     if (!first) first = tip;
   }
   return first;

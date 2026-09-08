@@ -9,6 +9,17 @@ export default function SavesPanel() {
   const state = useGame();
   const [message, setMessage] = useState<{ text: string; bad?: boolean } | null>(null);
   const [, forceRefresh] = useState(0);
+  /*
+     A second step on the one control that can end a session.
+
+     Round 20 landed on the title screen twice with a live family, both times
+     straight after a batched answer-then-advance, and never on demand
+     afterwards. The cause was never found. This is the only button in the game
+     that can produce that from a live career, and it went on one click — which
+     makes it the only mechanism in reach of the report. See
+     `__tests__/abandon.test.ts`.
+  */
+  const [confirmAbandon, setConfirmAbandon] = useState(false);
   const saves = allMeta();
   const ironman = DIFFICULTY_BY_ID[state.difficulty].ironman;
 
@@ -150,11 +161,24 @@ export default function SavesPanel() {
       <Panel title="Abandon this game">
         <div className="row between wrap">
           <p className="dim" style={{ margin: 0, maxWidth: '52ch' }}>
-            Returns to the title screen. Anything not written to a slot is lost.
+            {confirmAbandon
+              ? 'Your family stays where the autosave left it. Continue on the title screen picks it back up.'
+              : 'Returns to the title screen. The autosave keeps this family; anything since the last day you advanced is lost.'}
           </p>
-          <button className="btn danger" onClick={() => setGame(null)}>
-            Back to title
-          </button>
+          {confirmAbandon ? (
+            <div className="row">
+              <button className="btn" onClick={() => setConfirmAbandon(false)}>
+                Keep playing
+              </button>
+              <button className="btn danger" onClick={() => setGame(null)}>
+                Yes, abandon it
+              </button>
+            </div>
+          ) : (
+            <button className="btn danger" onClick={() => setConfirmAbandon(true)}>
+              Back to title
+            </button>
+          )}
         </div>
       </Panel>
     </>

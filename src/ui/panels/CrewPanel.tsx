@@ -4,7 +4,9 @@ import {
   canCallEverybodyIn,
   canTakeTheWeight,
   takeTheWeight,
+  type Meeting,
 } from '../../sim/verbs';
+import { VERBS } from '../../config/verbs';
 import { hasVerb } from '../../sim/build';
 import { useGame, mutate } from '../../store';
 import { Panel, Empty, StatRead, StatusTag, KeyValue, Bar, payRead } from '../components';
@@ -17,7 +19,7 @@ import {
   visibleTraits,
 } from '../../sim/npc';
 import { CrewPortrait } from '../CrewPortrait';
-import { readTies } from '../../sim/ties';
+import { followRisk, readTies, whoWouldFollow } from '../../sim/ties';
 import { canSilence, silence } from '../../sim/silence';
 import { callOffMark, liveMarks } from '../../sim/marks';
 import { Rng } from '../../sim/rng';
@@ -68,6 +70,20 @@ export default function CrewPanel() {
   const state = useGame();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  /*
+     What came out of the room.
+
+     `callEverybodyIn` returns a `Meeting` — who was heard, what each of them
+     had been carrying, and who did not come — and the panel used to throw it
+     away and call `mutate` for its side effects. So the button promising
+     "grievances come out, and you find out who did not come" produced one log
+     line of counts and no names, and round 20's tester pressed it twice, found
+     no cash change, no modal and nothing he recognised in the log, and filed
+     it as a control that does nothing.
+
+     It was doing something. It was not showing it.
+  */
+  const [meeting, setMeeting] = useState<Meeting | null>(null);
   const crew = crewList(state);
   const recruits = Object.values(state.recruits);
   const selected = selectedId ? state.npcs[selectedId] : null;
@@ -94,9 +110,24 @@ export default function CrewPanel() {
           {crew.length} of {maxCrew(state)} · recruiting costs {formatMoney(cost)}
         </span>
       </div>
+      {/*
+         The second sentence is the repair.
+
+         Rows have been `cursor: pointer` and nothing else, which is an
+         affordance only a mouse can find. Round 16 had three testers reach
+         days 32, 43 and 81 before clicking one, and all three called what is
+         behind it the best screen in the game — traits, grudges, the job
+         history, the sit-down. One wrote: "Nothing anywhere suggests the rows
+         are clickable."
+
+         Said here rather than as a tooltip, because a tooltip is the same
+         mistake one layer down.
+      */}
       <p className="page-sub">
         You cannot see what these people actually are. You see what you have had the
-        chance to notice, and that sharpens only by working alongside them.
+        chance to notice, and that sharpens only by working alongside them.{' '}
+        <span className="hot">Open somebody</span> to read what they are carrying, sit
+        down with them, or move them up.
       </p>
 
       {/*
@@ -146,9 +177,51 @@ export default function CrewPanel() {
             The whole family in one room. Grievances come out, and you find out who did
             not come.
           </p>
-          <button className="btn" onClick={() => mutate((g) => callEverybodyIn(g), true)}>
+          <button
+            className="btn"
+            onClick={() => setMeeting(mutate((g) => callEverybodyIn(g), true) ?? null)}
+          >
             Call everybody in
           </button>
+          {meeting && (
+            <div style={{ marginTop: 12 }}>
+              {/* The half the button's own description leads with. */}
+              {/*
+                  Who raised something, and not how much of it.
+
+                  `grievanceBefore` is a hidden stat, and the first rule of this
+                  game is that everything the player reads about a person goes
+                  through `perceive`. A meeting is a man saying his piece in a
+                  room, not a readout — so it names who spoke, on the same
+                  threshold the sim uses for the note it writes on their file,
+                  and quantifies nothing.
+              */}
+              {meeting.heard.filter((h) => h.grievanceBefore > VERBS.meetingClears).length === 0 ? (
+                <p className="faint" style={{ margin: 0 }}>
+                  {meeting.heard.length} came, and nobody had anything to raise.
+                </p>
+              ) : (
+                <>
+                  <p className="faint" style={{ margin: '0 0 6px' }}>
+                    What came out:
+                  </p>
+                  <ul className="tiny" style={{ margin: 0, paddingLeft: 18 }}>
+                    {meeting.heard
+                      .filter((h) => h.grievanceBefore > VERBS.meetingClears)
+                      .map((h) => (
+                        <li key={h.npc.id}>{h.npc.name} said their piece.</li>
+                      ))}
+                  </ul>
+                </>
+              )}
+              {/* And the half worth more than the first. */}
+              <p className="faint tiny" style={{ margin: '8px 0 0' }}>
+                {meeting.absent.length === 0
+                  ? 'Everybody came.'
+                  : `Did not come: ${meeting.absent.map((n) => n.name).join(', ')}.`}
+              </p>
+            </div>
+          )}
         </Panel>
       )}
 
@@ -414,6 +487,8 @@ function CrewDetail({ npc, onClose }: { npc: Npc; onClose: () => void }) {
   // Read through both men: how somebody is with a person you have never met is
   // not something you would have noticed.
   const ties = readTies(state, npc);
+  const behind = whoWouldFollow(state, npc);
+  const wouldGo = followRisk(state, npc);
   // The most intimate thing this sheet shows: not what he is like, but what
   // has been done to him. Gated highest of anything here for that reason.
   const memories = readMemories(npc, state.day);
@@ -551,6 +626,43 @@ function CrewDetail({ npc, onClose }: { npc: Npc; onClose: () => void }) {
                   {tie.text}
                 </p>
               ))}
+            </div>
+          )}
+
+          {/*
+               And the other direction, which is the one that costs you people.
+
+               `readTies` above is what this man thinks of everybody else. Ties
+               are stored on whoever's opinion changed, so that list could never
+               answer the question a boss is actually asking when he looks at
+               somebody he is thinking of dismissing: who comes out of the door
+               behind him. `followDeparture` reads exactly that and it was
+               readable from every sheet except this one.
+
+               The count is stated separately from the names because they are
+               different claims: the names are men you know well enough to have
+               noticed, and the number is everybody who would go, including
+               people you have not got the measure of.
+            */}
+          {(behind.length > 0 || wouldGo > 1) && (
+            <div style={{ marginTop: 10 }}>
+              <div className="tiny" style={{ marginBottom: 4 }}>
+                Who is behind them
+              </div>
+              {behind.map((tie) => (
+                <p
+                  key={tie.name}
+                  className={tie.tone === 'bad' ? 'hot' : tie.tone === 'good' ? 'good' : 'dim'}
+                  style={{ margin: '0 0 2px' }}
+                >
+                  {tie.text}
+                </p>
+              ))}
+              {wouldGo > 1 && (
+                <p className="hot tiny" style={{ margin: '2px 0 0' }}>
+                  If they walked, as many as {wouldGo} could go with them.
+                </p>
+              )}
             </div>
           )}
 

@@ -566,6 +566,7 @@ export const OPERATIONS: OperationDef[] = [
     risk: 'moderate',
     crewRequired: 4,
     investment: 0,
+    cooldownDays: 14,
     payout: [74_000, 140_000],
     durationDays: 8,
     baseSuccess: 0.70,
@@ -784,6 +785,67 @@ export const HEAT_DISTANCE = {
    * you to have actually used them. That asymmetry is a fair criticism of the
    * shape rather than the size, and it is left alone until there is a
    * measurement that says the size was not the problem.
+   *
+   * ## The measurement exists now, and the size was not the problem
+   *
+   * Round 17's three scorers all reported the same thing from the player's
+   * side — *"holding districts drops per-job heat to about 1"*, *"after day 140
+   * nothing threatened me"*, *"nothing pushed back"* — with the loop going flat
+   * at days 120, 130 and 180. Decomposed across twelve careers, on the best job
+   * available each day:
+   *
+   *     day                          30    60   120   180   240   299
+   *     heat multiplier            0.43  0.31  0.31  0.31  0.31  0.31
+   *       from the organization    1.18  2.50  2.50  2.50  2.50  2.50
+   *          of which headcount    0.75  0.75  0.83  0.83  0.83  0.83
+   *
+   * **The organization term reaches `maxFromOrganization` on day 60 and never
+   * moves again for the remaining eighty per cent of the career.** Headcount is
+   * 0.83 of that 2.5, so halving this number — the size repair recorded above —
+   * could never have reached it.
+   *
+   * Nor is headcount's shape the fault. Dropping it from the term entirely was
+   * tried and made things *worse*: the cap is then reached on day 30 instead of
+   * 60, because sending a senior man into a stewarded district already exceeds
+   * 2.5 on seniority and `stewarded` alone. Reverted.
+   *
+   * So the finding is neither the size nor this contributor's shape. It is that
+   * the cap is reachable by ordinary play inside two months and is a constant
+   * thereafter, which is what "the cost side evaporates" means mechanically.
+   *
+   * ## And neither constant is the lever
+   *
+   * Both were then swept, twelve careers each, reading the heat multiplier on
+   * the best job available on the day:
+   *
+   *     maxFromOrganization       d30   d60  d120  d180  d240  d299
+   *       2.5 (shipped)          0.43  0.31  0.31  0.31  0.31  0.31
+   *       1.8                    0.42  0.42  0.42  0.42  0.42  0.42
+   *       1.2                    0.56  0.56  0.56  0.56  0.56  0.56
+   *       0.8                    0.68  0.68  0.68  0.68  0.68  0.68
+   *
+   *     perSeniority              d30   d60  d120  d180  d240  d299
+   *       0.35 (shipped)         0.43  0.31  0.31  0.31  0.31  0.31
+   *       0.20                   0.43  0.39  0.38  0.36  0.38  0.38
+   *       0.10                   0.52  0.52  0.49  0.49  0.52  0.50
+   *       0.05                   0.59  0.59  0.55  0.53  0.55  0.55
+   *
+   * **Lowering the cap makes it saturate sooner, not later.** Every value is
+   * flat from day 30, because the contributors exceed all of them immediately;
+   * the constant only sets the height of the line. `perSeniority` behaves the
+   * same way, with at best a 0.05 drift across ten months.
+   *
+   * There is therefore no tuning of these two that turns the organization term
+   * back into a decision. The flatness is structural — the contributors
+   * saturate inside the first month — and changing it means changing what
+   * contributes, not what it is capped at. Left alone, with the sweep recorded
+   * so nobody repeats it.
+   *
+   * A caveat on method, because the table invites a conclusion it cannot
+   * support: the sweep bot runs under `runDaysSolvent` with a $250,000 floor,
+   * so its economy is propped up by the instrument. The multiplier trajectory
+   * is a real reading. Any estate or income figure from that bot is not, and
+   * none is quoted here.
    */
   perCrew: 1 / 12,
   /**

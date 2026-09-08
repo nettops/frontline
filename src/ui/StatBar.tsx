@@ -312,7 +312,7 @@ export default function StatBar({
                 live
                   ? 'The wire is running. Stop it to drive by hand.'
                   : waiting
-                  ? 'Something is waiting for your answer'
+                  ? 'There is a memo open. Answer it before the clock moves'
                   : talking
                     ? 'You are in a room with somebody. The day waits.'
                   : step.days === 1

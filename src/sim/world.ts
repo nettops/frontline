@@ -11,6 +11,8 @@
 import { Rng } from './rng';
 import type { GameState } from './types';
 import { addLog, pushEvent, weightedPick } from './util';
+import { money, payable } from './memo';
+import { spend } from './economy';
 import { crewList } from './npc';
 import { controlledTerritories } from './territory';
 import {
@@ -24,6 +26,37 @@ import {
 } from '../config/world';
 import { stageIndex } from '../config/lawEnforcement';
 import { ALL_FACTIONS, RIVAL_IDS } from '../config/factions';
+
+/**
+ * Buying the city's weather out early.
+ *
+ * Lives here rather than in `events.ts` because clearing a condition is this
+ * file's business — `tickWorld` is the only other place that writes
+ * `conditionId`, and two places ending a condition differently is the kind of
+ * split this project keeps finding in itself.
+ *
+ * Ends it today rather than shortening it, and stamps `lastEndedDay` so
+ * `CONDITION_GAP_DAYS` still holds: paying does not buy the right to have the
+ * next one arrive sooner.
+ */
+export function endConditionEarly(state: GameState): boolean {
+  const world = state.world;
+  if (!world.conditionId) return false;
+  const def = WORLD_CONDITION_BY_ID[world.conditionId];
+  if (!def?.endEarly) return false;
+  if (!spend(state, def.endEarly.cost, 'world')) return false;
+
+  world.conditionId = null;
+  world.endsDay = state.day;
+  world.lastEndedDay = state.day;
+  state.flags[`world_${def.id}`] = state.day;
+  addLog(
+    state,
+    `${def.name}: over, and it cost you ${money(def.endEarly.cost)} to make it so.`,
+    'money',
+  );
+  return true;
+}
 
 // ------------------------------------------------------------- accessors ---
 
@@ -145,8 +178,26 @@ export function tickWorld(state: GameState, rng: Rng): void {
         chosen.tone === 'bad' ? 'warning' : chosen.tone === 'good' ? 'opportunity' : 'info',
       npcId: null,
       data: { conditionId: chosen.id },
+      /*
+         And, where there is anything to be done about it, the thing to do.
+
+         `acknowledge` stays first and stays the honest default — most weather
+         is weather. What is added is a second option on the five conditions a
+         boss could actually reach, priced through `payable` so it is never
+         clickable at a price the player cannot cover; `priced.test.ts` holds
+         the whole catalogue to that.
+      */
       choices: [
         { id: 'acknowledge', label: 'Note it', hint: 'Nothing to decide. Only to work around' },
+        ...(chosen.endEarly
+          ? [
+              {
+                id: 'end_early',
+                label: chosen.endEarly.label,
+                ...payable(state, chosen.endEarly.cost, chosen.endEarly.hint),
+              },
+            ]
+          : []),
       ],
     });
   }

@@ -44,6 +44,42 @@ export const INFORMANT = {
    * could not check: somebody has to actually be building a case, because a man
    * with nothing to be frightened of has nobody to talk to.
    */
+  /**
+   * ...and the one of the three that decides nothing.
+   *
+   * Measured across twelve careers at the weekly check, as the share of
+   * man-weeks each gate lets through **on its own**:
+   *
+   *     boss who...          fear>55   loyalty<38   memory>=1   all three
+   *     grinds them daily        76%          18%         85%         15%
+   *     works them every 3rd     51%          15%         87%          8%
+   *
+   * **Loyalty is the binding gate and fear is nearly free.** Fear is the only
+   * thing stopping a man in 3% of man-weeks for the first boss and 7% for the
+   * second, so moving this number is close to a no-op: it cannot turn anybody
+   * who is not already disloyal and carrying something.
+   *
+   * That is written here because it looks like the opposite. Crew fear rests
+   * at a median of 71 for a working crew once `settleFear` is doing its job,
+   * which reads as "everybody clears the bar" — true, and not the same thing
+   * as "the bar decides who talks". Raising it makes an already-rare mechanic
+   * rarer and changes nothing else.
+   *
+   * **And the rate is fine, which took a probe to establish.** Counting
+   * informants alive says nothing — `tickInformants` runs the flip loop only
+   * while nobody is talking, so one at a time is the designed ceiling and not
+   * a rate. Measured properly by *occupancy*, over 24 careers each with
+   * nothing planted:
+   *
+   *     boss who...          ever had one   days somebody was talking   first turned
+   *     grinds them daily          24/24                         65%         day 105
+   *     works them every 4th       21/24                         40%         day 182
+   *
+   * So the mechanic reaches nearly every career, occupies a large part of it,
+   * and answers strongly to how the crew is worked. It is not rare and it was
+   * never the thing that needed fixing. See `informants.probe`, which had only
+   * ever measured whether a *planted* informant could be read.
+   */
   fearAbove: 55,
   loyaltyBelow: 38,
   /** Weight from what he is carrying, via `informFromMemory`. */
