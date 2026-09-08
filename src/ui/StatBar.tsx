@@ -237,7 +237,17 @@ export default function StatBar({
           value={org.fear}
           format={(n) => String(Math.round(n))}
           tone={org.fear > 45 ? 'hot' : undefined}
-          title="What people do for you because of the alternative. Keeps witnesses quiet and people from walking out — and costs you with the neighbourhood, the city, and anybody who had a choice."
+          /*
+             Round 23's blind report named this precisely: the tooltip said
+             what Fear does and never what moves it, and the tester never
+             worked out the two were separate stats for a reason. Added the
+             driver (violence and the credible promise of it — a heavy
+             approach, a contract, leaning on a witness) and the decay
+             (`tickFear`'s own comment: "it bleeds away if you stop") rather
+             than an exhaustive source list, which would drift the moment a
+             new one is added.
+          */
+          title="What people do for you because of the alternative. Rises from violence and the credible promise of it — a heavy approach, a contract, leaning on somebody who talks — and fades on its own if you stop. Keeps witnesses quiet and people from walking out, and costs you with the neighbourhood, the city, and anybody who had a choice."
         />
         <HeatStat heat={org.heat} tierName={tier.name} tierDescription={tier.description} />
         <Stat label="Crew" value={crew} format={(n) => String(Math.round(n))} />
