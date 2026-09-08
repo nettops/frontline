@@ -2925,3 +2925,40 @@ here was fixed by loosening a bar to match the game; two bars were
 repaired by fixing the game (the rate), one was repaired by fixing the
 instrument (a demonstrably noise-sensitive threshold, restated with
 evidence), and one was left honestly red rather than either.
+
+---
+
+## Re-measuring before acting: the "job dominance" finding was stale — 2026-09-08
+
+Before doing new job-content work per TASKS.md item 1 ("the highest-paying
+job is always the best job, needs new job kinds or a non-money payout"),
+checked whether the finding still held rather than trusting a note written
+before the merge. It did not.
+
+The other merged branch had already shipped `perFireByHand`
+(`10f2ee6`, 2026-09-06) — pricing a hand-run job's repetition the same way a
+standing order's already was — specifically for this symptom ("round 19's
+tester ran the same five jobs from day 110 to day 300 and paid nothing for
+any of it"). `scorecard.probe`'s bot, which does nothing but recruit and
+pick the single highest-EV job every day, now reads Depth 9.5: "best job
+changed 44% of weeks, 13 kinds used." That is the groove/pattern penalty
+doing exactly what it was built for, working on the default game rather
+than a special arm.
+
+What the same reading still shows, and was not previously named this
+precisely: Pacing 8, "nothing was new after day 970 — 34% of the career."
+A finite pool of firsts (job kinds, districts, ranks) exhausted late in a
+four-year bot career — a real finding, but a different one from job
+dominance, and lower urgency since day 970 is far past the 300-day window
+this project's own rule says to size changes against.
+
+Also verified and closed the two round-19 bug candidates by reading both
+code paths rather than one: the lay-low refusal is enforced on the main
+Launch button and the "Same again" quick-action both; the receipt/memo
+z-index layering is deliberate per its own CSS comment.
+
+**Result: KEPT — one long-standing item closed by re-measurement, no code
+changed.** The single most load-bearing item this project named across two
+rounds turned out to already be fixed, by a branch that did not know the
+finding existed. `HANDOFF.md` §6 and `.ai/TASKS.md` item 1 updated
+accordingly; nothing else touched this iteration.
