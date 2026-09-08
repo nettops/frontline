@@ -9,27 +9,43 @@ list rather than staying here as a second, aging copy of the same fact.
 Ranked, highest-leverage first. See `HANDOFF.md` §6 for the full findings
 ledger (F-numbers) these reference.
 
-## 1. The late-game flatline, day 970+ of a 1,460-day career (was: job-table breadth)
+## 1. Pacing 6, held across two consecutive blind rounds (r23, r24)
 
-**Re-measured 2026-09-08, and the framing this item carried since round 17
-is stale — closed by a fix from the other merged branch neither round knew
-about.** "The highest-paying job is always the best job once it unlocks" was
-true against the pre-merge code; `perFireByHand` (commit `10f2ee6`,
-2026-09-06) now prices repeating a job by hand the same way a standing order
-already was, and `scorecard.probe`'s own bot — which does nothing but pick
-the best-EV job every day — now reads **Depth 9.5, "best job changed 44% of
-weeks, 13 kinds used."** That is not a bot that grinds one job for 100 days.
+**Confirmed, not a one-off.** Both post-merge blind rounds independently
+scored Pacing 6 and named the same shape: a mid-late-game stretch (r23:
+day ~180+; r24: day ~220-330) of "dismiss digest → handle one recurring
+crew conversation → advance time" that reads as maintenance rather than
+new decisions, even though Depth scored 9 both times — the systems
+underneath are rich, but the *moment-to-moment loop* on top of them
+repeats. This is the answer to the question the old version of this item
+asked (was the bot's 44% weekly churn number matched by a human's felt
+experience?): not quite — churn in *which job* does not read as new
+*content* to a human the way a new system or a new kind of situation does.
 
-What the same reading still shows, and is a different, longer-horizon
-finding: **Pacing 8, "nothing was new after day 970 — 34% of the career."**
-Content runs out late, not because one job dominates but because the pool of
-firsts (job kinds, districts, ranks) is finite and a four-year bot exhausts
-it. Lower urgency than the old framing — day 970 is far past the 300-day
-window a human blind round ever reaches (see `FRONT_UPKEEP_RATE`'s own
-comment on why this project sizes changes against 300 days, not 1,460) — but
-real, and the next blind round should be asked directly whether decisions
-still feel like they stop changing, since a bot's 44% weekly churn number
-and a human's felt experience are not guaranteed to agree.
+Not yet diagnosed to a specific mechanism. Candidate angle: the crew
+sit-down/informant-suspicion trees becoming "mechanically identical"
+across different people once a player learns the pattern (r24's own
+words) — if true, that is a smaller, more tractable target than "add new
+job content," and worth checking before assuming this needs new systems
+rather than more variation within the ones that exist.
+
+Do not attempt as a same-day rider; this needs its own diagnosis session,
+same as the item it replaces did.
+
+## 1a. Interface 6, held across two consecutive blind rounds — partially addressed 2026-09-08
+
+Two concrete, reproduced-every-visit sub-causes fixed this session:
+roster detail panels revealing off-screen (`CrewPanel.tsx`,
+`RivalsPanel.tsx`), and the steward-delegation hint naming the situation
+instead of the door (`attention.ts`, `Rail.tsx`, `delegation.ts`). Neither
+fix has been validated by a fresh blind round yet — do that before
+assuming Interface has moved. The Rail's badge system itself is already
+extensive and well-designed (checked this session); if Interface stays at
+6 after the two fixes above are validated, the remaining gap is more
+likely the multi-panel information-architecture complexity both testers
+described (checking Overview, Operations, Diplomacy and Intelligence
+separately) than a missing badge, and that is a bigger design question,
+not a quick fix.
 
 ## 2. A district-holding cost for the player
 

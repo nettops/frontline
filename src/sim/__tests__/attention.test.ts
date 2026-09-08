@@ -25,7 +25,7 @@ import { declareWar } from '../diplomacy';
 import { eligibleHeirs, nameHeir } from '../succession';
 import { HOME_TERRITORY } from '../../config/territories';
 import { PATTERN } from '../../config/standingOrders';
-import { territoryList } from '../territory';
+import { territoryDef, territoryList } from '../territory';
 import { DELEGATION } from '../../config/delegation';
 import type { GameState } from '../types';
 
@@ -80,7 +80,7 @@ describe('what wants you today', () => {
     expect(attention(state).some((l) => l.id === 'idle')).toBe(false);
   });
 
-  it('names a district with nobody running it', () => {
+  it('names a district with nobody running it, and who could run it', () => {
     const state = game();
     for (const t of territoryList(state)) {
       t.influence.player = DELEGATION.promptAboveInfluence + 10;
@@ -88,6 +88,15 @@ describe('what wants you today', () => {
     const line = attention(state).find((l) => l.id === 'steward');
     expect(line).toBeTruthy();
     expect(line!.panel).toBe('territory');
+    /*
+       Round 24's blind report held ground the whole run and never found
+       this: the old text said "a district" and never which one, or who
+       could take it. Both now have to be in the sentence, not just true of
+       the state behind it.
+    */
+    const named = territoryList(state).some((t) => line!.text.includes(territoryDef(t.id).name));
+    expect(named, 'text should name the actual district, not just say "a district"').toBe(true);
+    expect(line!.text).toMatch(/put .+ in charge/i);
   });
 
   it('names a score with groundwork still to do', () => {

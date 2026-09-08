@@ -23,7 +23,7 @@
 
 import type { GameState } from './types';
 import { availableCrew } from './npc';
-import { needsSteward } from './delegation';
+import { eligibleStewards, stewardCandidateDistrict } from './delegation';
 import { liveScores, setupsLeft } from './scores';
 import { liveTraining } from './training';
 import { availableOperations, crewNeeded, operationCost } from './operations';
@@ -104,12 +104,24 @@ export function attention(state: GameState): Wanting[] {
     break;
   }
 
-  // A district held well enough to be worth giving to somebody, with nobody in
-  // it. `needsSteward` already carries both halves of that condition.
-  if (needsSteward(state)) {
+  /*
+     A district held well enough to be worth giving to somebody, with nobody
+     in it. `stewardCandidateDistrict` carries both halves of that condition.
+
+     Round 24's blind report held ground the whole run and never found this:
+     "the district you hold has nobody running it" named the situation and
+     not the district, the candidate, or that the control sits inside that
+     district's own detail view under "Who runs it." Naming all three is the
+     same repair `teaching`'s hint already made for the same reason.
+  */
+  const idleDistrict = stewardCandidateDistrict(state);
+  if (idleDistrict) {
+    const candidate = eligibleStewards(state)[0];
     out.push({
       id: 'steward',
-      text: 'A district you hold has nobody running it, and somebody could.',
+      text: candidate
+        ? `${territoryDef(idleDistrict.id).name} has nobody running it. Open it and put ${candidate.name} in charge.`
+        : `${territoryDef(idleDistrict.id).name} has nobody running it, and somebody could be.`,
       panel: 'territory',
     });
   }

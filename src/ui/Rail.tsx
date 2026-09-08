@@ -1,12 +1,12 @@
 import { useGame } from '../store';
 import type { GameState } from '../sim/types';
-import { controlledTerritories } from '../sim/territory';
+import { controlledTerritories, territoryDef } from '../sim/territory';
 import { mostHostile } from '../sim/faction';
 import { activeCases } from '../sim/investigation';
 import { playerIsAtWar } from '../sim/diplomacy';
 import { eligibleHeirs, heirOf } from '../sim/succession';
 import { crewList } from '../sim/npc';
-import { needsSteward } from '../sim/delegation';
+import { stewardCandidateDistrict } from '../sim/delegation';
 import { pointsLeft } from '../sim/build';
 import { approaches } from '../sim/approaches';
 
@@ -106,10 +106,11 @@ export default function Rail({
   const carrying = crewList(state).filter(
     (n) => (n.status === 'active' || n.status === 'busy') && n.stats.grievance >= 55,
   ).length;
-  // See `needsSteward`. This used to be computed here, and was wrong here: it
-  // was paired with a `held === 0` condition below, so the one prompt in the
-  // game to hand a district over reached only players who held none.
-  const handOver = needsSteward(state);
+  // See `stewardCandidateDistrict`. This used to be computed here, and was
+  // wrong here: it was paired with a `held === 0` condition below, so the
+  // one prompt in the game to hand a district over reached only players who
+  // held none.
+  const handOverDistrict = stewardCandidateDistrict(state);
   const leaks = (state.leaks ?? []).length;
   /*
      Points nobody has been told about.
@@ -240,10 +241,10 @@ export default function Rail({
               {carrying}
             </span>
           )}
-          {entry.id === 'territory' && handOver && (
+          {entry.id === 'territory' && handOverDistrict && (
             <span
               className="rail-badge"
-              title="You hold ground nobody is running for you. Hand a district to somebody."
+              title={`${territoryDef(handOverDistrict.id).name} has nobody running it. Open it and look for "Who runs it."`}
             >
               !
             </span>

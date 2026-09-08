@@ -3015,3 +3015,60 @@ two watched without changing anything.** Scores below the 9-10 target on
 7 of 10 axes remain the honest state; nothing here was a quick win large
 enough to move them, which is itself informative going into the next
 round.
+
+---
+
+## Round 24 — second consecutive clean round, two real fixes — 2026-09-08
+
+Findings open at the start: none named; this round exists to get a second
+reading against round 23's, per DIRECTOR.md §10's two-consecutive-rounds
+condition.
+
+Full round, Sonnet, pinned, fresh isolated instance, same brief as round
+23 plus a note-preservation instruction (round 23's tester lost its
+early-game notes to a mid-session context handoff). Day 368, Crew Leader
+(demoted from Capo on a crew-count drop), 9 crew, ~$503K net, 12
+districts, 9 fronts, survived a federal trial to acquittal.
+
+Scores: First hour 7, Clarity 7, Feedback 8, Depth 9, Pacing 6, Difficulty
+6, Writing 9, Interface 6, Standing in it 7, Fun 7.
+
+**No MUST FIX in either round 23 or round 24 — DIRECTOR.md §10 condition 1
+is met for the first time since the merge.** Depth held at 9 both rounds;
+Pacing and Interface both held at 6. Two readings agreeing is the signal
+this project's own rules treat as real, so both are logged as the actual,
+stable state rather than a one-off.
+
+Two fixes made, both reproduced on nearly every visit per the tester's own
+account:
+
+1. **Roster detail panels revealed off-screen.** `CrewPanel.tsx` and
+   `RivalsPanel.tsx` toggled a detail panel below a potentially
+   full-height table with no scroll or highlight. Fixed with a ref +
+   `scrollIntoView` at the point of selection — the smallest change that
+   shows the click did something.
+2. **The steward hint named the situation, not the door**, in both the
+   Rail badge and `attention()`'s Wanting line — "a district you hold has
+   nobody running it" without which one or who could take it. New
+   `stewardCandidateDistrict` (`delegation.ts`) exposes the actual
+   district so both callers can name it and a candidate. The existing
+   `attention.test.ts` steward test only checked `panel === 'territory'`;
+   strengthened to assert the district and candidate are actually named,
+   and mutation-verified — reverted the fix, watched the new assertion
+   fail on the exact wording it should catch, restored it.
+
+Two items checked and deliberately left alone: Lay Low's expiry already
+logs "You surface again" (`heat.ts`), so the tester's "silently expired"
+read is most likely a log line missed during a multi-day fast-forward, a
+visibility question rather than a missing feature. Round 23's "thrashy"
+rank flip-flop read as a positive discovery this round instead — one
+demotion, not a back-to-back oscillation — which is further evidence for
+`rank.ts`'s own argument against adding hysteresis, not against it.
+
+Verification: `tsc` clean, `npm test` green (130 files, 1,559 passing).
+
+**Result: KEPT — two real fixes, two consecutive clean rounds, and the
+first reliable read on which axes are stable since the merge.** Pacing
+and Interface are confirmed real, repeated findings (6 both rounds) and
+the next round's most likely place to look; Depth is confirmed strong (9
+both rounds) and should not be where effort goes next.

@@ -491,17 +491,17 @@ in §6's newest reconciliation block.
 
 ### Blind round scores
 
-    axis           r10   r11   r12   r13   r14   r15   r17   r18   r19   r23
-    First hour       8     8     8     8     9     9     6†    8     6     6‡
-    Clarity          9     6     6     9     8     8     5†    8     5     7
-    Feedback         9     7     8     8     8     9     7     8     8     9
-    Depth            8     6     8     8     8     8     8     7     7     9
-    Pacing           6     4     5     5     6     7     5     6     5     6
-    Difficulty       8     6     6     7     7     8     6     5     7     7
-    Writing          9     8     9     9     9    10     8     9     9    10
-    Interface        8     6     7*    7     8     9     4†    6     4     6
-    Standing in it   -     5     6     6     7     -     7     8     7     8
-    Fun              7     6     6     6     5     7     6     7     5     7
+    axis           r10   r11   r12   r13   r14   r15   r17   r18   r19   r23   r24
+    First hour       8     8     8     8     9     9     6†    8     6     6‡    7
+    Clarity          9     6     6     9     8     8     5†    8     5     7     7
+    Feedback         9     7     8     8     8     9     7     8     8     9     8
+    Depth            8     6     8     8     8     8     8     7     7     9     9
+    Pacing           6     4     5     5     6     7     5     6     5     6     6
+    Difficulty       8     6     6     7     7     8     6     5     7     7     6
+    Writing          9     8     9     9     9    10     8     9     9    10     9
+    Interface        8     6     7*    7     8     9     4†    6     4     6     6
+    Standing in it   -     5     6     6     7     -     7     8     7     8     7
+    Fun              7     6     6     6     5     7     6     7     5     7     7
 
 Round 16 (2026-09-07 morning) is not in this table — that round's brief
 asked only for a MUST FIX check and a novelty-day finding, not a full
@@ -518,9 +518,12 @@ First Hour reading (see §6's round 23 block).
 same numbers for entirely different rounds before the two histories were
 merged (2026-09-08) — see `docs/findings/director-log.md`'s "log forks
 here" banner. Round 22 in *this* table's lineage is a diagnosis-only
-session (F24), not a blind playtest, and has no scores to add. r23 is the
-first blind round run on the merged code and the first genuinely
-comparable point since the merge.
+session (F24), not a blind playtest, and has no scores to add. r23 and r24
+are the first two blind rounds run on the merged code, and the first
+genuinely comparable, consecutive points since the merge — no MUST FIX in
+either, and Depth/Pacing/Interface each held the same score across both,
+which is the strongest evidence yet for which axes are real and stable
+versus which move on a single tester's read.
 
 **Round 14 was the high-water mark on seven axes against r10-r13 — it no
 longer is, against the full table.** The tester was explicit about why:
@@ -646,6 +649,54 @@ director log entry "Developer decision — 2026-08-21".
 ## 6. Open findings
 
 Ranked. F10 outranks everything else in this list.
+
+### Round 24 — second consecutive clean blind round, two real fixes made, 2026-09-08
+
+Full round, Sonnet, pinned, on a fresh isolated instance with the same brief
+as round 23 plus a note-preservation instruction (round 23's own subagent
+lost its early-game notes to a mid-session context handoff). Day 368
+(Crew Leader, was Capo, demoted on a crew-count drop), 9 crew, ~$503K net,
+12 districts, 9 fronts. Survived a federal indictment through to a trial
+acquittal.
+
+**Scores**: First hour 7, Clarity 7, Feedback 8, Depth 9, Pacing 6,
+Difficulty 6, Writing 9, Interface 6, Standing in it 7, Fun 7. **No MUST
+FIX in either round 23 or round 24** — DIRECTOR.md §10 condition 1 (two
+consecutive clean rounds) is now met for the first time since the merge.
+Depth held at 9 both rounds; Pacing and Interface held at 6 both rounds,
+confirming those two as the real, repeated pattern rather than one
+tester's noise.
+
+**Two real fixes made, both reproduced on essentially every visit per the
+tester's own account, not one-off reports:**
+
+- **Organization and Rivals roster rows revealed their detail panel below
+  the visible table with no scroll or highlight.** On a full-height
+  roster, clicking a row near the top opened a panel the player would
+  never see without scrolling blind. Fixed in `CrewPanel.tsx` and
+  `RivalsPanel.tsx` with a ref + `scrollIntoView` on selection — the
+  smallest fix that actually shows the reveal happened.
+- **The steward-delegation hint named the situation and never the door.**
+  Both the Rail badge and the `attention()` Wanting line said "a district
+  you hold has nobody running it" without which district or who could
+  take it — the same failure mode this file's own header already names,
+  and the same one round 18 hit for succession. `stewardCandidateDistrict`
+  (new, `delegation.ts`) exposes the actual district so both callers can
+  name it and a candidate by name. `attention.test.ts`'s existing steward
+  test only checked `panel === 'territory'`; strengthened to assert the
+  district and candidate are actually named, and mutation-verified (reverted
+  the fix, watched the new assertion fail, restored it).
+
+**Two items checked and left alone:** Lay Low's expiry already logs "You
+surface again" (`heat.ts:218`) — not a missing feature, most likely a log
+line missed during a multi-day fast-forward, which is a visibility
+question rather than a code gap. Rank flip-flop watched in round 23 read
+as a positive, load-bearing discovery this round instead ("recontextualized
+crew retention as a rank-maintenance activity") — one demotion, not a
+back-to-back thrash, which is exactly what `rank.ts`'s design intends and
+further evidence against adding hysteresis.
+
+Verification: `tsc` clean, `npm test` green (130 files, 1,559 passing).
 
 ### Round 23 — first blind round on the merged code, 2026-09-08
 
