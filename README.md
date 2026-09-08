@@ -12,6 +12,15 @@ and bargains between all four, the city's opinion of the lot of it, and what
 happens to the organization when you are no longer the one running it. It is
 playable for many in-game years, and for longer than one lifetime.
 
+**A note on what this file is, added 2026-09-07**: this is a design-history
+document, not the project's live state — it isn't read by the automated
+diagnosis/build cycle (that's `HANDOFF.md`, `DIRECTOR.md`, `PLAYTEST.md`),
+and its later sections (the file-by-file architecture map, the
+chronological playtest-round narrative) predate everything shipped from
+2026-08-21 onward and are not kept in sync. For current state, read
+`HANDOFF.md`. Treat any specific number in this file (test count,
+`SAVE_VERSION`, a file list) as a snapshot, not a fact to cite.
+
 ```bash
 npm install
 npm run dev
@@ -20,7 +29,7 @@ npm run dev
 | Command | What it does |
 | --- | --- |
 | `npm run dev` | Play it at http://localhost:5173 |
-| `npm test` | 321 tests: determinism, invariants, a 365-day soak, AI behaviour, investigations, war and diplomacy, succession, the briefing, game modes, balance guards, faction beliefs and bonds, memory, failing fronts, the two trades, and a 24-world statistical harness with anomaly detection |
+| `npm test` | 1,384 tests and counting: determinism, invariants, a 365-day soak, AI behaviour, investigations, war and diplomacy, succession, the briefing, game modes, balance guards, faction beliefs and bonds, memory, failing fronts, the two trades, and a statistical harness with anomaly detection, among many later additions — run it for the current count rather than trusting this line, which drifts every session |
 | `npm run build` | Production build |
 | `PROBE=1 npx vitest run balance` | Print the full balance report when tuning |
 | `PROBE=1 npx vitest run statistics` | Print the distribution across 24 simulated cities |
@@ -1815,7 +1824,9 @@ it twice, and asks directly about the money floor.
 
 ## Save compatibility
 
-`SAVE_VERSION` is 12. Older saves are rejected with a clear message rather than
+`SAVE_VERSION` is 13 as of this writing and will have moved again — check
+`src/sim/state.ts` for the current value rather than trusting a number in
+prose. Older saves are rejected with a clear message rather than
 migrated — pre-release, that beats maintaining a migration path forever. Eight
 added goals and ties to every person, leaders and agendas to every family, the
 city's opinion, the fear currency, and the decision trace. Nine gave the

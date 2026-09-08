@@ -7,8 +7,10 @@ normal hypothesis → change → blind re-measure → keep-or-revert cycle.
 
 This exists to feed that process a diagnosed, ranked backlog — not to bypass
 it. Read `HANDOFF.md` and the tail of
-`docs/superpowers/findings/director-log.md` first, so ideas build on the
-findings already open (F1, F2, F5, F6, F7, F9) instead of re-discovering them.
+`docs/superpowers/findings/director-log.md` first, so ideas build on
+whichever findings §6 of `HANDOFF.md` currently lists as open instead of
+re-discovering them. That list moves every session — do not hardcode it
+here, it will just go stale the way an earlier version of this line did.
 
 ---
 
@@ -104,8 +106,8 @@ existing systems it touches, and — if picked — what a first vertical slice
 would look like.
 
 ### Open findings this touches
-Which of F1/F2/F5/F6/F7/F9 (or a new one) this backlog would address if
-approved.
+Which of `HANDOFF.md` §6's currently-open findings (or a genuinely new one)
+this backlog would address if approved.
 
 ### Awaiting approval
 State plainly that nothing was implemented and the list is waiting on the

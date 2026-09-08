@@ -348,12 +348,22 @@ instrument first.
 
 ## 4. Where the director loop stands
 
-`docs/superpowers/findings/director-log.md` is the full record. 1,044 lines.
-Read at least Iteration 3, the Round 11 repairs section and the Blind round 12
-entry before acting.
+`docs/superpowers/findings/director-log.md` is the full record — trimmed
+2026-09-07 to just the still-load-bearing entries (Developer decision
+2026-08-21 onward); the closed iterations before that are archived to
+`director-log-archive-iterations-0-3.md` in the same directory and rarely
+worth opening. Read its newest entry (round 17-19) and, if the question is
+about an older, specific finding, search for that finding's name rather
+than reading start to finish.
 
-**8 of a possible 8 iterations run.** §10's "two consecutive reverts, stop and
-come back to the developer" condition has been reached and reported.
+**8 of a possible 8 iterations run, as of round 14 — this was that cycle's
+own closing account, not a ceiling on the project.** §10's "two consecutive
+reverts" condition was reached and reported at the time; the developer
+brought the project back for further rounds since (15 through the
+present), each with its own mandate. The scores table immediately below
+stops at round 14 and was never extended — for anything from round 15
+onward, including the two most recent (18, 19), see §6's newest
+reconciliation block, not this table.
 
 ### Blind round scores
 
