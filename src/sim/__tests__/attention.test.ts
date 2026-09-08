@@ -27,7 +27,7 @@ import { HOME_TERRITORY } from '../../config/territories';
 import { PATTERN } from '../../config/standingOrders';
 import { territoryDef, territoryList } from '../territory';
 import { DELEGATION } from '../../config/delegation';
-import type { GameState } from '../types';
+import type { Business, GameState } from '../types';
 
 function game(seed = 3): GameState {
   const state = newGame({ name: 'Boss', difficulty: 'normal', seed });
@@ -97,6 +97,36 @@ describe('what wants you today', () => {
     const named = territoryList(state).some((t) => line!.text.includes(territoryDef(t.id).name));
     expect(named, 'text should name the actual district, not just say "a district"').toBe(true);
     expect(line!.text).toMatch(/put .+ in charge/i);
+  });
+
+  it('names the trade once there are fronts enough to run it', () => {
+    const state = game();
+    /*
+       Two operating fronts is `TRADES.product.minFronts` — a plain object is
+       enough, since `tradeUnlocked` only counts `status === 'operating'` and
+       `attention` never reads anything else off them.
+    */
+    const front = (id: string): Business => ({
+      id,
+      defId: 'laundromat',
+      territoryId: HOME_TERRITORY,
+      purchasedDay: state.day,
+      exposure: 0,
+      revenueTotal: 0,
+      launderedTotal: 0,
+      lastLaundered: 0,
+      health: 100,
+      status: 'operating',
+    });
+    state.businesses['f1'] = front('f1');
+    state.businesses['f2'] = front('f2');
+
+    const line = attention(state).find((l) => l.id === 'trade');
+    expect(line).toBeTruthy();
+    expect(line!.panel).toBe('contraband');
+
+    state.contraband.supplierId = 'some_supplier';
+    expect(attention(state).some((l) => l.id === 'trade')).toBe(false);
   });
 
   it('names a score with groundwork still to do', () => {

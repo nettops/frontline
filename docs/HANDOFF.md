@@ -651,6 +651,60 @@ director log entry "Developer decision — 2026-08-21".
 
 Ranked. F10 outranks everything else in this list.
 
+### Round 25 — a real MUST FIX, and rival passivity confirmed at the table, 2026-09-08
+
+Full round, Sonnet, pinned, fresh isolated instance. Day 221, Capo, 9 crew,
+$45,646 net worth, 2 districts, 4 fronts. Reached Capo two months inside
+the day-300 target with no war and no crisis — the quietest of the three
+post-merge rounds.
+
+**Did not follow the exact Part 2 rubric** — used its own 8-axis grouping
+(merging Clarity/Feedback/Interface into "UI/UX clarity & feedback," etc.)
+instead of the ten named axes. Its numbers are not added to the scores
+table below for that reason; the qualitative findings are still acted on.
+
+**One real, reproduced MUST FIX, and it is new — not the round-19 item
+already closed.** Opening a job's assembly panel while laying low starts
+on the loud default, which quiet work is the only legal answer to, so
+Launch sits disabled until the player notices and clicks Quiet by hand.
+Reproduced twice (two Corner Shakedown launches, Day 209), confirmed via
+direct `button.disabled` inspection. **Fixed**: `OperationsPanel.tsx`'s
+approach state now lazily initializes to `'quiet'` when `isLayingLow`
+is true at mount, rather than always to the loud default — the panel's
+own existing "approach persists across job selection" behaviour (a prior
+fix for the opposite complaint) is unchanged, this only affects what a
+fresh mount lands on. No jsdom in this project, so this is logic-verified
+(the ternary is a one-line call into an already-tested `isLayingLow`) and
+not live-browser-confirmed the way the round-24 scroll fix was.
+
+**Rivals never did anything, all game.** No war, no pressure, all three
+families stayed Neutral/Friendly the entire 221 days — *"under what
+conditions does a rival actually become legible or hostile, and is a full
+Capo run with zero wars an expected outcome?"* This is real, player-felt
+corroboration of exactly the mechanism F24's fourth bar names (rival
+"going quiet" overrepresented) — not an abstract probe percentage but a
+tester experiencing the consequence directly. Closed the same afternoon;
+see F24 below.
+
+**The Trade's zero signposting, corroborated a second time.** Round 24
+explored the numbers and declined; round 25 never opened the tab in 220+
+days. Two independent reports of the same gap. **Fixed**: a new
+`attention()` hint fires once `tradeUnlocked(state, 'product')` is true
+and no supplier has ever been retained, naming the door directly ("You
+have enough fronts to run product through them. Look at The Trade."),
+gated the same way `steward`/`heir` already are — only once genuinely
+reachable, never persistent once acted on. Mutation-tested.
+
+**Also surfaced, not acted on**: promotion quietly fixing loyalty problems
+the game's own text says money can't touch (a possible undocumented
+"aha," or a missed hint — not clear which); confronting a skimming steward
+being a one-way trust cliff; the succession badge reading as unexplained
+when the war-gated hint above never fires (itself downstream of rival
+passivity, and likely to resolve somewhat once rivals act more).
+
+Verification: `tsc` clean, `npm test` green (130 files, 1,560 passing
+after the new hint's test).
+
 ### Round 24 — second consecutive clean blind round, two real fixes made, 2026-09-08
 
 Full round, Sonnet, pinned, on a fresh isolated instance with the same brief
@@ -777,7 +831,7 @@ are explicitly trying to earn. Left for a second reading before touching.
 Full report is in this session's transcript; `.ai/FINAL_REPORT.md` will
 carry the complete text if a session-end report is written.
 
-### F24 — the merge of two parallel branches broke four pre-committed probe bars — THREE CLOSED, one open, 2026-09-08
+### F24 — the merge of two parallel branches broke four pre-committed probe bars — ALL FOUR CLOSED, 2026-09-08
 
 Not a code defect in either branch; a genuine interaction discovered only by
 running both branches' economy and AI changes together for the first time.
@@ -808,17 +862,40 @@ four bars it actually caused:
   the second use of DIRECTOR §5's exception on this specific line (first
   was the pairedGap methodology fix), and it should not be reached for a
   third time without widening the sample instead.
-- **Rival "going quiet" regression guard — OPEN, left failing on purpose.**
-  61.41-61.48% against a ≤61% bar. Confirmed *not* caused by front upkeep
-  (flat across every rate tested, 0 through 0.4). This bar is entirely this
-  session's own addition and already used its one-time restatement
-  exception before this merge — a second use is not taken. It is marginal
-  (under half a percentage point) and ties directly to TASKS.md item 4 (the
-  rival "going quiet" *frequency* term, already flagged as needing its own
-  dedicated session rather than a rider). Left red rather than forced green.
+- **Rival "going quiet" regression guard — CLOSED, 2026-09-08 afternoon, in
+  the dedicated session its own note asked for.** Was 61.4% against a ≤61%
+  bar, confirmed not caused by front upkeep. `config/factions.ts`'s own
+  history on `scoreConsolidate` — two levers already tried and proven inert
+  (`weights.consolidate`, `consolidate.heatReduction`) — pointed at "the
+  frequency lever is the heat term... a separate, larger change this
+  session is deliberately not making." That change:
+    - `scoreConsolidate`'s `alarmed` term was a hard step (`heat > 60 ?
+      0.5 : 0`) — the same cliff-shaped anti-pattern `broke` was already
+      fixed for. Smoothed to ramp from 0 at 60 to 0.5 at 100, same ceiling
+      and floor as before. Measured as a genuine no-op *on this specific
+      bar* (bit-identical result to 14 decimal places) — the margin by
+      which consolidate already wins at 300 days is too large for this
+      term alone to flip anything. Kept anyway: a strict correctness
+      improvement, consistent with the pattern already proven good for
+      `broke`, and may matter over the longer (1,460-day) careers
+      `scorecard.probe` measures.
+    - `AI.consolidate.whenBroke` (0.45), the multiplier on the `broke`
+      term, had never been tried — `wealthGain` was already cut to its
+      floor. Moved to **0.42**. 0.35 cleared the bar easily (58.7%) but
+      broke an unrelated pre-committed test (`memoPace.test.ts`, 19.2 days
+      against a >21 floor) via the same shared-rng-stream reshuffle this
+      project has hit before; 0.40 passed both with a thin memoPace margin
+      (21.7 vs 21); 0.42 clears both comfortably and restores memoPace to
+      25.2 days, close to its own documented 27.2-day baseline.
+    - Real, player-felt corroboration arrived the same day: round 25's
+      blind tester played 221 days with the rivals doing nothing at all —
+      no war, no pressure, all three Neutral or Friendly throughout — and
+      asked directly whether that was expected. It was the exact failure
+      this bar exists to catch, experienced rather than measured.
 
-`npm test` green (130 files, 1,559 passing), `tsc` clean, `npm run probe`
-now 1 failing of 99 (was 4).
+`tsc` clean, `npm test` green (130 files, 1,560 passing), `npm run probe`
+96/99 (all remaining skips are unrelated, pre-existing project-config
+skips, not new failures) — F24 is fully closed.
 
 ### Reconciled 2026-09-07, round 17 (afternoon) — read this before the block below it
 

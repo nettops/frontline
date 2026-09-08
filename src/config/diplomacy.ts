@@ -64,8 +64,25 @@ export const BOND = {
   grudgeDecayPerWeek: 0.4,
   trustDecayPerWeek: 0.15,
 
-  /** Trust earned per week of peace with somebody. Slow: it is earned. */
-  trustPerPeacefulWeek: 0.22,
+  /*
+     Trust earned per week of peace with somebody. Slow: it is earned — but
+     0.22 made "earned" the same as "never happens." `propose_alliance`
+     gates on `relationship() >= 20`, and reaching 20 from zero trust and no
+     grudge at 0.22 a week takes 91 weeks of *unbroken* peace — well past
+     where TASKS.md's own diagnosis found it "unreachable in every measured
+     career." Not because peace built no trust at all (it does, every week,
+     `tickBonds` runs it), but because the rate could not clear the bar
+     inside any career this project has ever measured one played, which is
+     the same failure as a badge with no way to satisfy it.
+
+     Raised so a genuinely peaceful run — no grudge accrued, which any real
+     friction resets — reaches the alliance gate in about 40 weeks (280
+     days), inside the window a human blind round actually plays rather
+     than past the end of one. Full allied status (`allianceTrust`, 40) is
+     still roughly double that at this rate, so it stays a late, deliberate
+     achievement rather than something this change also hands out early.
+  */
+  trustPerPeacefulWeek: 0.5,
   /** ...and per week of an alliance that is actually holding. */
   trustPerAlliedWeek: 0.5,
 

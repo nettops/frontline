@@ -339,7 +339,26 @@ function scoreConsolidate(state: GameState, faction: Faction, rng: Rng): Option 
   const personality = temperament(state, faction);
 
   const heatPressure = clamp(faction.heat / 100, 0, 1);
-  const alarmed = faction.heat > AI.heatAlarmAbove ? 0.5 : 0;
+  /*
+     How alarmed, not merely whether they are alarmed.
+
+     This was a flat 0.5 the instant heat crossed `heatAlarmAbove` (60) —
+     the same cliff `broke` used to be and was fixed for below. A family at
+     61 heat scored identically to one at 100, so the term could not tell a
+     family that had just noticed from one that was actually cornered.
+     `config/factions.ts`'s own history records two things already tried and
+     measured to move nothing (the weight, and `consolidate.heatReduction`)
+     before concluding "the frequency lever is the heat term ... a separate,
+     larger change this session is deliberately not making" — this is that
+     change, on the one part of the term that was still a step.
+
+     Proportional from `heatAlarmAbove` to 100 keeps the same ceiling (0.5,
+     at heat 100) and the same floor (0, at or below 60) as the step
+     version, so a family already at the cap scores exactly as it did
+     before — only the readings in between move.
+  */
+  const alarmed =
+    clamp((faction.heat - AI.heatAlarmAbove) / (100 - AI.heatAlarmAbove), 0, 1) * 0.5;
   /*
      How short they are, not merely whether they are short.
 

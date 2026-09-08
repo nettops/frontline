@@ -336,7 +336,7 @@ export const AI = {
      * The ceiling is unchanged; what changed is that it is now a ceiling
      * rather than a step.
      */
-    whenBroke: 0.45,
+    whenBroke: 0.42,
     heatReduction: 6,
     /** Influence shored up in districts they already hold. */
     influenceGain: 1,
