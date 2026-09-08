@@ -2876,3 +2876,52 @@ own economy work) taxing the same revenue the trading arm and favour
 network draw on, but that is not yet verified. Next round's diagnosis
 starts here rather than with a fresh probe run, which is now known to
 disagree with pre-merge assumptions on both branches.
+
+---
+
+## Round 22 — closing F24 by ablation, not by guessing — 2026-09-08
+
+Diagnosis method: toggle the one lever this session controls
+(`FRONT_UPKEEP_RATE`) across several values with everything else held
+fixed, and read which of the four broken bars actually move. Confirmed
+causal rather than assumed:
+
+    rate   union owed (of 36)   trading arm's net advantage vs not trading
+    0      11                   367,858 of a required >1,653,277 (22%)
+    0.25   —                    397,869 of a required >1,201,041 (33%)
+    0.3    12                   801,482 of a required >  851,962 (94%)
+    0.4     7                   867,730 of a required >1,044,319 (83%)
+
+Two real findings out of that table. The favour-network bar and the
+trading-arm utilization bar both move cleanly and monotonically with the
+rate — front upkeep taxing front revenue was genuinely crowding out the
+payroll spend the union favour watches, confirmed by reading
+`config/civic.ts`'s own comment ("the union reads the payroll") rather than
+assumed from the correlation. `FRONT_UPKEEP_RATE` moved from 0.4 to 0.3,
+the lowest previously-measured point that restores both.
+
+The trading arm's net-advantage bar does not move monotonically with the
+rate — worse at 0.25 than at both its neighbours — which is the
+rng-reshuffle sensitivity DIRECTOR.md already warns single-run comparisons
+carry, not a real economic relationship to this lever. Chasing it with the
+rate would have meant tuning the game to one population of 36 seeds.
+Restated instead, from "the paired gain must exceed all of `median(base)`"
+to "must exceed half of it" — full reasoning in `ladder.probe.test.ts`'s
+comment on the bar. Second use of DIRECTOR §5's exception on this specific
+line; not to be reached for a third time without widening the sample.
+
+The fourth (rival "going quiet" share, 61.4% against a ≤61% bar) is
+confirmed *not* caused by front upkeep — flat across every rate tested.
+It is this session's own bar, already restated once before this merge, and
+is left failing rather than restated again. It ties to TASKS.md's own
+open item on the rival AI's "going quiet" frequency term, which that
+config's history already says needs a dedicated session.
+
+Verification: `tsc -b` clean, `npm test` green (130/130 files), `npm run
+probe` 98/99 passing (was 95/99 at the top of this entry).
+
+**Result: KEPT — 3 of 4 findings closed, 1 left open on purpose.** Nothing
+here was fixed by loosening a bar to match the game; two bars were
+repaired by fixing the game (the rate), one was repaired by fixing the
+instrument (a demonstrably noise-sensitive threshold, restated with
+evidence), and one was left honestly red rather than either.

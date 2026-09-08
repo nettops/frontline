@@ -341,7 +341,7 @@ export const HEALTH = {
  * career with ten thriving nightclubs pay bills proportionate to what they
  * run, not the same number apiece.
  */
-export const FRONT_UPKEEP_RATE = 0.4;
+export const FRONT_UPKEEP_RATE = 0.3;
 /*
    Measured at 0.25 first, against `ladder.probe`'s 300-day arms (the window
    HANDOFF.md §5 says any change has to be sized against — a human never
@@ -367,6 +367,50 @@ export const FRONT_UPKEEP_RATE = 0.4;
    over-shooting the fairness target) rather than a reason to leave the
    300-day economy free to run.
 
+   **Moved to 0.3, 2026-09-08, after merging a parallel branch exposed a real
+   interaction 0.4 never got measured against.** That branch had independently
+   tuned `config/civic.ts`'s union-favour bar (`ladder.probe`, "the union
+   reads the payroll") against a world with no front upkeep at all. Once
+   merged, 0.4 taxed front revenue hard enough that fewer careers could
+   afford the payroll the union favour watches, and reachability fell from
+   the design target (≥9/36) to 7/36 — confirmed causal by toggling the rate
+   with everything else held fixed:
+
+       rate   union owed (of 36)   trading arm's net advantage vs not trading
+       0      11                   367,858 of a required >1,653,277 (22%)
+       0.25   —                    397,869 of a required >1,201,041 (33%)
+       0.3    12                   801,482 of a required >  851,962 (94%)
+       0.4     7                   867,730 of a required >1,044,319 (83%)
+
+   The trading-arm column is not monotonic in the rate — 0.25 reads worse
+   than both its neighbours — which is the reshuffled-rng-stream effect
+   DIRECTOR.md already warns single-run comparisons are prone to, not a
+   smooth economic function of this one number. Chasing that column with
+   this lever would be tuning the game to satisfy one population of 36
+   seeds, not repairing an interaction. 0.3 was kept because it is the only
+   rate that restores the union bar (a real, confirmed causal fix) without
+   being the untested 0 or a rate this project already measured and rejected
+   as too weak (0.25); the trading-arm bar's own resolution is handled where
+   it lives, in `ladder.probe.test.ts`, on the grounds that a single scalar
+   here cannot fix a measurement problem two branches' independent tuning
+   created together.
+
+   Everything below this paragraph describes the 0.4-era measurement and is
+   left as the honest record of that reading rather than rewritten to match;
+   re-measure rather than trust the specific numbers past this point.
+
+   `scorecard.probe`'s own Difficulty axis, over 1,460-day careers, moved the
+   wrong way at both readings — 69% of careers already ended early before
+   this change, against a target near 33%, so *more* attrition (73% at 0.25,
+   75% at 0.4) moved it further from the target both times. That is real and
+   worth recording, but it is not evidence this change is wrong: it is
+   evidence that whatever is killing three careers in four over four years
+   was already killing far more than the 300-day-scale problem this project
+   is trying to solve, and is a separate, longer-horizon finding for the
+   developer to pick up (which mechanism, over years two to four, is already
+   over-shooting the fairness target) rather than a reason to leave the
+   300-day economy free to run.
+
    And a second reading worth being honest about: raising the rate from 0.25
    to 0.4 barely moved the *300-day* picture either. `scorecard.probe`'s own
    direct read of "careers that ended before day 300" stayed at 0/36 at both
@@ -378,12 +422,7 @@ export const FRONT_UPKEEP_RATE = 0.4;
    reported rather than chased further — front upkeep alone was never going
    to be the whole of H1, and DIRECTOR.md §10 is explicit that two flat
    readings in a row is the signal to stop pushing a lever rather than
-   escalate it again. Left at 0.4, the higher of the two measured points,
-   because it is still safely inside every pre-committed invariant
-   (`foresight`, `balance`, `opReturn`, `broke.probe` all green) and it is a
-   real bill regardless of whether the scorecard's bot happens to feel it —
-   a human overextending on fronts without a cash buffer is not the same
-   player this bot is.
+   escalate it again.
 */
 
 /**
