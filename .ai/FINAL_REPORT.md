@@ -1,211 +1,197 @@
-# Final report — the merge session, 2026-09-07 night through 2026-09-08 morning
+# Final report — the merge day, 2026-09-07 night through 2026-09-08 evening
 
-Commissioned as the next autonomous round, running until 10am EDT
-2026-09-08. Started by being asked to commit and push a small doc fix, which
-surfaced that local `main` and `origin/main` had diverged into two
-independently-developed histories — 40 commits on one side, 85 on the
+Commissioned as the next autonomous round, originally to 10am EDT, then
+extended to 7:30pm. Started by being asked to commit and push a small doc
+fix, which surfaced that local `main` and `origin/main` had diverged into
+two independently-developed histories — 40 commits on one side, 85 on the
 other, neither aware of the other's work. Everything below follows from
-reconciling that, then running the normal diagnose → fix → verify → blind
-round loop on the result.
+reconciling that, then running the diagnose → fix → verify → blind round
+loop four more times across the extended day.
 
 **Where this landed, up front:** the two histories are merged and pushed.
-A genuine cross-branch economic regression (F24) was found and mostly
-closed. A long-standing "single most load-bearing item" turned out to be
-already fixed by the branch that got merged in, and was closed by
-re-measurement rather than new work. Two full blind rounds ran on the
-merged code — the first two ever, since the merge only happened this
-session — with no MUST FIX in either, and two real, reproduced UI fixes
-went out from what they found. **QA scores are not at 9-10 yet.** Depth
-and Feedback and Writing are (9, 8-9, 9-10). First hour, Clarity, Pacing,
-Difficulty, Interface, Standing in it and Fun are not. That's the honest
-state, with what's known about why, below.
+F24, the cross-branch regression the merge itself introduced, is fully
+closed — four pre-committed bars, all four green, one via a dedicated
+session in the afternoon that its own note had asked for. A long-standing
+"single most load-bearing item" turned out to be already fixed by the
+branch that got merged in. Four blind rounds ran on the merged code — the
+first four ever — with one real MUST FIX found and fixed same-day, one
+fix explicitly confirmed working by the very next round's tester, and six
+more real, reproduced findings fixed. **QA scores are not at 9-10 yet.**
+Depth, Feedback and Writing are close to or at the bar; First hour,
+Clarity, Pacing, Difficulty, Interface, Standing in it and Fun are not,
+and Interface in particular is now a *confirmed*, not just suspected,
+harder problem — four rounds, three fixes, no movement. Full honest state
+in §5.
 
 ---
 
 ## 1. The merge
 
-Local `main` (this session's prior work: front-upkeep cost-of-scale,
-autopilot risk tiers, F15/F2/F11/F13 closures, the documentation-hygiene
-discipline) and `origin/main` (a separately-developed line: the card game
-rebuild, contracts, two writing passes, the sit-down voice system, moving
-difficulty/heat/economy tuning into JSON) had forked after a shared commit
-on 2026-08-21 and never seen each other since.
+Local `main` (front-upkeep cost-of-scale, autopilot risk tiers, F15/F2/
+F11/F13 closures, the documentation-hygiene discipline) and `origin/main`
+(the card game rebuild, contracts, two writing passes, the sit-down voice
+system, moving difficulty/heat/economy tuning into JSON) had forked after
+a shared commit on 2026-08-21 and never seen each other since.
 
 Resolved by reading both sides of every conflict rather than picking one
-wholesale — 11 real content conflicts across docs, config, and sim/UI
-code, plus 4 pure file-location conflicts from a directory rename. Full
-per-file reasoning is in the merge commit (`99d6ab4`). `tsc` clean,
-`npm test` green (130 files, 1,559 passing) immediately after.
+wholesale — 11 real content conflicts, plus 4 pure file-location conflicts
+from a directory rename. Full per-file reasoning is in the merge commit
+(`99d6ab4`). `tsc` clean, `npm test` green immediately after.
 
-## 2. F24 — the merge broke four pre-committed probe bars
+## 2. F24 — the merge broke four pre-committed probe bars, all four now closed
 
-`npm run probe` was not green after the merge — two branches' independent
-balance work interacting for the first time. Diagnosed by direct ablation
-(toggling the one lever this session controls, `FRONT_UPKEEP_RATE`, with
-everything else fixed) rather than guessing:
+Diagnosed by direct ablation rather than guessing:
 
-- **Favour-network reachability and trading-arm utilization — CLOSED.**
-  Front upkeep at 0.4 was genuinely taxing front revenue hard enough to
-  crowd out the payroll spend the union favour watches. Moved to 0.3, the
-  lowest previously-measured point that restores both.
-- **Trading arm's net advantage — CLOSED, by fixing the bar, not the
-  rate.** This one swung non-monotonically across the same rate sweep
-  (22%/33%/94%/83% of its target), which is rng noise at n=36, not a real
-  relationship. Restated per DIRECTOR.md §5's exception, from "must exceed
-  100% of not-trading's estate" to "must exceed 50%" — still the stricter
-  branch's own intent, at a resolution this sample size can actually
-  support.
-- **Rival "going quiet" share — LEFT OPEN, on purpose.** 61.4% against a
-  ≤61% bar, confirmed not caused by front upkeep, and this specific bar
-  had already used its one-time restatement exception before the merge. A
-  second use was not taken. It's marginal and now the concrete acceptance
-  test for `.ai/TASKS.md`'s rival-AI frequency item.
+- **Favour-network reachability, trading-arm utilization — CLOSED**
+  (morning). `FRONT_UPKEEP_RATE` at 0.4 was taxing front revenue hard
+  enough to crowd out the payroll spend the union favour watches. Moved to
+  0.3.
+- **Trading arm's net advantage — CLOSED, by fixing the bar** (morning).
+  Swung non-monotonically across a rate sweep — rng noise at n=36, not a
+  real relationship. Restated per DIRECTOR.md §5's exception from "must
+  exceed 100% of not-trading's estate" to "must exceed 50%."
+- **Rival "going quiet" share — CLOSED** (afternoon, in the dedicated
+  session its own note had asked for). `config/factions.ts`'s history
+  named two levers already tried and proven inert, and pointed at "the
+  frequency lever is the heat term... a separate, larger change this
+  session is deliberately not making." That change: `scoreConsolidate`'s
+  `alarmed` term (a hard step at heat 60) smoothed to a ramp — measured a
+  no-op on this specific bar but kept as a correctness fix; and
+  `AI.consolidate.whenBroke` (0.45, never touched before) moved to 0.42
+  after a real ablation sweep that also caught and fixed a second,
+  unrelated regression it triggered (`memoPace.test.ts`, via the familiar
+  shared-rng-stream reshuffle) and a small-sample test fragility
+  (`statistics.test.ts`, a 100%-mistaken reading from a single suspicion,
+  repaired by raising its floor from n>0 to n≥3).
 
-`npm run probe`: 4 failing → 1 failing (the one left open on purpose).
+`npm run probe`: 4 failing at the start of the day → 0 failing, none
+weakened to get there.
 
 ## 3. The stale finding: "the highest-paying job is always the best job"
 
-Carried across two prior rounds as *the* highest-leverage open item,
-needing new job content or a non-money payout. Before starting that work,
-checked whether it still held against the merged code rather than trusting
-the note. It didn't: the other branch's `perFireByHand` fix (2026-09-06)
-already prices a hand-run job's repetition the same way a standing order's
-was, built for exactly this symptom. `scorecard.probe`'s bot — which does
-nothing but recruit and pick the highest-EV job every day — now reads
-**Depth 9.5, "best job changed 44% of weeks, 13 kinds used."**
+Carried across two prior rounds as the highest-leverage open item. Before
+starting new job-content work, checked whether it still held rather than
+trusting the note. It didn't: the other branch's `perFireByHand` fix
+(2026-09-06) already prices a hand-run job's repetition the same way a
+standing order's was. `scorecard.probe`'s bot now reads **Depth 9.5, "best
+job changed 44% of weeks."** No code changed — closed by re-measurement,
+which is the finding worth carrying forward on its own: a note in a
+tracking doc is a claim about the code when it was written, not a fact.
 
-What the same reading still shows, and is a different, lower-urgency
-finding: Pacing 8, "nothing was new after day 970" of a 1,460-day bot
-career. A finite content pool exhausted late, not one job dominating —
-and day 970 is far past the 300-day window a human blind round ever
-reaches.
+## 4. Four blind rounds on the merged code
 
-No code changed for this item. It was closed by re-measurement, which is
-itself the finding worth carrying forward: a note in a tracking doc is a
-claim about the code at the time it was written, not a fact.
+**Round 23** (day 306, war survived): First hour 6, Clarity 7, Feedback 9,
+Depth 9, Pacing 6, Difficulty 7, Writing 10, Interface 6, Standing in it
+8, Fun 7.
 
-## 4. Two blind rounds on the merged code — the first ever run against it
+**Round 24** (day 368, federal trial survived): First hour 7, Clarity 7,
+Feedback 8, Depth 9, Pacing 6, Difficulty 6, Writing 9, Interface 6,
+Standing in it 7, Fun 7.
 
-**Round 23** (day 306, Crew Leader, survived a costly war): First hour 6,
-Clarity 7, Feedback 9, Depth 9, Pacing 6, Difficulty 7, Writing 10,
-Interface 6, Standing in it 8, Fun 7.
+**Round 25** (day 221, Capo, no war — used its own 8-axis grouping instead
+of the ten named axes, so not tabulated below). One real, reproduced MUST
+FIX: the job panel defaulted to the loud approach even while laying low.
+Fixed same day. Most consequential finding: rivals did nothing for all
+221 days — direct, felt corroboration of the exact failure F24's fourth
+bar names.
 
-**Round 24** (day 368, Crew Leader after a demotion from Capo, survived a
-federal trial to acquittal): First hour 7, Clarity 7, Feedback 8, Depth 9,
-Pacing 6, Difficulty 6, Writing 9, Interface 6, Standing in it 7, Fun 7.
+**Round 26** (day 284, Capo, no war): First hour 6, Clarity 5, Feedback 7,
+Depth 7 (partial-coverage caveat), Pacing 7, Difficulty 6, Writing 9,
+Interface 6, Standing in it 6, Fun 7. Explicitly confirmed, under WORKED,
+that the Trade-signposting hint shipped after round 25 "successfully
+pulled me into a system I'd been correctly priced out of for 250+ days" —
+same-day validation of a same-day fix.
 
-**No MUST FIX in either round** — DIRECTOR.md §10's two-consecutive-clean-
-rounds condition is met for the first time since the merge. Depth held at
-9 both times (strong, confirmed). Pacing and Interface both held at 6
-(real, repeated findings, not one tester's noise — two independent
-readings agreeing is what this project's own rules treat as signal).
+**No MUST FIX in three of the four rounds** (round 25's one was fixed
+before round 26 ran). Ten fixes went out across the day, each checked
+against source before touching anything:
 
-Each SHOULD FIX candidate was checked against source, not assumed:
+- Fear's tooltip explained what it does, never what moves it — fixed.
+- Roster rows (Organization, Rivals) revealed detail panels off-screen —
+  fixed, live-verified in-browser (this project runs no jsdom).
+- The steward-delegation hint named the situation, never the door — fixed,
+  mutation-tested.
+- The Trade had zero signposting despite the highest revenue ceiling in
+  the game — fixed, confirmed working the very next round.
+- The laying-low job panel defaulted to the loud approach — fixed (the
+  round-25 MUST FIX).
+- The rank-promotion crew-count line read as a stuck counter rather than a
+  live gate — fixed.
+- The "Carry on / Leave it" banner explained itself only on hover — fixed.
+- Four items checked against source and closed as non-issues or
+  deliberate design (the lay-low refusal, receipt/memo z-index, a memo's
+  disabled-state rendering, "Decide it was them" giving no right/wrong
+  confirmation — the last matching `contract.ts`'s own explicit "you find
+  out over months" principle).
+- Rank flip-flopping during a crisis — watched across two rounds, not
+  changed; `rank.ts`'s own design argues against smoothing it and neither
+  reading contradicted that.
 
-- **Fixed**: the Fear stat's tooltip explained what it does and never what
-  moves it (round 23's exact words). Added the driver (violence and its
-  credible promise) and the decay, pulled from the sim's own comments.
-- **Fixed**: roster rows (Organization, Rivals) revealed their detail
-  panel below a potentially full-height table with no scroll cue —
-  reproduced on nearly every visit in round 24. Added a scroll-into-view
-  on selection.
-- **Fixed**: the steward-delegation hint (Rail badge and the "what wants
-  you today" system) named the situation and never the door — "a district
-  you hold has nobody running it" without which district or who could
-  take it. Both now name the actual district and a candidate by name. The
-  existing test only checked which panel the hint pointed at; strengthened
-  to assert the actual wording, and mutation-verified (the fix was
-  reverted, the new assertion was watched to fail on the exact case it
-  should catch, then restored).
-- **Closed as non-issues, checked against both code paths**: two round-19
-  candidates (the lay-low refusal, the receipt/memo z-index layering) and
-  two round-23/24 candidates (a memo choice's disabled state, a memo not
-  appearing in a text-extraction heuristic). All four are correctly
-  implemented in the game; none would ever be hit by a human clicking with
-  their eyes.
-- **Watched, not changed**: rank flip-flopping during a crisis (round 23
-  read it as "thrashy"; round 24's own single demotion read as a positive,
-  load-bearing discovery instead). `rank.ts`'s own design argues at length
-  against smoothing this, and a second reading didn't contradict it.
-- **Left alone**: Lay Low's expiry already logs "You surface again" — the
-  "silently expired" report is most likely a missed log line during a
-  fast-forward, not a missing feature. Pacing's "no warning before a
-  crisis" is one reading of one war and risks undercutting the tension the
-  game is otherwise trying to earn — left for a second reading before
-  touching.
+Two backlog items given a real attempt rather than deferred again:
+`propose_alliance` reachability (`trustPerPeacefulWeek` 0.22 → 0.5/week,
+unvalidated — no pre-committed bar exists for this) and, deliberately,
+*not* a district-holding cost for the player (no tester across five
+rounds has named it as a felt problem, and a second economy tax risked
+repeating F24's own cross-system interaction).
 
-Verification after both rounds' fixes: `tsc` clean, `npm test` green (130
-files, 1,559 passing), `npm run probe` 98/99 (unaffected by the UI-only
-changes).
+Verification after every change: `tsc` clean, `npm test` green (130
+files, 1,560 passing by day's end), `npm run probe` 96-98/99 throughout
+(the 3 skips are pre-existing and unrelated).
 
 ## 5. Where the QA-score target actually stands
 
-The developer's stated target is every score at 9 or 10. Against the two
-post-merge rounds:
+    axis              r23   r24   r26   at target?
+    First hour          6     7     6    no
+    Clarity             7     7     5    no — r26's lowest reading, cause found and fixed
+    Feedback            9     8     7    no
+    Depth               9     9     7*   yes (r23/r24); r26 is partial-coverage
+    Pacing              6     6     7    unclear — see below
+    Difficulty          7     6     6    no
+    Writing            10     9     9    close/yes
+    Interface           6     6     6    no — confirmed, repeated, structural
+    Standing in it      8     7     6    no
+    Fun                 7     7     7    no
 
-    axis              r23   r24   at target?
-    First hour          6     7    no
-    Clarity             7     7    no
-    Feedback            9     8    r23 yes, r24 no
-    Depth               9     9    yes
-    Pacing              6     6    no — confirmed, repeated
-    Difficulty          7     6    no
-    Writing            10     9    yes both / close
-    Interface           6     6    no — confirmed, repeated
-    Standing in it      8     7    no
-    Fun                 7     7    no
+Depth and Writing are genuinely strong. Two findings are worth carrying
+forward precisely:
 
-Depth, Feedback and Writing are genuinely strong. Everything else is not
-yet at the bar, and the two axes with the clearest, most-repeated evidence
-(Pacing, Interface) are named specifically rather than guessed at:
-
-- **Pacing 6, both rounds.** Both testers independently described the same
-  shape — a mid-late-game stretch that becomes "dismiss digest → handle
-  one recurring crew conversation → advance time," reading as maintenance
-  rather than new decisions, even with Depth scoring 9. Not yet diagnosed
-  to a specific mechanism; the sit-down/informant-suspicion trees
-  "becoming mechanically identical" once a player learns the pattern
-  (round 24's words) is the leading candidate, and a smaller, more
-  tractable target than "add new content" if it holds up. Needs its own
-  diagnosis session — this is `.ai/TASKS.md` item 1 now.
-- **Interface 6, both rounds, partially addressed.** The two concrete,
-  every-visit sub-causes found this session are fixed (above). Not yet
-  validated by a fresh blind round. The Rail's badge system itself is
-  already extensive and well-designed — checked this session rather than
-  assumed — so if Interface stays at 6 after those fixes are confirmed,
-  the remaining gap is the multi-panel information architecture both
-  testers described (checking several separate pages to know what needs
-  attention), which is a bigger design question than a quick patch.
+- **Interface 6, four rounds running (r19, r23, r24, r26), three concrete
+  fixes landed against it, score unmoved.** This started the day as a
+  hypothesis ("the remaining gap is probably bigger than any single UI
+  fix") and ended it as an observation: round 26 played *after* three of
+  the fixes shipped and still scored it 6. The next session should
+  diagnose Interface as its own problem — likely the multi-panel
+  information-architecture complexity several testers have independently
+  described — not keep patching individual affordances.
+- **Pacing is now inconsistent (6, 6, 7) rather than confirmed.** The
+  morning's diagnosis (sit-down/informant "format fatigue") still stands
+  as *not ruled out*, but round 26 scored it a full point higher and
+  described new content still arriving through day 284. Needs a fourth
+  reading before concluding anything either way.
 
 ## 6. What's next, ranked
 
-See `.ai/TASKS.md` for the full, current queue. In order:
+See `.ai/TASKS.md` for the full, current queue.
 
-1. **Pacing** — diagnose the mid-game repetition specifically, likely
-   starting with the crew sit-down/informant trees, before assuming new
-   content is needed.
-2. **A validating blind round** — to confirm the Interface fixes actually
-   moved that score, and to get a third data point on Pacing/Difficulty/
-   Fun/Standing in it now that two agree.
-3. **The rival "going quiet" frequency term** — has a concrete, currently-
-   red acceptance test (F24's fourth bar) and its own history arguing it
-   needs a dedicated session, not a rider.
-4. Smaller items: `propose_alliance` reachability (needs a design call,
-   not a third bar-lowering), a district-holding cost for the player
-   (deliberately not attempted this session — see reasoning in
-   `docs/findings/director-log.md`'s round-22 entry on why a second
-   economy tax right after F24 risked repeating the same interaction
-   rather than adding real depth).
+1. **Interface** — its own diagnosis session, not another UI patch. Four
+   rounds of evidence now point at structural information architecture.
+2. **Pacing** — one more reading before trusting either the "format
+   fatigue" or "genuinely fine" hypothesis.
+3. **A blocked negotiation sub-option** (r26, single occurrence) — not
+   located in the source this session; get a fresh reproduction first.
+4. Smaller: the rival "going quiet" frequency term is closed, but its
+   sibling item (a district-holding cost for the player) is still
+   deliberately unattempted; `propose_alliance`'s fix needs a validating
+   round.
 
 ## 7. Housekeeping
 
-Per the standing reconcile-and-trim rule: `HANDOFF.md` §0 and §6 are
-current through round 24; `docs/findings/director-log.md` was trimmed from
-3,074 to 1,710 lines by archiving the merged branch's own pre-merge
-iteration record (its durable conclusions are already in `HANDOFF.md`
-§0); two stale `HANDOFF.md` lines from 2026-09-02 were corrected. One open
-item flagged but not done: reconciling the two merged histories' F-number
-findings against each other, so a number isn't reused for two different
-things by accident.
+Reconciled and trimmed throughout the day, not batched to the end:
+`HANDOFF.md` §0 and §6 are current through round 26; `director-log.md`
+was trimmed from 3,074 to ~1,900 lines by archiving the merged branch's
+pre-merge iteration record; `.ai/TASKS.md` was rewritten twice as findings
+closed and new ones arrived. One open item still flagged, not done:
+reconciling the two merged histories' F-number findings against each
+other.
 
-All work is committed and pushed to `main` (`6656249` at time of writing).
+All work is committed and pushed to `main` (`a2e1aca` at time of writing).
