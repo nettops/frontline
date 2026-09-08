@@ -62,30 +62,11 @@ crew-assignment path. Whoever picks this up next: get the exact panel and
 context from a fresh reproduction first, since guessing at the file wasted
 real time this session.
 
-## Closed 2026-09-08
-
-- **F24's fourth bar (rival "going quiet" frequency) — CLOSED**, and
-  confirmed valuable the same day: round 25 played 221 days with zero
-  rival activity of any kind, the exact failure this bar exists to catch.
-- **`propose_alliance` reachability — a real fix, not a third
-  bar-lowering.** `trustPerPeacefulWeek` raised 0.22 → 0.5/week; reaching
-  the alliance gate from a clean slate now takes ~40 weeks instead of ~91.
-  Still unvalidated by a blind round (no pre-committed bar exists for
-  this) — watch `peakStanding` in future reports.
-- **The Trade's zero signposting — fixed and confirmed working.**
-  Corroborated by r24 and r25; the new `attention()` hint was explicitly
-  named as a WORKED item in r26's very next report: *"successfully pulled
-  me into a system I'd been correctly priced out of for 250+ days, right
-  at the moment it became viable."*
-- **A round-25 MUST FIX — fixed.** Laying-low job panel now defaults to
-  quiet at mount.
-- **The rank-promotion crew-count line reading as static — fixed.**
-  `rank.ts`'s `whatItNeeds` now appends "right now" to the crew
-  requirement specifically, since crew (unlike districts and fronts) can
-  fall as well as rise and a tester read 90 unchanging days of "needs 2
-  more" as a stuck counter rather than a live gate.
-- **The "Carry on / Leave it" banner explaining itself only on hover —
-  fixed.** Both buttons now say what they do in the visible label.
+All items closed 2026-09-08 (F24's fourth bar, `propose_alliance`, the
+Trade signposting hint, the round-25 MUST FIX, the rank-promotion crew-
+count line, the "Carry on / Leave it" banner) have been folded into
+`docs/HANDOFF.md` §6 and dropped from here — see that file for the full
+write-up of each, not a second copy of it in this queue.
 
 ## Smaller, lower-priority
 
