@@ -1,5 +1,19 @@
 # Fun, Depth and Pacing Implementation Plan
 
+> **Closed, 2026-09-07.** This is not a live roadmap — it is a 2026-08-19
+> diagnostic session, kept for the reasoning behind decisions that already
+> shipped. Tasks 1-9 below are in current source (spot-checked against
+> `sim/standing.ts`, `sim/delegation.ts`, `config/goals.ts` and others).
+> Tasks 10-12 were superseded by a later, separate design:
+> `docs/superpowers/specs/2026-08-30-contracts-design.md`
+> (`sim/contract.ts`), which covers the same idea from scratch. The
+> "Probe results" section below the task list (originally starting partway
+> through this file) is a closed measurement pass whose durable
+> conclusions (the heat ratchet, the rank-ladder resize) are already
+> folded into later specs and `HANDOFF.md` — its raw numbers predate the
+> whole Mafia-boss economy layer and should not be read as current. For
+> current state, read `HANDOFF.md`.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Give the day 60–150 stretch of a career a surplus it can grow from, content that opens on what you have done, and a recurring decision that marks the people who carry it.
@@ -10,7 +24,7 @@
 
 ## Global Constraints
 
-- **This project is not a git repository.** `git commit` will fail. Every task ends with `npx vitest run` and `npx tsc --noEmit` instead of a commit. If you want commits, run `git init` first and add commit steps back — that is a decision for the repo owner, not for this plan.
+- **This project was not a git repository when this plan was written.** It is now (`main`, remote `nettops/frontline`, per `HANDOFF.md`) — this line is preserved as written rather than corrected in place, since the plan itself is closed; do not follow its "run vitest/tsc instead of a commit" instruction on live work today.
 - **No jsdom.** UI changes cannot be unit tested. UI tasks end with a browser verification step against the dev server on `http://localhost:5173`, not a test.
 - **Balance numbers live in `src/config/`, never in `src/sim/`.** §21/22.
 - **`src/config/*.ts` must not import from `src/sim/` except for types.** Predicates read flattened summary interfaces — the `config/goals.ts` pattern.
