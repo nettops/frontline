@@ -401,13 +401,23 @@ source-edit contamination affected these three columns specifically (see
 §6's round-17 block for the mechanism); read Depth/Pacing/Difficulty/
 Writing/Standing in it/Fun for r17 as the real reading, not the marked
 ones.
-    Fun              7     6     6     6     5
 
-**Round 14 is the high-water mark on seven axes and the low on Fun.** The tester
-was explicit about why: *"The first sixty days were gripping. The last hundred
-and eighty were grinding a position I could not win, with the same four jobs."*
+**Round 14 was the high-water mark on seven axes against r10-r13 — it no
+longer is, against the full table.** The tester was explicit about why:
+*"The first sixty days were gripping. The last hundred and eighty were
+grinding a position I could not win, with the same four jobs."* Round 15
+now reads higher than r14 on six of those axes (Feedback, Pacing,
+Difficulty, Writing, Interface, Fun) and is the actual high-water round on
+most of the table; round 18 holds the high on Standing in it (8). Keep
+this sentence's original claim as a record of what was true when r14 was
+the newest data — it is not a current ranking.
 First hour has now been 8 or better in five consecutive rounds and is the most
-stable thing in this record.
+stable thing in this record. **That streak is a round-14 snapshot, not the
+current state** — r15 held it (9), but r17 read 6 (contaminated, see §6,
+real value unknown) and r19 read a genuine 6 (a career that never
+expanded, per §6's round-17 block). First hour is not still the project's
+most stable axis; Writing is the only one that has stayed ≥8 across every
+round in the table.
 
 Round 13 is fully scored — screenshots worked from the first call, so **Interface
 covers the visual half again for the first time since round 11**.
@@ -458,8 +468,11 @@ the late game.
   below 30'."* Round 12 spent 200 days on the same gate and never learned the
   cause; round 13 was blocked from about day 15, knew the stat and the bar while
   it was happening, bought its first front on day 44 and held seven by day 250.
-  Clarity moved 6 → 9, the largest single-axis move in the project's record —
-  **quoted as a trend line, never as the proof.**
+  Clarity moved 6 → 9, the largest single-axis *improvement* in the project's
+  record — **quoted as a trend line, never as the proof.** (Round 18 → 19's
+  Clarity drop, 8 → 5, later tied this in raw magnitude; that one is
+  ordinary round-to-round variance from a rougher career, not a fix, and
+  is not evidence of anything the way this one was.)
 
 - **Iteration 6 — lay-low, plus F14 and F13. AWAITING ROUND 14.** Quiet-approach
   work is permitted while laying low; everything louder is refused with a reason
