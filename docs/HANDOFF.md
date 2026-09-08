@@ -491,17 +491,17 @@ in §6's newest reconciliation block.
 
 ### Blind round scores
 
-    axis           r10   r11   r12   r13   r14   r15   r17   r18   r19
-    First hour       8     8     8     8     9     9     6†    8     6
-    Clarity          9     6     6     9     8     8     5†    8     5
-    Feedback         9     7     8     8     8     9     7     8     8
-    Depth            8     6     8     8     8     8     8     7     7
-    Pacing           6     4     5     5     6     7     5     6     5
-    Difficulty       8     6     6     7     7     8     6     5     7
-    Writing          9     8     9     9     9    10     8     9     9
-    Interface        8     6     7*    7     8     9     4†    6     4
-    Standing in it   -     5     6     6     7     -     7     8     7
-    Fun              7     6     6     6     5     7     6     7     5
+    axis           r10   r11   r12   r13   r14   r15   r17   r18   r19   r23
+    First hour       8     8     8     8     9     9     6†    8     6     6‡
+    Clarity          9     6     6     9     8     8     5†    8     5     7
+    Feedback         9     7     8     8     8     9     7     8     8     9
+    Depth            8     6     8     8     8     8     8     7     7     9
+    Pacing           6     4     5     5     6     7     5     6     5     6
+    Difficulty       8     6     6     7     7     8     6     5     7     7
+    Writing          9     8     9     9     9    10     8     9     9    10
+    Interface        8     6     7*    7     8     9     4†    6     4     6
+    Standing in it   -     5     6     6     7     -     7     8     7     8
+    Fun              7     6     6     6     5     7     6     7     5     7
 
 Round 16 (2026-09-07 morning) is not in this table — that round's brief
 asked only for a MUST FIX check and a novelty-day finding, not a full
@@ -510,7 +510,17 @@ history if that round's own account is needed. † = this round's own
 source-edit contamination affected these three columns specifically (see
 §6's round-17 block for the mechanism); read Depth/Pacing/Difficulty/
 Writing/Standing in it/Fun for r17 as the real reading, not the marked
-ones.
+ones. ‡ = the tester's own working notes were lost to a mid-session
+context handoff, not a game defect — read as unscored rather than a real
+First Hour reading (see §6's round 23 block).
+
+**r20-r22 do not appear here.** A separately-developed branch used the
+same numbers for entirely different rounds before the two histories were
+merged (2026-09-08) — see `docs/findings/director-log.md`'s "log forks
+here" banner. Round 22 in *this* table's lineage is a diagnosis-only
+session (F24), not a blind playtest, and has no scores to add. r23 is the
+first blind round run on the merged code and the first genuinely
+comparable point since the merge.
 
 **Round 14 was the high-water mark on seven axes against r10-r13 — it no
 longer is, against the full table.** The tester was explicit about why:
@@ -636,6 +646,57 @@ director log entry "Developer decision — 2026-08-21".
 ## 6. Open findings
 
 Ranked. F10 outranks everything else in this list.
+
+### Round 23 — first blind round on the merged code, 2026-09-08
+
+Full round, Sonnet, pinned. Day 306 (past the 300-day target), Crew Leader,
+8 crew, $8,172/$0, 4 districts held plus a foothold, 6 fronts. A genuine
+rise-and-grind: reached Capo/Underboss, lost ground to a costly war with a
+rival family, ended the run battered but standing with a named successor.
+
+**Scores**: First hour 6 (low confidence — the tester's own working notes
+were lost to a context handoff mid-session, not a game defect; treat as
+unscored rather than a real First Hour reading), Clarity 7, Feedback 9,
+Depth 9, Pacing 6, Difficulty 7, Writing 10, Interface 6, Standing in it 8,
+Fun 7. Below the 9-10 target on 7 of 10 scored axes.
+
+**Two SHOULD FIX items checked against source and closed as non-issues,
+same pattern as round 19's two candidates**: a memo choice that looked
+"clickable" while its label stated an unmet precondition — the code
+correctly sets `disabledReason` and renders `disabled` with a distinct
+CSS state (opacity 0.45, red text, a ✕ prefix); very likely read from
+text/accessibility-tree rather than a screenshot, which this project's own
+established lesson says to check first. A blocking memo whose text
+`get_page_text` couldn't find without the full accessibility tree — the
+memo renders as a real, visible overlay a human would see immediately;
+this is a limitation of that specific text-extraction heuristic, not
+something a human player would ever hit.
+
+**One design tension, watched rather than changed**: rank flipped between
+Capo and Crew Leader within days during the war ("thrashy"). `rank.ts`'s
+own header argues at length against smoothing this — a derived rank with
+hysteresis would be a high-water mark, "a trophy rather than a
+description" — and the crew-headcount field it reads only counts the
+literal dead, not the hurt or busy, so the flips reflect real hiring/loss
+churn during a crisis rather than a display bug. One tester, one war; not
+acted on without a second report of the same pattern.
+
+**One real Clarity fix, made**: the Fear stat's tooltip explained what
+Fear does and never what moves it — the tester's exact words, "I never
+found out what specifically raises or lowers Fear as a stat." Added the
+driver (violence and its credible promise) and the decay (fades if you
+stop) to `StatBar.tsx`'s tooltip, pulling the language from `player.ts`'s
+own doc comment on `gainFear`/`tickFear` rather than inventing new copy.
+
+**One Pacing observation, not acted on**: "no way to see how close a
+lurking crisis is before it lands" (heat 38→91 over ten days during the
+war escalation). A trend/velocity indicator is a real possible answer, but
+this is a single reading of one unusual event (a war), and an anticipatory
+warning meter risks defanging the tension Difficulty and Standing in it
+are explicitly trying to earn. Left for a second reading before touching.
+
+Full report is in this session's transcript; `.ai/FINAL_REPORT.md` will
+carry the complete text if a session-end report is written.
 
 ### F24 — the merge of two parallel branches broke four pre-committed probe bars — THREE CLOSED, one open, 2026-09-08
 

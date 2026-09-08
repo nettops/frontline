@@ -2962,3 +2962,56 @@ changed.** The single most load-bearing item this project named across two
 rounds turned out to already be fixed, by a branch that did not know the
 finding existed. `HANDOFF.md` §6 and `.ai/TASKS.md` item 1 updated
 accordingly; nothing else touched this iteration.
+
+---
+
+## Round 23 — first blind round on the merged code — 2026-09-08
+
+Findings open at the start: none named specifically; this round exists to
+get a first read on the merged game as a whole, post-F24.
+
+Full round, Sonnet, pinned, dispatched with only the tester-facing half of
+PLAYTEST.md plus a passivity clarification (per DIRECTOR.md sec4's newest
+paragraph). Day 306, Crew Leader, 8 crew, $8,172/$0, 4 districts + a
+foothold, 6 fronts. Reached Capo/Underboss, lost ground to a costly war,
+survived to the end battered with a named successor.
+
+Scores: First hour 6 (low confidence, see below), Clarity 7, Feedback 9,
+Depth 9, Pacing 6, Difficulty 7, Writing 10, Interface 6, Standing in it
+8, Fun 7.
+
+Diagnosis of each SHOULD FIX item, by reading the actual code paths rather
+than guessing:
+
+- Two "looked like a bug" items closed as non-issues on inspection — a
+  memo choice's disabled state (properly `disabled` with distinct CSS,
+  likely read from text rather than a screenshot) and a memo not appearing
+  in `get_page_text`'s output (a real, visible overlay; a text-extraction
+  heuristic limitation, not something a human would hit).
+- Rank flip-flopping during the war: `rank.ts`'s own header argues against
+  smoothing this at length, and the crew field it reads only excludes the
+  dead — the flips track real hiring/loss churn, not a bug. Watched, not
+  changed, pending a second report.
+- Fear's tooltip explained what it does and never what moves it — the
+  tester's precise complaint. Fixed in `StatBar.tsx`, language drawn from
+  `player.ts`'s own comments on the mechanic rather than invented.
+- Pacing's "no warning before a crisis lands" — one reading of one war,
+  and a warning meter risks undercutting the tension the game is
+  otherwise trying to earn. Left for corroboration.
+
+First hour's low score carries a process finding of its own: a single
+subagent context ran the entire round (2h25m, 301k tokens, 1539 tool
+calls) and lost its own early-game working notes to a context handoff
+partway through, which is why that axis reads low-confidence rather than
+a real First Hour reading. Worth considering shorter/checkpointed rounds
+or an explicit note-preservation instruction in a future dispatch if this
+recurs.
+
+Verification after the fix: tsc clean, npm test green (130 files, 1,559
+passing).
+
+**Result: KEPT — one real fix made, three findings closed as non-issues,
+two watched without changing anything.** Scores below the 9-10 target on
+7 of 10 axes remain the honest state; nothing here was a quick win large
+enough to move them, which is itself informative going into the next
+round.
