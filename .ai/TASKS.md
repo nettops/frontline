@@ -20,23 +20,7 @@ a job that pays in something other than money — content work, not a
 config change. Do not attempt as a same-day rider on another change; size
 and measure it on its own.
 
-## 2. Two unconfirmed bug candidates from round 19 (2026-09-07)
-
-Found past that session's deadline, checked against source, not yet
-verified live:
-- *"Lay low silently blocks a loud launch"* — the code already looks
-  correct (`operations.ts:535`'s refusal matches the tester's quote
-  exactly, rendered as visible text under a disabled button). Likely a
-  testing-harness artifact. Confirm with a live screenshot before touching
-  anything.
-- *"Event dialogs render visually overlapped"* — a specific mechanism was
-  found (`.receipt` at z-index 60 can float over `.memo-backdrop` at
-  z-index 50 when memos queue inside the receipt's 6-second window,
-  `theme.css:2517` vs `:993`) but not reproduced live. Confirm before
-  deciding whether the fix is a lower z-index, a shorter window, or
-  standing the receipt down when a new event arrives.
-
-## 3. A district-holding cost for the player
+## 2. A district-holding cost for the player
 
 Rivals already pay `upkeepPerDistrict`/`upkeepDistrictScale`
 (`config/factions.ts`); the player never did, the same gap front upkeep
@@ -45,16 +29,21 @@ session wants more 300-day economic bite than front upkeep alone
 provided — see `HANDOFF.md`'s round-17 block for what front upkeep did
 and didn't move.
 
-## 4. The rival "going quiet" frequency term
+## 3. The rival "going quiet" frequency term
 
 `AI.consolidate.wealthGain` was fixed (the *payoff*, 2026-09-07); the
 *frequency* of going quiet is set by a different term in
 `scoreConsolidate` (`caution * heatPressure + alarmed + broke`) that
 session deliberately left alone. `config/factions.ts`'s own history —
 three prior measured passes on `pressure.cost`, each with a developer
-comment — argues this needs its own careful session, not a rider.
+comment — argues this needs its own careful session, not a rider. Now has
+a concrete, currently-red regression guard attached to it: F24's fourth
+bar (`ladder.probe.test.ts`, "does not pay a family more to do nothing
+than to work"), consolidate share at 61.4% against a ≤61% bar, confirmed
+not caused by front upkeep and already past its one-time restatement
+exception. Whoever picks this up should make that bar the acceptance test.
 
-## 5. `propose_alliance`, unreachable in every measured career
+## 4. `propose_alliance`, unreachable in every measured career
 
 Diagnosed, not attempted: the relationship quantity it gates on has no
 passive growth, only explicit tribute actions feed it, and the gate has
