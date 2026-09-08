@@ -161,31 +161,32 @@ Vite 6, Vitest 2. The player starts broke and grows an organization through
 operations, crew, territory, rival families, and law enforcement.
 
     npm run dev        # play it
-    npm test           # the gate — 1,401 tests in 112 files, ~50s
-    npm run probe      # the eight measuring files in sim/probes/, ~11min
+    npm test           # the gate — run it for the current count, it drifts every session
+    npm run probe      # the measuring files in sim/probes/, ~10min
     npm run test:all   # both
     npx tsc -b         # types
     npm run playtest   # namespaced instance for blind testers
 
-**Current verified state, 2026-09-02: `tsc` clean. 1,401 unit tests across 112
-files and 85 probe assertions across 8 files, all green.** Last blind
-measurement: round 17, three scorers, days 184/163/317 — see the director log.
+**Current verified state, 2026-09-08 (superseding the 2026-09-02 paragraph
+this replaced — see git history if that reasoning is needed): `tsc` clean,
+`npm test` green (130 files, 1,559 passing), `npm run probe` 98/99.** The
+one probe failure is deliberate and named — F24's consolidate-share bar,
+§6 — not an oversight. Last blind measurement: round 24, see §0 and §6 for
+both post-merge rounds' full detail. Read §0 before trusting anything
+below this line about specific numbers; this section is architecture and
+history, not current state.
 
 The suite is split into two vitest projects. `npm test` is the gate and runs the
-unit project only, in about forty seconds; `npm run probe` runs the eight
-measuring files in `src/sim/probes/` and takes about eleven minutes. Before the
-split the two ran together and the gate took 8m48, which is long enough that
-people stop running it.
+unit project only, in about sixteen seconds; `npm run probe` runs the
+measuring files in `src/sim/probes/` and takes about ten minutes.
 
-**Nothing fails on purpose any more, and the target it used to fail is still
-there.** `ladder.probe`'s pre-committed rank condition — *"gives a 300-day career
-more than three rungs"* — is unchanged and now passes, because the table was
-re-gated rather than the target moved: rank runs off `OpsBoard` (districts,
-fronts, crew, favours, rival trust) on the reasoning that *"rank is a clean-money
-threshold wearing a title"* and a board gated on rank alone stops moving around
-day 90. DIRECTOR §5 forbids moving a pre-commit to unblock a change and it was
-not moved; it is live, and it went red during a rejected experiment in iteration
-9, which is how it is known to still bite.
+**The rank ladder is derived, not stored, and can go down.** `ladder.probe`'s
+pre-committed rank condition — *"gives a 300-day career more than three
+rungs"* — passes because the table was re-gated rather than the target
+moved: rank runs off `OpsBoard` (districts, fronts, crew, favours, rival
+trust) on the reasoning that *"rank is a clean-money threshold wearing a
+title."* DIRECTOR §5 forbids moving a pre-commit to unblock a change and
+it was not moved.
 
 `sim/rank.ts` derives what the player is *called* from that same board, so what
 you are called and what you are allowed to do cannot come apart.
