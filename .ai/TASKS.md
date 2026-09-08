@@ -444,6 +444,62 @@ Fixed same session, both test-first and mutation-verified:
 `round19` dispatched to check whether these move Difficulty/Interface on
 a fresh, uncontaminated round. No source edits while it runs.
 
+## Round19's blind report — a rougher career, two new bug candidates checked against code
+
+Ran long (past the session's 9pm deadline) and landed a much rougher
+career than round18's: never expanded past its starting district and two
+fronts (one expansion attempt was crushed by rival pressure), so most of
+the "above your standing" job tier and Rivals/Armoury were structurally
+unreachable, not skipped by choice. Scores accordingly lower on several
+axes than round18: First hour 6, Clarity 5, Feedback 8, Depth 7, Pacing 5,
+**Difficulty 7 (up)**, Writing 9, Interface 4, Standing in it 6, Fun 5. The
+Difficulty rise ("brutal but fair... every crisis traced back to a
+decision I made") is a genuinely good, uncontaminated reading — this
+tester's harder run is exactly the variance a single blind round carries,
+not a regression.
+
+**Two new MUST FIX candidates, checked against source (not fixed — out of
+session time):**
+
+1. **"Laying low blocks a loud approach with no visible refusal" —
+   checked, the code is right; this is very likely a testing artifact,
+   not a defect.** `operations.ts:535` gates exactly this
+   (`isLayingLow(state) && approach !== 'quiet'`) with the reason "You are
+   laying low. Only quiet work moves until that ends." — the *exact*
+   string the tester quoted back, which means the game state was correct
+   and the refusal fired. `OperationsPanel.tsx` disables the Launch button
+   on `!check?.ok` and renders `check.reason` as visible red text
+   underneath it (verified earlier this session, part of the F10/F12
+   pattern this project has fixed before). A real disabled `<button>`
+   does not fire a click in a browser; the tester's own automation may not
+   have detected the disabled state the way a human clicking would.
+   **Owed**: a live browser check (screenshot the button mid-lay-low)
+   before this goes anywhere near a code change — DIRECTOR.md's own rule
+   is to verify a single-source claim against the code before acting, and
+   the code says this already works.
+
+2. **"Event dialogs render visually overlapped with the underlying
+   content" — a plausible, specific mechanism found in the CSS, not
+   confirmed live.** `.receipt` (the "what that did" stamp shown after
+   answering a memo — `theme.css:2517`, `z-index: 60`) sits *above*
+   `.memo-backdrop` (`z-index: 50`), and `MemoModal.tsx`'s own comment
+   confirms this is deliberate: "the next memo can open on top of it, and
+   it clears itself" — when memos queue tightly (the tester's own example:
+   two "Emilio Mercuri" events a day apart), the previous answer's receipt
+   can still be showing, fixed near the top of the viewport, while the next
+   memo's modal opens underneath it. Whether this actually *overlaps* the
+   card's own text depends on viewport height and card length, which is why
+   this is a hypothesis with a found mechanism rather than a confirmed bug.
+   **Owed**: reproduce live (queue two memos inside the 6-second receipt
+   window, screenshot), then decide whether the receipt needs a lower
+   z-index, a shorter window, or to stand down the moment a new event
+   arrives.
+
+Neither was fixed this session — found in the last hour, past the
+deadline, and this project's own rule is not to act on a single-source
+claim without checking the browser, which needs a live session this
+report didn't leave time for.
+
 ## Not attempted this session, and why — for the next one
 
 - **Pacing's day-180-200 wall is unmoved across every round in this
