@@ -287,8 +287,29 @@ export interface Org {
   heatBy: Record<HeatChannel, number>;
   /** Days since the last heat-generating action, drives decay. */
   quietDays: number;
+  /**
+   * A rolling week of street attention arriving, decayed a seventh a day.
+   *
+   * Only read when `HEAT_ABSORPTION.ofIntake` is set, which it is not by
+   * default — it exists so the apparatus can be capped against what the
+   * organization is actually producing, and so that cap can be swept. Optional
+   * and lazily initialised, so an old save reads as an outfit that has not
+   * generated anything yet and fills in over its first week.
+   */
+  heatIntake?: number;
   /** Player has ordered a lay-low period; ends on this day. */
   layLowUntilDay: number | null;
+  /**
+   * The last rank the game said out loud, and which trades it said were open.
+   *
+   * Both are derived — `rankNow` reads the job board, `tradeUnlocked` counts
+   * fronts — which is why neither can drift out of step with what the player
+   * can do, and also why neither has a moment of change to hang a message on.
+   * These are the marks `announce.ts` compares against. Optional and lazily
+   * set, so an old save reads as an outfit nobody has told anything yet.
+   */
+  rankSaid?: RankId;
+  tradeSaid?: Partial<Record<TradeId, boolean>>;
 }
 
 // ------------------------------------------------------------------- npcs ---
@@ -591,6 +612,24 @@ export interface OperationDef {
   baseSuccess: number;
   heatOnSuccess: number;
   heatOnFailure: number;
+  /**
+   * Days before this exact job can be run again, if it is a thing you can only
+   * do so often.
+   *
+   * Absent on all but one job, and that is the point. Four attempts to price
+   * `call_in_tribute` down are recorded in `__tests__/freeLadder.test.ts`, and
+   * every one failed the same way: any cost the whole board obeys removes the
+   * dominant job's competitors before it removes the dominant job, because the
+   * dominant job is the most robust thing on the board. A second currency took
+   * Port Operation from 175 launches to nought and left Tribute higher than it
+   * started; a repetition tax cut Tribute 20% and the paid tier-4 jobs 70%.
+   *
+   * So this is deliberately not a mechanic. It is one number on one definition,
+   * enforced in `canLaunch`, and it says the thing that job's own description
+   * has always said: you cannot go round everyone who owes you and ask for it
+   * all again next week.
+   */
+  cooldownDays?: number;
   /** Player attribute that helps this kind of work. */
   attribute: AttributeId;
   respect: number;
@@ -778,6 +817,15 @@ export interface Leak {
  * this shape and it does not carry the field.
  */
 export interface Whisper {
+  /**
+   * Stable handle, so a follow-up can name which rumour it is about.
+   *
+   * Optional because saves written before anyone could act on a whisper have
+   * none; `whisperId` derives the same string for those, so an old feed is
+   * addressable without a migration. Set from the day it arrived and never
+   * updated, which matters because corroboration moves `day`.
+   */
+  id?: string;
   day: number;
   kind: string;
   text: string;
@@ -789,6 +837,13 @@ export interface Whisper {
   truth: boolean;
   /** Set once a second whisper about the same subject has hardened it. */
   corroborated: boolean;
+  /**
+   * Who has already been asked about this, so one contact cannot be milked.
+   *
+   * A second opinion is worth having and a third from the same person is not
+   * — he has told you what he thinks. Absent on an untouched whisper.
+   */
+  checkedBy?: string[];
 }
 
 /** One person outside the family, and where you stand with them. */
@@ -1654,13 +1709,16 @@ export interface EventChoice {
   cost?: number;
 }
 
+/** How loudly a memo asks. See `sim/pace.ts` for what the clock does with it. */
+export type EventSeverity = 'info' | 'opportunity' | 'warning' | 'danger';
+
 export interface PendingEvent {
   id: Id;
   defId: string;
   day: number;
   title: string;
   body: string;
-  severity: 'info' | 'opportunity' | 'warning' | 'danger';
+  severity: EventSeverity;
   choices: EventChoice[];
   /** NPC the event is about, when there is one. */
   npcId: Id | null;
@@ -1998,6 +2056,21 @@ export interface GameState {
    * somebody tired.
    */
   standing?: StandingOrder[];
+  /**
+   * How well-read each job-and-district pair has become, 0..100.
+   *
+   * Keyed `defId@territoryId`, because that is what the mechanic was always
+   * described as being worn on: *"the answer to a groove is to go and stand
+   * somewhere else, not to stop."* It used to live on the `StandingOrder`
+   * record, which meant a player who never automated anything had no record
+   * for it to live on and repeated the same job forever for free. Round 19's
+   * tester hand-ran five jobs for three hundred days and paid nothing.
+   *
+   * Optional and self-migrating: `tickStandingOrders` folds any legacy
+   * `order.pattern` in here once and zeroes it, so an old save keeps the
+   * groove it had earned and nothing is counted twice.
+   */
+  patterns?: Record<string, number>;
   /**
    * People who got away, and the fact that somebody is still looking.
    *

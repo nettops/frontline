@@ -2,7 +2,7 @@
  * Scores: the machine behind the month in front of a job.
  *
  * The table lives in `config/scores.ts` and the design note is
- * `docs/superpowers/specs/2026-08-23-scores-and-setups-design.md`. This file
+ * `docs/specs/2026-08-23-scores-and-setups-design.md`. This file
  * owns opening one, what the gear is worth on the night, and what happens to
  * the gear afterwards.
  *

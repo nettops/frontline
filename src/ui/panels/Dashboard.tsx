@@ -6,8 +6,12 @@ import StreetScene from '../StreetScene';
 import type { PanelId } from '../Rail';
 import { crewList, availableCrew } from '../../sim/npc';
 import { attention } from '../../sim/attention';
-import { payrollForecast, weeklyWageBill } from '../../sim/economy';
-import { isLayingLow, startLayLow } from '../../sim/heat';
+import { approaches } from '../../sim/approaches';
+import { arcs } from '../../sim/arcs';
+import { rankNow, nextRank, whatItNeeds, whatHoldsIt } from '../../sim/rank';
+import { openSitdown } from '../../sim/sitdown';
+import { payrollForecast, totalFunds, weeklyWageBill } from '../../sim/economy';
+import { channelHeat, isLayingLow, startLayLow } from '../../sim/heat';
 import { arrestRisk, weeklyLegalCost } from '../../sim/investigation';
 import { maxCrew } from '../../sim/player';
 import { formatMoney, formatShortDay } from '../../sim/util';
@@ -107,8 +111,47 @@ function LayLow() {
   const paydays = LAY_LOW_DURATION_DAYS / PAYDAY_INTERVAL;
   const perPayday = weeklyWageBill(state) + weeklyLegalCost(state);
   const cost = Math.round(perPayday * paydays + (state.org.wagesOwed ?? 0));
+  /*
+     And whether that is money you have, which is the question.
+
+     The line above is a repair an earlier round already paid for: it prices
+     both paydays and the arrears, not one week. Round 21 read it, went dark on
+     day 168, and came out having missed $1,063 of payroll on the second one —
+     two soldiers quit that morning and the rank went with them. He filed it as
+     the preview pricing a single week. It priced two. What it never did was
+     the subtraction, and a fortnight of doing nothing is the one commitment in
+     the game where you cannot earn your way out of the gap you just agreed to.
+
+     `totalFunds` rather than clean money alone, because wages come out of
+     dirty first — the same order `tickEconomy` charges in.
+  */
+  const covered = totalFunds(state) >= cost;
+  const short = Math.round(cost - totalFunds(state));
   const pointless = state.org.heatBy.street < 1;
-  const tier = heatTier(state.org.heat);
+
+  /*
+     What going quiet is actually governed by, which is not the tier.
+
+     The copy here quoted `HeatTier.decayMultiplier` and concluded from it that
+     going quiet "will not clear this". Both halves were wrong. That multiplier
+     scales `HEAT_ABSORPTION` — what a large organization makes go away by
+     existing — and the heat-ratchet rework deliberately took it *off* the
+     decay path, because scaling decay by it was what made the meter a one-way
+     door. `tickHeat` multiplies by `quietShare`, the difficulty, the channel,
+     and four for laying low. No tier anywhere.
+
+     Round 16's tester read the sentence at heat 58, believed it, and put off
+     going dark from day 42 to day 78. Heat then went 58 to 16 in ten days.
+     They filed those 36 days as where their run broke, and they were right.
+
+     What genuinely decides whether this helps is `LAY_LOW_BY_CHANNEL`: four on
+     the street, one on the books, nought inside the family. So the warning is
+     about where your heat is, which is a fact the player can act on — go
+     quiet for street trouble, deal with the informant for the other kind.
+  */
+  const street = channelHeat(state, 'street');
+  const elsewhere = channelHeat(state, 'money') + channelHeat(state, 'inside');
+  const mostlyElsewhere = elsewhere > street;
 
   if (!armed) {
     return (
@@ -129,11 +172,9 @@ function LayLow() {
            now says what tier they are in and what that does to the rate.
         */
         title={`${LAY_LOW_DURATION_DAYS} days dark. Only quiet work moves; anything louder is refused, and the street reads it as weakness. ${
-          tier.decayMultiplier >= 0.7
-            ? 'Street heat falls fast from here.'
-            : `At ${tier.name} street heat only bleeds off at ${Math.round(
-                tier.decayMultiplier * 100,
-              )}% of the usual rate — going quiet helps, but it will not clear this on its own.`
+          mostlyElsewhere
+            ? 'Most of what is on you is not street trouble, and going dark does almost nothing for the books and nothing at all for somebody talking.'
+            : 'Street heat comes off four times faster while you are dark, and fastest when there is most of it.'
         }${pointless ? ' There is no street heat to lose right now.' : ''}`}
       >
         Lay low
@@ -159,14 +200,23 @@ function LayLow() {
       <span className="tiny faint">
         {LAY_LOW_DURATION_DAYS} days idle · about {formatMoney(cost)} in wages and counsel ·{' '}
         {LAY_LOW_RESPECT_COST} respect
-        {pointless ? ' · nothing to cool' : ''}
-        {!pointless && tier.decayMultiplier < 0.7 && (
+        {!covered && (
           <span className="hot">
             {' '}
-            · at {tier.name} street heat only falls at{' '}
-            {Math.round(tier.decayMultiplier * 100)}% of the usual rate, so this will not
-            clear it
+            · you are {formatMoney(short)} short of that, and nothing earns while you are
+            dark
           </span>
+        )}
+        {pointless ? ' · nothing to cool' : ''}
+        {!pointless && mostlyElsewhere && (
+          <span className="hot">
+            {' '}
+            · most of what is on you is not on the street — this will barely touch the
+            books and will do nothing about anybody talking
+          </span>
+        )}
+        {!pointless && !mostlyElsewhere && (
+          <span className="faint"> · street heat comes off four times faster while dark</span>
         )}
       </span>
       <button className="btn small" onClick={() => setArmed(false)}>
@@ -192,6 +242,8 @@ export default function Dashboard({ onNavigate }: { onNavigate: (id: PanelId) =>
   const crew = crewList(state);
   const free = availableCrew(state);
   const wanting = attention(state);
+  const waiting = approaches(state);
+  const running = arcs(state);
   const laying = isLayingLow(state);
   const payroll = payrollForecast(state);
   const risk = arrestRisk(state);
@@ -203,6 +255,34 @@ export default function Dashboard({ onNavigate }: { onNavigate: (id: PanelId) =>
     <>
       <div className="page-head">
         <h1 className="page-title">Overview</h1>
+        {/*
+           What people call you, and what would change it.
+
+           The game refers to standing constantly — the whole locked-jobs table
+           is headed "ABOVE YOUR STANDING" — and until now the only screen that
+           printed the player's own rank was the save row. Three testers in
+           round 16 played past day 120 believing they had been promoted,
+           because their crew ceiling had tripled.
+
+           The second half is the Rail's rule: never a demand for attention
+           without a statement of what would satisfy it.
+        */}
+        <span className="tiny">
+          <span className="stamp cool">{rankNow(state).name}</span>
+          {/* At the top there is no next rung, so the goal line used to
+              vanish. `whatHoldsIt` says what the rank is standing on instead —
+              rank is derived and falls, so those terms are live. */}
+          {whatItNeeds(state).length === 0 && whatHoldsIt(state).length > 0 && (
+            <span className="faint">
+              {' '}· holding it on {whatHoldsIt(state).join(', ')}
+            </span>
+          )}
+          {whatItNeeds(state).length > 0 && (
+            <span className="faint">
+              {' '}· {nextRank(state)?.name} wants {whatItNeeds(state).join(', ')}
+            </span>
+          )}
+        </span>
       </div>
 
       {condition && (
@@ -249,6 +329,77 @@ export default function Dashboard({ onNavigate }: { onNavigate: (id: PanelId) =>
           </div>
         </Panel>
       )}
+      {/*
+        People, as against chores.
+
+        Kept apart from "Wanting you" on purpose. That panel is the recurring
+        loop asking to be run — jobs to send men on, groundwork to start — and
+        this one is somebody standing in the doorway. Folding them together
+        would put "3 standing about, and 2 jobs you could send them on" beside
+        a man who is owed a promotion, at the same weight, and the second would
+        read as another errand.
+
+        Each row opens the room it is about. That is the whole feature: the
+        sit-down has existed for a long time and could only ever be reached by
+        the player deciding to go and find somebody.
+      */}
+      {waiting.length > 0 && (
+        <Panel title={waiting.length === 1 ? 'Somebody is waiting' : 'People are waiting'}>
+          <div className="stack">
+            {waiting.map((w) => (
+              <button
+                key={w.npcId}
+                className="btn small wide"
+                onClick={() => {
+                  mutate((s2) => { openSitdown(s2, 'crew', w.npcId, w.reasonId); });
+                  onNavigate('crew');
+                }}
+              >
+                <span className={w.urgency === 'now' ? 'warn' : undefined}>{w.name}</span>{' '}
+                <span className="faint">{w.text}</span>
+              </button>
+            ))}
+          </div>
+        </Panel>
+      )}
+      {/*
+           What you started and have not finished.
+
+           The third of three lists and deliberately not folded into the other
+           two. "Wanting you" is the loop asking to be run and the doorway is a
+           person in it; this is the set of things already in motion, which is
+           a different question — not *what should I do today* but *what am I
+           carrying*.
+
+           The game turned out to be full of arcs and to have no way of seeing
+           them as arcs: a score lives on Operations, a promise and a mark on
+           the crew sheet, a case on Law, so a boss with four things running had
+           four screens to remember. See `sim/arcs.ts`, which asks each system
+           what it has open and does not score any of it.
+
+           Oldest first, because the thing that has been open longest is
+           usually the thing that has been forgotten, and no other screen can
+           answer that.
+        */}
+      {running.length > 0 && (
+        <Panel title="What you have running">
+          <div className="stack">
+            {running.map((a) => (
+              <button
+                key={a.id}
+                className="btn small wide"
+                onClick={() => onNavigate(a.panel)}
+              >
+                <span className={a.pressing ? 'warn' : undefined}>{a.title}</span>{' '}
+                <span className="faint">
+                  — {a.where}. {a.ends}.
+                </span>
+              </button>
+            ))}
+          </div>
+        </Panel>
+      )}
+
       <Panel
           title="Attention"
           action={!laying && <LayLow />}

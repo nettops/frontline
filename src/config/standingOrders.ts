@@ -69,6 +69,75 @@ export const PATTERN = {
   perFire: 2,
 
   /**
+   * Whether a night the player runs by hand wears the groove too.
+   *
+   * `true`, and it is what this mechanic was always described as doing —
+   * "charged to anybody working the pair, not only to the order. The police
+   * watch the pattern, not your minutes." It was not true in the code: the
+   * number lived on the `StandingOrder` record, so a player who never
+   * automated anything had nothing for it to live on and could repeat one job
+   * on one corner forever for nothing.
+   *
+   * Round 19's tester did exactly that from roughly day 110 to day 300 —
+   * *"the inputs got bigger; the decision never got new"* — while round 18's
+   * tester, who had set an order, met the same mechanic on day 68 at −17% on
+   * his odds. Same build, opposite experience, and the difference was a
+   * feature neither of them was choosing between.
+   *
+   * It is a flag rather than a bare `true` for one reason: the old note in
+   * this file said every `ladder.probe` baseline was untouched *because* the
+   * mechanic was inert without an order, so turning it on moves all of them at
+   * once, and a change that moves every baseline needs something the paired
+   * sweep in `ladder.probe` can turn. See `wearing the groove by hand` there.
+   *
+   * **And measured against the complaint itself, which it had never been.**
+   * Every reading this mechanic had was an estate or a rank — what repetition
+   * *cost*, never whether anybody stopped repeating. Sixty paired seeds on a
+   * bot that reads the odds it is shown, groove against no groove:
+   *
+   *     over the last 90 days   without   with     seeds moved
+   *     distinct job/district   21        42       54 up, 6 down
+   *     share on its top 3      0.49      0.40     45 down, 15 up
+   *
+   * A career works twice as much of the board and leans nine points less on
+   * its three habits. The day it *stops* finding anything new came back 286
+   * against 294 of 300 and is not a reading — that arm re-picks a district
+   * every morning, so it never settles either way. See
+   * `says whether pricing repetition changes what a career does`.
+   *
+   * The size is an upper bound, not a forecast. It is what a player who reads
+   * every number on every job gets; round 19's tester was not that player, and
+   * whether the price is legible enough to change a human's mind is a question
+   * for a blind round, not for this file.
+   */
+  wornByHand: true,
+
+  /**
+   * And what a hand-run night adds, which is not what an order adds.
+   *
+   * Charging `perFire` for both was the first attempt and it took the ladder
+   * apart. Paired over a hundred seeds: **Boss 54/100 down to 24/100**, 38
+   * seeds losing it against 8 gaining, and $1.29M off the estate. More than
+   * half the top of the game, to price one habit.
+   *
+   * The rate was not wrong; it was being asked to do a job it was not tuned
+   * for. `perFire` 2 settles a continuously-worked pair near 77 of 100, and
+   * that figure was set against a *standing order* — a fixed, published
+   * arrangement anybody can set a watch by, that the player opted into and can
+   * move. A boss turning up himself is the same street and less of a timetable,
+   * and it is not something he opted into at all.
+   *
+   * 0.8 settles at `0.8 / decayShare` = 31, which is the smallest figure that
+   * clears `noticeAbove` — below 25 the game does not mention it, and an
+   * invisible price is the exact failure recorded on `perFire` above. At 31 it
+   * is worth about 19 points of odds, which is close to what round 18's tester
+   * actually met and reported as the fairest lesson in his run: *"They know the
+   * routine −17%... a lesson delivered entirely through numbers I was shown
+   * before I made the mistake."*
+   */
+  perFireByHand: 0.8,
+
+  /**
    * Where a groove stops deepening, whatever anybody does.
    *
    * A clamp rather than the working limit; the equilibrium above sits well

@@ -1,3 +1,5 @@
+import type { MemoryKind } from './memories';
+
 /**
  * Things you said you would do.
  *
@@ -25,7 +27,13 @@
  *    of special-case code.
  */
 
-export type PromiseKind = 'next_job' | 'covered';
+export type PromiseKind =
+  | 'next_job'
+  | 'covered'
+  | 'promoted'
+  | 'territory'
+  | 'next_in_line'
+  | 'handled';
 
 export interface PromiseDef {
   kind: PromiseKind;
@@ -37,6 +45,21 @@ export interface PromiseDef {
   brokenLog: string;
   /** How long you have. */
   days: number;
+  /**
+   * Memories that break it before the deadline, for the promises kept by an
+   * absence rather than an act.
+   *
+   * This was a constant in `sim/promises.ts` naming three memory kinds, which
+   * was correct while `covered` was the only promise of its shape and wrong
+   * the moment a second one existed — "I will handle it" and "you are covered"
+   * both fail on silence, and they fail on *different* silences. Declared per
+   * promise so the tick keeps knowing nothing about which is which.
+   *
+   * Read from the man's own memories rather than hooked into the paths that
+   * could hurt him, so a route added next year breaks the promise without
+   * knowing promises exist. Only meaningful when `keptByDoing` is false.
+   */
+  brokenBy?: MemoryKind[];
   /**
    * Whether letting the clock run out is the failure or the success.
    *
@@ -65,6 +88,86 @@ export const PROMISES: Record<PromiseKind, PromiseDef> = {
     brokenLog: 'found out what being covered is worth.',
     days: 30,
     keptByDoing: false,
+    brokenBy: ['took_a_charge', 'was_hurt', 'went_unpaid'],
+  },
+
+  /*
+     The four below are the same machine with a wider vocabulary.
+
+     Two kinds was not a design, it was where the work stopped: the sit-down
+     could say "you have the next one" and "you are covered" and nothing else,
+     so the strongest register in the conversation had two sentences in it. A
+     man who wants the rung above him, or the district he has been running
+     without the title, or to know where he stands when you are gone, could be
+     told none of those things — and those are the three things the crew sheet
+     says people want.
+
+     Each is kept by the act you would have performed anyway if you meant it,
+     which is the rule the first two established. Promotion is kept by
+     promoting him. Ground is kept by putting him in charge of some. The line
+     is kept by naming him. None of them needs a new verb.
+  */
+
+  promoted: {
+    kind: 'promoted',
+    outstanding: 'Was told the next rung is theirs',
+    broken: 'Was told they were going up. Watched somebody else go instead.',
+    brokenLog: 'has stopped mentioning the promotion.',
+    /*
+       Shorter than "the next one", and deliberately.
+
+       A job comes round every week and a rung does not, so a month is a long
+       time to be told you are nearly there and a season is an insult. This is
+       the promise most likely to be made carelessly — it costs nothing to say
+       and it is what everybody wants — so it is also the one that should come
+       due while the boss still remembers saying it.
+    */
+    days: 28,
+    keptByDoing: true,
+  },
+
+  territory: {
+    kind: 'territory',
+    outstanding: 'Was told they would get ground of their own',
+    broken: 'Was promised a district. Is still working somebody else\'s.',
+    brokenLog: 'has stopped asking which district was supposed to be theirs.',
+    days: 35,
+    keptByDoing: true,
+  },
+
+  next_in_line: {
+    kind: 'next_in_line',
+    outstanding: 'Was told they are next',
+    broken: 'Was told they were next. Found out what that was worth.',
+    brokenLog: 'has worked out that being next was a figure of speech.',
+    /*
+       The longest window in the table, because it is the longest promise.
+
+       Nobody expects to be named heir this month. What they expect is that
+       the question has been settled, and a season is how long a man will wait
+       before concluding it has not been.
+    */
+    days: 60,
+    keptByDoing: true,
+  },
+
+  handled: {
+    kind: 'handled',
+    outstanding: 'Was told you would deal with it',
+    broken: 'Was told it would be dealt with. It was not.',
+    brokenLog: 'has stopped waiting for you to deal with it.',
+    days: 21,
+    /*
+       Kept by an absence, like `covered`, but a different absence.
+
+       "You are covered" fails when something happens *to* him. "I will handle
+       it" fails when the thing he brought you happens *again* — he is passed
+       over once more, leaned on again, left on the bench he was complaining
+       about. So the two share a shape and not a list, which is why the list
+       moved into the table.
+    */
+    keptByDoing: false,
+    brokenBy: ['passed_over', 'was_leaned_on', 'left_on_the_bench'],
   },
 };
 

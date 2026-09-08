@@ -32,7 +32,7 @@ import {
   readOrders,
   refuseOrder,
 } from '../../sim/orders';
-import { people, prosperity, territoryDef } from '../../sim/territory';
+import { people, territoryDef } from '../../sim/territory';
 import { formatMoney } from '../../sim/util';
 import { rivals } from '../../sim/faction';
 import {
@@ -41,11 +41,17 @@ import {
   PLANT,
   TRADES,
   TRADE_IDS,
+  TRADE_SENTIMENT_FLOOR,
   WORKSHOP,
   type TradeId,
 } from '../../config/contraband';
+import { districtCapacity } from '../../sim/contraband';
 import { priced } from '../../sim/market';
-import { CONTROL_LABEL } from '../../config/territories';
+import {
+  CONTROL_LABEL,
+  SENTIMENT_RECOVERY_PER_WEEK,
+  SENTIMENT_START,
+} from '../../config/territories';
 import { houseName, houseShort } from '../../sim/houses';
 
 /**
@@ -174,24 +180,32 @@ export default function ContrabandPanel() {
                 value={Math.min(100, read.affordable)}
                 tone={read.affordable < Math.min(read.capacity.routes, read.capacity.crew) ? 'hot' : 'ok'}
               />
+              {/*
+                 The fourth bar, and the one that was never here.
+
+                 A supply arrangement is the first thing this trade needs and
+                 the panel had no word for it. A tester read "Money is the
+                 short end" on two separate days while holding the money, the
+                 ground and the people, and found the retainer by clicking a
+                 greyed-out button. It is a yes/no rather than a quantity, so
+                 it is a line rather than a bar.
+              */}
+              <div className="row between" style={{ margin: '10px 0 0' }}>
+                <span className="tiny">Somebody supplying you</span>
+                <span className={read.sourced ? 'tiny mono' : 'tiny mono hot'}>
+                  {read.sourced ? 'yes' : 'no'}
+                </span>
+              </div>
               <p className="faint" style={{ marginTop: 10, marginBottom: 0 }}>
-                {read.capacity.total <= 0
-                  ? read.eligible.length === 0
-                    ? // Naming the threshold, not gesturing at it. The table below
-                      // lists only districts that qualify, so a player who does not
-                      // hold one deeply enough sees an empty table and no reason —
-                      // which reads as a broken screen rather than a requirement.
-                      `Nothing can move. This needs a district at ${CONTROL_LABEL[
-                        def.minControl
-                      ].toLowerCase()} or better, and you do not hold one that far yet.`
-                    : 'Nothing can move. Open a route in one of the districts below.'
-                  : read.affordable < Math.min(read.capacity.routes, read.capacity.crew)
-                    ? read.affordable === 0
-                      ? `Nothing is moving because nothing was bought. A load costs ${formatMoney(read.cost)} and there is no money to buy one.`
-                      : `Money is the short end. You can stock ${read.affordable} at ${formatMoney(read.cost)} each; the streets and the people could carry more.`
-                    : read.capacity.crew < read.capacity.routes
-                      ? 'You have more ground than people. Anybody on a job is not on this.'
-                      : 'You have more people than ground. Take more of the city.'}
+                {/*
+                   Resolved in `readTrade`, against the state each clause is
+                   about. This used to be three nested ternaries over
+                   `capacity.total`, which is the minimum of two unrelated
+                   numbers — so a crew of nobody reported as a shortage of
+                   streets and told a tester to open a route he already had
+                   open.
+                */}
+                {read.blocker?.sentence ?? 'Nothing is holding it up.'}
               </p>
             </Panel>
           </div>
@@ -261,6 +275,21 @@ export default function ContrabandPanel() {
                       <td>
                         <div style={{ minWidth: 90 }}>
                           <Bar value={t.sentiment} tone={t.sentiment < 30 ? 'hot' : undefined} />
+                          {/*
+                             The rate, not just the level.
+
+                             The per-unit cost lived in a button tooltip, which
+                             is invisible to anybody who is not hovering, and a
+                             per-unit figure is the wrong unit anyway: what
+                             decides whether a street turns is that number
+                             against the district's own recovery, and nothing
+                             on the screen had ever named the recovery at all.
+                             A blind tester ran product through one
+                             neighbourhood for 348 days and could not say what
+                             it had cost him, because it had cost him nothing
+                             and the screen could not have told him either way.
+                          */}
+                          <span className="name-sub">{feelingRate(state, tab, t)}</span>
                         </div>
                       </td>
                       <td>
@@ -425,7 +454,15 @@ function Orders() {
   );
 }
 
-/** What one district would take, for the table. */
+/**
+ * What one district would take, for the table.
+ *
+ * Reads the simulation's own function rather than restating the formula. The
+ * copy that used to live here had drifted: it left out `CONTROL_THROUGHPUT`,
+ * so a district held at a foothold advertised nearly three times what it would
+ * actually carry, on the same screen as a blockers panel a tester reported for
+ * naming the wrong blocker.
+ */
 function districtShare(
   state: ReturnType<typeof useGame>,
   trade: TradeId,
@@ -433,12 +470,36 @@ function districtShare(
 ): number {
   const t = state.territories[territoryId];
   if (!t) return 0;
-  // Recomputed here rather than threaded through: it is one multiplication and
-  // the panel wants it per row.
-  const def = TRADES[trade];
-  const wealth = (prosperity(state, territoryId) / 100) * def.wealthWeight;
-  const folk = (people(state, territoryId) / 62_000) * def.populationWeight;
-  return def.districtCapacity * (wealth + folk);
+  return districtCapacity(state, trade, t);
+}
+
+/**
+ * What running it here does to the street, per week, against the recovery.
+ *
+ * The per-unit figure on its own is not the decision — a district climbs
+ * `SENTIMENT_RECOVERY_PER_WEEK` back toward indifference every week regardless
+ * — so this states the net, in the direction feeling is actually going.
+ */
+function feelingRate(
+  state: ReturnType<typeof useGame>,
+  trade: TradeId,
+  t: { id: string; sentiment: number },
+): string {
+  const carried = districtShare(state, trade, t.id);
+  const room = Math.max(
+    0,
+    Math.min(
+      1,
+      (t.sentiment - TRADE_SENTIMENT_FLOOR) / (SENTIMENT_START - TRADE_SENTIMENT_FLOOR),
+    ),
+  );
+  const cost = carried * Math.abs(TRADES[trade].sentimentPerUnit) * room;
+  const recovery = t.sentiment < SENTIMENT_START ? SENTIMENT_RECOVERY_PER_WEEK : 0;
+  const net = recovery - cost;
+  if (Math.abs(net) < 0.05) return 'settled where it is';
+  return net < 0
+    ? `−${Math.abs(net).toFixed(1)} a week while it runs`
+    : `+${net.toFixed(1)} a week`;
 }
 
 /** Where product comes from, and what the waterfront is doing to the price. */

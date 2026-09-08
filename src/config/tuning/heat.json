@@ -1,0 +1,39 @@
+{
+  "tiers": [
+    { "min": 0,  "max": 10,  "name": "Quiet",                      "decayMultiplier": 1.0,  "description": "Nobody is looking at you." },
+    { "min": 11, "max": 25,  "name": "Suspicious",                 "decayMultiplier": 0.85, "description": "A name in a file somewhere. Nothing more." },
+    { "min": 26, "max": 40,  "name": "Investigating",              "decayMultiplier": 0.7,  "description": "Someone has been assigned to you." },
+    { "min": 41, "max": 60,  "name": "Major Investigation",        "decayMultiplier": 0.55, "description": "Resources are being spent. Your people are being watched." },
+    { "min": 61, "max": 80,  "name": "Intensive Task Force",       "decayMultiplier": 0.42, "description": "A dedicated unit. Surveillance. Pressure on your weakest links." },
+    { "min": 81, "max": 92,  "name": "Organization Under Siege",   "decayMultiplier": 0.32, "description": "They are coming. The only question is who talks first." },
+    { "min": 93, "max": 100, "name": "Nothing Left To Watch",      "decayMultiplier": 0.22, "description": "Every room you use is known and every name on your payroll is written down. This does not get worse. It only ends." }
+  ],
+
+  "decayShare": 0.026,
+  "quietDaysBeforeDecay": 2,
+
+  "absorption": {
+    "fromCrew": 4,
+    "perCrew": 0.2,
+    "max": 5.75
+  },
+
+  "layLowDurationDays": 14,
+  "layLowRespectCost": 4,
+
+  "successPenaltyAtMax": 0.3,
+  "dismissHeatReduction": 4,
+  "cancelOperationHeat": 3,
+
+  "layLowByChannel": {
+    "street": 4,
+    "money": 1,
+    "inside": 0
+  },
+
+  "decayByChannel": {
+    "street": 1.25,
+    "money": 0.8,
+    "inside": 0.6
+  }
+}

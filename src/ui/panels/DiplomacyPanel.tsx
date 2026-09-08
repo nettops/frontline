@@ -37,7 +37,26 @@ export default function DiplomacyPanel() {
           {wars.length} {wars.length === 1 ? 'war' : 'wars'} in the city
         </span>
       </div>
+      {/*
+         The row is the door, and until now nothing said so.
+
+         Every verb this system has — peace, tribute, an alliance, a sit-down
+         with the man who runs the house — lives in a modal that opens by
+         clicking a family's row, and the row's only affordance was a cursor.
+         All three round-17 scorers concluded from that the panel is read-only:
+         *"Diplomacy has no verbs"*, *"read-only table"*, *"it has never had a
+         single clickable action"* — one of them after 317 days with a rank
+         requirement pointing straight at it.
+
+         This is the fault round 16 found in the crew dossier, in a second
+         place: three testers reached that screen on days 32, 43 and 81 because
+         it too was one click inside a table row that was `cursor: pointer` and
+         nothing else. That one was repaired by saying so in the page-sub.
+         Nobody checked whether the pattern existed elsewhere. It did, twice.
+      */}
       <p className="page-sub">
+        <strong>Open a family to talk to them</strong> — peace, tribute, an alliance,
+        or a word with whoever runs it.{' '}
         Resentment builds on its own — taking a family's ground, leaning on their
         people, taking one of their men. It stops one step short of war. Crossing
         that last step is always somebody's decision, and getting back out of it

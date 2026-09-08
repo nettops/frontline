@@ -1,7 +1,7 @@
 /**
  * Scores: jobs you have to build before you can do them.
  *
- * The design note is `docs/superpowers/specs/2026-08-23-scores-and-setups-design.md`.
+ * The design note is `docs/specs/2026-08-23-scores-and-setups-design.md`.
  * This file holds the four properties the design rests on, and the layer is
  * decoration if any one of them fails.
  *

@@ -15,7 +15,7 @@
 import { Rng, clamp } from './rng';
 import { note } from './ledger';
 import type { GameState, Loan } from './types';
-import { addLog, nextId } from './util';
+import { addLog, nextId, say } from './util';
 import { DAYS_PER_YEAR } from '../config/economy';
 import {
   CYCLE_PHASES,
@@ -399,9 +399,28 @@ export function tickLoans(
     loan.missed += 1;
     loan.owed = Math.round(loan.owed * (1 + DEFAULT_TERMS.penaltyPerMiss));
     state.org.respect = Math.max(0, state.org.respect + DEFAULT_TERMS.respectPerMiss);
+    /*
+       One sentence, every week you are short, for as long as you are short.
+
+       Seen four times in twelve lines of a real career's log. The irony —
+       *"They were very understanding about it"* — is good once and is a tic by
+       the third time, and it also hides the thing a player needs: how many
+       weeks they have now missed, and that missing enough of them brings
+       somebody to the door. `loan.missed` and `graceMissed` are both right
+       here and neither was being said.
+    */
+    const left = DEFAULT_TERMS.graceMissed - loan.missed;
     addLog(
       state,
-      `${def.name} was not paid this week. They were very understanding about it.`,
+      left <= 0
+        ? `${def.name} was not paid again. Somebody will be sent.`
+        : left === 1
+          ? `${def.name} was not paid. They were pleasant about it and said it was the last time they would be.`
+          : say(`missed_${loan.id}`, state.day, [
+              `${def.name} was not paid this week. Nobody said anything about it.`,
+              `${def.name} was not paid. The man who came for it waited twenty minutes and left.`,
+              `${def.name} was not paid, and the amount owed went up by the usual.`,
+            ]),
       'failure',
     );
 

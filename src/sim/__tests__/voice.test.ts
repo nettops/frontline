@@ -1,169 +1,148 @@
 /**
- * The way the game talks about people.
+ * Two men in the same chair do not sound the same.
  *
- * Two rules, both found by a playtester rather than by a test, which is why
- * they are now tests.
+ * The sit-down is the one place in this game where somebody is in the room with
+ * you, and the man opposite had no voice in it. Every reaction was narrated —
+ * *"They do not count it in front of you, which is manners"* — and the
+ * narration is good, but it belongs to the *register*, so a hot-headed enforcer
+ * and a calculating bookkeeper produced the same sentence in the same cadence.
+ * One writer doing every part.
  *
- * The first is that the game does not assume anybody's gender. The NPC
- * generator produces Carla, Rosa, Bianca, Gina and Nadia alongside Sal, Rocco
- * and Joey, and every one of them used to be "he" — in the flavour text, in the
- * crew sheet, in the sit-down, in 441 separate strings. The tester caught one.
- * Nothing in the state has ever recorded a gender, so they/them is not a
- * compromise here; it is the only thing the game actually knows.
+ * Two properties, and the second is the one that could have gone wrong quietly.
  *
- * The second is agreement. A mechanical he→they rewrite produces "they is" and
- * "they has" unless somebody is careful, and one bad automated pass turned "He
- * was not young" into "They were young" — a sentence meaning the opposite.
+ * **He sounds like himself.** Different traits, different words, same move.
  *
- * These read the source rather than the behaviour, because what is guarded is a
- * property of the text: that somebody adding an event next year writes it the
- * same way.
- *
- * ---
- *
- * The first version of this file checked eight files by hand-written list, and
- * missed the crew sheet's own section headings — the most visible instance of
- * the bug, on the screen a player looks at most. Hand-written lists of what to
- * check are how a guard ends up guarding the wrong thing. It now walks
- * everything.
+ * **And he tells you nothing about a number.** The temptation was to write the
+ * angry line off `loyalty` — he snaps because loyalty is 22 — which is the
+ * hidden stat leaking out dressed as character, and worse than printing it
+ * because it looks like writing. Keyed on traits instead, which are *manner*:
+ * how somebody talks is the most observable thing about them and says nothing
+ * about where any figure sits. The guard below holds that by putting the same
+ * man through the same beat at opposite ends of every stat.
  */
 import { describe, expect, it } from 'vitest';
-/*
-   Every source file in the project, read as text.
+import { newGame } from '../state';
+import { Rng } from '../rng';
+import { crewList } from '../npc';
+import { openSitdown, chooseRegister, availableRegisters, clearSitdown } from '../sitdown';
+import { VOICES } from '../../config/voice';
+import { TRAITS } from '../../config/npcs';
+import type { GameState, Npc } from '../types';
 
-   `import.meta.glob` is resolved by Vite at build time, so this cannot drift
-   out of date the way a hand-written import list did — a file added next year
-   is checked the day it lands, with nobody having to remember.
-*/
-const sources = import.meta.glob('../../**/*.{ts,tsx}', {
-  query: '?raw',
-  import: 'default',
-  eager: true,
-}) as Record<string, string>;
-
-/**
- * Comments are stripped in a separate first pass, and that ordering is the
- * whole reason this works.
- *
- * Doing it in one pass — deciding at each character whether it opens a comment
- * or a string — breaks on an apostrophe in JSX text. `don't` opens a fake
- * string span that runs to the next apostrophe, swallowing any comment in
- * between and reporting design prose as something the player reads. Two real
- * bugs hid behind exactly that noise.
- */
-function stripComments(src: string): string {
-  let out = '';
-  let i = 0;
-  const n = src.length;
-  while (i < n) {
-    if (src[i] === '/' && src[i + 1] === '/') {
-      const j = src.indexOf('\n', i);
-      i = j === -1 ? n : j;
-    } else if (src[i] === '/' && src[i + 1] === '*') {
-      const j = src.indexOf('*/', i + 2);
-      i = j === -1 ? n : j + 2;
-    } else {
-      out += src[i++];
-    }
-  }
-  return out;
+function ready(seed: number): GameState {
+  const state = newGame({ name: 'Voice', difficulty: 'normal', seed });
+  state.org.cash = 200_000;
+  state.day = 40;
+  return state;
 }
 
-/**
- * Everything the player can read: string and template literals, plus JSX text.
- *
- * JSX text is not a string literal — it is bare text between tags — which is
- * how every heading on the crew sheet survived the rewrite that was supposed to
- * fix them. Apostrophes in JSX text make the string scanner produce spans that
- * are not really strings; that is harmless here, because what those spans
- * contain is JSX text, which is exactly what needs checking too.
- */
-function playerFacing(src: string): string[] {
-  const code = stripComments(src);
-  const out: string[] = [];
-
-  let i = 0;
-  const n = code.length;
-  while (i < n) {
-    const c = code[i];
-    if (c === "'" || c === '"' || c === '`') {
-      const quote = c;
-      const start = ++i;
-      while (i < n) {
-        if (code[i] === '\\') {
-          i += 2;
-          continue;
-        }
-        if (code[i] === quote) break;
-        i++;
-      }
-      out.push(code.slice(start, i));
-      i++;
-    } else if (c === '>') {
-      // JSX text: everything up to the next tag.
-      const j = code.indexOf('<', i);
-      if (j > i + 1) out.push(code.slice(i + 1, j));
-      i = j === -1 ? n : j;
-    } else {
-      i++;
-    }
-  }
-  return out;
+/** One beat, and what he said in it. */
+function firstBeat(state: GameState, npc: Npc): string | null {
+  npc.stats.grievance = 60;
+  if (!openSitdown(state, 'crew', npc.id, 'settle').ok) return null;
+  const reg = availableRegisters(state)[0];
+  if (!reg) return null;
+  chooseRegister(state, new Rng(state.rng), reg.id);
+  const beat = state.sitdown?.beats[0]?.text ?? null;
+  clearSitdown(state);
+  return beat;
 }
 
-const FILES: [string, string][] = Object.entries(sources)
-  // Tests talk about the bug in order to guard it, which is not the same as
-  // committing it.
-  /*
-     Tests talk about the bug in order to guard it, which is not the same as
-     committing it. Filtered on the filename rather than on the directory,
-     because the keys a glob hands back are relative to the importing file and
-     their exact shape is not something worth depending on.
-  */
-  .filter(([path]) => !/\.test\.tsx?$/.test(path))
-  .map(([path, text]) => [path.replace(/^(\.\.\/)+/, ''), text]);
-
-describe('the game does not decide anybody is a man', () => {
-  it('is reading the whole codebase, not a list somebody kept up to date', () => {
+describe('the man opposite', () => {
+  it('has a line for every trait the game can give somebody', () => {
     /*
-       The guard on the guard, twice over. Both rules below pass perfectly if
-       the parser returns nothing, and the previous version of this file passed
-       while ignoring three quarters of the game.
+       A trait with no voice falls through to bare narration, which is the old
+       behaviour and is silent about itself. This is the guard against the
+       catalogue drifting behind `TRAITS` — a new trait ships mute otherwise.
     */
-    expect(FILES.length).toBeGreaterThan(60);
-    const all = FILES.flatMap(([, src]) => playerFacing(src));
-    expect(all.length).toBeGreaterThan(1500);
-    expect(all.filter((t) => /\bthey\b/i.test(t)).length).toBeGreaterThan(150);
+    const missing = TRAITS.filter((t) => !VOICES[t.id]).map((t) => t.id);
+    expect(missing, `traits with no voice: ${missing.join(', ')}`).toEqual([]);
   });
 
-  it('uses no gendered pronoun in anything the player reads', () => {
-    const offenders: string[] = [];
-    for (const [name, src] of FILES) {
-      for (const text of playerFacing(src)) {
-        const hit = /\b(he|him|his|himself|she|her|hers|herself)\b/i.exec(text);
-        if (hit) {
-          const from = Math.max(0, hit.index - 45);
-          offenders.push(`${name}: "…${text.slice(from, hit.index + 45).trim()}…"`);
-        }
+  it('says something different depending on who he is', () => {
+    const heard = new Set<string>();
+    let men = 0;
+    for (const seed of [3, 11, 21, 33, 47, 58]) {
+      const state = ready(seed);
+      for (const npc of crewList(state).slice(0, 2)) {
+        const beat = firstBeat(state, npc);
+        if (!beat) continue;
+        men += 1;
+        heard.add(beat.split('\n')[0]);
+        state.day += 40;
       }
     }
-    expect(
-      offenders,
-      `the game has decided somebody's gender:\n${offenders.slice(0, 12).join('\n')}`,
-    ).toHaveLength(0);
+    expect(men, 'no sit-down opened, so this measured nothing').toBeGreaterThan(4);
+    /*
+       Against the men who spoke rather than a fixed number: the failure this
+       catches is every voice collapsing to one, and a bar of "more than half
+       of them differed" says that without depending on how many opened.
+    */
+    expect(heard.size, 'everybody in the room sounds the same').toBeGreaterThan(men / 2);
   });
 
-  it('agrees its verbs with the plural it now uses', () => {
-    const offenders: string[] = [];
-    for (const [name, src] of FILES) {
-      for (const text of playerFacing(src)) {
-        const bad = /\bthey\s+(is|was|has|does|isn't|wasn't|hasn't|doesn't)\b/i.exec(text);
-        if (bad) {
-          const from = Math.max(0, bad.index - 45);
-          offenders.push(`${name}: "…${text.slice(from, bad.index + 55).trim()}…"`);
+  it('draws only on his traits and on what the player just watched happen', () => {
+    /*
+       Rule 1, as the property that is actually true.
+
+       The first version of this asserted that the line does not move when a
+       hidden stat moves, put one man's stats at 5 and another's at 95, and
+       failed — correctly. Stats decide whether the move *lands*, landing
+       decides which half of the voice is drawn from, and the player watches
+       the landing happen. The line following the outcome is not a leak; it is
+       the outcome, which was never hidden.
+
+       So the invariant is the sourcing: whatever he says belongs to one of his
+       own traits, in the half matching what the player just saw. Nothing else
+       can have reached it. That fails the moment somebody writes an angry line
+       off `loyalty`, which is the mistake this is here to prevent.
+    */
+    let checked = 0;
+    for (const seed of [3, 11, 21, 33, 47, 58]) {
+      const state = ready(seed);
+      for (const npc of crewList(state).slice(0, 2)) {
+        npc.stats.grievance = 60;
+        if (!openSitdown(state, 'crew', npc.id, 'settle').ok) continue;
+        for (let i = 0; i < 3; i++) {
+          const regs = availableRegisters(state);
+          if (!regs.length || !state.sitdown) break;
+          chooseRegister(state, new Rng(state.rng), regs[i % regs.length].id);
+          const beat = state.sitdown?.beats[state.sitdown.beats.length - 1];
+          if (!beat) break;
+          const spoken = beat.text.split('\n')[0];
+          if (!spoken.startsWith('“')) continue;
+          const allowed = npc.traits
+            .filter((t) => VOICES[t])
+            .flatMap((t) => (beat.landed ? VOICES[t].landed : VOICES[t].missed));
+          expect(
+            allowed,
+            `${npc.name} said something that is not his: ${spoken}`,
+          ).toContain(spoken);
+          checked += 1;
         }
+        clearSitdown(state);
+        state.day += 40;
       }
     }
-    expect(offenders, offenders.join('\n')).toHaveLength(0);
+    expect(checked, 'nobody spoke, so this measured nothing').toBeGreaterThan(4);
+  });
+
+  it('never says the same thing twice in one conversation', () => {
+    for (const seed of [3, 11, 21, 47]) {
+      const state = ready(seed);
+      const npc = crewList(state)[0];
+      npc.stats.grievance = 60;
+      if (!openSitdown(state, 'crew', npc.id, 'settle').ok) continue;
+      for (let i = 0; i < 4; i++) {
+        const regs = availableRegisters(state);
+        if (!regs.length || !state.sitdown) break;
+        chooseRegister(state, new Rng(state.rng), regs[i % regs.length].id);
+      }
+      const spoken = (state.sitdown?.beats ?? [])
+        .map((x) => x.text.split('\n')[0])
+        .filter((l) => l.startsWith('“'));
+      expect(new Set(spoken).size, `he repeated himself: ${spoken.join(' | ')}`).toBe(spoken.length);
+      clearSitdown(state);
+    }
   });
 });

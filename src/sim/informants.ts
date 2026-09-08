@@ -157,6 +157,20 @@ export interface Presence {
   leaks: number;
   /** Nights he worked at all, over the same window. */
   jobs: number;
+  /**
+   * Dead, defected, or otherwise no longer anybody's problem.
+   *
+   * The window this table reads is longer than a man lasts, so the people you
+   * have already dealt with keep appearing in it — and they appear at the top,
+   * because it sorts on the leak count and a man who stopped working still has
+   * his old nights. A blind tester finished a 481-day career with 6 of the 16
+   * rows belonging to men who were gone, two of them killed by him, listed as
+   * "2 nights / 0 worked" and "5 / 0". `canAccuse` refuses them, so nothing
+   * was exploitable; what they did was make the one comparison this whole
+   * screen exists for unreadable, with a zero denominator, at the top of the
+   * table.
+   */
+  gone: boolean;
 }
 
 export function timesPresent(state: GameState): Presence[] {
@@ -170,15 +184,24 @@ export function timesPresent(state: GameState): Presence[] {
     for (const id of job.crewIds) jobs.set(id, (jobs.get(id) ?? 0) + 1);
   }
 
+  const isGone = (id: Id) => {
+    const npc = state.npcs[id];
+    return !npc || npc.status === 'dead' || npc.status === 'defected';
+  };
+
   return [...new Set([...leaks.keys(), ...jobs.keys()])]
     .map((id) => ({
       id,
       name: state.npcs[id]?.name ?? 'somebody since gone',
       leaks: leaks.get(id) ?? 0,
       jobs: jobs.get(id) ?? 0,
+      gone: isGone(id),
     }))
     .filter((row) => row.leaks > 0)
-    .sort((a, b) => b.leaks - a.leaks);
+    // Men who are gone still belong on the page — a night they were on is a
+    // night they were on — but never above the men you can still do something
+    // about. They sort under, whatever their count.
+    .sort((a, b) => Number(a.gone) - Number(b.gone) || b.leaks - a.leaks);
 }
 
 // ------------------------------------------------------------------- tick ---
@@ -223,7 +246,7 @@ export function tickInformants(state: GameState, rng: Rng): void {
     const his = jobs.filter((j) => j.crewIds.includes(npc.id));
     if (his.length === 0) continue;
     const job = rng.pick(his);
-    record(state, job, npc.id);
+    noteAftermath(state, record(state, job, npc.id));
     addEvidence(state, {
       day: state.day,
       source: 'informant',
@@ -243,7 +266,7 @@ export function tickInformants(state: GameState, rng: Rng): void {
   */
   if (rng.chance(INFORMANT.coldLeakChancePerWeek)) {
     const job = rng.pick(jobs);
-    record(state, job, null);
+    noteAftermath(state, record(state, job, null));
     addEvidence(state, {
       day: state.day,
       source: 'operation',
@@ -254,6 +277,88 @@ export function tickInformants(state: GameState, rng: Rng): void {
       detail: `They have put ${job.name} in ${territoryDef(job.territoryId).name} together on their own.`,
     });
   }
+}
+
+// ------------------------------------------------------------- afterwards ---
+
+/**
+ * What has come back since the last time you decided it was somebody.
+ *
+ * The right/wrong branch in `accuse` has always been real — a correct call
+ * pays +14 respect and costs the room 5 loyalty, a wrong one costs 10 respect,
+ * 16 loyalty and 20 grievance to every man in it, and the player is never told
+ * which they paid. A blind tester killed two men across a 481-day career, both
+ * of whom were in fact talking, and reported the outcome as identical in both
+ * cases and therefore as a screen with no consequence behind it:
+ *
+ *   > "If the leak stopping is the payoff, I could not see it; if the leak
+ *   > continuing is the punishment, I could not see that either. Right now,
+ *   > not knowing costs nothing, so it isn't a burden — it's just missing
+ *   > information."
+ *
+ * He was right about the thing that mattered. The design's own answer is
+ * `INFORMANT.cautiousDays`: the real informant goes quiet for eight weeks
+ * rather than stopping, so *the record going quiet is the only confirmation
+ * there is* — and nothing on any screen tracked the record from the day of the
+ * accusation, so a quiet page and a solved problem looked the same and so did
+ * a page that had started filling up again.
+ *
+ * This counts, and says nothing about what the count means. Derived from the
+ * dated note `accuse` already writes, so there is no new state and nothing to
+ * migrate.
+ */
+export interface Aftermath {
+  /** Who you decided it was, and when. */
+  name: string;
+  day: number;
+  daysSince: number;
+  /** Nights that have come back since. The whole read, and it adjudicates nothing. */
+  sinceCount: number;
+  /** The most recent of them, for the panel to date. */
+  lastDay: number | null;
+}
+
+const DECIDED = 'You decided it was them.';
+
+export function readAftermath(state: GameState): Aftermath | null {
+  let best: { npc: Npc; day: number } | null = null;
+  for (const npc of Object.values(state.npcs)) {
+    for (const note of npc.notes ?? []) {
+      if (note.text !== DECIDED) continue;
+      if (!best || note.day > best.day) best = { npc, day: note.day };
+    }
+  }
+  if (!best) return null;
+
+  const since = leakList(state).filter((l) => l.day > best!.day);
+  return {
+    name: best.npc.name,
+    day: best.day,
+    daysSince: state.day - best.day,
+    sinceCount: since.length,
+    lastDay: since.length ? Math.max(...since.map((l) => l.day)) : null,
+  };
+}
+
+/**
+ * And the one line that makes it land without answering anything.
+ *
+ * Said the first time the record breaks its silence after an accusation, which
+ * is the moment a player who was wrong could have found out and never did.
+ * Deliberately not "you were wrong" — a leak after a correct call is possible
+ * too, because somebody else can always start.
+ */
+export function noteAftermath(state: GameState, leak: Leak): void {
+  const after = readAftermath(state);
+  if (!after) return;
+  // Only the first one. After that the page speaks for itself.
+  if (after.sinceCount !== 1 || after.lastDay !== leak.day) return;
+  addLog(
+    state,
+    `Something has come back that they could not have told anybody. ` +
+      `${after.name} has been in the ground ${after.daysSince} days.`,
+    'heat',
+  );
 }
 
 // --------------------------------------------------------------- accusing ---

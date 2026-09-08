@@ -140,6 +140,15 @@ export interface HomeRead {
   people: string[];
   /** Days since the last evening at home. */
   since: number;
+  /**
+   * What being away is costing, said rather than left to be inferred.
+   *
+   * Empty for a boss who is around. `neglectRisk` is 1 up to
+   * `HOME.depositionFrom` on purpose — a penalty everybody carries is a tax
+   * rather than a thing the player can be wrong about — so this says nothing
+   * until there is something to say.
+   */
+  costing: string | null;
 }
 
 export function homeRead(state: GameState): HomeRead {
@@ -154,5 +163,31 @@ export function homeRead(state: GameState): HomeRead {
       return `${p.name}, ${def ? def.label : 'family'}`;
     }),
     since: state.day - house.lastVisitDay,
+    /*
+       The consequence, on the screen that shows the counter.
+
+       A round-17 scorer wrote: *"I have a wife and two children, I clicked Go
+       home once on day 26, and on day 163 the game told me 'Last evening at
+       home: 137 days ago'. That is a lovely line attached to nothing. It never
+       cost me anything, and a family that cannot be neglected at a price is set
+       dressing."*
+
+       They were wrong about the price and right about the screen. Neglect
+       multiplies the chance the player's own people remove him, up to
+       `HOME.depositionAtWorst` — `ladder.probe` measures careers ending at
+       x1.9 — and `homeRead` reported the days, the label and the names, and
+       never once mentioned it. A cost nobody is told about is not a cost the
+       player can decide to pay, which is the whole of what that scorer met.
+
+       Said as a direction rather than as the multiplier, because the number is
+       one the game does not show anywhere else and a bare "x1.6" on a screen
+       about a man's family would be the wrong register entirely.
+    */
+    costing:
+      neglectRisk(state) <= 1
+        ? null
+        : neglectRisk(state) >= 1 + (HOME.depositionAtWorst - 1) * 0.6
+          ? 'Your own people have no reason to stand with you beyond the work, and it shows when a room turns.'
+          : 'You are becoming somebody your own people only know as the work.',
   };
 }

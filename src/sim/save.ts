@@ -8,7 +8,7 @@
 
 import type { GameMode, GameState } from './types';
 import { SAVE_VERSION } from './state';
-import { RANK_BY_ID } from '../config/economy';
+import { rankNow } from './rank';
 import { DIFFICULTY_BY_ID } from '../config/difficulty';
 import { crewList } from './npc';
 import { formatShortDay } from './util';
@@ -46,7 +46,16 @@ function buildMeta(state: GameState, slot: SlotId): SaveMeta {
   return {
     slot,
     name: state.player.name,
-    rank: RANK_BY_ID[state.player.rank].name,
+    /*
+       The live reading, not the stored field.
+
+       This row was the only place in the entire interface that printed a
+       rank, and it printed `player.rank` — which nothing ever assigns, so it
+       said Street Criminal for the life of every career. Round 16 had three
+       testers find that independently and all three filed it as the thing
+       that broke their sense of progress.
+    */
+    rank: rankNow(state).name,
     difficulty: DIFFICULTY_BY_ID[state.difficulty].name,
     mode: state.mode,
     day: state.day,

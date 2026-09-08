@@ -4,7 +4,15 @@
  * Heat is deliberately sticky: it decays slowly, decays slower the higher it
  * is, and only decays at all after consecutive quiet days. You cannot idle
  * your way down from 80 — you have to actively change how you operate.
+ *
+ * The numbers live in `tuning/heat.json` so they can be changed without a
+ * TypeScript toolchain. Everything that explains them stays here — JSON cannot
+ * hold a comment, and most of this file is the record of what each figure was
+ * before, what it measured, and why it moved.
  */
+
+import { checkBands } from './tuning/check';
+import data from './tuning/heat.json';
 
 export interface HeatTier {
   min: number;
@@ -22,71 +30,23 @@ export interface HeatTier {
   description: string;
 }
 
-export const HEAT_TIERS: HeatTier[] = [
-  {
-    min: 0,
-    max: 10,
-    name: 'Quiet',
-    decayMultiplier: 1.0,
-    description: 'Nobody is looking at you.',
-  },
-  {
-    min: 11,
-    max: 25,
-    name: 'Suspicious',
-    decayMultiplier: 0.85,
-    description: 'A name in a file somewhere. Nothing more.',
-  },
-  {
-    min: 26,
-    max: 40,
-    name: 'Investigating',
-    decayMultiplier: 0.7,
-    description: 'Someone has been assigned to you.',
-  },
-  {
-    min: 41,
-    max: 60,
-    name: 'Major Investigation',
-    decayMultiplier: 0.55,
-    description: 'Resources are being spent. Your people are being watched.',
-  },
-  {
-    min: 61,
-    max: 80,
-    name: 'Intensive Task Force',
-    decayMultiplier: 0.42,
-    description: 'A dedicated unit. Surveillance. Pressure on your weakest links.',
-  },
-  {
-    min: 81,
-    max: 92,
-    name: 'Organization Under Siege',
-    decayMultiplier: 0.32,
-    description: 'They are coming. The only question is who talks first.',
-  },
-  /*
-     The last stretch reads differently, because it used to read the same.
+/*
+   The last stretch of the table reads differently, because it used to read
+   the same.
 
-     81 to 100 was one band with one name, one description and one decay rate,
-     and the number itself clamps at 100 — so a player at 96 saw exactly what a
-     player at 82 saw, and every further mistake changed nothing on screen. A
-     round-7 tester described heat as going inert near the top, which is what a
-     gauge with no travel left looks like from the outside.
+   81 to 100 was one band with one name, one description and one decay rate,
+   and the number itself clamps at 100 — so a player at 96 saw exactly what a
+   player at 82 saw, and every further mistake changed nothing on screen. A
+   round-7 tester described heat as going inert near the top, which is what a
+   gauge with no travel left looks like from the outside.
 
-     Splitting the band costs nothing mechanically at 81-92 and gives the last
-     eight points somewhere to say so. The decay is lower again, which is the
-     honest continuation of a curve that has been falling the whole way up.
-  */
-  {
-    min: 93,
-    max: 100,
-    name: 'Nothing Left To Watch',
-    decayMultiplier: 0.22,
-    description:
-      'Every room you use is known and every name on your payroll is written down. This does not get worse. It only ends.',
-  },
-];
+   Splitting the band costs nothing mechanically at 81-92 and gives the last
+   eight points somewhere to say so. The decay is lower again, which is the
+   honest continuation of a curve that has been falling the whole way up.
+*/
+export const HEAT_TIERS: HeatTier[] = data.tiers;
+
+checkBands('tuning/heat.json', HEAT_TIERS);
 
 /**
  * Which tier a reading falls in — by floor alone, because heat is not an integer.
@@ -170,14 +130,14 @@ export function heatSeverity(heat: number): HeatSeverity {
  *
  * Chosen by plotting seven values against the resulting distribution rather
  * than by eye; see section 3.2 of
- * `docs/superpowers/specs/2026-08-23-heat-ratchet-design.md`. Below about 0.018
+ * `docs/specs/2026-08-23-heat-ratchet-design.md`. Below about 0.018
  * the top band still holds a sixth of every career; above about 0.030 the
  * bottom two bands hold a quarter and the law system goes decorative.
  */
-export const HEAT_DECAY_SHARE = 0.026;
+export const HEAT_DECAY_SHARE = data.decayShare;
 
 /** Days of no heat-generating activity before decay starts at all. */
-export const QUIET_DAYS_BEFORE_DECAY = 2;
+export const QUIET_DAYS_BEFORE_DECAY = data.quietDaysBeforeDecay;
 
 /**
  * What an organization makes go away on its own, every day, working or not.
@@ -214,7 +174,7 @@ export const HEAT_ABSORPTION = {
    * that you cannot idle your way out of trouble, which matters most when the
    * organization is small enough for one bad week to end it.
    */
-  fromCrew: 4,
+  fromCrew: data.absorption.fromCrew,
   /**
    * Per person on the payroll beyond that floor, per day.
    *
@@ -234,7 +194,66 @@ export const HEAT_ABSORPTION = {
    * So this is the first value for the absorption that has ever been measured
    * against heat behaving as the table describes.
    */
-  perCrew: 0.2,
+  perCrew: data.absorption.perCrew,
+  /*
+     ...and the ceiling this does not have, which is measured and not fixed.
+
+     The figures above are absolute — a flat subsidy per head per day — and
+     nothing compares them to what the organization is actually producing. A
+     blind tester ran product and arms through five districts at $177,143 a
+     week for 348 days and finished a 481-day career at a total heat of 7 out
+     of 100, three of it from the street. The trade generated 2.4 a week; his
+     sixteen men absorbed 16.8, seven times more, every week, before the
+     proportional decay ran at all. `heatApparatus.test.ts` reproduces it: with
+     a standing trade running, street heat settles at exactly **0.0** for any
+     payroll of sixteen or more, and at 13.3 for a payroll of four. The largest
+     families in the game are the quietest, and hiring is a way to make a
+     standing operation invisible.
+
+     The ratio is structural rather than a number set wrong. Trade throughput
+     is capped by *ground* — the routes a family holds — while the apparatus
+     grows with the *payroll*, so past a certain size every man hired removes
+     more than the trade he enables can produce. Raising `heatPerUnit` does not
+     touch it; that would punish the small outfits, who are the fragile ones,
+     and leave the large ones where they are.
+
+     A repair was built, measured, and is not going in. `APPARATUS_CAP` below
+     is the dial; the reading that settles it is `sizing the apparatus cap` in
+     `ladder.probe`, which runs the same 36 seeds under each setting and pairs
+     each against itself:
+
+         0.7    Boss 7/36 (off: 17/36)   12 seeds lost it, 2 gained
+         0.9    Boss 8/36                12 lost, 3 gained
+         0.95   Boss 6/36                12 lost, 1 gained
+                                         weekly heat +10 · estate -500k to -640k
+
+     Twelve down and one to three up, at every setting. The cap costs about a
+     third of the Boss careers in a human-length career and half a million of
+     estate, and it does it consistently rather than at one value.
+
+     The first pass at this measured the same three settings *unpaired* — 36
+     careers under one config against a fixed bar — and read 5 bars failing at
+     0.7, none at 0.9 and 3 at 0.95, which is not monotonic and looked like
+     noise. It was not noise. Boss inside 300 days runs at about one career in
+     five, so an unpaired count carries roughly two and a half careers before
+     anything is done to the game, and 0.9 had landed on exactly 8 of 36
+     against a bar of "at least 8". Reading that as "all 53 pass, so 0.9 is
+     safe" was reading a coin landing on its edge as a decision.
+
+     So the fault stands and the dial ships off. What is now known is what it
+     would cost to close it this way, which is more than the fault is worth: an
+     invisible standing operation is a real defect, and a third of the ladder
+     is a bigger one. Repricing what a standing trade costs in attention is a
+     different change, and it needs to reach the heat without going through the
+     apparatus every family is entitled to.
+
+     That change is `TradeDef.heatChannel`, and it went in: both trades pay
+     into `money` now, where nothing absorbs, paper decays slower than the
+     street and laying low does not help. Same weekly figure, sixteen hands —
+     it settles at 0.0 on the street and 20.3 on the books. Paired over a
+     hundred seeds it costs 12 careers their Boss and returns 5, against the
+     cap's 12 and 2 out of thirty-six, and the whole probe suite passes.
+  */
   /**
    * The most an organization can make go away by being large alone.
    *
@@ -258,7 +277,7 @@ export const HEAT_ABSORPTION = {
    * is already dangerous stays sticky, and it still does nothing at all about
    * an informant.
    */
-  max: 5.75,
+  max: data.absorption.max,
   /**
    * And it only works on the street.
    *
@@ -275,28 +294,51 @@ export const HEAT_ABSORPTION = {
 } as const;
 
 /** Laying low multiplies decay, but you cannot run operations while doing it. */
-const LAY_LOW_DECAY_MULTIPLIER = 4;
-export const LAY_LOW_DURATION_DAYS = 14;
+export const LAY_LOW_DURATION_DAYS = data.layLowDurationDays;
 /**
  * Laying low costs respect — the street notices you went quiet. Kept modest
  * because heat management is a repeated action: at a steep cost, a player who
  * correctly goes quiet several times ends up with less standing than one who
  * never manages heat at all, which inverts the whole point of the system.
  */
-export const LAY_LOW_RESPECT_COST = 4;
+export const LAY_LOW_RESPECT_COST = data.layLowRespectCost;
 
 /**
  * How much heat hurts operations. At heat 100 this removes 38 percentage
  * points of success chance, which is what makes the doom loop real:
  * high heat causes failures, failures cause more heat.
  */
-export const HEAT_SUCCESS_PENALTY_AT_MAX = 0.3;
+/**
+ * The cap on the apparatus, as a share of what the outfit is producing.
+ *
+ * `null` is the shipped setting and is exactly the behaviour `HEAT_ABSORPTION`
+ * describes: the flat figures apply, and nothing compares them to the
+ * organization's own output. A number caps the apparatus at that share of a
+ * rolling week of arrivals, so it can never remove more heat than it was given
+ * — which is the repair for the fault recorded on `HEAT_ABSORPTION.max`, where
+ * a family of sixteen absorbs seven times what a full narcotics operation
+ * generates and street heat settles at exactly zero.
+ *
+ * A mutable holder rather than a field on the frozen table, and that is the
+ * point of it: `sizing the apparatus cap` in `ladder.probe` sweeps it across
+ * the same seeds to produce a paired reading, which is the thing that was
+ * missing when three settings were measured and none could be chosen.
+ *
+ * It stays in TypeScript rather than moving to `tuning/heat.json` with the
+ * numbers around it, and the rule that decides is what the file is for: the
+ * JSON holds figures somebody might reasonably retune, and this is not one. It
+ * is off, nothing in the game writes it, and turning it on is a change to the
+ * game that needs the probe above behind it rather than an edit to a data file.
+ */
+export const APPARATUS_CAP: { ofIntake: number | null } = { ofIntake: null };
+
+export const HEAT_SUCCESS_PENALTY_AT_MAX = data.successPenaltyAtMax;
 
 /** Dismissing an exposed crew member cuts a thread — and their loyalty to you. */
-export const DISMISS_HEAT_REDUCTION = 4;
+export const DISMISS_HEAT_REDUCTION = data.dismissHeatReduction;
 
 /** Heat added when an operation is cancelled mid-run (loose ends). */
-export const CANCEL_OPERATION_HEAT = 3;
+export const CANCEL_OPERATION_HEAT = data.cancelOperationHeat;
 
 // ------------------------------------------------------------- channels ---
 
@@ -377,16 +419,11 @@ export const CHANNEL_OF_SOURCE: Record<
  * it is a specific tool that does one thing very well and one thing not at all.
  * A player pinned by an informant has to deal with the informant.
  */
-export const LAY_LOW_BY_CHANNEL: Record<HeatChannel, number> = {
-  street: LAY_LOW_DECAY_MULTIPLIER,
-  money: 1,
-  inside: 0,
-};
+export const LAY_LOW_BY_CHANNEL: Record<HeatChannel, number> = data.layLowByChannel;
 
 /** Ordinary decay speed per channel, before tier and difficulty. */
-export const DECAY_BY_CHANNEL: Record<HeatChannel, number> = {
-  street: 1.25,
-  // Paper does not go away because you stopped. It goes away because it got old.
-  money: 0.8,
-  inside: 0.6,
-};
+/*
+   Paper does not go away because you stopped. It goes away because it got old,
+   which is why `money` is slower than `street` and `inside` slower again.
+*/
+export const DECAY_BY_CHANNEL: Record<HeatChannel, number> = data.decayByChannel;

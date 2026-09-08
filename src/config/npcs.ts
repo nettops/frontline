@@ -434,8 +434,56 @@ export const DRIFT = {
    * bad night should still be in a man weeks later, and gone by the season.
    * Symmetric, so a man talked down below his own baseline climbs back to it
    * as well — the number is who he is, not a floor on how bad it can get.
+   *
+   * **It did not hold, and the record above overstates what it bought.**
+   * Re-measured across twelve careers while fixing the doorway, with the crew
+   * median taken at six points:
+   *
+   *     day                    30   60   90  150  210  300
+   *     grinds them daily      49   64   89   99  100    -
+   *     works them every 3rd   48   48   50   64   94    -
+   *     never sends anybody    48   48   49   48   54    -
+   *
+   * So the settle holds a crew that is not being worked and loses to one that
+   * is. 1.5 a week is roughly one arrest every ten weeks; `ARREST_FEAR_INCREASE`
+   * alone is 15 and `STAGE_ADVANCE_FEAR` is 8. The ratchet is slower than it
+   * was and it is still a ratchet, and the "90 from then on" above should read
+   * "94 by day 300 for anybody who plays".
+   *
+   * Deliberately **not** raised here. Every stat-gated system downstream reads
+   * this — `heatFearLoyalty` scales on `fear / 100`, `BEHAVIOUR.informantFearAbove`
+   * gates who talks to the police — so the number is a balance change across
+   * several systems and belongs in its own measured piece of work rather than
+   * as a side effect of a UI repair. What was done instead is local: the one
+   * consumer that had turned into wallpaper because of this, the doorway's
+   * fear branch, now reads the *rise* off a man's own `fearBase` rather than an
+   * absolute bar. See `config/approaches.ts`.
    */
   fearSettlePerTick: 1.5,
+
+  /**
+   * The share of the distance back to himself that a man closes each week.
+   *
+   * A share rather than a flat step, and the argument is the one
+   * `HEAT_DECAY_SHARE` already makes in this codebase about the identical
+   * fault: *"a flat rate clears slowest exactly where it is worst."* Inflow
+   * scales with everything the player does and outflow scaled with nothing, so
+   * there was no equilibrium to find — only a ceiling to arrive at.
+   *
+   *     per man per week        in    off    net
+   *     grinds them daily     2.84   1.01   +1.84
+   *     works them every 3rd  2.20   0.97   +1.22
+   *     never sends anybody   1.11   0.49   +0.62
+   *
+   * A flat 1.5 cannot balance 2.84 however faithfully it is applied, and 43
+   * weeks of a 1.84 surplus is 80 points on a stat that starts at 43. With a
+   * share the resting point is `inflow / share`, so a crew settles where the
+   * boss's own conduct puts it instead of at 100 regardless.
+   *
+   * Swept against the distribution rather than picked — see the table in
+   * `DRIFT.fearSettlePerTick` above for what it replaced.
+   */
+  fearSettleShare: 0.14,
   /** Player leadership resists all decay. At leadership 20, ~+3 per tick. */
   leadershipResistFactor: 0.16,
   /** Ambition creeps up in people who taste success. */

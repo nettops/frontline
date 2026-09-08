@@ -7,6 +7,8 @@ import { playerIsAtWar } from '../sim/diplomacy';
 import { eligibleHeirs, heirOf } from '../sim/succession';
 import { crewList } from '../sim/npc';
 import { needsSteward } from '../sim/delegation';
+import { pointsLeft } from '../sim/build';
+import { approaches } from '../sim/approaches';
 
 export type PanelId =
   | 'dashboard'
@@ -109,6 +111,56 @@ export default function Rail({
   // game to hand a district over reached only players who held none.
   const handOver = needsSteward(state);
   const leaks = (state.leaks ?? []).length;
+  /*
+     Points nobody has been told about.
+
+     Round 16 had three testers out of three find the build screen by accident
+     — on days 8, 18 and 25 — and all three reported the same thing: sixteen
+     points had been sitting unspent since the first morning, raising nothing,
+     while they ran jobs at a deficit they did not know they were carrying.
+     One called it "the one thing in the game a player can be strictly wrong
+     about for free", which is exactly right and is why this belongs on the
+     rail rather than in a tip that fires once.
+
+     The badge system already existed and already had this rule written above
+     it — every badge says what it wants — and was simply never pointed at the
+     one screen the opening hour never mentions.
+  */
+  const unspent = pointsLeft(state);
+  /*
+     Somebody standing in the doorway.
+
+     The engagement work built `approaches.ts` so that men with a reason come
+     to the boss instead of only the other way round, and it shipped rendering
+     in exactly one place: a panel on the Overview. All three round-16 testers
+     missed it for their entire careers.
+
+     A rail badge is the route, and it needed the read to be worth one first.
+     Measured before this was added, the doorway was lit on 71% of days with
+     the list at its cap — a badge on that is wallpaper, and the rule above
+     this block already says so. Worse, it was 71% for a boss who grinds his
+     crew and 76% for one who barely works them, so it said nothing about how
+     the player played.
+
+     With the fear branch reading the rise off a man's own nerve it does
+     (`__tests__/approaches.test.ts` runs these and guards the gap):
+
+         promotes, works them every third day     0%
+         promotes, grinds them daily              9%
+         never promotes, works them every third  40%
+         never promotes, grinds them daily       53%
+
+     A boss who never advances anybody should have a queue at his door, and
+     now he can see it without happening to be on the right screen.
+
+     `crew`'s own badge stays, and is a different sentence: it counts men who
+     are carrying something, which is a standing condition, where this is
+     somebody who has come to say it today. They do not double up in practice
+     — across the same careers the crew badge lit on 0% of days for every boss
+     but the one who refuses everybody, and 6% for him.
+  */
+  const waiting = approaches(state);
+  const urgent = waiting.some((a) => a.urgency === 'now');
   const watching = state.mode === 'simulation';
   const entries = watching ? BUILT.filter((e) => e.city) : BUILT;
 
@@ -142,6 +194,14 @@ export default function Rail({
           {entry.id === 'territory' && held > 0 && (
             <span className="rail-phase" title={`${held} district${held === 1 ? '' : 's'} under your control`}>
               {held}
+            </span>
+          )}
+          {entry.id === 'player' && unspent > 0 && (
+            <span
+              className="rail-badge"
+              title={`${unspent} point${unspent === 1 ? '' : 's'} to place. They raise your odds on every job until you do`}
+            >
+              {unspent}
             </span>
           )}
           {entry.id === 'rivals' && hostile && (
@@ -199,6 +259,18 @@ export default function Rail({
           {entry.id === 'succession' && noHeir && (
             <span className="rail-badge" title="Nobody is named to take over. Name a successor.">
               !
+            </span>
+          )}
+          {entry.id === 'dashboard' && waiting.length > 0 && (
+            <span
+              className="rail-badge"
+              title={
+                `${waiting.length === 1 ? 'Somebody is' : `${waiting.length} people are`} ` +
+                `waiting to see you${urgent ? ', and one of them cannot wait' : ''}. ` +
+                `Open them from the Overview.`
+              }
+            >
+              {urgent ? `${waiting.length}!` : waiting.length}
             </span>
           )}
           {entry.id === 'dashboard' && pending > 0 && (

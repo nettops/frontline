@@ -19,6 +19,7 @@ import type { PanelId } from './Rail';
 import type { Cue } from './audio';
 import type { StageId } from '../config/lawEnforcement';
 import type { FactionId } from '../config/factions';
+import { heatTier } from '../config/heat';
 import { crewList } from '../sim/npc';
 import { controlledTerritories } from '../sim/territory';
 import { playerWars } from '../sim/diplomacy';
@@ -358,10 +359,24 @@ export function buildReport(before: Snapshot, state: GameState): DayReport | nul
 
   const heat = Math.round(now.heat) - Math.round(before.heat);
   if (Math.abs(heat) >= 2) {
+    /*
+       The tier is the actionable half, and it was the half missing.
+
+       `Heat up 7, to 43.` is a meter reading: a player who does not already
+       know what 43 buys them cannot do anything with it, and one who does has
+       read it off the stat bar already. Crossing into Major Investigation is
+       the thing worth walking back into the room for, so the line says so when
+       it happened and stays a bare number when it did not.
+    */
+    const crossed = heatTier(now.heat).name !== heatTier(before.heat).name;
     push(
       heat > 0
-        ? `Heat up ${heat}, to ${Math.round(now.heat)}.`
-        : `Heat down ${-heat}, to ${Math.round(now.heat)}.`,
+        ? crossed
+          ? `Heat up ${heat}. They are at ${heatTier(now.heat).name.toLowerCase()} now.`
+          : `Heat up ${heat}, to ${Math.round(now.heat)}.`
+        : crossed
+          ? `Heat down ${-heat}, and they have eased off to ${heatTier(now.heat).name.toLowerCase()}.`
+          : `Heat down ${-heat}, to ${Math.round(now.heat)}.`,
       heat > 0 ? 'bad' : 'good',
       null,
     );
@@ -414,7 +429,7 @@ export function buildReport(before: Snapshot, state: GameState): DayReport | nul
   if (state.pendingEvents.length > 0) {
     const n = state.pendingEvents.length;
     push(
-      n === 1 ? 'Something is waiting for an answer.' : `${n} things are waiting for an answer.`,
+      n === 1 ? 'A memo is open and waiting on you.' : `${n} memos are open and waiting on you.`,
       'neutral',
       null,
       'today',

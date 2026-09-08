@@ -24,6 +24,7 @@ import { closeWeek } from './ledger';
 import { tickPossessions } from './possessions';
 import { tickLaunderer } from './launderers';
 import { tickTerritory } from './territory';
+import { tickAnnouncements } from './announce';
 import { tickDelegation } from './delegation';
 import { tickPromises } from './promises';
 import { markStanding } from './standing';
@@ -200,6 +201,13 @@ export function advanceDay(state: GameState): void {
   //     it takes the world as it stands at the end of the day's events, which
   //     is what somebody would actually be repeating.
   tickWhispers(state);
+  // 7a1. What changed about you today that nothing else would have said.
+  //
+  //      Last, or as near as makes no difference: it reads what the day left
+  //      behind — the board, the fronts — so it has to run after everything
+  //      that could have moved either. Announcing a rank before the arrest
+  //      that costs it would be the one thing this file exists to stop.
+  tickAnnouncements(state);
   // 7a2. And the people who are not in the family at all.
   //
   //      Reads nothing any other tick writes and writes only its own record,

@@ -19,7 +19,7 @@ import { worldPull } from './build';
 import { clamp } from './rng';
 import type { GameState } from './types';
 import { holdingShare } from './holdings';
-import { addLog } from './util';
+import { addLog, say } from './util';
 import { worldMod } from './world';
 import {
   DECAY_BY_CHANNEL,
@@ -30,6 +30,7 @@ import {
   LAY_LOW_DURATION_DAYS,
   LAY_LOW_RESPECT_COST,
   QUIET_DAYS_BEFORE_DECAY,
+  APPARATUS_CAP,
   HEAT_ABSORPTION,
   heatTier,
   type HeatChannel,
@@ -79,23 +80,109 @@ export function addHeat(
   const tierBefore = heatTier(state.org.heat).name;
 
   const by = channels(state);
-  by[channel] = clamp(
-    (by[channel] ?? 0) + amount * diff.heatGain * worldMod(state, 'heatGain'),
-    0,
-    100,
-  );
+  const arriving = amount * diff.heatGain * worldMod(state, 'heatGain');
+  by[channel] = clamp((by[channel] ?? 0) + arriving, 0, 100);
+  // What the apparatus may be measured against. See HEAT_ABSORPTION.ofIntake,
+  // which is null by default, in which case nothing below reads this.
+  if (channel === HEAT_ABSORPTION.channel) {
+    state.org.heatIntake = (state.org.heatIntake ?? 0) + arriving;
+  }
   resettle(state);
   state.org.quietDays = 0;
 
-  const tierAfter = heatTier(state.org.heat).name;
-  if (tierAfter !== tierBefore) {
-    addLog(
-      state,
-      `Attention on the organization has risen: ${tierAfter}.${reason ? ` (${reason})` : ''}`,
-      'heat',
-    );
+  const after = heatTier(state.org.heat);
+  if (after.name !== tierBefore) {
+    /*
+       What it looks like, not what the meter did.
+
+       This line was `Attention on the organization has risen: Major
+       Investigation. (Enforce the Peace went wrong)` and `scorecard.probe`
+       measured its tail as **the single loudest sentence-ending in the game**,
+       1.2% of everything a player reads across 48 careers. Three faults in one
+       sentence: it named a meter rather than a thing that happened, it read
+       like a status report from a department, and the cause it did have was
+       parked in brackets at the end where a label goes.
+
+       The tier descriptions in `tuning/heat.json` were already the writing this
+       needed — *"Someone has been assigned to you"*, *"A name in a file
+       somewhere"* — and nothing had ever shown one to a player at the moment it
+       became true. So: the cause, then what that bought you. Same information,
+       one fewer abstraction, and it changes with both halves instead of only
+       the tier.
+    */
+    const seen = say(`heat_up_${after.name}`, state.day, RISING[after.name] ?? [after.description]);
+    addLog(state, reason ? `${sentence(reason)} ${seen}` : seen, 'heat');
   }
 }
+
+/**
+ * A cause label, as the start of a sentence.
+ *
+ * The reasons handed to `addHeat` are noun phrases written to sit in brackets
+ * — `a body turned up`, `the enforce the peace went wrong`. They read as causes
+ * once they are the subject of their own sentence, and this is the smallest
+ * thing that makes them one rather than rewriting twenty call sites.
+ */
+function sentence(reason: string): string {
+  const trimmed = reason.trim();
+  const capped = trimmed.charAt(0).toUpperCase() + trimmed.slice(1);
+  return /[.!?]$/.test(capped) ? capped : `${capped}.`;
+}
+
+/**
+ * What each tier looks like from the street, in more than one way.
+ *
+ * The first version of this repair appended `tuning/heat.json`'s `description`
+ * to the cause, which was a real improvement over naming the meter and
+ * introduced a smaller version of the same fault: seven static strings for the
+ * life of a career. `scorecard.probe` measured *"Nothing more."* at 2.2% of
+ * every sentence-ending a player reads, the loudest in the game, within one
+ * run of shipping it.
+ *
+ * So the tier is a scene rather than a caption, and the description stays where
+ * it was already doing its job — the stat bar tooltip, where a player goes to
+ * ask what the tier means rather than being told every time it moves.
+ */
+const RISING: Record<string, string[]> = {
+  Suspicious: [
+    'Somebody wrote your name down.',
+    'A patrol car goes past the club twice a night now. It never stops.',
+    'Somebody asked the bar staff who owns the place. Nobody knew anything.',
+  ],
+  Investigating: [
+    'Someone has been assigned to you.',
+    'The same two men have been outside the club three nights running.',
+    'A detective came in, bought one drink, paid for it, and left.',
+  ],
+  'Major Investigation': [
+    'They are spending money on you now. Your people are being followed home.',
+    'Two of your men have been stopped and searched this week for nothing.',
+    'Somebody has been photographing the door.',
+  ],
+  'Intensive Task Force': [
+    'There is a unit for you now. It has an office and a board with faces on it.',
+    'Every one of your drivers has been pulled over at least once this fortnight.',
+    'They took your accountant in for four hours and asked about a name nobody there had heard.',
+  ],
+  'Organization Under Siege': [
+    'They are coming. The only question left is who talks first.',
+    'Three of your places were served warrants the same morning.',
+    'Two men on the payroll have stopped coming in and will not answer the door.',
+  ],
+  'Nothing Left To Watch': [
+    'Every room you use is known and every name on the payroll is written down.',
+    'They no longer bother hiding the car outside.',
+    'A man you have never met knew your mother’s address.',
+  ],
+};
+
+const FALLING: string[] = [
+  'The car that was parked opposite is not there this morning.',
+  'Nobody was following your drivers this week.',
+  'The detective who kept turning up has been put on something else.',
+  'Two weeks with nothing in the papers, and it shows on the street.',
+  'Whoever was asking around has stopped asking.',
+];
 
 /**
  * Put a channel at an exact figure.
@@ -148,8 +235,19 @@ export function tickHeat(state: GameState): void {
     (n) => n.status === 'active' || n.status === 'busy',
   ).length;
   const apparatus = Math.max(0, hands - HEAT_ABSORPTION.fromCrew);
+  /*
+     A rolling week of arrivals, decayed a seventh a day. Cheaper than keeping
+     seven days in the save and close enough for what it answers: roughly how
+     much is this outfit currently producing. Kept whether or not the cap is
+     on, so turning the cap on mid-career does not read a week of zero.
+  */
+  org.heatIntake = (org.heatIntake ?? 0) * (1 - 1 / 7);
+  const ceiling =
+    APPARATUS_CAP.ofIntake === null
+      ? Infinity
+      : ((org.heatIntake ?? 0) / 7) * APPARATUS_CAP.ofIntake;
   const absorbed =
-    Math.min(HEAT_ABSORPTION.max, apparatus * HEAT_ABSORPTION.perCrew) *
+    Math.min(HEAT_ABSORPTION.max, apparatus * HEAT_ABSORPTION.perCrew, ceiling) *
     heatTier(org.heat).decayMultiplier *
     diff.heatDecay;
   const soaking = channels(state);
@@ -191,7 +289,13 @@ export function tickHeat(state: GameState): void {
 
   const tierAfter = heatTier(org.heat).name;
   if (tierAfter !== tierBefore) {
-    addLog(state, `Pressure is easing. Now: ${tierAfter}.`, 'heat');
+    /*
+       The same repair, on the way down. `Pressure is easing. Now:
+       Investigating.` was the falling counterpart of the line above and had
+       the same two faults — a meter for a subject, and one sentence for four
+       years.
+    */
+    addLog(state, say(`heat_down_${tierAfter}`, state.day, FALLING), 'heat');
   }
 }
 

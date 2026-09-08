@@ -86,8 +86,29 @@ function grievanceOf(npc: Npc, day: number): string | null {
     (m) => MEMORIES[m.kind]?.tone === 'bad' && day - m.day <= GEN_WHEN.grievanceStaleAfterDays,
   );
   if (bad) return MEMORIES[bad.kind].text;
-  const note = npc.notes.find((n) => n.kind === 'bad' && day - n.day <= GEN_WHEN.grievanceStaleAfterDays);
-  return note ? note.text : null;
+
+  /*
+     And nothing else, which is a correction rather than a narrowing.
+
+     This used to fall back to `npc.notes`, and notes do not have the shape the
+     comment above describes. A memory's text is a verb phrase with an implied
+     subject — "were not paid, and remember the week" — and a note is a whole
+     capitalised sentence with its own full stop. Spliced into the same slot it
+     produced, verbatim, in front of two round-17 testers:
+
+         "They have not forgotten it: they Was on the Fence Stolen Goods. It
+          went wrong.. Soldier, 61 days with you."
+
+     Reproduced twice by one of them, and the same defect reported independently
+     by a second as a "broken template string". In a game whose testers scored
+     the writing 10, 10 and 9, a garbled sentence inside a character-drama modal
+     is worth more than the sentence it was covering for.
+
+     The caller already handles null — it says "They will not say what it is
+     about, which is its own answer", which is a better line than any note would
+     have produced anyway.
+  */
+  return null;
 }
 
 // ------------------------------------------------------------- the shapes ---
@@ -118,7 +139,7 @@ const wantsAWord: EventDef = {
     const ask = Math.max(500, Math.round(npc.wage * GEN_EFFECT.payWages));
     const carrying = about
       ? `They have not forgotten it: they ${about}.`
-      : `They will not say what it is about, which is its own answer.`;
+      : `They will not say what it is about. They will not say who asked, either.`;
     const who = `${ROLE_LABEL[npc.role]}, ${npc.daysInCrew} days with you.`;
     return {
       defId: 'gen_wants_a_word',
@@ -255,13 +276,21 @@ const frontTrouble: EventDef = {
               `${Math.round(b.health)} out of a hundred and the man running it has ` +
               `started talking about getting out. It closes on its own if you let it.`,
           ])
-        : oneOf(rng, [
-            `Somebody has been sitting across the street from it. Exposure is ` +
-              `${Math.round(b.exposure)} out of a hundred, which is the number that ` +
-              `decides whether a file gets opened with this address on it.`,
-            `A car has been parked opposite three mornings running. Exposure is ` +
-              `${Math.round(b.exposure)} out of a hundred, and that is the number a ` +
-              `warrant gets written against.`,
+        : /*
+             The observation, without the lecture that used to follow it.
+
+             Both of these opened well and then said *"Exposure is 62 out of a
+             hundred, which is the number that decides whether a file gets
+             opened"* — the game naming its own variable and then explaining
+             what the variable is for. The bar on the Businesses panel is where
+             that number lives and it is already there. What an event is for is
+             the thing that happened.
+          */
+          oneOf(rng, [
+            `Somebody has been sitting across the street from it since Monday. ` +
+              `Same car, different men. The manager has started using the back door.`,
+            `A car has been parked opposite three mornings running. Whoever is in ` +
+              `it writes down who goes in, and your name is on the lease.`,
           ]),
       severity: failing ? 'warning' : 'danger',
       npcId: null,
@@ -299,19 +328,30 @@ const streetTurning: EventDef = {
   },
   build(state, rng, ctx) {
     const t = ctx.territory!;
-    const consequence =
-      `at that number the shopkeepers stop selling, the jobs get harder, and ` +
-      `somebody eventually talks to a detective because they have no reason not to.`;
+    /*
+       Three good openers that each ended in the same sentence about a number.
+
+       The `consequence` clause was appended verbatim to all three — *"at that
+       number the shopkeepers stop selling, the jobs get harder, and somebody
+       eventually talks to a detective"* — so a player met one observation and
+       one paragraph of mechanism, three ways. It also did the arithmetic out
+       loud, which the Territory panel's bar already does honestly.
+
+       Each line now ends in the thing that follows from it. A district that has
+       turned is not a number; it is a shopkeeper who suddenly has none in the
+       back.
+    */
+    const where = territoryDef(t.id).name;
     return {
       defId: 'gen_street_turning',
-      title: `${territoryDef(t.id).name} has gone quiet on you`,
+      title: `${where} has gone quiet on you`,
       body: oneOf(rng, [
-        `Nobody says anything to your people any more. Public feeling there is ` +
-          `${Math.round(t.sentiment)} out of a hundred, and ${consequence}`,
-        `Two of your men were served last and charged first. Public feeling in the ` +
-          `district is ${Math.round(t.sentiment)} out of a hundred, and ${consequence}`,
-        `There was a meeting about you above the hardware shop. Public feeling is ` +
-          `${Math.round(t.sentiment)} out of a hundred, and ${consequence}`,
+        `Nobody says anything to your people any more. Two shops that paid without ` +
+          `being asked now want to be asked, and one of them has a lawyer.`,
+        `Two of your men were served last and charged first. The butcher told them ` +
+          `there was nothing in the back, and the window behind the counter was full.`,
+        `There was a meeting about you above the hardware shop. Forty people, and ` +
+          `nobody has told you what was said.`,
       ]),
       severity: 'warning',
       npcId: null,
@@ -496,6 +536,19 @@ const askedForYou: EventDef = {
  * inside carries it for years, and an investigator sitting across from him
  * later is having a very different conversation because of it.
  */
+/**
+ * What a lawyer at a desk takes off what is left of a sentence.
+ *
+ * Read rather than stored, and floored at a day so paying is never a purchase
+ * of nothing — a man picked up yesterday with four days to serve still gets
+ * somebody sent, and still gets out sooner for it.
+ */
+function bailDaysOff(state: GameState, npc: Npc): number {
+  const left = (npc.unavailableUntilDay ?? state.day) - state.day;
+  if (left <= 1) return 0;
+  return Math.max(1, Math.round(left * GEN_EFFECT.insideBailShortens));
+}
+
 const somebodyInside: EventDef = {
   id: 'gen_somebody_inside',
   ...shape('gen_somebody_inside'),
@@ -506,6 +559,10 @@ const somebodyInside: EventDef = {
   build(state, rng, ctx) {
     const npc = ctx.npc!;
     const bail = Math.max(1_500, Math.round(npc.wage * GEN_EFFECT.insideBailWeeks));
+    // Decided here and carried on the memo, so the sentence the choice quotes
+    // is the sentence the resolver serves. Computing it twice would let the
+    // two drift by however many days the player took to answer.
+    const daysOff = bailDaysOff(state, npc);
     return {
       defId: 'gen_somebody_inside',
       title: `${npc.name} is inside`,
@@ -518,12 +575,16 @@ const somebodyInside: EventDef = {
       ]),
       severity: 'danger',
       npcId: npc.id,
-      data: {},
+      data: { daysOff },
       choices: [
         {
           id: 'bail',
           label: 'Get somebody down there',
-          ...payable(state, bail, 'and they know who sent them'),
+          ...payable(
+            state,
+            bail,
+            `out ${daysOff} ${daysOff === 1 ? 'day' : 'days'} sooner, and they know who sent them`,
+          ),
         },
         {
           id: 'wait',
@@ -758,7 +819,7 @@ const theNameStuck: EventDef = {
           `to your face, the way you would use somebody's actual name. ` +
           `Everybody waited to see what you did about it.`,
         `A message came in addressed to ${name}. ${npc.name} brought it through ` +
-          `and put it down without a word, which is its own kind of question.`,
+          `and put it down without a word. Nobody has asked you for anything yet.`,
       ]),
       severity: 'opportunity',
       npcId: npc.id,
@@ -1051,7 +1112,9 @@ export function resolveGenerated(
           return;
         }
         adjustSentiment(state, id, GEN_EFFECT.streetSentiment);
-        addLog(state, `${money(GEN_EFFECT.streetSpend)} spread around ${territoryDef(id).name}. Feeling is ${Math.round(t.sentiment)}.`, 'money');
+        // What the money bought, not what the meter reads. The bar on the
+        // Territory panel is where the figure lives.
+        addLog(state, `${money(GEN_EFFECT.streetSpend)} spread around ${territoryDef(id).name}. Two funerals paid for and a roof fixed.`, 'money');
         return;
       }
       if (choiceId === 'lean') {
@@ -1111,7 +1174,26 @@ export function resolveGenerated(
         }
         npc.stats.loyalty = clamp(npc.stats.loyalty + GEN_EFFECT.insideLoyalty, 0, 100);
         remember(npc, state.day, 'looked_after');
-        addLog(state, `${money(bail)} and somebody who knows the desk sergeant. ${npc.name} was seen to.`, 'money');
+        /*
+           And the half that is visible the same afternoon.
+
+           The loyalty and the memory are the durable effects and both are
+           invisible for months — the memory changes a deposition years later.
+           A tester paid this seven times, checked the roster each time, and
+           could not tell what he had bought. The days come off the sentence
+           the choice quoted, the note goes on the file, and the roster moves.
+        */
+        const daysOff = Math.max(0, Math.round(Number(event.data.daysOff ?? 0)));
+        if (daysOff > 0 && npc.unavailableUntilDay !== null) {
+          npc.unavailableUntilDay = Math.max(state.day + 1, npc.unavailableUntilDay - daysOff);
+        }
+        addNote(npc, state.day, 'Somebody was sent down there for them.', 'good');
+        addLog(
+          state,
+          `${money(bail)} and somebody who knows the desk sergeant. ${npc.name} was seen to` +
+            (daysOff > 0 ? `, and is out ${daysOff} ${daysOff === 1 ? 'day' : 'days'} sooner.` : '.'),
+          'money',
+        );
         return;
       }
       npc.stats.loyalty = clamp(npc.stats.loyalty + GEN_EFFECT.insideAbandonedLoyalty, 0, 100);

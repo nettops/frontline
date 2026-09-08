@@ -34,10 +34,9 @@ import {
   CARDS,
   NOBODIES,
   SEATED,
-  TABLES,
-  TABLE_BY_ID,
+  STAKES,
   type CardStyle,
-  type TableDef,
+  type StakeBand,
 } from '../config/cards';
 import { CIVIC, CIVIC_FIGURES } from '../config/civic';
 import type { CardPlay, GameState, Possession } from './types';
@@ -51,11 +50,17 @@ export function cards(state: GameState): CardPlay {
   return state.cards;
 }
 
-/** A week of people forgetting how your last hand looked. */
+/**
+ * A day of people forgetting how your last hand looked.
+ *
+ * No `day %` gate any more, and that removal is the load-bearing half of this
+ * whole change: the weekly one made the decay arrive in a lump on the same day
+ * the next game did, so suspicion and opportunity moved together and neither
+ * was ever a decision. It bleeds now.
+ */
 export function tickCards(state: GameState): void {
-  if (state.day % CARDS.intervalDays !== 0) return;
   const play = cards(state);
-  play.suspicion = clamp(play.suspicion - CARDS.suspicion.decayPerWeek, 0, CARDS.suspicion.max);
+  play.suspicion = clamp(play.suspicion - CARDS.suspicion.decayPerDay, 0, CARDS.suspicion.max);
 }
 
 // ------------------------------------------------------------ the table ----
@@ -71,14 +76,60 @@ export interface Seated {
 }
 
 /**
- * Which week's game this is.
+ * Which night's game this is.
  *
- * Floored rather than exact so every day inside a week reads the same table —
- * a room whose occupant changed while the player was deciding would be a
- * screen that lies.
+ * `intervalDays` is 1, so this is the day — kept as the same expression rather
+ * than reduced to `state.day`, because the constant is what says how long a
+ * table holds its company and reducing it would hide that.
  */
-function week(state: GameState): number {
+function night(state: GameState): number {
   return Math.floor(state.day / CARDS.intervalDays);
+}
+
+/** What the room will take off you, priced for the year. See `ceilingCap`. */
+export function stakeCeiling(state: GameState): number {
+  const raw = Math.min(
+    STAKES.ceilingCap,
+    STAKES.ceilingBase * 2 ** (state.org.respect / STAKES.respectPerDoubling),
+  );
+  return Math.round(priced(state, raw));
+}
+
+/**
+ * The most this boss could actually put on a table tonight.
+ *
+ * The lesser of what the room will take and what is in the drawer, and it is
+ * the denominator for everything that reads a bet as a share — who sits
+ * opposite, what the night teaches, whether the pot is worth repeating.
+ *
+ * Dividing by the ceiling alone inverted the design at the top of the game: a
+ * boss whose name buys him a million-dollar table and who holds fifty thousand
+ * could never reach the serious band, so the better he did the less anybody
+ * worth an evening would play him. What the room is reading is what the money
+ * costs *you*, and that is this.
+ */
+export function couldPutUp(state: GameState): number {
+  return Math.max(stakeFloor(state), Math.min(stakeCeiling(state), totalFunds(state)));
+}
+
+/** The smallest bet anybody deals you in for, priced for the year. */
+export function stakeFloor(state: GameState): number {
+  return Math.round(priced(state, STAKES.floor));
+}
+
+/**
+ * Which company a bet buys, as a share of what you could have put up.
+ *
+ * A share rather than a sum, because the room is reading what this costs *you*
+ * — see `STAKES.quietBelow`. Clamped at the top so a stake equal to the
+ * ceiling is `serious` rather than falling off the end of the bands.
+ */
+export function bandFor(state: GameState, stake: number): StakeBand {
+  const most = couldPutUp(state);
+  const share = most > 0 ? stake / most : 0;
+  if (share < STAKES.quietBelow) return 'quiet';
+  if (share < STAKES.seriousAbove) return 'middling';
+  return 'serious';
 }
 
 /**
@@ -103,10 +154,10 @@ function week(state: GameState): number {
  * The top room picks first, which is the fiction as well as the mechanism: the
  * people worth an evening are upstairs, and the rooms below take who is left.
  */
-export function seating(state: GameState): Record<string, Seated> {
+export function seating(state: GameState): Record<StakeBand, Seated> {
   const taken = new Set<string>();
-  const out: Record<string, Seated> = {};
-  const w = week(state);
+  const out = {} as Record<StakeBand, Seated>;
+  const w = night(state);
 
   /** First unused entry at or after the drawn index. Null if all are taken. */
   const claim = <T>(items: readonly T[], drawn: number, id: (item: T) => string): T | null => {
@@ -123,20 +174,22 @@ export function seating(state: GameState): Record<string, Seated> {
   const at = (key: string, salt: number, count: number) =>
     Math.floor(Rng.stableNoise(key, salt) * count);
 
-  // Top room first. `TABLES` is authored bottom-up, so this walks it backwards.
-  for (const def of [...TABLES].reverse()) {
-    const mix = SEATED[def.id] ?? SEATED.back_room;
-    const key = `cards:${state.rng.seed}:${def.id}`;
+  // The serious table picks first, which is the fiction as well as the
+  // mechanism: the people worth an evening play for real money, and the bands
+  // below take who is left.
+  for (const band of ['serious', 'middling', 'quiet'] as StakeBand[]) {
+    const mix = SEATED[band];
+    const key = `cards:${state.rng.seed}:${band}`;
     const roll = Rng.stableNoise(key, w);
 
     const stranger = (): Seated => {
       const who = claim(NOBODIES, at(key, w + 500, NOBODIES.length), (n) => n);
-      // Only reachable with more rooms than strangers, which a test forbids.
+      // Only reachable with more bands than strangers, which a test forbids.
       return { kind: 'nobody', who: who ?? 'somebody nobody introduced', id: null };
     };
 
     if (roll < mix.nobody) {
-      out[def.id] = stranger();
+      out[band] = stranger();
       continue;
     }
 
@@ -146,7 +199,7 @@ export function seating(state: GameState): Record<string, Seated> {
         at(key, w + 900, CIVIC_FIGURES.length),
         (f) => `civic:${f.id}`,
       );
-      out[def.id] = figureDef
+      out[band] = figureDef
         ? { kind: 'civic', who: figureDef.title, id: figureDef.id }
         : stranger();
       continue;
@@ -162,7 +215,7 @@ export function seating(state: GameState): Record<string, Seated> {
     const faction = others.length
       ? claim(others, at(key, w + 1300, others.length), (f) => `rival:${f.id}`)
       : null;
-    out[def.id] = faction
+    out[band] = faction
       ? {
           kind: 'rival',
           who: `${faction.leader.name} of the ${houseShort(state, faction.id)}`,
@@ -174,14 +227,9 @@ export function seating(state: GameState): Record<string, Seated> {
   return out;
 }
 
-/** Who is sitting opposite at one table. See `seating`. */
-export function seatedAt(state: GameState, tableId: string): Seated {
-  return seating(state)[tableId] ?? { kind: 'nobody', who: NOBODIES[0], id: null };
-}
-
-/** What a seat costs tonight, in this year's money. */
-export function tableStake(state: GameState, def: TableDef): number {
-  return priced(state, def.stake);
+/** Who is sitting opposite the money you are putting up. See `seating`. */
+export function seatedAt(state: GameState, stake: number): Seated {
+  return seating(state)[bandFor(state, stake)] ?? { kind: 'nobody', who: NOBODIES[0], id: null };
 }
 
 export interface Refusal {
@@ -198,31 +246,44 @@ export interface Refusal {
  */
 export function canSit(
   state: GameState,
-  tableId: string,
+  stake: number,
   stakeItemId?: string | null,
 ): Refusal {
-  const def = TABLE_BY_ID[tableId];
-  if (!def) return { ok: false, reason: 'No such game.' };
-
   const play = cards(state);
   const since = state.day - play.lastPlayedDay;
   if (since < CARDS.intervalDays) {
-    return {
-      ok: false,
-      reason: `The game runs weekly. Next one in ${CARDS.intervalDays - since} days.`,
-    };
-  }
-
-  if (state.org.respect < def.respectAbove) {
+    const left = Math.max(1, CARDS.intervalDays - since);
     return {
       ok: false,
       reason:
-        `They do not know you well enough. Respect ${def.respectAbove} gets you in the door, ` +
-        `and you are on ${Math.round(state.org.respect)}.`,
+        `You have already sat down tonight. The next game is in ${left} ` +
+        `${left === 1 ? 'day' : 'days'}.`,
     };
   }
 
-  const stake = tableStake(state, def);
+  const floor = stakeFloor(state);
+  if (stake < floor) {
+    return {
+      ok: false,
+      reason: `Nobody is dealing you in for less than ${formatMoney(floor)}.`,
+    };
+  }
+
+  /*
+     What the room will take, which is the gate the three respect bars used to
+     be. It names the number *and* what lifts it, because a refusal that does
+     not is the fourth rule of this project.
+  */
+  const ceiling = stakeCeiling(state);
+  if (stake > ceiling) {
+    return {
+      ok: false,
+      reason:
+        `Nobody here will play you for more than ${formatMoney(ceiling)}. ` +
+        `That goes up as more people know your name — you are on ` +
+        `${Math.round(state.org.respect)} respect.`,
+    };
+  }
 
   if (stakeItemId) {
     const owned = heldPossessions(state).find((p) => p.defId === stakeItemId);
@@ -233,8 +294,8 @@ export function canSit(
       return {
         ok: false,
         reason:
-          `${itemDef ? itemDef.name : 'It'} is worth ${formatMoney(worth)} and the stake is ` +
-          `${formatMoney(stake)}. Nobody is taking that against this.`,
+          `${itemDef ? itemDef.name : 'It'} is worth ${formatMoney(worth)} and you are playing ` +
+          `for ${formatMoney(stake)}. Nobody is taking that against this.`,
       };
     }
     return { ok: true };
@@ -311,17 +372,21 @@ function moveSeat(
 export function sitDown(
   state: GameState,
   rng: Rng,
-  tableId: string,
+  stake: number,
   style: CardStyle,
   stakeItemId?: string | null,
 ): HandResult {
-  const check = canSit(state, tableId, stakeItemId);
+  const check = canSit(state, stake, stakeItemId);
   if (!check.ok) return check;
 
-  const def = TABLE_BY_ID[tableId];
   const play = cards(state);
-  const seat = seatedAt(state, tableId);
-  const stake = tableStake(state, def);
+  const seat = seatedAt(state, stake);
+  /*
+     What this cost you, as a share of what you could have lost. Everything
+     below that used to key off a fixed table keys off this instead — who is
+     opposite, what the night teaches, and whether anybody repeats the story.
+  */
+  const share = Math.min(1, stake / Math.max(1, couldPutUp(state)));
 
   const staked = stakeItemId
     ? heldPossessions(state).find((p) => p.defId === stakeItemId) ?? null
@@ -369,7 +434,7 @@ export function sitDown(
       message += ` A man who has taken your money is easier to talk to.`;
     }
 
-    trainAttribute(state, 'streetSmarts', CARDS.trainStraight);
+    trainAttribute(state, 'streetSmarts', CARDS.learnAtCeiling.straight * share);
     addLog(state, message, 'money');
     return { ok: true, message, won: false, swing: -stake, lost: result ?? undefined };
   }
@@ -381,7 +446,11 @@ export function sitDown(
   const odds = sharp ? CARDS.hard.win : straightOdds(state);
   const won = !caught && rng.chance(odds);
 
-  trainAttribute(state, 'streetSmarts', sharp ? CARDS.trainHard : CARDS.trainStraight);
+  trainAttribute(
+    state,
+    'streetSmarts',
+    (sharp ? CARDS.learnAtCeiling.hard : CARDS.learnAtCeiling.straight) * share,
+  );
 
   if (caught) {
     const result = takeStake(state, staked, stake);
@@ -433,7 +502,7 @@ export function sitDown(
     standing: sharp ? 0 : CARDS.straight.civicStanding + CARDS.won.civicStanding,
     trust: sharp ? 0 : CARDS.straight.rivalTrust,
   });
-  if (stake >= priced(state, CARDS.won.respectAtStake)) gainRespect(state, CARDS.won.respect);
+  if (share >= CARDS.won.respectAtShare) gainRespect(state, CARDS.won.respect);
 
   const message = `You took ${formatMoney(pot)} off ${seat.who}.`;
   addLog(state, message, 'money');
@@ -461,25 +530,86 @@ function takeStake(state: GameState, staked: Possession | null, stake: number): 
 // -------------------------------------------------------------- the read ---
 
 /**
- * A room, priced and refused.
+ * The table at one number, refused.
  *
- * Extends `Refusal` rather than renaming its fields, so the panel can hold a
- * row and a fresh `canSit` check in the same variable — it re-checks whenever
- * the player picks something of their own to stake, and two shapes meaning the
- * same thing would make that a cast.
+ * Extends `Refusal` rather than renaming its fields, so the panel can hold the
+ * read and a fresh `canSit` check in the same variable — it re-checks whenever
+ * the player moves the stake or puts something of their own up, and two shapes
+ * meaning the same thing would make that a cast.
  */
 export interface TableRead extends Refusal {
-  def: TableDef;
   stake: number;
+  /** Where that sits between the floor and what the room will take. */
+  floor: number;
+  ceiling: number;
+  band: StakeBand;
   seat: Seated;
+  /** What a deliberate loss against this seat is worth. See `throwRead`. */
+  thrown: string;
 }
 
-/** What the panel shows, already priced and already refused. */
-export function tableRead(state: GameState): TableRead[] {
-  return TABLES.map((def) => ({
-    def,
-    stake: tableStake(state, def),
-    seat: seatedAt(state, def.id),
-    ...canSit(state, def.id),
-  }));
+/**
+ * What a thrown night against this seat is actually worth.
+ *
+ * Every seat carried the same string — *"Worth an evening whatever the cards
+ * do"* — whether the man opposite was two points off owing you a favour or
+ * already owed you everything he is going to. A blind tester threw five nights
+ * across a 481-day career, two landed, three did not, and he could not tell
+ * the cases apart before or after:
+ *
+ *   > "It fails silently about half the time... All five opposites carried
+ *   > the identical tag. A $12,313 stake against Doreen Rowe read exactly the
+ *   > same as a $413 stake against a city-hall man."
+ *
+ * Half of that is a roll and is meant to be: `CARDS.lose.civicFavourChance` is
+ * 0.45 and a coin flip you can read is not a coin flip. The other half is not
+ * a roll at all. `CIVIC.maxOwed` is 2, and a figure already holding two owes
+ * you nothing further no matter what you throw — the money goes, and the log
+ * says *"They took it as their due, and nothing more"*, which is the same
+ * sentence an unlucky night gets. That case is a guaranteed nothing wearing
+ * the costume of bad luck, and it is the one this exists to name.
+ *
+ * States the odds and the ceiling. It does not state the outcome.
+ */
+export function throwRead(state: GameState, seat: Seated): string {
+  if (seat.kind === 'nobody') return 'Nobody who decides anything';
+
+  if (seat.kind === 'civic' && seat.id) {
+    const held = figure(state, seat.id);
+    if (held.owed >= CIVIC.maxOwed) {
+      return (
+        `Owes you ${held.owed} of ${CIVIC.maxOwed} — a thrown night buys ` +
+        `nothing more until you spend one`
+      );
+    }
+    const odds = Math.round(CARDS.lose.civicFavourChance * 100);
+    return (
+      `Owes you ${held.owed} of ${CIVIC.maxOwed} · a thrown night lands a ` +
+      `favour about ${odds}% of the time`
+    );
+  }
+
+  // A rival always moves. What does not always move is the band the panel
+  // draws it in, which is what read as a failure.
+  return 'A thrown night always moves what they think of you, whether or not the band changes';
+}
+
+/**
+ * What the panel shows for the number the player is looking at.
+ *
+ * One read rather than a row per room. The stake is an argument because it is
+ * the decision now — everything else on the screen, including who is sitting
+ * opposite, is downstream of it.
+ */
+export function tableRead(state: GameState, stake: number): TableRead {
+  const seat = seatedAt(state, stake);
+  return {
+    stake,
+    floor: stakeFloor(state),
+    ceiling: stakeCeiling(state),
+    band: bandFor(state, stake),
+    seat,
+    thrown: throwRead(state, seat),
+    ...canSit(state, stake),
+  };
 }

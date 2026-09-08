@@ -115,3 +115,45 @@ export const WHISPER_CONFIDENCE_LABEL: [number, string][] = [
   [0.4, 'They heard it from somebody'],
   [0, 'They are guessing'],
 ];
+
+/**
+ * Going and finding out, which is the decision the feed never offered.
+ *
+ * A whisper could be read and corroborated by waiting, and that was all. The
+ * player's only move against a rumour was patience, so the feed was a thing
+ * that happened to them rather than a thing they worked.
+ *
+ * What this adds is a *second opinion*, and deliberately not an answer. The
+ * contact you ask is a person with their own reach and their own reasons, and
+ * `WHISPERS.wrongChance` already establishes that this game's information is
+ * fallible on the way in. It would be a strange system that made it infallible
+ * on the way back.
+ *
+ * So asking hardens or undermines the confidence and never touches `truth`.
+ * The player still decides, which is the whole mechanic — the difference is
+ * that they can now spend something to decide sooner.
+ */
+export const LOOK_INTO = {
+  /**
+   * How often the contact is right about what they went and found.
+   *
+   * Above a coin and well below certainty. At 0.75 a single opinion is worth
+   * having and two agreeing opinions are worth acting on, which is the shape
+   * the corroboration mechanic already had and this is meant to accelerate
+   * rather than replace.
+   */
+  contactIsRight: 0.75,
+
+  /** What agreement adds to how sure the room is, and disagreement takes. */
+  agreesConfidence: 0.2,
+  disagreesConfidence: -0.25,
+
+  /**
+   * Days after it arrived that a rumour is still worth a favour.
+   *
+   * Shorter than `staleAfterDays`, because a fortnight-old rumour is still
+   * worth reading and is no longer worth spending a favour on: whatever it was
+   * about has either happened or has not.
+   */
+  worthCheckingWithin: 21,
+} as const;

@@ -283,7 +283,7 @@ describe('the personal half', () => {
    The nine original items are bought once and cost nothing to hold, which is
    why they absorbed a career's surplus for about a month and then stopped. The
    measurement behind this is in
-   `docs/superpowers/specs/2026-08-24-money-sinks-design.md`: a family earns
+   `docs/specs/2026-08-24-money-sinks-design.md`: a family earns
    $1,128,015 of clean money and spends $142,297 of it, and 61% of everything
    it is worth ends the run sitting in a savings account.
 

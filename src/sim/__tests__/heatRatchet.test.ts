@@ -20,7 +20,7 @@
  * test is the guard on the other side, because a meter pinned at the bottom is
  * no more use than one pinned at the top.
  *
- * See `docs/superpowers/specs/2026-08-23-heat-ratchet-design.md`.
+ * See `docs/specs/2026-08-23-heat-ratchet-design.md`.
  */
 import { describe, expect, it } from 'vitest';
 

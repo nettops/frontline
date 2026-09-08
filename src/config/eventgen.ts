@@ -394,6 +394,25 @@ export const GEN_EFFECT = {
   /** Somebody of yours is in a cell. */
   insideBailWeeks: 6,
   insideLoyalty: 9,
+  /**
+   * ...and how much of what is left of the sentence the money actually buys.
+   *
+   * Paying used to buy loyalty, a `looked_after` memory and nothing a player
+   * could see. Both halves of that are real — the memory is what makes an
+   * investigator's conversation with him two years later go differently — and
+   * both are invisible for months. A blind tester paid this seven times across
+   * a 481-day career, roughly $10,500, checked the roster immediately
+   * afterwards each time, and wrote: *"Whatever the money buys, nothing on the
+   * roster or in the log changes. I paid it four times without ever learning
+   * what it bought."*
+   *
+   * So it takes days off, the choice says how many before you press it, and
+   * the man is on the roster sooner. Slightly under half, because it is a
+   * lawyer at a desk and not a pardon — the sentence is shortened, never
+   * cancelled, and there is a floor of a day so the option is never a purchase
+   * of nothing.
+   */
+  insideBailShortens: 0.45,
   insideAbandonedLoyalty: -12,
   insideAbandonedFear: 3,
 
