@@ -1,285 +1,264 @@
-# Final report — 2026-09-07, the 5-hour round
+# Final report — Round 17, 2026-09-07 (full-day session)
 
-Continuation of the 2026-09-06 session, extended to five hours with an
-explicit two-model split: an Opus-model pass decided what deserved fixing,
-a Sonnet-model pass (this one) implemented, tested and committed each item,
-with a second, narrower Opus pass partway through to verify the work and
-re-prioritize. The round closed with a full blind playtest, the first human
-read on everything built across both sessions.
+Commissioned to attack the two things every prior session had deferred —
+**run variety** and **economic balance** — with a target of every
+blind-playtest score and every automated QA axis at 9 or 10, nothing below
+9. Two-model split: Opus diagnosed, Sonnet (this pass) implemented, tested,
+measured and committed each item. Started 11:36am EDT; the last blind
+round finished at 9:24pm, past the 9pm target.
 
-## Executive summary
+**Where this landed, up front:** six commits, all tested and verified. Two
+uncontaminated blind rounds ran against the changes. One project-record
+result (a permanent death near day 300 — the first in this project's blind
+history) and one new project-high score (Standing in it, 8/10). Nothing
+reached 9-10. That's explained in full in §5, with evidence rather than
+excuses.
 
-Six commits landed, all test-first, all verified (`tsc` clean, full suite
-green, `npm run build` succeeds, the two UI-visible changes checked live in
-the browser). The pattern from the previous session repeated at a deeper
-layer: last time it was whole systems (contracts, the favour network, the
-pressure dial) with real logic and no way to discover them; this time it was
-config keys with real balance intent and no reader, and — the largest single
-finding — a build-screen stat (Instinct) whose most expensive verb had
-complete simulation logic and no UI control anywhere in the game. Auditing
-its two neighbours (Word, Ledger) for the same defect found something
-different and more honest to report: both are missing a foundation, not a
-button, and were labelled as such rather than built badly under a deadline.
+---
 
-The session closed with a full blind playtest round — the first time any
-human-shaped read has touched contracts, the armoury, the favour network,
-the pressure dial, or anything from tonight's changes. **Result: no MUST FIX
-items, and the point where decisions stopped changing moved from a
-three-round-confirmed ~day 90–119 (F1) to ~day 220–230** — a real, measured
-improvement on the project's single largest standing finding, though not a
-closure of it. Three SHOULD FIX items from that round were fixed before this
-report was written; the rest are recorded as findings for the next session.
+## 1. The diagnosis
 
-## Gameplay
+An Opus pass read `HANDOFF.md`, `DIRECTOR.md`, and the live code and probes
+— not just the documentation, which turned out to be materially wrong.
 
-**What changed for the player, in order of how much it matters:**
+**Headline finding: `HANDOFF.md` was stale on the economy.** Two "open"
+findings (F15, the front-gate economic fork; F2, the influence wall) were
+actually closed weeks ago and nobody had re-measured. Three of the four
+"deliberately failing" tests the file said were pre-committed and red were
+green.
 
-- **Instinct is a real stat now.** At three points in (before this session,
-  the world tier did nothing at all) and seven (the "Plant somebody" verb),
-  a player who invests in it gets an actual informant inside a rival house
-  or a law-enforcement agency, visible on the Intelligence panel, who gives
-  advance warning before a case moves to its next stage. This was previously
-  a complete fabrication on the build screen — the single most expensive
-  verb in the game, silently doing nothing, on a choice made once at the
-  start of a career and never revisited.
-- **Word and Ledger say what they actually are.** Rather than continuing to
-  promise verbs that cannot be reached, the build screen now says plainly
-  that neither has anywhere to be used yet — before a player spends points
-  on them, not after.
-- **A missed contract has a consequence again.** Previously the same rival
-  could be targeted again the very next morning after a botched attempt;
-  now there's a real cooldown, matching the design's own stated intent.
-- **The silent partner (F15's own repair) actually protects you**, in the
-  narrower, honest sense the config comment can support: it damps hostile
-  targeting and pressure scoring, though it does not block a war outright.
-- **Seven money gates now say what they cost** instead of a generic "you
-  cannot cover it" — contraband workshops and plants, buying a police
-  contact, destroying evidence, pressuring a witness, launching a job, and
-  a heist stake.
-- **The "on the card" mechanic explains itself.** A round-16 finding, fixed
-  same session: the panel used to show a flat "$0 a week" caption that read
-  as "this is worthless" regardless of whether anything was on the card yet.
-  It now shows what each district actually pays, previews it before you
-  commit, and says plainly that fear moves the number, not the ground.
-- **The favour network (The City) is far more likely to be found.** Also a
-  round-16 finding: its tip existed but sat behind thirteen others in queue
-  priority and was never shown in a 305-day career. Moved up the list.
-- **District tiers say what they need.** The round's clearest, most
-  specific complaint — "guessing throughout the run" what raises a district
-  from Foothold to Control. The district panel now names the next tier, the
-  number, and — for the top two tiers, which also require leading the
-  district outright — whether that lead is already held.
+**The real, current problem:** the economy has no real cost of scale. A
+crew member returned 27x his wage. 83% of clean income was never spent.
+0 of 36 careers failed inside 300 days on the standard measuring bot. As a
+consequence, 17 of 19 measurable optional player behaviours were net
+financial *losses* — only one strategy (expand, buy fronts, run the top
+job) was ever rewarded, which is the actual mechanism behind "decisions
+stop feeling novel."
 
-All three round-16 fixes above are UI/legibility changes only — none
-touches a balance number, and all three were verified live in the browser
-in addition to their new tests.
+**A regression nobody had caught:** the automated Difficulty score sat at
+4.7 — the lowest ever measured in this project, and a release-blocking
+condition under this project's own rules (`DIRECTOR.md` §10 condition 4:
+no axis below 6).
 
-## Longevity
+**An honest ceiling, stated plainly before any work began:** two of the
+six automated axes (Pacing, Difficulty) have arithmetic ceilings that
+can't be cleared without either more content than fits in one session, or
+weakening what the measurement means. `DIRECTOR.md` explicitly forbids
+chasing a score three separate times in its own text. This was treated as
+a real constraint to report against, not an excuse to stop — see §5.
 
-This is the headline number from the round: **decisions stopped changing
-around day 220–230**, against F1's three-round-confirmed ~day 90–119. That
-is not this session's doing alone — it reflects everything built since
-late August (contracts, the armoury, street scenes, the favour network, the
-pressure dial) landing together, seen by a human for the first time. But it
-is a real, measured data point on the project's largest standing finding,
-not a projection: the tester specifically named running out of new
-districts to introduce into (~day 240) as the mechanism, and separately
-named "The City" as a system they found only in their very last moves —
-meaning the true ceiling on novelty is probably later still, once that
-discoverability fix and the other favour-network content actually gets
-used across a career rather than in the last five minutes of one.
+## 2. What shipped
 
-F1 is not closed. The round's own words: *"the loop was: launch the
-highest-crew job available, pay any courtesy/legal-favor event, periodically
-go quiet"* — a real plateau, just a much later one than any prior round has
-reported. The single most concrete next step this project has is: run
-another blind round now that the favour network is actually reachable
-mid-career instead of only at the end, and see whether that alone pushes
-the plateau later still, or whether something else has to give.
+### 2a. The pressure dial and favour network were never decoration — the instrument measuring them was broken
 
-## Economy
+The economic-balance probe's own bot triggered "go clean" on an
+organization-wide case stage and heat level — not what the dial actually
+defends (a single front's own exposure and inspection risk). The broken
+policy reported using these systems cost a career **-$896,499 estate and
+-54% laundering** for almost no benefit. Confirmed real (not a
+measurement artifact) via a proper paired comparison before touching
+anything. Rewritten to trigger on the thing the dial actually protects
+against. Corrected reading: **+$749,645 estate, +$1,937,207 laundered.**
+The systems work; nobody had measured them honestly.
 
-Not rebalanced, deliberately. Every money-related change this session was
-either wiring an existing, already-priced mechanic to a config value that
-was never read (grip, the partner, contract cooldowns) or making an
-existing price legible (the seven refusals, the card mechanic) — never
-adjusting a number because it felt wrong. The one balance-adjacent
-recommendation on the table (retuning `CONTRACT.cooldownDays`) was checked
-against the codebase and declined: it matches an already-shipped sibling
-mechanic (`CAPO_APPROACH.cooldownDays`) that the code's own comments say is
-deliberately parallel.
+### 2b. Rivals no longer profit more from doing nothing than from working
 
-The round's own numbers: a $2,500 start reached $502,902 across six
-districts and three fronts by day 305, surviving a real payroll crisis
-(a hurried, lossy sale of savings) and a full federal indictment along the
-way. The tester's own words on what was actually at stake by the end —
-*"not 'some money and a rank' — money and rank are the least of what was
-actually in front of me"* — is close to the intended late-game feeling this
-project has been building toward across both sessions.
+Going quiet paid a rival family $12,000 on top of its own ~$2,190/week
+organic income — sitting still outearned two and a half weeks of running
+the organization. Cut to $1,500. Reading the actual scoring code showed
+this fixes the *payoff* but not the *frequency* of going quiet (a separate
+term, deliberately left alone — three prior tuning passes on this exact
+file argue it needs its own session, not a rider on this one).
 
-## Run variety
+### 2c. Fronts now cost something to hold
 
-Not directly touched this session, but the round's report is informative
-here: the tester's specific path (heavy investment in legal counsel and
-intelligence once indicted, an informant-accusation decision made on
-probabilistic evidence, courtesy payments to keep two rivals neutral rather
-than fighting) is a materially different shape of career than the ladder
-probe's standard bot plays, and one this project's systems (beliefs,
-memory, the bond matrix) were built to support. The clearest evidence of
-systemic rather than scripted variety: the tester never got confirmation
-whether their killed "informant" was actually guilty, and reported that
-uncertainty as the single most memorable moment of the run.
+The single biggest structural gap found: a business had a one-time
+purchase price and, forever after, zero ongoing cost — verified by reading
+the tick code line by line, not inferred. Rivals have had the equivalent
+since early in the project; the player never did. A real weekly bill now
+exists, sized as a share of what the fronts actually earn, paid the same
+way payroll is (partial payment allowed, shortfall carried, no hard
+cliff). Unpaid bills cost a front its health rather than ending the game
+outright.
 
-## Dynamic run evolution
+Measured at two rates before settling — neither, on its own, moved the
+"careers surviving all 300 days" needle for the standard measuring bot,
+which was an honest, reported result rather than a claimed win. It is a
+real, permanent structural fix regardless.
 
-The round's own account of Instinct — newly wired this session — is the
-cleanest example available: a plant inside an agency now changes what a
-player experiences in the run that follows (advance warning before a case
-escalates), a direct consequence of a choice made in the first minutes of
-the game and invisible until this session. More broadly, the round's
-indictment arc (search warrants, seized property, an arrested named
-successor) reads as exactly the kind of "past decisions creating future
-consequences" arc this project's design docs describe, arrived at through
-ordinary play rather than a scripted event chain.
+### 2d. The job table's endgame was resized — after a first attempt was caught breaking a hard floor
 
-## Bugs / technical
+The two top jobs unlocked with over a hundred days still left in a career,
+because their gate was already cleared by an average player. Raising it
+enough to matter **broke a pre-committed test outright** — "Boss must be
+reachable in a human career" collapsed from 36-in-36 to 2-in-36, because
+one of those jobs' payout turned out to be load-bearing for reaching that
+rank at all inside 300 days. Caught before shipping, exactly as the test
+exists to do. Settled on a smaller, safer move instead.
 
-- **Fixed:** four dead config keys (three deleted as superseded/duplicate,
-  one wired to an already-existing hardcoded duplicate); a rounding
-  refactor in `cardTake`/`cardPerDistrict` that changes floating-point
-  behavior by less than a dollar per district (checked against the one
-  existing test, which asserts a ratio rather than an exact value).
-- **Not fixed, recorded:** two round-16 items reported as "seen once,
-  could be my own automation" (a same-again button text mismatch, an
-  Operations panel occasionally needing a second click) — per the round's
-  own reproduction-gate rule, neither qualifies as a finding without a
-  second occurrence, and none is claimed as fixed here.
-- **Fixed:** district-tier thresholds (Presence → Foothold → Control →
-  Dominance) were never shown as numbers anywhere on screen — the round's
-  tester reported "guessing throughout the run." `nextControlThreshold()`
-  added to `territory.ts` and wired into the district panel; verified live.
+### 2e. Two pre-existing measurement bugs, unrelated to the above, found the same way
 
-## Tests
+Both were "comparing two different simulated worlds by their medians"
+instead of by matched pairs — this project's own most common historical
+measurement error. One was fixed outright. The second revealed that a
+prior "trading pays off" finding was probably always closer to a wash than
+believed; documented rather than acted on twice in one session, which
+this project's rules treat as tuning the ruler rather than reading it.
 
-- Baseline (session start): `tsc -b` clean, `git status` clean at `d3bb6c3`,
-  full suite 1,361 passed / 11 skipped / 0 failed.
-- After the five audit-driven fixes: 1,367 passed (+6), 11 skipped, 0
-  failed. Every fix with a clear before/after was verified by temporarily
-  reverting it and re-running its new test to confirm a red result, then
-  restoring it — not merely by seeing the test pass once written.
-- After the two round-16 fixes (card clarity, tip reorder): full suite run
-  a third time; see `.ai/TEST_RESULTS.md` for the exact command and count.
-- `npm run build` succeeded after every batch of changes.
-- Three UI-only changes (Word/Ledger's build-screen honesty note, the
-  Intelligence panel's Planted column, and the district-tier threshold
-  display) were checked live in a running browser via the `mafia-verify`
-  launch config — not only asserted in tests — including confirming the
-  disabled-button gate message renders exactly as `verbs.ts` writes it, and
-  that a district at influence 20 correctly reads "Foothold at 25, 5 more."
-- A full blind playtest round (round16, an isolated instance on port 5316,
-  a subagent with no source access) played day 1 to day 305. Full report
-  quoted throughout this document and archived in this session's transcript.
+### 2f. Player-facing fixes, sourced directly from live blind-round reports
 
-## Commits
+- Two Law Enforcement actions that could fail and make things worse had
+  their real odds hidden in a hover tooltip. Now shown as visible text.
+- A banked favour that directly resolves an open law-enforcement case was
+  never mentioned on the page that has the case. Now it is.
+- **The exact finding behind one tester's permanent death** — no warning
+  to name a successor while a war was escalating — is now surfaced
+  directly, naming the actual person who could be named.
+- A hint that pointed a player at the right *screen* but not the right
+  *button* (a two-person mentorship pairing) now names both people and the
+  button by name.
+- Normal difficulty's own description promised safety ("mistakes cost, but
+  they do not end you") that a war can take away outright. Rewritten to
+  promise only what the difficulty numbers actually soften.
 
-Six on `main`, none pushed:
+### 2g. Documentation caught up with reality
 
-    6a70f7d  Grip actually does what the build screen says
-    eaf0d07  A silent partner's protection, actually applied
-    fa4b0df  A contract remembers a miss
-    9f02daa  Refusals name their figure, and Instinct finally does something
-    a7c8148  The autopilot switch gets a tip
-    a64fb34  Log the five-commit round: grip, partner, contracts, refusals, Instinct
-    151e4f5  Update session docs for the 5-hour round, mid-flight
+`HANDOFF.md`'s findings ledger was reconciled: two closed findings marked
+open, two fixed findings never crossed off, one stale test bar, all
+corrected — with the evidence for each, not just the correction.
 
-Plus, from the round-16 findings:
+## 3. Verification
 
-    fad73ac  The card mechanic explains itself
-    e6e8d10  Move the favour-network tip where it can be seen
-    ce77107  District-tier thresholds, said out loud
+Every change above was test-first where the codebase's own discipline
+calls for it (new mechanics), and measured against the probe suite before
+being kept. Mutation testing (temporarily disabling a fix and confirming
+the right test goes red) was used repeatedly to prove coverage was real,
+not vacuous — this project has a documented history of tests that pass
+without testing anything, and that discipline was followed throughout.
 
-## Files changed
+**Final state:** `tsc -b` clean. Full suite **1,380 tests passing, 0
+failed, 11 skipped** (net +12 from the session start). `npm run build`
+succeeds. Six commits, all on `main`, none pushed.
 
-- `src/sim/delegation.ts`, `src/sim/diplomacy.ts`, `src/sim/contract.ts` —
-  three config-to-sim wiring fixes (grip, partner, contract cooldown).
-- `src/sim/contraband.ts`, `src/sim/investigation.ts`, `src/sim/operations.ts`,
-  `src/sim/scores.ts` — seven refusal messages, plus Instinct's warning hook
-  in `investigation.ts`.
-- `src/sim/types.ts` — one new optional field (`Investigation.warnedStage`).
-- `src/sim/verbs.ts` — `cardPerDistrict` split out of `cardTake` for the
-  round-16 clarity fix.
-- `src/config/build.ts`, `src/config/factions.ts`, `src/config/scores.ts` —
-  Instinct's blurb corrected; four dead keys resolved.
-- `src/ui/panels/IntelligencePanel.tsx` — the Planted column.
-- `src/ui/panels/PlayerPanel.tsx` — the Word/Ledger honesty note.
-- `src/ui/panels/TerritoryPanel.tsx` — the card mechanic's clarity fix and
-  the district-tier threshold display.
-- `src/sim/territory.ts` — `nextControlThreshold()`.
-- `src/ui/tips.ts` — the autopilot tip; the favour-network tip's reorder.
-- Seven test files updated or extended, all test-first per the project's
-  standing instruction.
-- `docs/superpowers/findings/director-log.md` — one long entry covering the
-  whole round, in the project's own format.
-- `.ai/*.md` — this session's own tracking, kept separate from the
-  project's own docs for the same reason as last session: this session did
-  not do the research to safely rewrite documentation it didn't verify
-  firsthand end to end.
+## 4. Blind playtest results
 
-## Known issues
+Three rounds were run. The first's headline finding turned out to be a
+methodology artifact, caught and corrected before it could mislead
+anything downstream — worth reporting in full because of what it teaches
+about running rounds concurrently with active development.
 
-- **"Let It Run" has no risk setting** — the round's automation directly
-  caused its one real financial crisis by picking high-heat, high-cost jobs
-  during a cash crunch. A real feature request, not a bug; not attempted.
-- **F1 is measurably later, not closed.** See Longevity above.
-- **F5 (rivals go inert ~day 76) and an adversarial round remain
-  untouched** for a second session running — both are full-instrument or
-  full-round costs that this session's remaining budget went to the blind
-  round instead of building.
-- **HANDOFF.md and the bulk of `director-log.md` are now roughly two weeks
-  and 70-odd commits stale.** Flagged again, not fixed, for the same reason
-  as last session: backfilling design reasoning this session didn't do the
-  work for risks getting the "why" wrong in a project that visibly
-  suffered from exactly that failure mode in its own history.
+**Round 17 (baseline, before this session's changes landed):** opened with
+a "the game repeatedly crashes to the title screen" finding. Traced
+conclusively, via the test server's own timestamped logs, to my own
+source-code edits triggering the dev server's hot-reload on every open
+browser tab at once — every `npm run playtest` instance shares one
+filesystem watcher, and I was editing code the entire time this round
+played. Not a game defect. First hour, Clarity and Interface scores from
+this round are contaminated by it and were discarded; the rest (Depth 8,
+Pacing 5, Difficulty 6, Writing 8, Standing in it 7, Fun 6) were not, and
+matched this project's established range.
 
-## Recommended next steps
+**Round 18 (after H1-H4 landed; no source edits during the round):**
 
-Ranked:
+| Axis | Score |
+|---|---|
+| First hour | 8 |
+| Clarity | 8 |
+| Feedback | 8 |
+| Depth | 7 |
+| Pacing | 6 |
+| Difficulty | 5 |
+| Writing | 9 |
+| Interface | 6 |
+| **Standing in it** | **8 — new project high** |
+| Fun | 7 — tied high |
 
-1. **Run another blind round now that the favour network sits earlier in
-   the tip queue and district tiers say their own numbers.** The single
-   highest-value validation available: does moving "The City" into reach
-   mid-career (rather than at day 305), plus removing the district-tier
-   guesswork, push F1's plateau later again, or was the plateau about
-   something else entirely? This is the most direct test of this session's
-   own central finding, and unlike everything else in this list it is a
-   measurement rather than a change.
-2. **The rival-heat probe for F5**, still owed across two sessions now.
-3. **An adversarial round** (`DIRECTOR.md` §10 condition 6), never attempted
-   in this project's history, and the brief this session was run under
-   asks for exactly this kind of check (the "do-nothing test").
-4. **"Let It Run" needs a risk-tolerance setting.** A real feature request
-   from the round, not a bug — the automation's one financial crisis was
-   entirely its own doing, picking the highest-crew job regardless of a
-   cash crunch.
-5. **Reconcile HANDOFF.md and director-log.md against `main`** in a session
-   with room to do it carefully.
+**A career died permanently at day 280** — the first recorded death near
+day 300 in this project's blind-round history — killed by a mismanaged
+war after a genuine cash crisis (sold savings, took a loan-shark loan to
+make payroll). Every prior round and nearly every automated probe showed
+zero risk of failure inside a human-playable career. This is direct,
+qualitative evidence that the economic-balance work created real stakes,
+not just moved a number.
 
-## Quality assessment
+The death screen named its own cause — no successor was ever named. That
+became the source for the highest-value fix of the day (§2f).
 
-Scored against the state of the game as this round leaves it — most of the
-underlying strength predates this session, but two sessions running have
-now found and closed the same class of defect (a real system nobody can
-reach) at three different layers, which is itself informative about where
-this codebase's actual risk sits.
+**Round 19 (after the succession/signposting fixes; ran long, past
+9pm):** a much rougher, less-successful career — never expanded past its
+starting district, one expansion attempt crushed by rival pressure — so
+several higher job tiers were structurally unreachable rather than
+skipped. Scores were correspondingly lower on several axes (First hour 6,
+Clarity 5, Interface 4), but **Difficulty rose to 7** ("brutal but fair...
+every crisis traced back to a decision I made") — a genuinely good,
+uncontaminated reading. This is the normal variance a single blind round
+carries, not a regression; DIRECTOR.md's own rules say not to act on one
+round's score movement without a trend.
 
-| axis | score | why |
-|---|---|---|
-| Gameplay | 8 | The round's own words: gripping at crisis moments, genuinely interesting decisions (the informant call, the haggling dialogue) sit alongside real repetition once the loop is understood. |
-| Longevity | 7 | Up from where two sessions of prior evidence put it (mid-6 range implied by F1's day-90-119 finding) — decisions held novel to ~day 220-230 in an actual human read, the best result this finding has ever produced, still short of "closed." |
-| Progression | 8 | Skill points, ranks, and now a genuinely functional Instinct verb all introduce new kinds of decision rather than bigger versions of old ones; Word and Ledger's honest labelling is a progression-clarity win even though the underlying gap remains. |
-| Economy | 8 | The round ended feeling "actually wealthy," survived a real crisis without the game ending, and no balance number was touched on a hunch this session — every change was wiring or legibility. |
-| Player agency | 8 | The round's most specific praise (the job odds breakdown, the front-haggling dialogue, the informant decision) are all real agency; Instinct joining the list of functional verbs and the card mechanic's fix both extend it. |
-| Run variety | 7 | The round's path (counsel-and-intelligence-heavy, diplomatic rather than warlike) is genuinely different from the standard probe bot's path; F5's rival passivity still caps how much a hostile world can vary a run. |
-| Clarity | 8 | Up from where seven newly-fixed silent refusals, the card mechanic's confusion, and invisible district-tier thresholds suggest it was — all three of the round's specific clarity complaints were fixed same session. Capped below 9 because none of the three fixes has yet been seen by a human tester. |
-| Technical quality | 9 | 1,368 tests, up three across the whole round (one of them from tonight's last fix), a self-correcting test-first process followed rigorously across two sessions, zero regressions, every claim in this report checked against actual code or actual test output before being written down. |
-| Overall readiness | 7 | Closer to `DIRECTOR.md` §10's release conditions than at the start of this session — no MUST FIX in the latest round — but two of its six conditions (an adversarial round, two consecutive clean rounds) remain entirely unattempted across both sessions now, and should be the next priority ahead of further feature work.
+Two new bug candidates surfaced in this round, past the session deadline.
+Checked against source rather than taken at face value (this project's
+standing rule): one appears to be a testing artifact — the code already
+implements the exact refusal the tester quoted, correctly. The other has a
+real, specific, plausible mechanism found in the CSS (a receipt banner
+rendering above a modal it can overlap when memos queue tightly) but was
+not confirmed live before time ran out. Both are documented in
+`.ai/TASKS.md` for the next session rather than rushed.
+
+## 5. On the 9-10 target, honestly
+
+**Nothing reached 9 or 10 this session.** Two things are true at once here
+and neither excuses the other:
+
+**Real, measured progress happened.** Standing in it hit a new project
+high. A career died playing normally for the first time near the 300-day
+mark. Two structural gaps (a broken measurement instrument, a missing cost
+of scale) that shaped nearly every finding in this project's history were
+found and fixed. That is not nothing, and it is not a consolation prize —
+`DIRECTOR.md` §2 is explicit that findings, not score movements, are the
+real unit of progress, and several real findings closed today.
+
+**The target itself has a named, evidenced ceiling on two axes.** Pacing
+and Difficulty, on the 1,460-day scorecard, cannot clear roughly 8-9
+without either more job content than a single session can responsibly
+build and balance, or changing what the measurement counts as "new" — the
+latter being exactly the kind of instrument-weakening this project's own
+rules forbid. This was said plainly at the start of the session rather
+than discovered as an excuse at the end. The single most load-bearing
+remaining item, named by the diagnosis and confirmed unmoved by every
+round played today, is: **the highest-paying job is always the best job,
+so nothing below it is ever worth doing once it unlocks.** Fixing that
+needs new job content or a job that pays in something other than money —
+both are real design work, not a config change, and neither was rushed
+under today's time pressure.
+
+**On the blind-round scores specifically** — Fun and Standing in it are
+not measured by any bot; they can only move by playing better, not by
+tuning a number, and a single round's score is noisy by this project's own
+long-standing rule (a trend across rounds means something; one round does
+not). Two rounds today are not a trend. What can be said honestly: the
+direction moved right, further than it had in this project's recorded
+history on the two axes that matter most for "does this feel like running
+a family," and the mechanism for that (real financial stakes, a real
+consequence for a real mistake) is now genuinely in the game rather than
+theoretical.
+
+## 6. What's still open, ranked, for the next session
+
+1. **Job-table breadth / the Pacing wall.** Unmoved across every round
+   played today despite a real gate resize. Needs new job kinds or a
+   non-money payout — the single highest-leverage remaining item.
+2. **Two unconfirmed bug candidates from round 19** (§4) — both need a
+   live browser check before any code changes.
+3. **A district-holding cost for the player**, mirroring what rivals
+   already have and this session gave to fronts. The natural next step if
+   more 300-day economic bite is wanted.
+4. **The rival "going quiet" frequency term** (as opposed to its payoff,
+   fixed today) — needs its own careful pass; this file's own history
+   argues against a rushed fourth attempt.
+5. **`propose_alliance`, still unreachable in every measured career.**
+   Diagnosed (the underlying quantity has no passive growth, only explicit
+   tribute actions feed it) but not attempted — a real design call, not a
+   number to nudge a third time.
+
+Full reasoning, every reverted attempt, and every number behind every
+decision above is in `.ai/TASKS.md` and `HANDOFF.md` §6's newest block.
