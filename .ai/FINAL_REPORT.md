@@ -1,264 +1,211 @@
-# Final report — Round 17, 2026-09-07 (full-day session)
+# Final report — the merge session, 2026-09-07 night through 2026-09-08 morning
 
-Commissioned to attack the two things every prior session had deferred —
-**run variety** and **economic balance** — with a target of every
-blind-playtest score and every automated QA axis at 9 or 10, nothing below
-9. Two-model split: Opus diagnosed, Sonnet (this pass) implemented, tested,
-measured and committed each item. Started 11:36am EDT; the last blind
-round finished at 9:24pm, past the 9pm target.
+Commissioned as the next autonomous round, running until 10am EDT
+2026-09-08. Started by being asked to commit and push a small doc fix, which
+surfaced that local `main` and `origin/main` had diverged into two
+independently-developed histories — 40 commits on one side, 85 on the
+other, neither aware of the other's work. Everything below follows from
+reconciling that, then running the normal diagnose → fix → verify → blind
+round loop on the result.
 
-**Where this landed, up front:** six commits, all tested and verified. Two
-uncontaminated blind rounds ran against the changes. One project-record
-result (a permanent death near day 300 — the first in this project's blind
-history) and one new project-high score (Standing in it, 8/10). Nothing
-reached 9-10. That's explained in full in §5, with evidence rather than
-excuses.
+**Where this landed, up front:** the two histories are merged and pushed.
+A genuine cross-branch economic regression (F24) was found and mostly
+closed. A long-standing "single most load-bearing item" turned out to be
+already fixed by the branch that got merged in, and was closed by
+re-measurement rather than new work. Two full blind rounds ran on the
+merged code — the first two ever, since the merge only happened this
+session — with no MUST FIX in either, and two real, reproduced UI fixes
+went out from what they found. **QA scores are not at 9-10 yet.** Depth
+and Feedback and Writing are (9, 8-9, 9-10). First hour, Clarity, Pacing,
+Difficulty, Interface, Standing in it and Fun are not. That's the honest
+state, with what's known about why, below.
 
 ---
 
-## 1. The diagnosis
+## 1. The merge
 
-An Opus pass read `HANDOFF.md`, `DIRECTOR.md`, and the live code and probes
-— not just the documentation, which turned out to be materially wrong.
+Local `main` (this session's prior work: front-upkeep cost-of-scale,
+autopilot risk tiers, F15/F2/F11/F13 closures, the documentation-hygiene
+discipline) and `origin/main` (a separately-developed line: the card game
+rebuild, contracts, two writing passes, the sit-down voice system, moving
+difficulty/heat/economy tuning into JSON) had forked after a shared commit
+on 2026-08-21 and never seen each other since.
 
-**Headline finding: `HANDOFF.md` was stale on the economy.** Two "open"
-findings (F15, the front-gate economic fork; F2, the influence wall) were
-actually closed weeks ago and nobody had re-measured. Three of the four
-"deliberately failing" tests the file said were pre-committed and red were
-green.
+Resolved by reading both sides of every conflict rather than picking one
+wholesale — 11 real content conflicts across docs, config, and sim/UI
+code, plus 4 pure file-location conflicts from a directory rename. Full
+per-file reasoning is in the merge commit (`99d6ab4`). `tsc` clean,
+`npm test` green (130 files, 1,559 passing) immediately after.
 
-**The real, current problem:** the economy has no real cost of scale. A
-crew member returned 27x his wage. 83% of clean income was never spent.
-0 of 36 careers failed inside 300 days on the standard measuring bot. As a
-consequence, 17 of 19 measurable optional player behaviours were net
-financial *losses* — only one strategy (expand, buy fronts, run the top
-job) was ever rewarded, which is the actual mechanism behind "decisions
-stop feeling novel."
+## 2. F24 — the merge broke four pre-committed probe bars
 
-**A regression nobody had caught:** the automated Difficulty score sat at
-4.7 — the lowest ever measured in this project, and a release-blocking
-condition under this project's own rules (`DIRECTOR.md` §10 condition 4:
-no axis below 6).
+`npm run probe` was not green after the merge — two branches' independent
+balance work interacting for the first time. Diagnosed by direct ablation
+(toggling the one lever this session controls, `FRONT_UPKEEP_RATE`, with
+everything else fixed) rather than guessing:
 
-**An honest ceiling, stated plainly before any work began:** two of the
-six automated axes (Pacing, Difficulty) have arithmetic ceilings that
-can't be cleared without either more content than fits in one session, or
-weakening what the measurement means. `DIRECTOR.md` explicitly forbids
-chasing a score three separate times in its own text. This was treated as
-a real constraint to report against, not an excuse to stop — see §5.
+- **Favour-network reachability and trading-arm utilization — CLOSED.**
+  Front upkeep at 0.4 was genuinely taxing front revenue hard enough to
+  crowd out the payroll spend the union favour watches. Moved to 0.3, the
+  lowest previously-measured point that restores both.
+- **Trading arm's net advantage — CLOSED, by fixing the bar, not the
+  rate.** This one swung non-monotonically across the same rate sweep
+  (22%/33%/94%/83% of its target), which is rng noise at n=36, not a real
+  relationship. Restated per DIRECTOR.md §5's exception, from "must exceed
+  100% of not-trading's estate" to "must exceed 50%" — still the stricter
+  branch's own intent, at a resolution this sample size can actually
+  support.
+- **Rival "going quiet" share — LEFT OPEN, on purpose.** 61.4% against a
+  ≤61% bar, confirmed not caused by front upkeep, and this specific bar
+  had already used its one-time restatement exception before the merge. A
+  second use was not taken. It's marginal and now the concrete acceptance
+  test for `.ai/TASKS.md`'s rival-AI frequency item.
 
-## 2. What shipped
+`npm run probe`: 4 failing → 1 failing (the one left open on purpose).
 
-### 2a. The pressure dial and favour network were never decoration — the instrument measuring them was broken
+## 3. The stale finding: "the highest-paying job is always the best job"
 
-The economic-balance probe's own bot triggered "go clean" on an
-organization-wide case stage and heat level — not what the dial actually
-defends (a single front's own exposure and inspection risk). The broken
-policy reported using these systems cost a career **-$896,499 estate and
--54% laundering** for almost no benefit. Confirmed real (not a
-measurement artifact) via a proper paired comparison before touching
-anything. Rewritten to trigger on the thing the dial actually protects
-against. Corrected reading: **+$749,645 estate, +$1,937,207 laundered.**
-The systems work; nobody had measured them honestly.
+Carried across two prior rounds as *the* highest-leverage open item,
+needing new job content or a non-money payout. Before starting that work,
+checked whether it still held against the merged code rather than trusting
+the note. It didn't: the other branch's `perFireByHand` fix (2026-09-06)
+already prices a hand-run job's repetition the same way a standing order's
+was, built for exactly this symptom. `scorecard.probe`'s bot — which does
+nothing but recruit and pick the highest-EV job every day — now reads
+**Depth 9.5, "best job changed 44% of weeks, 13 kinds used."**
 
-### 2b. Rivals no longer profit more from doing nothing than from working
+What the same reading still shows, and is a different, lower-urgency
+finding: Pacing 8, "nothing was new after day 970" of a 1,460-day bot
+career. A finite content pool exhausted late, not one job dominating —
+and day 970 is far past the 300-day window a human blind round ever
+reaches.
 
-Going quiet paid a rival family $12,000 on top of its own ~$2,190/week
-organic income — sitting still outearned two and a half weeks of running
-the organization. Cut to $1,500. Reading the actual scoring code showed
-this fixes the *payoff* but not the *frequency* of going quiet (a separate
-term, deliberately left alone — three prior tuning passes on this exact
-file argue it needs its own session, not a rider on this one).
+No code changed for this item. It was closed by re-measurement, which is
+itself the finding worth carrying forward: a note in a tracking doc is a
+claim about the code at the time it was written, not a fact.
 
-### 2c. Fronts now cost something to hold
+## 4. Two blind rounds on the merged code — the first ever run against it
 
-The single biggest structural gap found: a business had a one-time
-purchase price and, forever after, zero ongoing cost — verified by reading
-the tick code line by line, not inferred. Rivals have had the equivalent
-since early in the project; the player never did. A real weekly bill now
-exists, sized as a share of what the fronts actually earn, paid the same
-way payroll is (partial payment allowed, shortfall carried, no hard
-cliff). Unpaid bills cost a front its health rather than ending the game
-outright.
+**Round 23** (day 306, Crew Leader, survived a costly war): First hour 6,
+Clarity 7, Feedback 9, Depth 9, Pacing 6, Difficulty 7, Writing 10,
+Interface 6, Standing in it 8, Fun 7.
 
-Measured at two rates before settling — neither, on its own, moved the
-"careers surviving all 300 days" needle for the standard measuring bot,
-which was an honest, reported result rather than a claimed win. It is a
-real, permanent structural fix regardless.
+**Round 24** (day 368, Crew Leader after a demotion from Capo, survived a
+federal trial to acquittal): First hour 7, Clarity 7, Feedback 8, Depth 9,
+Pacing 6, Difficulty 6, Writing 9, Interface 6, Standing in it 7, Fun 7.
 
-### 2d. The job table's endgame was resized — after a first attempt was caught breaking a hard floor
+**No MUST FIX in either round** — DIRECTOR.md §10's two-consecutive-clean-
+rounds condition is met for the first time since the merge. Depth held at
+9 both times (strong, confirmed). Pacing and Interface both held at 6
+(real, repeated findings, not one tester's noise — two independent
+readings agreeing is what this project's own rules treat as signal).
 
-The two top jobs unlocked with over a hundred days still left in a career,
-because their gate was already cleared by an average player. Raising it
-enough to matter **broke a pre-committed test outright** — "Boss must be
-reachable in a human career" collapsed from 36-in-36 to 2-in-36, because
-one of those jobs' payout turned out to be load-bearing for reaching that
-rank at all inside 300 days. Caught before shipping, exactly as the test
-exists to do. Settled on a smaller, safer move instead.
+Each SHOULD FIX candidate was checked against source, not assumed:
 
-### 2e. Two pre-existing measurement bugs, unrelated to the above, found the same way
+- **Fixed**: the Fear stat's tooltip explained what it does and never what
+  moves it (round 23's exact words). Added the driver (violence and its
+  credible promise) and the decay, pulled from the sim's own comments.
+- **Fixed**: roster rows (Organization, Rivals) revealed their detail
+  panel below a potentially full-height table with no scroll cue —
+  reproduced on nearly every visit in round 24. Added a scroll-into-view
+  on selection.
+- **Fixed**: the steward-delegation hint (Rail badge and the "what wants
+  you today" system) named the situation and never the door — "a district
+  you hold has nobody running it" without which district or who could
+  take it. Both now name the actual district and a candidate by name. The
+  existing test only checked which panel the hint pointed at; strengthened
+  to assert the actual wording, and mutation-verified (the fix was
+  reverted, the new assertion was watched to fail on the exact case it
+  should catch, then restored).
+- **Closed as non-issues, checked against both code paths**: two round-19
+  candidates (the lay-low refusal, the receipt/memo z-index layering) and
+  two round-23/24 candidates (a memo choice's disabled state, a memo not
+  appearing in a text-extraction heuristic). All four are correctly
+  implemented in the game; none would ever be hit by a human clicking with
+  their eyes.
+- **Watched, not changed**: rank flip-flopping during a crisis (round 23
+  read it as "thrashy"; round 24's own single demotion read as a positive,
+  load-bearing discovery instead). `rank.ts`'s own design argues at length
+  against smoothing this, and a second reading didn't contradict it.
+- **Left alone**: Lay Low's expiry already logs "You surface again" — the
+  "silently expired" report is most likely a missed log line during a
+  fast-forward, not a missing feature. Pacing's "no warning before a
+  crisis" is one reading of one war and risks undercutting the tension the
+  game is otherwise trying to earn — left for a second reading before
+  touching.
 
-Both were "comparing two different simulated worlds by their medians"
-instead of by matched pairs — this project's own most common historical
-measurement error. One was fixed outright. The second revealed that a
-prior "trading pays off" finding was probably always closer to a wash than
-believed; documented rather than acted on twice in one session, which
-this project's rules treat as tuning the ruler rather than reading it.
+Verification after both rounds' fixes: `tsc` clean, `npm test` green (130
+files, 1,559 passing), `npm run probe` 98/99 (unaffected by the UI-only
+changes).
 
-### 2f. Player-facing fixes, sourced directly from live blind-round reports
+## 5. Where the QA-score target actually stands
 
-- Two Law Enforcement actions that could fail and make things worse had
-  their real odds hidden in a hover tooltip. Now shown as visible text.
-- A banked favour that directly resolves an open law-enforcement case was
-  never mentioned on the page that has the case. Now it is.
-- **The exact finding behind one tester's permanent death** — no warning
-  to name a successor while a war was escalating — is now surfaced
-  directly, naming the actual person who could be named.
-- A hint that pointed a player at the right *screen* but not the right
-  *button* (a two-person mentorship pairing) now names both people and the
-  button by name.
-- Normal difficulty's own description promised safety ("mistakes cost, but
-  they do not end you") that a war can take away outright. Rewritten to
-  promise only what the difficulty numbers actually soften.
+The developer's stated target is every score at 9 or 10. Against the two
+post-merge rounds:
 
-### 2g. Documentation caught up with reality
+    axis              r23   r24   at target?
+    First hour          6     7    no
+    Clarity             7     7    no
+    Feedback            9     8    r23 yes, r24 no
+    Depth               9     9    yes
+    Pacing              6     6    no — confirmed, repeated
+    Difficulty          7     6    no
+    Writing            10     9    yes both / close
+    Interface           6     6    no — confirmed, repeated
+    Standing in it      8     7    no
+    Fun                 7     7    no
 
-`HANDOFF.md`'s findings ledger was reconciled: two closed findings marked
-open, two fixed findings never crossed off, one stale test bar, all
-corrected — with the evidence for each, not just the correction.
+Depth, Feedback and Writing are genuinely strong. Everything else is not
+yet at the bar, and the two axes with the clearest, most-repeated evidence
+(Pacing, Interface) are named specifically rather than guessed at:
 
-## 3. Verification
+- **Pacing 6, both rounds.** Both testers independently described the same
+  shape — a mid-late-game stretch that becomes "dismiss digest → handle
+  one recurring crew conversation → advance time," reading as maintenance
+  rather than new decisions, even with Depth scoring 9. Not yet diagnosed
+  to a specific mechanism; the sit-down/informant-suspicion trees
+  "becoming mechanically identical" once a player learns the pattern
+  (round 24's words) is the leading candidate, and a smaller, more
+  tractable target than "add new content" if it holds up. Needs its own
+  diagnosis session — this is `.ai/TASKS.md` item 1 now.
+- **Interface 6, both rounds, partially addressed.** The two concrete,
+  every-visit sub-causes found this session are fixed (above). Not yet
+  validated by a fresh blind round. The Rail's badge system itself is
+  already extensive and well-designed — checked this session rather than
+  assumed — so if Interface stays at 6 after those fixes are confirmed,
+  the remaining gap is the multi-panel information architecture both
+  testers described (checking several separate pages to know what needs
+  attention), which is a bigger design question than a quick patch.
 
-Every change above was test-first where the codebase's own discipline
-calls for it (new mechanics), and measured against the probe suite before
-being kept. Mutation testing (temporarily disabling a fix and confirming
-the right test goes red) was used repeatedly to prove coverage was real,
-not vacuous — this project has a documented history of tests that pass
-without testing anything, and that discipline was followed throughout.
+## 6. What's next, ranked
 
-**Final state:** `tsc -b` clean. Full suite **1,380 tests passing, 0
-failed, 11 skipped** (net +12 from the session start). `npm run build`
-succeeds. Six commits, all on `main`, none pushed.
+See `.ai/TASKS.md` for the full, current queue. In order:
 
-## 4. Blind playtest results
+1. **Pacing** — diagnose the mid-game repetition specifically, likely
+   starting with the crew sit-down/informant trees, before assuming new
+   content is needed.
+2. **A validating blind round** — to confirm the Interface fixes actually
+   moved that score, and to get a third data point on Pacing/Difficulty/
+   Fun/Standing in it now that two agree.
+3. **The rival "going quiet" frequency term** — has a concrete, currently-
+   red acceptance test (F24's fourth bar) and its own history arguing it
+   needs a dedicated session, not a rider.
+4. Smaller items: `propose_alliance` reachability (needs a design call,
+   not a third bar-lowering), a district-holding cost for the player
+   (deliberately not attempted this session — see reasoning in
+   `docs/findings/director-log.md`'s round-22 entry on why a second
+   economy tax right after F24 risked repeating the same interaction
+   rather than adding real depth).
 
-Three rounds were run. The first's headline finding turned out to be a
-methodology artifact, caught and corrected before it could mislead
-anything downstream — worth reporting in full because of what it teaches
-about running rounds concurrently with active development.
+## 7. Housekeeping
 
-**Round 17 (baseline, before this session's changes landed):** opened with
-a "the game repeatedly crashes to the title screen" finding. Traced
-conclusively, via the test server's own timestamped logs, to my own
-source-code edits triggering the dev server's hot-reload on every open
-browser tab at once — every `npm run playtest` instance shares one
-filesystem watcher, and I was editing code the entire time this round
-played. Not a game defect. First hour, Clarity and Interface scores from
-this round are contaminated by it and were discarded; the rest (Depth 8,
-Pacing 5, Difficulty 6, Writing 8, Standing in it 7, Fun 6) were not, and
-matched this project's established range.
+Per the standing reconcile-and-trim rule: `HANDOFF.md` §0 and §6 are
+current through round 24; `docs/findings/director-log.md` was trimmed from
+3,074 to 1,710 lines by archiving the merged branch's own pre-merge
+iteration record (its durable conclusions are already in `HANDOFF.md`
+§0); two stale `HANDOFF.md` lines from 2026-09-02 were corrected. One open
+item flagged but not done: reconciling the two merged histories' F-number
+findings against each other, so a number isn't reused for two different
+things by accident.
 
-**Round 18 (after H1-H4 landed; no source edits during the round):**
-
-| Axis | Score |
-|---|---|
-| First hour | 8 |
-| Clarity | 8 |
-| Feedback | 8 |
-| Depth | 7 |
-| Pacing | 6 |
-| Difficulty | 5 |
-| Writing | 9 |
-| Interface | 6 |
-| **Standing in it** | **8 — new project high** |
-| Fun | 7 — tied high |
-
-**A career died permanently at day 280** — the first recorded death near
-day 300 in this project's blind-round history — killed by a mismanaged
-war after a genuine cash crisis (sold savings, took a loan-shark loan to
-make payroll). Every prior round and nearly every automated probe showed
-zero risk of failure inside a human-playable career. This is direct,
-qualitative evidence that the economic-balance work created real stakes,
-not just moved a number.
-
-The death screen named its own cause — no successor was ever named. That
-became the source for the highest-value fix of the day (§2f).
-
-**Round 19 (after the succession/signposting fixes; ran long, past
-9pm):** a much rougher, less-successful career — never expanded past its
-starting district, one expansion attempt crushed by rival pressure — so
-several higher job tiers were structurally unreachable rather than
-skipped. Scores were correspondingly lower on several axes (First hour 6,
-Clarity 5, Interface 4), but **Difficulty rose to 7** ("brutal but fair...
-every crisis traced back to a decision I made") — a genuinely good,
-uncontaminated reading. This is the normal variance a single blind round
-carries, not a regression; DIRECTOR.md's own rules say not to act on one
-round's score movement without a trend.
-
-Two new bug candidates surfaced in this round, past the session deadline.
-Checked against source rather than taken at face value (this project's
-standing rule): one appears to be a testing artifact — the code already
-implements the exact refusal the tester quoted, correctly. The other has a
-real, specific, plausible mechanism found in the CSS (a receipt banner
-rendering above a modal it can overlap when memos queue tightly) but was
-not confirmed live before time ran out. Both are documented in
-`.ai/TASKS.md` for the next session rather than rushed.
-
-## 5. On the 9-10 target, honestly
-
-**Nothing reached 9 or 10 this session.** Two things are true at once here
-and neither excuses the other:
-
-**Real, measured progress happened.** Standing in it hit a new project
-high. A career died playing normally for the first time near the 300-day
-mark. Two structural gaps (a broken measurement instrument, a missing cost
-of scale) that shaped nearly every finding in this project's history were
-found and fixed. That is not nothing, and it is not a consolation prize —
-`DIRECTOR.md` §2 is explicit that findings, not score movements, are the
-real unit of progress, and several real findings closed today.
-
-**The target itself has a named, evidenced ceiling on two axes.** Pacing
-and Difficulty, on the 1,460-day scorecard, cannot clear roughly 8-9
-without either more job content than a single session can responsibly
-build and balance, or changing what the measurement counts as "new" — the
-latter being exactly the kind of instrument-weakening this project's own
-rules forbid. This was said plainly at the start of the session rather
-than discovered as an excuse at the end. The single most load-bearing
-remaining item, named by the diagnosis and confirmed unmoved by every
-round played today, is: **the highest-paying job is always the best job,
-so nothing below it is ever worth doing once it unlocks.** Fixing that
-needs new job content or a job that pays in something other than money —
-both are real design work, not a config change, and neither was rushed
-under today's time pressure.
-
-**On the blind-round scores specifically** — Fun and Standing in it are
-not measured by any bot; they can only move by playing better, not by
-tuning a number, and a single round's score is noisy by this project's own
-long-standing rule (a trend across rounds means something; one round does
-not). Two rounds today are not a trend. What can be said honestly: the
-direction moved right, further than it had in this project's recorded
-history on the two axes that matter most for "does this feel like running
-a family," and the mechanism for that (real financial stakes, a real
-consequence for a real mistake) is now genuinely in the game rather than
-theoretical.
-
-## 6. What's still open, ranked, for the next session
-
-1. **Job-table breadth / the Pacing wall.** Unmoved across every round
-   played today despite a real gate resize. Needs new job kinds or a
-   non-money payout — the single highest-leverage remaining item.
-2. **Two unconfirmed bug candidates from round 19** (§4) — both need a
-   live browser check before any code changes.
-3. **A district-holding cost for the player**, mirroring what rivals
-   already have and this session gave to fronts. The natural next step if
-   more 300-day economic bite is wanted.
-4. **The rival "going quiet" frequency term** (as opposed to its payoff,
-   fixed today) — needs its own careful pass; this file's own history
-   argues against a rushed fourth attempt.
-5. **`propose_alliance`, still unreachable in every measured career.**
-   Diagnosed (the underlying quantity has no passive growth, only explicit
-   tribute actions feed it) but not attempted — a real design call, not a
-   number to nudge a third time.
-
-Full reasoning, every reverted attempt, and every number behind every
-decision above is in `.ai/TASKS.md` and `HANDOFF.md` §6's newest block.
+All work is committed and pushed to `main` (`6656249` at time of writing).
