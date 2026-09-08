@@ -372,27 +372,35 @@ worth opening. Read its newest entry (round 17-19) and, if the question is
 about an older, specific finding, search for that finding's name rather
 than reading start to finish.
 
-**8 of a possible 8 iterations run, as of round 14 — this was that cycle's
-own closing account, not a ceiling on the project.** §10's "two consecutive
+**8 of a possible 8 iterations run, as of round 14 — that cycle's own
+closing account, not a ceiling on the project.** §10's "two consecutive
 reverts" condition was reached and reported at the time; the developer
-brought the project back for further rounds since (15 through the
-present), each with its own mandate. The scores table immediately below
-stops at round 14 and was never extended — for anything from round 15
-onward, including the two most recent (18, 19), see §6's newest
-reconciliation block, not this table.
+brought the project back for further rounds since, each with its own
+mandate. Table extended through round 19 below — full reasoning for 17-19
+in §6's newest reconciliation block.
 
 ### Blind round scores
 
-    axis           r10   r11   r12   r13   r14
-    First hour       8     8     8     8     9
-    Clarity          9     6     6     9     8
-    Feedback         9     7     8     8     8
-    Depth            8     6     8     8     8
-    Pacing           6     4     5     5     6
-    Difficulty       8     6     6     7     7
-    Writing          9     8     9     9     9
-    Interface        8     6     7*    7     8
-    Standing in it   -     5     6     6     7
+    axis           r10   r11   r12   r13   r14   r15   r17   r18   r19
+    First hour       8     8     8     8     9     9     6†    8     6
+    Clarity          9     6     6     9     8     8     5†    8     5
+    Feedback         9     7     8     8     8     9     7     8     8
+    Depth            8     6     8     8     8     8     8     7     7
+    Pacing           6     4     5     5     6     7     5     6     5
+    Difficulty       8     6     6     7     7     8     6     5     7
+    Writing          9     8     9     9     9    10     8     9     9
+    Interface        8     6     7*    7     8     9     4†    6     4
+    Standing in it   -     5     6     6     7     -     7     8     7
+    Fun              7     6     6     6     5     7     6     7     5
+
+Round 16 (2026-09-07 morning) is not in this table — that round's brief
+asked only for a MUST FIX check and a novelty-day finding, not a full
+Part 2 score sheet; see `.ai/FINAL_REPORT.md`'s earlier version in git
+history if that round's own account is needed. † = this round's own
+source-edit contamination affected these three columns specifically (see
+§6's round-17 block for the mechanism); read Depth/Pacing/Difficulty/
+Writing/Standing in it/Fun for r17 as the real reading, not the marked
+ones.
     Fun              7     6     6     6     5
 
 **Round 14 is the high-water mark on seven axes and the low on Fun.** The tester
