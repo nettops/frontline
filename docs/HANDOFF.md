@@ -676,7 +676,14 @@ tester's own account, not one-off reports:**
   roster, clicking a row near the top opened a panel the player would
   never see without scrolling blind. Fixed in `CrewPanel.tsx` and
   `RivalsPanel.tsx` with a ref + `scrollIntoView` on selection — the
-  smallest fix that actually shows the reveal happened.
+  smallest fix that actually shows the reveal happened. **Live-verified in
+  the browser 2026-09-08 morning**, not just unit-tested — this project
+  runs no jsdom (`HANDOFF.md` §2), so a DOM scroll call has zero coverage
+  from the pure-sim suite. Confirmed on an isolated instance at a short
+  viewport: `<main>`'s `scrollTop` moved from 0 to 198 on row click, and a
+  screenshot shows the detail panel's heading inside the viewport
+  afterward. The steward-hint fix below is pure logic and was already
+  mutation-tested, so it did not need the same live check.
 - **The steward-delegation hint named the situation and never the door.**
   Both the Rail badge and the `attention()` Wanting line said "a district
   you hold has nobody running it" without which district or who could
