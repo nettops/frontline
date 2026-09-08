@@ -22,15 +22,28 @@ asked (was the bot's 44% weekly churn number matched by a human's felt
 experience?): not quite — churn in *which job* does not read as new
 *content* to a human the way a new system or a new kind of situation does.
 
-Not yet diagnosed to a specific mechanism. Candidate angle: the crew
-sit-down/informant-suspicion trees becoming "mechanically identical"
-across different people once a player learns the pattern (r24's own
-words) — if true, that is a smaller, more tractable target than "add new
-job content," and worth checking before assuming this needs new systems
-rather than more variation within the ones that exist.
+**Partially diagnosed, 2026-09-08 — the "dominant register" hypothesis is
+ruled out; a harder one is left standing.** Checked `config/sitdown.ts`'s
+four crew registers (Press/Offer/Listen/Level) directly rather than
+guessing: they read four different stats (fear/greed/grievance/respect),
+at different thresholds, different costs, and reward different training —
+there is no single register that is simply best regardless of who you are
+talking to. `npc.ts`'s `perceive()` also genuinely varies the signal shown
+before a choice, banded and noisy in a way that sharpens with familiarity.
+This system is not shallow, and Depth 9 across both rounds agrees with
+that reading.
 
-Do not attempt as a same-day rider; this needs its own diagnosis session,
-same as the item it replaces did.
+What's left standing, unconfirmed: the repetition may be about **format**
+rather than **content** — the same modal shape appearing over and over
+reads as "here we go again" even when the decision underneath genuinely
+varies, purely from how often the interaction type recurs. That is a
+harder, more fundamental question (reduce sit-down frequency? vary the
+UI presentation? accept it as a property of a working mechanic used
+often?) that needs a developer call on the trade-off, not a code fix
+picked unilaterally. Do not attempt a fix here without that call; the
+next useful step is confirming the format-fatigue hypothesis specifically
+(does Pacing move if sit-down frequency is throttled, holding everything
+else fixed?) before deciding what if anything to change.
 
 ## 1a. Interface 6, held across two consecutive blind rounds — partially addressed 2026-09-08
 
