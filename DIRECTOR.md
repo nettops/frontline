@@ -206,6 +206,18 @@ Do not tell a tester mid-round to go and use something. Under-use is the
 measurement, and prompting it overwrites the finding with the answer you wanted.
 Ask at write-up time, naming no feature.
 
+This must not tip into a tester who never reaches for anything. `PLAYTEST.md`
+already tells the tester to try to survive, not to tour the screens — the risk
+is a tester who takes that as license to sit still: never buys a contact,
+never calls a sit-down, never approaches a family, and reports each absence as
+a clean finding when the real cause was passivity, not the game. The brief's
+existing frame is the fix — a player trying to keep the org alive reaches for
+whatever the game puts in front of them as a reason. Under-use is what's left
+after that: a system nothing ever pointed them at, or one they saw and judged
+not worth the cost. Neither is "went looking for untested corners on
+spec," which stays out of bounds — that's the same contamination as being told
+outright.
+
 ---
 
 ## 5. Things you may not do
@@ -393,7 +405,9 @@ the evidence, and hand it back.
 - The diagnosis points at a redesign large enough that the game becomes a
   different game.
 - You reach **eight iterations**. Report where things stand and let the
-  developer decide whether to continue.
+  developer decide whether to continue. Eight is a mandatory check-in, not a
+  budget — it does not mean the game has eight iterations to become good, and
+  reaching it with things still improving is not itself a reason to stop.
 
 ---
 
