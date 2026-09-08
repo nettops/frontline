@@ -3,6 +3,16 @@
 Read this, then read `DIRECTOR.md` and `PLAYTEST.md`. This file is the state;
 those two are the rules.
 
+**Standing rule, added 2026-09-07: reconcile this file before a session
+ends, not just when somebody notices it is wrong.** Every diagnosis pass
+this project has run reads this file first, and a stale entry here is not
+neutral — it is a wrong instruction to the next reader, and three separate
+sessions now have spent real time re-discovering a finding this file had
+already listed as open when it was actually closed. If a session's own
+report (`.ai/FINAL_REPORT.md`, `.ai/TASKS.md`) says something closed,
+found, or fixed, that has to land here too before the session is over, in
+the same pass — not deferred to "whenever this next comes up stale."
+
 Project root: `C:\Users\cory\Desktop\mafia`. A git repo now — `main`, remote
 `nettops/frontline` — which the section below this paragraph did not know
 when it was written. Windows 11, PowerShell 5.1 (no `&&`, no `||`, no
@@ -21,9 +31,11 @@ operations, crew, territory, rival families, and law enforcement.
     npx tsc -b         # types
     npm run playtest   # namespaced instance for blind testers
 
-**Current verified state, 2026-09-07 (afternoon, round 17): `tsc` clean,
-1,380 tests, 110 files, all passing except one documented, unattributed
-finding — see §6's newest reconciliation block.** The rank-ladder pacing
+**Current verified state, 2026-09-07 (end of round 17, ~9:30pm): `tsc`
+clean, 1,384 tests, 110 files, all passing.** One of those (the trading-arm
+`pairedGap` comparison) is a documented coin-flip rather than a stable
+green — see §6's newest reconciliation block for why it is read that way
+rather than trusted at face value. The rank-ladder pacing
 questions this paragraph used to argue with itself about (three overlapping,
 partly contradictory sentences, left exactly as a warning about editing this
 file by appending rather than revising) were resolved somewhere in the nine
@@ -624,6 +636,80 @@ against 9/9/21 when the gate was set) — repeating "lower the bar again"
 would be the third time on this exact quantity; HANDOFF's own F17 entry
 already says the quantity needs fixing, not the bar, and that is still
 correct and still undone.
+
+### Round 17's two blind rounds, and what they closed
+
+Two clean rounds ran after the changes above (a third, `round17` itself,
+opened with a MUST FIX that turned out to be this session's own source
+edits triggering the shared dev-server's hot-reload on the tester's tab —
+not a game defect, see the git log's `4d7581f`/`4ae06b8` commit messages
+for the timestamped proof; its First hour/Clarity/Interface scores were
+discarded as contaminated and the rest were kept).
+
+**Round 18: a career died permanently at day 280** — the first recorded
+death near the 300-day mark in this project's blind-round history — killed
+by a mismanaged war, after a genuine cash crisis. Scores: First hour 8,
+Clarity 8, Feedback 8, Depth 7, Pacing 6, Difficulty 5, Writing 9,
+Interface 6, **Standing in it 8 (a new project high)**, Fun 7 (tied
+high). The death screen named its own cause — no successor had ever been
+named, and nothing had ever pointed the tester back at Succession once the
+war made it urgent.
+
+**Fixed the same session, from that finding, test-first and
+mutation-verified:**
+- `attention.ts` gains a line: at war, with no heir named, naming the most
+  senior eligible man by name and pointing at Succession.
+- The existing "teaching" (crew-pairing/mentorship) hint named the
+  situation ("your best man is free") and not the door — round 18 hit it
+  twice and never found the button. Now names both men and the button.
+- `LawPanel.tsx`: two actions (`destroyEvidence`, `pressureWitness`) had
+  real, computable failure odds stated only in a hover tooltip. Now shown
+  as visible text — the same F10/F12-shaped repair this project has made
+  before. A banked favour that directly buries the case being viewed is
+  now named on that case's own page (it previously sat unused for months
+  in round 18's own career, found only by accident on the last day).
+- Normal difficulty's blurb ("mistakes cost, but they do not end you")
+  overpromised against a mechanic (war) none of the difficulty numbers
+  touch. Rewritten to promise only what the numbers soften.
+
+**Round 19 (a rougher career — never expanded past its starting district,
+one expansion attempt crushed by rival pressure):** First hour 6, Clarity
+5, Feedback 8, Depth 7, Pacing 5, **Difficulty 7** ("brutal but fair —
+every crisis traced back to a decision I made"), Writing 9, Interface 4,
+Standing in it 6, Fun 5. Read as ordinary single-round variance per
+DIRECTOR.md's own rule (a trend across rounds means something, one round
+does not) rather than a regression — the lower scores track this
+particular career's smaller footprint, and Difficulty's rise is a
+genuinely good, uncontaminated reading in the opposite direction from
+round 18's.
+
+**Two new MUST FIX candidates from round 19, checked against source, not
+yet resolved live:**
+- *"Lay low silently blocks a loud launch"* — checked, and the code is
+  already correct: `operations.ts:535` gates exactly this and the tester's
+  own quoted refusal string is the literal string in the code, rendered as
+  visible text under a properly `disabled` button. Very likely a testing
+  artifact (a real disabled `<button>` does not fire a click). **Owed**: a
+  live screenshot check before this goes near a code change.
+- *"Event dialogs render visually overlapped"* — a specific, plausible
+  mechanism was found: `.receipt` (`theme.css:2517`, z-index 60) renders
+  above `.memo-backdrop` (z-index 50) by design (`MemoModal.tsx`'s own
+  comment: "the next memo can open on top of it"), so a receipt still
+  inside its 6-second window can float over a tightly-queued next memo.
+  Not confirmed live — depends on viewport height and card length. **Owed**:
+  reproduce (queue two memos inside the receipt window, screenshot) before
+  deciding whether the fix is a lower z-index, a shorter window, or
+  standing the receipt down the moment a new event arrives.
+
+**The single most load-bearing item left, confirmed unmoved by both
+rounds despite the job-gate resize above:** the highest-paying job is
+always the best job once it unlocks, so nothing below it is ever worth
+doing — the root of both rounds' "decisions stop changing around day
+180-200," unchanged from every prior round this project has ever measured.
+Needs new job content or a job that pays in something other than money,
+neither attempted this session. See `.ai/FINAL_REPORT.md` for the full
+account of why this specific thing is the next session's highest-leverage
+target.
 
 ### Reconciled 2026-09-07 — read this before trusting a status below
 
