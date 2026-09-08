@@ -474,7 +474,7 @@ can be enjoyable without you ever inhabiting it, and it can be gripping without
 being enjoyable at all. If your two numbers are the same, check that you meant
 them to be.
 
-### Part 3 — four questions
+### Part 3 — eight questions
 
 Answer these in prose, honestly, from your own experience of playing:
 
@@ -500,6 +500,14 @@ Answer these in prose, honestly, from your own experience of playing:
 7. **At the point you stopped, what would you have lost if it had all gone?**
    Answer in terms of what was actually in front of you, not what the rules say
    you had. "Some money and a rank" is a real answer and a damning one.
+8. **Name something that happened at least twenty days before you stopped, and
+   say what it is still changing about how you play now.** Not whether it was
+   interesting at the time — whether it left a mark. "A guy betrayed me, I lost
+   $10k, and I played the same after" is a real answer. So is a chain: it cost
+   you a crew, so you moved someone into their spot, and that is who took the
+   fall the next time something went wrong. If nothing from early on is still
+   live in how you play, say that plainly — it is a finding about the game, not
+   about your memory.
 
 ### Part 4 — the systems
 
