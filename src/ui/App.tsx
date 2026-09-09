@@ -295,7 +295,12 @@ export default function App() {
           />
         )}
         {!live && report && (
-          <Bulletin report={report} onGo={goto} onDismiss={() => setReport(null)} />
+          <Bulletin
+            report={report}
+            pendingNow={state.pendingEvents.length}
+            onGo={goto}
+            onDismiss={() => setReport(null)}
+          />
         )}
         {/*
            Pick up where the week was interrupted.

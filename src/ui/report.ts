@@ -108,6 +108,34 @@ export const DAY_PARTS: { id: DayPart; label: string }[] = [
   { id: 'evening', label: 'This evening' },
 ];
 
+/**
+ * The 'today' part, read fresh every time rather than baked into a report.
+ *
+ * This used to be a line `buildReport` pushed from `state.pendingEvents
+ * .length` at the moment a span stopped — a snapshot of something that is
+ * still live. Round 27's MUST FIX: a player can answer a memo directly (it
+ * renders on top of everything and reads current state, same as ever)
+ * without dismissing the briefing behind it, and the old snapshot went on
+ * saying "a memo is open and waiting on you" after the desk was actually
+ * clear — a briefing telling the truth about a moment that had already
+ * passed, which is exactly what rule 3 forbids. `Bulletin` calls this at
+ * render time with the live count instead, so 'today' can never say
+ * something that has stopped being true.
+ */
+export function pendingLines(pendingNow: number): ReportLine[] {
+  if (pendingNow <= 0) return [];
+  return [
+    {
+      text:
+        pendingNow === 1
+          ? 'A memo is open and waiting on you.'
+          : `${pendingNow} memos are open and waiting on you.`,
+      tone: 'neutral',
+      panel: null,
+    },
+  ];
+}
+
 export interface DayReport {
   from: number;
   to: number;
@@ -419,22 +447,8 @@ export function buildReport(before: Snapshot, state: GameState): DayReport | nul
     push(`Nobody at home has said anything. It has been ${house.since} days.`, 'neutral', 'player', 'evening');
   }
 
-  /*
-     Anything still on the desk belongs to today rather than to last night.
-
-     A memo is the one thing in a briefing that has not happened yet, and
-     reading it under the same heading as a death is what made the old
-     briefing feel like a list rather than a morning.
-  */
-  if (state.pendingEvents.length > 0) {
-    const n = state.pendingEvents.length;
-    push(
-      n === 1 ? 'A memo is open and waiting on you.' : `${n} memos are open and waiting on you.`,
-      'neutral',
-      null,
-      'today',
-    );
-  }
+  // The 'today' part is not pushed here any more — see `pendingLines`,
+  // above, for why and where it moved.
 
   if (lines.length === 0) return null;
   return { from: before.day, to: state.day, lines, cue: cueFor(lines, state) };

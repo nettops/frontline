@@ -284,12 +284,61 @@ fell out of the same run: `distinctEnds` (final-rank diversity over four
 years) was only 2 of a possible 5, now the axis's actual soft spot — not
 chased further under the deadline.
 
-## 9. Housekeeping, 2026-09-09
+## 9. Working the four-axis plan, 2026-09-09 (continued)
 
-`docs/findings/director-log.md` gained one entry for this session,
-including the theory retraction. `HANDOFF.md` §0, §4's scores table and
-§6 are current through round 27. `.ai/TASKS.md` was rewritten to reflect
-the retraction, round 27's two new items, and the closed negotiation-bug
-and alliance-gate findings.
+With the round-27 plan agreed (§8) and time still on the clock, worked
+three of its four items in order.
+
+**First hour — CLOSED.** A payroll hint already existed (`tips.ts`'s
+`wages` tip) and was well-placed in the tutorial queue. The actual gap
+was its gate: `crewList(s).length >= 2`, one hire more than a career
+needs to owe wages — the starting associate draws a real wage from day
+one, so a player who never hired a second man was never warned at all.
+Gate lowered to `>= 1`. Test-first, mutation-verified.
+
+**Pacing — a signpost shipped, unvalidated by a round yet.**
+`OperationsPanel`'s "Above your standing" table has always listed every
+locked job with its requirement and payout, up to $2.8M, and nothing had
+ever pointed a player at it. New tip, `bigger_jobs`, fires once early and
+names where to look — no claim about timing, which would violate
+CLAUDE.md's third rule. Test-first, mutation-verified, live-verified
+firing correctly. **Corrected the plan's own premise before spending
+effort on it**: `scorecard.probe` cannot validate an informational hint,
+since its bot doesn't read UI text — this needed a round from the start,
+not a probe.
+
+**Clarity — CLOSED, and it was a genuinely different bug from what either
+session had reproduced.** Live-verifying the Pacing tip meant actually
+loading the game and living through the exact sequence a tester would,
+rather than reasoning about it from source — and that surfaced the real
+mechanism behind round 27's "memo hidden behind the digest," which the
+prior session's three source-checks and live retests had all cleared
+(correctly: `MemoModal` really does render on top of everything, exactly
+as checked). The real bug: `report.ts` baked "a memo is open and waiting
+on you" into the Bulletin as a **snapshot**, taken when a multi-day
+advance stopped. The game has always let a player answer that memo
+directly, and doing so never touched the already-rendered Bulletin — so
+it went on claiming a memo was open long after the desk was genuinely
+clear. Reproduced live end to end, fixed by moving the `'today'` day-part
+onto a small pure function (`pendingLines`) that `Bulletin` calls fresh
+every render with the live count, so there is nothing kept between
+renders to go stale. Test-first, mutation-verified, live-verified.
+
+**Interface — still open, by design.** The developer will play it
+directly; no AI method has moved this in five rounds and this session
+made no attempt to substitute for that.
+
+`tsc` clean, `npm test` green (130 files, 1,567 passing, up from 1,565
+at the top of this session). No probe run for any of these three fixes —
+none touch balance or `rng`.
+
+## 10. Housekeeping, 2026-09-09
+
+`docs/findings/director-log.md` gained entries for round 27, the
+Difficulty regression, and the First hour / Pacing / Clarity fixes,
+including the theory retraction and the corrected Pacing-plan premise.
+`HANDOFF.md` §0, §1, §4's scores table and §6 are current through all of
+the above. `.ai/TASKS.md` tracks the one item still open (Interface,
+waiting on the developer) and the smaller carried-forward findings.
 
 All of this is committed and pushed to `main` by the end of this session.

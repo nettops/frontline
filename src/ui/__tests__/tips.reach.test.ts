@@ -36,7 +36,7 @@ import { BUSINESSES } from '../../config/businesses';
 
 /** Reached by playing a career straightforwardly. */
 const ORDINARY = [
-  'first_job', 'it_saves', 'reading_people', 'wages', 'dirty_money', 'heat',
+  'first_job', 'it_saves', 'bigger_jobs', 'reading_people', 'wages', 'dirty_money', 'heat',
   'case_open', 'ground', 'sitdown', 'grievance', 'delegate',
   'leaks', 'rivals', 'war', 'heir', 'trade', 'why',
   'the_game', 'lean_on_it', 'contract', 'favours', 'autopilot',

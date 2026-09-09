@@ -2069,3 +2069,77 @@ round: whether a player staying solo long enough to need this warning is
 itself common — if it's rare, this closes a real gap that happens to be
 low-traffic, which is still worth having fixed but says nothing about
 whether it moves the score.
+
+---
+
+## Pacing's signpost, and a real Clarity bug found while verifying it — 2026-09-09
+
+Second item of the round-27 four-axis plan: Pacing's agreed "one cheap,
+reversible signpost."
+
+`OperationsPanel`'s "Above your standing" table has always listed every
+locked job with its requirement and payout — Financial Scheme, Port
+Operation, Citywide Distribution Network up to $2.8M — and nothing had
+ever pointed a player at it. A tip that once did something adjacent
+(`step_up`) was removed on the theory the Needs column teaches it "at the
+moment the player is looking at the job," true only for a player already
+looking. New tip, `bigger_jobs`: fires once, early (after the first job,
+while anything is still locked), names where to look, no claim about
+timing (CLAUDE.md's third rule, "everything the player sees is true").
+Test-first
+(`tips.reach.test.ts`), mutation-verified.
+
+**Caught and corrected a flaw in this item's own plan before spending
+effort on it**: the plan said to measure the tip's effect on
+`scorecard.probe`'s Pacing axis before dispatching a round. That cannot
+work — the probe's bot doesn't read UI text, so a purely informational
+hint cannot move any probe metric whether or not it helps a real player.
+This is an experience change, and `DIRECTOR.md` already has a rule for
+exactly this shape of change: those get a round, not a probe. Recorded
+here so the same mis-plan doesn't get proposed again.
+
+**While live-verifying the tip fires correctly, found the actual
+mechanism behind round 27's other MUST FIX** — "a memo hidden behind the
+digest" — which the prior session investigated three times (reading
+source, three separate live retests) and could not reproduce. The real
+bug was different from what either session had been looking for:
+`report.ts`'s `buildReport` baked "a memo is open and waiting on you"
+into `report.lines` as a **snapshot**, taken the instant a multi-day
+advance stopped. `MemoModal` renders correctly on top of everything, as
+already confirmed (`z-index: 50` against the Bulletin's `20`) — but the
+game has always allowed a player to answer that memo **directly**, and
+doing so does not touch the already-rendered Bulletin. Reproduced live:
+advanced time, answered the interrupting memo by clicking a choice
+directly, and watched the Bulletin keep its "WAITING ON YOU" section with
+no memo on screen and no rail badge — the exact symptom round 27
+described, just not the mechanism either investigation had guessed at.
+Confirmed fixed the same way immediately after.
+
+Fix: moved the `'today'` day-part off the frozen snapshot entirely.
+`pendingLines(pendingNow: number)` in `report.ts` is a small pure
+function with nothing to keep between calls, so there is nothing to go
+stale. `Bulletin` now calls it every render with
+`state.pendingEvents.length`, passed in live from `App.tsx`, instead of
+reading anything baked into `report` at build time. Also had to fix the
+heading-suppression logic alongside it — the existing rule ("a heading
+over the only part in the briefing is furniture") counted populated
+parts from `report.lines` alone, which would have silently miscounted
+once `'today'` moved to a separate live source. Test-first
+(`report.test.ts`): the old test asserting the snapshot behavior was
+rewritten to assert its *absence*, plus two new cases on `pendingLines`
+directly, one of which mutation-tests the exact staleness bug (return the
+line regardless of count) and catches it. Live-verified in the browser
+end to end.
+
+`tsc` clean, `npm test` green (130 files, 1,567 passing, up from 1,565).
+No probe run for either change — a tip predicate and a report-rendering
+fix, neither touches balance or `rng`.
+
+**Result: KEPT.** Two of four axes now have a real, verified fix in place
+(Pacing unvalidated by a round yet, Clarity confirmed and closed). Worth
+noting for the record: this Clarity fix was not planned — it turned up
+only because the Pacing tip's own verification meant actually loading the
+game and living through the exact sequence a tester would, rather than
+reasoning about it from source. The prior session's three failed retests
+all checked "does the modal render on top" and got a clean answer every
+time, because that was never the bug.
