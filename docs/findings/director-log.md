@@ -2038,3 +2038,34 @@ confirmed green earlier this session and untouched by this investigation
 **Result: KEPT.** A three-week-old open finding closed by re-measurement
 alone, the same lesson ("a note in a tracking doc is a claim about the
 code when it was written, not a fact") landing a second time in one week.
+
+---
+
+## First hour — a real payroll-warning gap closed — 2026-09-09
+
+Agreed a concrete plan with the developer for round 27's four sub-8 axes
+(recorded in `.ai/TASKS.md`), starting with the cheapest to check: First
+hour's "nothing taught me the payroll-timing danger before my first cash
+crisis."
+
+A payroll hint already existed — `tips.ts`'s `wages` tip, well-placed in
+the tutorial queue and protected from being starved out by
+`TIP_LINGER_DAYS`. The actual gap was its own gate: `crewList(s).length
+>= 2`. A career starts with one associate already drawing a real wage
+(`npc.ts`'s `wage` field has no first-hire exception), so a player who
+never brought in a second man was paying payroll from day one and never
+saw the tip that names the danger — exactly what round 27 reported.
+Gated down to `>= 1`. Test-first: added a case in `tips.reach.test.ts`
+constructing a solo-crew, day-6 state and asserting the tip fires,
+watched it fail on the exact `>= 2` gate, fixed, then mutation-verified
+by reverting and watching it fail again for the same reason before
+restoring.
+
+`tsc` clean, `npm test` green (130 files, 1,565 passing, up from 1,564).
+No probe run — a tip predicate, no balance or rng touched.
+
+**Result: KEPT.** One item of four closed. Worth watching on the next
+round: whether a player staying solo long enough to need this warning is
+itself common — if it's rare, this closes a real gap that happens to be
+low-traffic, which is still worth having fixed but says nothing about
+whether it moves the score.

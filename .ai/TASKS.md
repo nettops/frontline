@@ -15,13 +15,18 @@ r27 read below 8 on four axes. Ranked by what's cheapest to act on first,
 not by score — each says what to do and what "worked" looks like on the
 next reading.
 
-**1. First hour (7) — not yet investigated at all.** "Nothing taught me
-the payroll-timing danger before my first cash crisis" was a single,
-un-reproduced complaint nobody has checked against source yet. **Next
-step, cheap, no round needed:** read `attention.ts`/`tips.ts` for a
-payroll-danger hint — does one exist, and does it fire before or after
-the first shortfall? If missing or late, add one test-first. Confirms
-when a future round's day-30 notes stop naming payroll as a surprise.
+**1. First hour (7) — CLOSED, a real gap, fixed 2026-09-09.** A payroll
+hint already existed (`tips.ts`'s `wages` tip) and was well-placed in
+the queue — the actual gap was its gate: `crewList(s).length >= 2`, one
+hire more than a career needs to owe wages. The one associate a career
+starts with draws a real wage from day one (`npc.ts`'s `wage` field has
+no first-hire exception), so a player who never brought in a second man
+was never warned at all — exactly round 27's account. Gate lowered to
+`>= 1`. Test-first (`tips.reach.test.ts`), mutation-verified. Confirms
+when a future round's day-30 notes stop naming payroll as a surprise —
+or, worth watching for, whether staying solo long enough to need the
+warning is itself rare, in which case this closes a real gap that
+happens to be low-traffic.
 
 **2. Pacing (6) — diagnosed three times, never attempted.** r23/r24/r27
 all name the same shape: a mid-game grind (day ~30-200) before The Trade

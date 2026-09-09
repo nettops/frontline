@@ -193,6 +193,29 @@ describe('the advice', () => {
     expect(tip.when(s), 'the boss owns something and was never told what it is').toBe(true);
   });
 
+  /*
+     A solo career pays wages too, and never saw the tip that says so.
+
+     Round 27's First-hour complaint: "nothing taught me the payroll-timing
+     danger before I hit my first cash crisis." `wages` requires
+     `crewList(s).length >= 2` — but a career starts with one associate
+     already drawing `ROLE_WAGE[role]` every payday (`npc.ts`'s `wage` field
+     has no first-hire exception), so a player who never brings in a second
+     man pays real wages from day one and is gated out of the one tip that
+     names the danger. This bot always hires a second man ('ORDINARY' above
+     reaches `wages` through that path); a player who stays solo does not.
+  */
+  it('warns about payroll for a solo career too, not only after a second hire', () => {
+    const s = newGame({ name: 'Solo', difficulty: 'normal', mode: 'career', seed: 4 });
+    const tip = TIPS.find((t) => t.id === 'wages')!;
+    expect(tip, 'the tip is gone').toBeDefined();
+    s.day = 6;
+    expect(
+      tip.when(s),
+      'a career with one man, already drawing a wage, is not being warned about payroll',
+    ).toBe(true);
+  });
+
   it('accounts for every tip in the list', () => {
     const unaccounted = TIPS.map((t) => t.id).filter(
       (id) => !ORDINARY.includes(id) && !(id in NEEDS_AN_ACTION),

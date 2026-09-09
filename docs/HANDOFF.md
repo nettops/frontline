@@ -50,10 +50,11 @@ still saying it long after both had stopped being true.
 14; round 21 has been run and scored. Read this section for the state and the
 rest for how it got here.
 
-`tsc` clean, `npm test` green (130 files, 1,564 passing), `npm run probe`
-last run clean at 96/96 non-skipped (unrun since the diplomacy/refusal
-fixes below — none of them touch balance, so not expected to move it, but
-not yet re-confirmed). F24 (the merge's own regression) is fully closed —
+`tsc` clean, `npm test` green (130 files, 1,565 passing), `npm run probe`
+last run clean at 96/96 non-skipped (unrun since the diplomacy/refusal/
+tip fixes below — none of them touch balance, so not expected to move it,
+but not yet re-confirmed after the most recent one). F24 (the merge's own
+regression) is fully closed —
 all four bars. Five blind rounds have now run on the merged code (23-27),
 the fifth reaching **Crime Lord**, the top rank, for the first time any
 blind round has. See §4's scores table and §6 for full detail.
@@ -176,7 +177,7 @@ operations, crew, territory, rival families, and law enforcement.
     npm run playtest   # namespaced instance for blind testers
 
 **Current verified state, 2026-09-09: `tsc` clean, `npm test` green
-(130 files, 1,564 passing).** Last blind measurement: round 27. Read §0
+(130 files, 1,565 passing).** Last blind measurement: round 27. Read §0
 before trusting anything below this line about specific numbers; this
 section is architecture and history, not current state.
 
@@ -690,6 +691,26 @@ restated here rather than only in the archive:
   question, not touched since 2026-08-23.
 - **Stock at 43% of trade revenue is the biggest leak left in the trading
   economy**, per F23's own closing note, and nothing has looked at it since.
+
+### First hour — a real payroll-warning gap closed, 2026-09-09 (post-round-27 follow-up)
+
+Working through round 27's four sub-8 axes with a plan agreed for each
+(see `.ai/TASKS.md`), starting with the cheapest to check: First hour's
+"nothing taught me the payroll-timing danger before my first cash crisis."
+
+A payroll hint already existed and was reasonably placed in the tip
+queue (`tips.ts`'s `wages` tip, firing day 6+ with a well-tuned 12-day
+linger so it can't be starved out — see `TIP_LINGER_DAYS`'s own history).
+**The actual gap was its gate**: `crewList(s).length >= 2`, requiring a
+second hire before it would speak, while the one associate a career
+starts with already draws a real wage from day one — `npc.ts`'s `wage`
+field has no first-hire exception, so a player who never brought anybody
+else in was paying payroll from day one and was never warned at all.
+Exactly round 27's account. Gate lowered to `>= 1`. Test-first
+(`tips.reach.test.ts`), mutation-verified.
+
+`tsc` clean, `npm test` green (130 files, 1,565 passing). No probe run —
+a UI predicate change, no balance or rng touched.
 
 ### Round 27 — a real alliance-gate bug closed, a wrong Interface theory retracted, 2026-09-09
 
