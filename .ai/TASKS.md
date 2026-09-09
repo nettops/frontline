@@ -9,81 +9,55 @@ list rather than staying here as a second, aging copy of the same fact.
 Ranked, highest-leverage first. See `HANDOFF.md` §6 for the full findings
 ledger (F-numbers) these reference.
 
-## 1. Interface 6, five rounds running (r19, r23, r24, r26, r27) — cause still genuinely unknown
+## The four-axis plan, decided 2026-09-09
 
-Four sub-causes found and fixed across r24/r25/r26 (roster detail panels
-off-screen, the steward-delegation hint naming the situation not the door,
-the laying-low job panel's loud default, the "Carry on / Leave it" banner)
-— none moved the score. r27 was explicitly asked to be concrete about
-*where* the friction is (a screen, a control, how something looks, or
-moving between screens) and answered with a memo/digest interaction (see
-item 4 below) and unlabelled icon-only top-bar buttons — not "checking
-multiple panels."
+r27 read below 8 on four axes. Ranked by what's cheapest to act on first,
+not by score — each says what to do and what "worked" looks like on the
+next reading.
 
-**The previous entry here — "the remaining gap is multi-panel information-
-architecture complexity multiple testers have independently described" —
-was checked against its own citation on 2026-09-09 and retracted.** No
-round's actual write-up said anything like it; the phrase traced to a
-misread of `Dashboard.tsx`'s own header comment about a *round 15* problem
-the Wanting/waiting/running panels were already built to fix. Presenting
-an inference as something "multiple testers have independently described"
-overclaimed the evidence, and it's recorded here rather than quietly fixed
-so the same mistake doesn't get repeated with more confidence next time.
+**1. First hour (7) — not yet investigated at all.** "Nothing taught me
+the payroll-timing danger before my first cash crisis" was a single,
+un-reproduced complaint nobody has checked against source yet. **Next
+step, cheap, no round needed:** read `attention.ts`/`tips.ts` for a
+payroll-danger hint — does one exist, and does it fire before or after
+the first shortfall? If missing or late, add one test-first. Confirms
+when a future round's day-30 notes stop naming payroll as a surprise.
 
-**Where this actually leaves Interface: genuinely open.** Five rounds, four
-real fixes, no score movement, and the one round asked to be specific named
-narrow, checkable things rather than a structural complaint. The honest
-next step is not a diagnosis session built on a theory — it's another
-direct, concrete ask (as r27's) after the icon-label and memo/digest items
-below are looked at, to see whether narrow fixes plus one more reading
-finally move it, before concluding it's something bigger.
+**2. Pacing (6) — diagnosed three times, never attempted.** r23/r24/r27
+all name the same shape: a mid-game grind (day ~30-200) before The Trade
+and six-figure jobs open it back up. **Next step: try one cheap,
+reversible signpost before spending another round on it** — a hint naming
+what unlocks soon and roughly when, no balance change. Measure its effect
+on `scorecard.probe`'s Pacing axis first, the way any balance-adjacent
+change gets measured, *before* dispatching a round to confirm the felt
+experience — if the probe shows no movement, the idea is ruled out for
+free instead of on a round's dime.
 
-## 2. Pacing — inconsistent across six rounds, still unresolved
+**3. Clarity (7) — the memo/digest bug, real per the tester, unreproduced
+three times by direct retest.** `MemoModal` reads `pendingEvents`
+unconditionally and sits at `z-index: 50` against the digest's `20` —
+nothing in source supports the tester's account of it rendering hidden
+underneath. **Next step:** ride along on whichever round runs next (full
+or targeted) with an explicit ask — "if you see this, screenshot before
+clicking anything else." Three more clean passes without it is itself a
+result (fair to call it unreproducible and drop it); a screenshot at the
+actual moment is the only thing likely to find a real mechanism if there
+is one.
 
-r23/r24 scored 6 (a mid-late-game maintenance loop), r26 scored 7 (new
-content still arriving through day 284), r27 scored 6 again. Three sixes
-and a seven is not a trend either way. `config/sitdown.ts`'s registers are
-confirmed not shallow (prior diagnosis, still holds). Needs a reading that
-specifically probes *why* rather than just recording the number — the
-format-fatigue hypothesis was never confirmed and shouldn't be assumed
-again without one.
+**4. Interface (6) — five rounds, four real fixes, no movement, and this
+round's three "concrete" answers didn't survive checking.** **Decided
+2026-09-09: the developer plays it directly**, rather than another AI
+round or a targeted AI pass — the one method not yet tried, and the one
+that can tell whether the ceiling is the game or the testing method
+itself. No formal blind-score rubric for this pass (the developer isn't
+blind to the design, so a Part-2-style number wouldn't mean the same
+thing) — just play normally and log friction as it happens: where you
+had to think about *how* to do something rather than *what* to do.
+Confirms when either something concrete turns up that five AI rounds
+missed, or the developer's own read agrees Interface is fine and the
+score has been measuring the AI-tester method the whole time.
 
-## 3. One SHOULD FIX from round 27, checked and probably not a real defect
-
-**"Icon-only top-bar buttons with no visible label" — checked against
-source 2026-09-09, does not match what's there.** `StatBar.tsx` has
-exactly five buttons: sound and hints both render visible text (`sound`,
-`hints`/`hints off`) rather than an icon, per a round-7 fix already on
-record, and the three day-advance buttons were explicitly excluded by the
-tester's own report. Most likely the same root cause as the "intermittent
-page-width collapse to ~400-500px" SHOULD FIX below it in that report — a
-narrow-width rendering artifact the tester itself flagged as possibly not
-the game's fault could plausibly trigger a responsive breakpoint that
-hides label text, producing both complaints from one event. Not chased
-further without a cleaner second report; if one arrives, check the same
-narrow-viewport theory first rather than assuming a missing label.
-
-The "Why" transparency log's raw-numbers-with-no-gloss complaint is a
-narrower residual of a tonal complaint already fixed once (an
-introductory paragraph exists). Glossing every term is real new content,
-not a quick fix, and lower priority than anything above it.
-
-## 4. A memo rendering "hidden behind" the digest — investigated, not reproduced
-
-r26 and r27 both reported a version of a blocked/confusing negotiation or
-memo interaction; r27's specific account: advancing time surfaces a
-digest whose "a memo is open and waiting on you" line is plain text, and
-the actual memo dialog doesn't appear until the digest is dismissed.
-Checked against source (`MemoModal` reads `pendingEvents` unconditionally;
-`.memo-backdrop` is `z-index: 50` against the Bulletin's `20`) and live-
-tested on a fresh instance — three separate memo-triggering advances, and
-in every case the memo rendered correctly on top, immediately. **Could not
-reproduce.** Left open rather than guessed at. If it recurs, get a
-screenshot at the moment it happens before touching anything — neither the
-CSS nor a direct retest explains the tester's account, so the next
-reproduction is more likely to find the real mechanism than more reading.
-
-## 5. A district-holding cost for the player
+## A district-holding cost for the player
 
 Rivals already pay `upkeepPerDistrict`/`upkeepDistrictScale`
 (`config/factions.ts`); the player never did, the same gap front upkeep
@@ -112,6 +86,13 @@ before committing to a rate.
   New, smaller, unchased item surfaced by the same measurement:
   `distinctEnds` (final-rank diversity over four years) was only 2 of a
   possible 5 in that run — now the axis's actual soft spot.
+- **"Icon-only top-bar buttons with no visible label" — checked against
+  source, does not match.** `StatBar.tsx` has exactly five buttons; sound
+  and hints both render visible text (`sound`, `hints`/`hints off`) rather
+  than an icon, per a round-7 fix already on record, and the three
+  day-advance buttons were explicitly excluded by the tester's own report.
+  Most likely the same root cause as the page-width-collapse item below —
+  folded into the Interface plan above rather than treated as its own fix.
 
 ## Smaller, lower-priority
 
