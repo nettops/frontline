@@ -1986,3 +1986,55 @@ yesterday works), a second MUST FIX investigated thoroughly and honestly
 left as unreproduced, three real UI-visibility bugs fixed pre-emptively,
 and a wrong hypothesis from the prior session caught and retracted rather
 than built on further.
+
+---
+
+## The 1,460-day Difficulty regression — stale, re-measured, closed — 2026-09-09
+
+With time left before the 5pm deadline, picked up the other still-open
+carried item: `TASKS.md`'s "Difficulty regression" bullet claimed 69-75%
+of four-year careers end early, a figure dating to 2026-08-21-era code
+and never re-checked since — the exact same trap round-17's "job
+dominance" finding fell into two days ago (trusting a note instead of
+re-measuring).
+
+Traced the actual mechanism first, since nobody ever had: `removePlayer`
+in `succession.ts` is the *only* place `state.gameOver` is ever set, and
+it has exactly one call site — `investigation.ts`'s trial-verdict handler.
+A career can only end by a conviction landing with no eligible, serious
+successor available at that exact moment; there is no other ending in
+this game (no bankruptcy stop, no generic "wiped out").
+
+Measured with a one-off diagnostic — a `globalThis` push inside
+`removePlayer` recording each removal's kind and contender count, plus one
+throwaway `it()` reading it back at the end of `scorecard.probe.test.ts`'s
+existing 48-world, 1,460-day population — both fully reverted after, `git
+diff` confirmed clean on both files:
+
+    removals: 131 across 48 worlds (2.73/career) — 119 convicted, 12 killed
+    no eligible contender at removal: 19/131
+    endedEarly (the game actually stopped): 19/48 = 39.6% (target ~33%)
+    Difficulty axis this run: 6.07 (up from the 4.7 this bullet quoted)
+
+**Closed as stale, not as fixed** — nothing in the game changed today to
+produce this; the population had simply moved since whatever intervening
+session (most likely F5/F24's rival-AI work, or the succession-panel
+signposting from round 18 onward, both of which touch how often a
+successor is actually in place) last measured it, and nobody had checked
+back. Corrected in `HANDOFF.md` and `.ai/TASKS.md`.
+
+**One new, smaller, genuinely unchased finding fell out of the same
+measurement**: `distinctEnds` — how many different final ranks the 48
+careers reached — was only 2, out of a possible 5 the axis rewards. That
+half of the Difficulty formula is now the weaker one, and it's a different
+question (rank diversity over four years, not survival) from the one this
+session set out to check. Not investigated further; noted rather than
+chased under the deadline.
+
+Verification: `tsc` clean; `npm test` and `npm run probe` both already
+confirmed green earlier this session and untouched by this investigation
+(both files are back to their committed state).
+
+**Result: KEPT.** A three-week-old open finding closed by re-measurement
+alone, the same lesson ("a note in a tracking doc is a claim about the
+code when it was written, not a fact") landing a second time in one week.

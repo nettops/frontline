@@ -267,6 +267,23 @@ real fixes, no movement, and an honest "still don't know" rather than a
 retracted theory in its place. Pacing is still inconsistent across six
 readings (6/6/7/6). Full current queue is `.ai/TASKS.md`.
 
+**One more open item closed with time left before the deadline: the
+1,460-day Difficulty regression, stale.** `TASKS.md` had carried "69-75%
+of four-year careers end early" since 2026-08-21-era code, never
+re-checked — the same mistake round-17's "job dominance" finding made two
+days ago. Traced the actual mechanism (a career can only end via a trial
+conviction with no eligible successor — `succession.ts`'s `removePlayer`
+is the only place `state.gameOver` is ever set, called from exactly one
+site) and re-measured with a temporary, fully-reverted diagnostic on
+`scorecard.probe`'s own 48-world population: **endedEarly is now 39.6%**,
+close to the 33% target, and the **Difficulty axis reads 6.07**, up from
+the 4.7 this bullet was written against. Nothing in the game changed
+today — the population had simply moved since some intervening session
+last measured it and nobody checked back. A smaller, different finding
+fell out of the same run: `distinctEnds` (final-rank diversity over four
+years) was only 2 of a possible 5, now the axis's actual soft spot — not
+chased further under the deadline.
+
 ## 9. Housekeeping, 2026-09-09
 
 `docs/findings/director-log.md` gained one entry for this session,
