@@ -1,4 +1,4 @@
-import { DAY_PARTS, type DayReport } from './report';
+import { DAY_PARTS, pendingLines, type DayReport } from './report';
 import type { PanelId } from './Rail';
 import { formatShortDay } from '../sim/util';
 
@@ -16,10 +16,17 @@ import { formatShortDay } from '../sim/util';
  */
 export default function Bulletin({
   report,
+  pendingNow,
   onGo,
   onDismiss,
 }: {
   report: DayReport;
+  /**
+   * `state.pendingEvents.length`, read live rather than off `report` — see
+   * `pendingLines` in `report.ts` for why the 'today' part has to come from
+   * here instead of from a snapshot.
+   */
+  pendingNow: number;
   onGo: (panel: PanelId) => void;
   onDismiss: () => void;
 }) {
@@ -27,6 +34,16 @@ export default function Bulletin({
     report.to - report.from <= 1
       ? formatShortDay(report.to)
       : `${formatShortDay(report.from + 1)} — ${formatShortDay(report.to)}`;
+
+  const todayLines = pendingLines(pendingNow);
+  const linesFor = (partId: (typeof DAY_PARTS)[number]['id']) =>
+    partId === 'today' ? todayLines : report.lines.filter((l) => (l.part ?? 'overnight') === partId);
+  // A heading over the only part in the briefing is furniture — see the
+  // comment below. 'today' now comes from `pendingNow` rather than from
+  // `report.lines`, so this has to count populated parts the same way the
+  // render loop looks them up, not just ask whether `report.lines` alone
+  // spans more than one part.
+  const populatedParts = DAY_PARTS.filter((part) => linesFor(part.id).length > 0).length;
 
   return (
     <aside className="bulletin" aria-label="What happened">
@@ -48,13 +65,11 @@ export default function Bulletin({
          prints nothing — most mornings have exactly one.
       */}
       {DAY_PARTS.map((part) => {
-        const lines = report.lines.filter((l) => (l.part ?? 'overnight') === part.id);
+        const lines = linesFor(part.id);
         if (lines.length === 0) return null;
         return (
           <div key={part.id} className="bulletin-part">
-            {report.lines.some((l) => (l.part ?? 'overnight') !== part.id) && (
-              <h3 className="bulletin-part-head">{part.label}</h3>
-            )}
+            {populatedParts > 1 && <h3 className="bulletin-part-head">{part.label}</h3>}
             <ul className="bulletin-lines">
               {lines.map((line, i) => (
                 <li

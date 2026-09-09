@@ -50,14 +50,14 @@ still saying it long after both had stopped being true.
 14; round 21 has been run and scored. Read this section for the state and the
 rest for how it got here.
 
-`tsc` clean, `npm test` green (130 files, 1,565 passing), `npm run probe`
+`tsc` clean, `npm test` green (130 files, 1,567 passing), `npm run probe`
 last run clean at 96/96 non-skipped (unrun since the diplomacy/refusal/
-tip fixes below — none of them touch balance, so not expected to move it,
-but not yet re-confirmed after the most recent one). F24 (the merge's own
-regression) is fully closed —
-all four bars. Five blind rounds have now run on the merged code (23-27),
-the fifth reaching **Crime Lord**, the top rank, for the first time any
-blind round has. See §4's scores table and §6 for full detail.
+tip/report fixes below — none of them touch balance, so not expected to
+move it, but not yet re-confirmed after the most recent ones). F24 (the
+merge's own regression) is fully closed — all four bars. Five blind
+rounds have now run on the merged code (23-27), the fifth reaching
+**Crime Lord**, the top rank, for the first time any blind round has.
+See §4's scores table and §6 for full detail.
 `.ai/FINAL_REPORT.md` has the fuller narrative through round 26; round 27
 is written up in §6 and in `docs/findings/director-log.md` but has not yet
 been folded into that report.
@@ -177,7 +177,7 @@ operations, crew, territory, rival families, and law enforcement.
     npm run playtest   # namespaced instance for blind testers
 
 **Current verified state, 2026-09-09: `tsc` clean, `npm test` green
-(130 files, 1,565 passing).** Last blind measurement: round 27. Read §0
+(130 files, 1,567 passing).** Last blind measurement: round 27. Read §0
 before trusting anything below this line about specific numbers; this
 section is architecture and history, not current state.
 
@@ -691,6 +691,60 @@ restated here rather than only in the archive:
   question, not touched since 2026-08-23.
 - **Stock at 43% of trade revenue is the biggest leak left in the trading
   economy**, per F23's own closing note, and nothing has looked at it since.
+
+### Pacing and Clarity — a signpost shipped, and a real staleness bug found and closed, 2026-09-09
+
+Continuing through round 27's four-axis plan (see `.ai/TASKS.md`), next:
+Pacing's agreed "one cheap, reversible signpost."
+
+**Pacing — a tip shipped, unvalidated.** r23, r24 and r27 all independently
+named the same shape: a mid-game grind, day ~30 to ~200, before The Trade
+and the six-figure jobs (Financial Scheme, Citywide Distribution Network,
+up to $2.8M) open the game back up. `OperationsPanel`'s "Above your
+standing" table has always listed every locked job with its requirement
+and payout — nothing had ever pointed a player at it. A tip that once did
+something adjacent (`step_up`) was removed on the theory that the Needs
+column teaches this "at the moment the player is looking at the job,"
+true only for a player already looking. New tip, `bigger_jobs`, fires once
+early (after the first job, while anything is still locked) and names
+where to look, without any claim about timing. Test-first
+(`tips.reach.test.ts`), mutation-verified, live-verified firing correctly.
+
+**Correcting this item's own earlier plan**: `scorecard.probe` cannot
+validate an informational hint — its bot doesn't read UI text, so no
+probe metric can move from this change regardless of whether it helps.
+This is an experience change; per `DIRECTOR.md`'s own rule, those get a
+round, not a probe. Watch the next round instead.
+
+**Clarity — CLOSED, and it was a different, real bug from what either
+session had reproduced.** Live-verifying the Pacing tip surfaced the
+actual mechanism behind round 27's "memo hidden behind the digest" MUST
+FIX, which the prior session investigated three times and could not
+reproduce. The real bug: `report.ts`'s `buildReport` baked "a memo is
+open and waiting on you" into `report.lines` as a **snapshot**, taken the
+moment a multi-day advance stopped. `MemoModal` renders independently and
+correctly on top of everything (as the prior session's z-index reading
+already confirmed) — but a player can answer that memo **directly**,
+which the game has always allowed, without ever dismissing the Bulletin
+sitting behind it. The Bulletin then goes on saying a memo is open long
+after the desk is genuinely clear: not a modal hidden underneath
+anything, a **stale claim the briefing kept making about itself** —
+reproduced live (advanced time, answered the interrupting memo directly,
+watched the "Waiting on you" section persist with no memo on screen and
+no rail badge), and confirmed fixed the same way immediately after.
+
+Moved the `'today'` day-part off the frozen snapshot: `pendingLines(n)` in
+`report.ts` is a small pure function of the live count, and `Bulletin`
+now calls it every render with `state.pendingEvents.length` passed in
+fresh from `App.tsx`, rather than reading anything baked into `report` at
+build time. Structurally cannot go stale again — there is nothing kept
+between renders to go stale. Test-first (`report.test.ts`, three new
+cases including a mutation-caught staleness scenario), mutation-verified,
+live-verified.
+
+`tsc` clean, `npm test` green (130 files, 1,567 passing, up from 1,565).
+No probe run for either change — a tip predicate and a report-rendering
+fix, no balance or rng touched.
 
 ### First hour — a real payroll-warning gap closed, 2026-09-09 (post-round-27 follow-up)
 

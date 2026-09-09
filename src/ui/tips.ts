@@ -33,6 +33,7 @@ import { eligibleHeirs, heirOf } from '../sim/succession';
 import { tradeUnlocked } from '../sim/contraband';
 import { canBorrow, totalOwed } from '../sim/market';
 import { canAcquire } from '../sim/business';
+import { lockedOperations } from '../sim/operations';
 
 import { BUSINESSES } from '../config/businesses';
 import { cards, seatedAt, stakeCeiling, stakeFloor } from '../sim/cards';
@@ -149,6 +150,33 @@ export const TIPS: Tip[] = [
     panel: null,
     when: (s) => s.operationHistory.length > 0,
     ceiling: 45,
+  },
+  /*
+     The city gets bigger before you do, and nothing used to say so.
+
+     Rounds 23, 24 and 27 all named the same mid-game shape independently:
+     the same small jobs on repeat, day 30 to 200, with nothing feeling
+     like it was building toward anything. `OperationsPanel`'s "Above your
+     standing" table has always listed exactly what's coming and what it
+     pays — Financial Scheme, Port Operation, Citywide Distribution
+     Network, six figures and up — but nothing ever pointed a player at it.
+     `step_up`, a tip that once did something adjacent to this, was removed
+     on the theory that the Needs column teaches it "at the moment the
+     player is looking at the job" — true only for a player who is already
+     looking. This says it once, early, so a look is worth taking. No claim
+     about when any of it opens — a guess would violate CLAUDE.md's third
+     rule ("everything the player sees is true") — only that it exists and
+     where.
+  */
+  {
+    id: 'bigger_jobs',
+    only: ['career', 'sandbox'],
+    label: 'Ahead',
+    text:
+      "What you can run today is not the ceiling. Operations lists what's above your standing, with what it needs and what it pays — the city gets bigger before you do.",
+    panel: 'operations',
+    when: (s) => s.operationHistory.length > 0 && lockedOperations(s).length > 0,
+    ceiling: BASICS_UNTIL,
   },
 
   // ----------------------------------------------------------- the people ---

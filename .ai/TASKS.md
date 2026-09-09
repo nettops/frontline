@@ -28,26 +28,36 @@ or, worth watching for, whether staying solo long enough to need the
 warning is itself rare, in which case this closes a real gap that
 happens to be low-traffic.
 
-**2. Pacing (6) — diagnosed three times, never attempted.** r23/r24/r27
-all name the same shape: a mid-game grind (day ~30-200) before The Trade
-and six-figure jobs open it back up. **Next step: try one cheap,
-reversible signpost before spending another round on it** — a hint naming
-what unlocks soon and roughly when, no balance change. Measure its effect
-on `scorecard.probe`'s Pacing axis first, the way any balance-adjacent
-change gets measured, *before* dispatching a round to confirm the felt
-experience — if the probe shows no movement, the idea is ruled out for
-free instead of on a round's dime.
+**2. Pacing (6) — a signpost shipped 2026-09-09, unvalidated.** r23/r24/r27
+all named the same shape: a mid-game grind (day ~30-200) before The Trade
+and six-figure jobs open it back up. Added a one-time tip (`bigger_jobs`
+in `tips.ts`) pointing at `OperationsPanel`'s "Above your standing" table
+— which already lists every locked job's requirement and payout, up to
+$2.8M, and nothing had ever pointed a player at it. Test-first
+(`tips.reach.test.ts`), mutation-verified, live-verified firing correctly
+in browser. **Correction to this item's own earlier plan**: a probe
+cannot validate this. `scorecard.probe`'s bot doesn't read UI text, so a
+pure informational hint cannot move any probe metric — this is an
+experience change, and per `DIRECTOR.md`'s own rule, those get a round,
+not a probe. Watch the next round's Pacing score and Part 4 "Used" notes
+for whether "Above your standing" gets mentioned as newly found.
 
-**3. Clarity (7) — the memo/digest bug, real per the tester, unreproduced
-three times by direct retest.** `MemoModal` reads `pendingEvents`
-unconditionally and sits at `z-index: 50` against the digest's `20` —
-nothing in source supports the tester's account of it rendering hidden
-underneath. **Next step:** ride along on whichever round runs next (full
-or targeted) with an explicit ask — "if you see this, screenshot before
-clicking anything else." Three more clean passes without it is itself a
-result (fair to call it unreproducible and drop it); a screenshot at the
-actual moment is the only thing likely to find a real mechanism if there
-is one.
+**3. Clarity (7) — CLOSED, and it turned out to be a real, different bug
+than either of us had reproduced. 2026-09-09.** While live-verifying item
+2's tip, caught the actual mechanism behind round 27's "memo hidden
+behind the digest": the Bulletin's "a memo is open and waiting on you"
+line was baked into `report.lines` as a snapshot the moment a multi-day
+advance stopped — and a player can answer that memo directly (it renders
+on top of everything, same as always) without dismissing the Bulletin
+behind it. The banner then goes on saying a memo is open long after the
+desk is genuinely clear, which is what actually happened: not a modal
+hidden underneath anything, a **stale claim the game kept making about
+itself** after the fact stopped being true — confirmed live, reproduced
+in the browser, and confirmed fixed the same way. Moved the 'today' part
+off the frozen snapshot onto a small pure function (`pendingLines` in
+`report.ts`) that `Bulletin` now calls with the live count every render,
+so it structurally cannot go stale again. Test-first
+(`report.test.ts`), mutation-verified, live-verified.
 
 **4. Interface (6) — five rounds, four real fixes, no movement, and this
 round's three "concrete" answers didn't survive checking.** **Decided

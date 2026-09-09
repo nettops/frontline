@@ -17,7 +17,7 @@ import { newGame } from '../../sim/state';
 import { runDaysSolvent } from '../../sim/__tests__/helpers';
 import { crewList } from '../../sim/npc';
 import { addLog } from '../../sim/util';
-import { DAY_PARTS, buildReport, snapshot } from '../report';
+import { DAY_PARTS, buildReport, pendingLines, snapshot } from '../report';
 import { home } from '../../sim/personal';
 import { HOME } from '../../config/personal';
 import { AGENCIES } from '../../config/lawEnforcement';
@@ -296,11 +296,18 @@ describe('the parts of the day', () => {
   });
 
   /*
-     A memo has not happened yet, which is the whole difference. Reading it
-     under the same heading as a death is what made the old briefing a list
-     rather than a morning.
+     A memo has not happened yet, which used to be reason enough to file it
+     under 'today' on the briefing itself — and reason enough, it turned
+     out, for the line to go stale. Round 27's MUST FIX: a player can answer
+     a memo directly (it renders on top of everything, same as ever)
+     without dismissing the briefing behind it, and a line baked into
+     `report.lines` at the moment the span stopped has no way to notice the
+     desk cleared. `buildReport` no longer carries a 'today' line at all —
+     `pendingLines`, read live by `Bulletin` at render time, does — so this
+     now asserts the *absence*, and the two tests after it cover
+     `pendingLines` directly.
   */
-  it('files what has not happened yet under today', () => {
+  it('no longer bakes a memo into the report itself', () => {
     const state = fresh();
     const snap = snapshot(state);
     state.org.heat += 20;
@@ -317,12 +324,26 @@ describe('the parts of the day', () => {
     });
 
     const report = buildReport(snap, state)!;
-    const today = report.lines.filter((l) => l.part === 'today');
-    expect(today.length, 'a memo on the desk was not filed under today').toBe(1);
-    // Identifies which line it is, not what it says. The condition this test
-    // holds is the filing above; the wording moved in the writing pass and
-    // "Something is waiting for an answer" named nothing a player could act on.
-    expect(today[0].text).toMatch(/memo is open/);
+    expect(
+      report.lines.some((l) => l.part === 'today'),
+      "a memo on the desk is back to being baked into the report, which is what went stale",
+    ).toBe(false);
+  });
+
+  it('says a memo is open, read live rather than from a snapshot', () => {
+    expect(pendingLines(0)).toEqual([]);
+    const one = pendingLines(1);
+    expect(one.length).toBe(1);
+    expect(one[0].text).toMatch(/memo is open/);
+    expect(pendingLines(2)[0].text).toMatch(/2 memos/);
+  });
+
+  it('cannot say a memo is open once the count it was called with is zero', () => {
+    // The whole point: nothing about this can go stale, because there is
+    // nothing kept between calls to go stale. Two calls, two counts, two
+    // independent answers — not a flag that has to be cleared somewhere.
+    expect(pendingLines(1).length).toBe(1);
+    expect(pendingLines(0).length).toBe(0);
   });
 
   /*
