@@ -414,6 +414,12 @@ function ContractButton({
 }) {
   const state = useGame();
   const check = canContract(state, target);
+  /*
+     Round 27: this button read "Not possible" on its face for every refused
+     target, with the real reason — no crew free, a cooldown with days left,
+     the cost uncovered — sitting only in the hover. Same rule 4 defect
+     `LawPanel`'s witness-contract row had, fixed the same way.
+  */
   return (
     <button
       className="btn small danger"
@@ -430,7 +436,7 @@ function ContractButton({
         if (out) onDone(out.message);
       }}
     >
-      {check.ok ? `Send somebody — ${formatMoney(check.cost ?? 0)}` : 'Not possible'}
+      {check.ok ? `Send somebody — ${formatMoney(check.cost ?? 0)}` : check.message}
     </button>
   );
 }
@@ -519,9 +525,14 @@ function Roster({ faction, intel }: { faction: Faction; intel: number }) {
                           }, true)
                         }
                       >
+                        {/*
+                           Round 27: same fix as `ContractButton` above — the
+                           reason a poach is refused belongs on the button,
+                           not only in its hover.
+                        */}
                         {check.ok
                           ? `Make an offer — ${formatMoney(check.cost)}`
-                          : 'Not possible'}
+                          : check.message}
                       </button>
                       {/*
                          The other verb on the same man, and deliberately the

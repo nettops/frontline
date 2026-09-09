@@ -44,19 +44,22 @@ still saying it long after both had stopped being true.
 
 ---
 
-## 0. Where this stands — 2026-09-08 evening
+## 0. Where this stands — 2026-09-09
 
 **Everything below section 7 is history.** §7 "What comes next" still owes round
 14; round 21 has been run and scored. Read this section for the state and the
 rest for how it got here.
 
-`tsc` clean, `npm test` green (130 files, 1,560 passing), `npm run probe`
-96 passed / 3 skipped / 0 failed (the 3 skips are unrelated, pre-existing
-project-config skips). F24 (the merge's own regression, below) is fully
-closed — all four bars. Four blind rounds have now run on the merged code
-(23-26); see §4's scores table and §6 for full detail. `.ai/FINAL_REPORT.md`
-has the complete narrative of the day, from the 40-vs-85-commit branch
-merge through round 26, including the honest QA-score-vs-target reading.
+`tsc` clean, `npm test` green (130 files, 1,564 passing), `npm run probe`
+last run clean at 96/96 non-skipped (unrun since the diplomacy/refusal
+fixes below — none of them touch balance, so not expected to move it, but
+not yet re-confirmed). F24 (the merge's own regression) is fully closed —
+all four bars. Five blind rounds have now run on the merged code (23-27),
+the fifth reaching **Crime Lord**, the top rank, for the first time any
+blind round has. See §4's scores table and §6 for full detail.
+`.ai/FINAL_REPORT.md` has the fuller narrative through round 26; round 27
+is written up in §6 and in `docs/findings/director-log.md` but has not yet
+been folded into that report.
 
 ### What shipped since round 21
 
@@ -172,11 +175,10 @@ operations, crew, territory, rival families, and law enforcement.
     npx tsc -b         # types
     npm run playtest   # namespaced instance for blind testers
 
-**Current verified state, 2026-09-08 evening: `tsc` clean, `npm test` green
-(130 files, 1,560 passing), `npm run probe` 96/96 non-skipped (3 unrelated
-skips).** Last blind measurement: round 26. Read §0 before trusting anything
-below this line about specific numbers; this section is architecture and
-history, not current state.
+**Current verified state, 2026-09-09: `tsc` clean, `npm test` green
+(130 files, 1,564 passing).** Last blind measurement: round 27. Read §0
+before trusting anything below this line about specific numbers; this
+section is architecture and history, not current state.
 
 The suite is split into two vitest projects. `npm test` is the gate and runs the
 unit project only, in about sixteen seconds; `npm run probe` runs the
@@ -493,17 +495,17 @@ mandate. Table extended through round 26 below.
 
 ### Blind round scores
 
-    axis           r10   r11   r12   r13   r14   r15   r17   r18   r19   r23   r24   r26
-    First hour       8     8     8     8     9     9     6†    8     6     6‡    7     6
-    Clarity          9     6     6     9     8     8     5†    8     5     7     7     5
-    Feedback         9     7     8     8     8     9     7     8     8     9     8     7
-    Depth            8     6     8     8     8     8     8     7     7     9     9     7§
-    Pacing           6     4     5     5     6     7     5     6     5     6     6     7
-    Difficulty       8     6     6     7     7     8     6     5     7     7     6     6
-    Writing          9     8     9     9     9    10     8     9     9    10     9     9
-    Interface        8     6     7*    7     8     9     4†    6     4     6     6     6
-    Standing in it   -     5     6     6     7     -     7     8     7     8     7     6
-    Fun              7     6     6     6     5     7     6     7     5     7     7     7
+    axis           r10   r11   r12   r13   r14   r15   r17   r18   r19   r23   r24   r26   r27
+    First hour       8     8     8     8     9     9     6†    8     6     6‡    7     6     7
+    Clarity          9     6     6     9     8     8     5†    8     5     7     7     5     7
+    Feedback         9     7     8     8     8     9     7     8     8     9     8     7     9
+    Depth            8     6     8     8     8     8     8     7     7     9     9     7§    9
+    Pacing           6     4     5     5     6     7     5     6     5     6     6     7     6
+    Difficulty       8     6     6     7     7     8     6     5     7     7     6     6     8
+    Writing          9     8     9     9     9    10     8     9     9    10     9     9     9
+    Interface        8     6     7*    7     8     9     4†    6     4     6     6     6     6
+    Standing in it   -     5     6     6     7     -     7     8     7     8     7     6     8¶
+    Fun              7     6     6     6     5     7     6     7     5     7     7     7     8¶
 
 Round 16 (2026-09-07 morning) is not in this table — that round's brief
 asked only for a MUST FIX check and a novelty-day finding, not a full
@@ -517,7 +519,11 @@ to a mid-session context handoff, not a game defect — read as unscored
 rather than a real First Hour reading (see §6's round 23 block). § = the
 tester's own caveat: never touched Diplomacy's aggressive options, Rivals,
 Succession, Contracts, or the Arms Trade this run, so this is a
-partial-coverage score, not a reading that Depth itself declined.
+partial-coverage score, not a reading that Depth itself declined. ¶ = r27's
+tester gave one number for both Standing in it and Fun — PLAYTEST.md's own
+instruction to check that this was intentional when the two match was not
+visibly followed. Not chased further; both read as plausible on the run
+described.
 
 **r20-r22 and r25 do not appear here.** r20-r22: a separately-developed
 branch used the same numbers for entirely different rounds before the two
@@ -530,11 +536,16 @@ are still in §6's round-25 block and were acted on. r23, r24 and r26 are
 the three genuinely comparable points since the merge — no MUST FIX in any
 of the three (r25's one MUST FIX is the exception, fixed the same day),
 and Pacing and Interface between them show the clearest repeated pattern:
-Interface has now read 6 four times in a row (r19 aside) across four
-different rounds. **Neither Interface nor Pacing has resolved as of round
-26** — Interface stayed at 6 through three landed fixes (a real, structural
-finding now, per `.ai/TASKS.md`); Pacing has gone 6/6/7, inconsistent
-rather than confirmed.
+Interface has now read 6 in five rounds running (r19 aside) across five
+different rounds, r27 included. **Interface has still not resolved after
+four rounds of landed fixes and, as of r27, a direct, unleading ask to be
+concrete about where the friction actually is.** r27 named a memo/digest
+interaction and unlabelled icon buttons — real, narrow, checkable things —
+not the "multi-panel information architecture" theory the prior session
+closed on, which traced to a misread of an old `Dashboard.tsx` comment
+about a problem from round 15 already fixed and has been retracted (see
+`docs/findings/director-log.md`'s round-27 entry). Pacing has gone
+6/6/7/6 — still inconsistent, not confirmed either way.
 
 **Round 14 was the high-water mark on seven axes against r10-r13 — it no
 longer is, against the full table.** The tester was explicit about why:
@@ -663,6 +674,72 @@ restated here rather than only in the archive:
 - **Stock at 43% of trade revenue is the biggest leak left in the trading
   economy**, per F23's own closing note, and nothing has looked at it since.
 
+### Round 27 — a real alliance-gate bug closed, a wrong Interface theory retracted, 2026-09-09
+
+Full round, Sonnet, pinned, fresh isolated instance, explicitly asked to be
+concrete about *where* Interface friction is (screen, control, look, or
+navigation) rather than leave it to inference again. Day 303, **Crime
+Lord** — the first blind round ever to reach the top rank — 24 of 57 crew
+capacity, $337,333 clean, 9 of 12 districts, 9 fronts, a named heir who
+survived three arrests, a formal alliance with the Delgado family.
+
+**Scores**: First hour 7, Clarity 7, Feedback 9, Depth 9, Pacing 6,
+Difficulty 8, Writing 9, Interface 6, Standing in it/Fun both 8 (see the
+¶ footnote above). Difficulty's jump to 8 is the largest single-axis move
+since the merge — one reading, not yet a trend.
+
+**The prior session's Interface theory — retracted.** "The remaining gap
+is multi-panel information-architecture complexity multiple testers have
+independently described" traced, on inspection, to nobody: no round's
+actual commentary said anything like it, and the phrase came from
+misreading `Dashboard.tsx`'s own header comment about a *round 15* problem
+the Wanting/waiting/running panels were already built to fix. r27's own
+concrete answer — a memo/digest interaction and unlabelled icon buttons —
+supports none of it. Corrected in `.ai/TASKS.md` and here; full account in
+`docs/findings/director-log.md`'s round-27 entry.
+
+**MUST FIX — `propose_alliance`'s refusal message could contradict its own
+gate, CLOSED.** Reproduced by the tester at standing 20 exactly: the
+message read "Standing with them is 20; this needs 20" — its own bar
+already met — and the button stayed refused; worked normally shortly
+after on the same relationship. Root cause: the message rounds `standing`
+for display but the gate compared the unrounded float, so 19.6 (which
+rounds to 20) still failed `19.6 < 20`. `diplomacy.ts`'s `canDo` now rounds
+before the comparison, not only before the message, so the two can no
+longer disagree. Test-first, mutation-verified. This is also the first
+real confirmation that yesterday's `trustPerPeacefulWeek` raise makes
+`propose_alliance` reachable at all — the tester built one.
+
+**MUST FIX — a memo rendering "hidden behind" the digest, investigated,
+NOT reproduced.** `MemoModal` reads `pendingEvents` unconditionally and
+`.memo-backdrop` sits at `z-index: 50` against the Bulletin's `20` — nothing
+in source supports the tester's account. Live-tested on a fresh instance:
+three separate month-advances each hit a real memo, and each rendered
+correctly on top, immediately. Left open, honestly unreproduced, rather
+than guessed at — the next report should screenshot the moment it happens.
+
+**Three refusal-visibility bugs, found while preparing for this round
+(not by the tester) and fixed the moment the round's instance was stopped.**
+`canContract` and `canApproach` both return specific, real refusal reasons
+— no crew free, a cooldown with days left, cost uncovered — and three
+buttons across `LawPanel.tsx` and `RivalsPanel.tsx` showed "not possible"
+on the button face with the reason only in a hover `title`, the same rule-4
+shape `refusalShown.test.ts` already guards elsewhere. **This is very
+likely round 26's own unlocated "negotiation sub-option shown blocked for
+every candidate with no stated reason"** — same mechanism, same shape —
+though it was found by reading rather than by reproducing that exact
+round's report, so it is not certain to be the identical instance. Test-
+first, all three mutation-verified.
+
+**SHOULD FIX items, checked and left alone**: the Why-log's raw-numbers
+complaint is a narrower residual of a tonal complaint already fixed once
+(an intro paragraph exists); glossing every term is real new content, not
+a quick fix. Word/Ledger's unfinished payoffs are the same known,
+developer-decision item, corroborated again. The page-width collapse is
+the tester's own flagged-as-possible-harness-artifact.
+
+Verification: `tsc` clean, `npm test` green (130 files, 1,564 passing).
+
 ### Round 26 — the Trade hint confirmed working; three more Clarity/Interface fixes, 2026-09-08
 
 Full round, Sonnet, pinned, fresh isolated instance, explicitly told to
@@ -711,15 +788,17 @@ respect, a log line) but not narrated as attributable to being right or
 wrong, and changing that would undo a deliberate choice. A negotiation
 sub-option shown blocked for every candidate with no stated reason —
 single occurrence, not reproduced, and not located in the time available
-this session; flagged for whoever hits it next to find rather than guessed
-at.
+this session. **Very likely closed 2026-09-09** — see round 27's entry
+above for a refusal-visibility bug of the same shape found by reading
+`LawPanel.tsx`/`RivalsPanel.tsx`, not by reproducing this exact report.
 
 **Interface still reads 6** despite three fixes now landed against it
 across two rounds (roster scroll, steward hint, this round's banner and
-rank-text fixes) — consistent with `.ai/TASKS.md`'s own prediction that
-the remaining gap is broader information-architecture complexity rather
-than any single missing affordance. Depth's drop to 7 (from 9 twice) is
-explicitly a coverage artifact (the tester's own caveat), not a finding
+rank-text fixes). **The "broader information-architecture complexity"
+theory this line used to end on was retracted 2026-09-09** — it did not
+trace to any tester's actual words; see round 27's entry above. What
+Interface's gap actually is remains open. Depth's drop to 7 (from 9 twice)
+is explicitly a coverage artifact (the tester's own caveat), not a finding
 about the systems it didn't touch.
 
 Verification: `tsc` clean, `npm test` green (130 files, 1,560 passing).

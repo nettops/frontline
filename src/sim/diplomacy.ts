@@ -877,7 +877,21 @@ export function canDo(
     return { ok: false, message: 'There is a war on. That comes first.' };
   }
 
-  const standing = relationship(state, 'player', target);
+  /*
+     Rounded before the gate reads it, not only before the message prints it.
+
+     Round 27's MUST FIX: a raw standing of 19.6 rounds to 20 for display, so
+     a refused `propose_alliance` read "Standing with them is 20; this needs
+     20" and stayed refused — a message telling the player their own bar was
+     already cleared while the click did nothing. The rounded figure is the
+     only precise reading of this stat the player is ever shown (the roster
+     table only ever prints a qualitative label, never the number), so it has
+     to be the number that decides the gate. Whatever the refusal says is
+     true now, at the cost of the gate turning on the same half-point a
+     border always has — a fair trade for a refusal that cannot lie about its
+     own arithmetic.
+  */
+  const standing = Math.round(relationship(state, 'player', target));
   if (standing < def.minRelationship) {
     /*
        Names the bar, because every refusal in this project has to.
@@ -892,7 +906,7 @@ export function canDo(
     return {
       ok: false,
       message:
-        `They will not hear it from you. Standing with them is ${Math.round(standing)}; ` +
+        `They will not hear it from you. Standing with them is ${standing}; ` +
         `this needs ${def.minRelationship}.`,
     };
   }

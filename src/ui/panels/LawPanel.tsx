@@ -379,6 +379,14 @@ function CaseDetail({
                     npcId: npc.id,
                   };
                   const check = canContract(state, target);
+                  /*
+                     Round 27: `canContract` already names the real reason —
+                     no crew free, a cooldown with days left, the cost
+                     uncovered — and this button was showing "not possible"
+                     on its face and the reason only in the hover. Same rule
+                     4 defect this project keeps finding and fixing; the
+                     reason goes where the player is already looking.
+                  */
                   return (
                     <button
                       key={`ct-${npc.id}`}
@@ -396,7 +404,8 @@ function CaseDetail({
                         if (out) setMessage(out.message);
                       }}
                     >
-                      {npc.name} — {check.ok ? formatMoney(check.cost ?? 0) : 'not possible'}
+                      {npc.name} —{' '}
+                      {check.ok ? formatMoney(check.cost ?? 0) : check.message}
                     </button>
                   );
                 })}
