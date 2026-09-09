@@ -1866,3 +1866,123 @@ Verification: `tsc` clean, `npm test` green (130 files, 1,560 passing),
 Interface fixes made, and Interface's repeated-but-unmoved score is now
 a confirmed finding rather than a guess about where effort should go
 next.**
+
+---
+
+## Round 27, and retiring last session's Interface theory — 2026-09-09
+
+Commissioned as a fresh session, deadline 5pm. Before dispatching, checked
+`git fetch` against `origin/main` per the standing divergence-check rule —
+clean, nothing to reconcile.
+
+**First, a correction.** The prior session's closing hypothesis — "the
+remaining Interface gap is multi-panel information-architecture complexity
+multiple testers have independently described" — was checked against its
+own cited evidence before building on it, and the citation did not hold.
+Grepping every round's actual Interface commentary in this log found no
+tester ever describing "checking N panels separately"; the phrase traced to
+`Dashboard.tsx`'s own header comment about a problem from *round 15* that
+the Wanting/waiting/running panels were built to fix, misread as a live
+complaint. Flagged rather than quietly dropped, because presenting an
+inference as "multiple testers have independently described" when it was
+one session's own pattern-match is exactly the overclaiming this project's
+own §3 catalog exists to catch. `.ai/TASKS.md` and `HANDOFF.md` are
+corrected below.
+
+Before dispatching, also read `LawPanel.tsx`/`RivalsPanel.tsx` looking for
+concrete Interface candidates and found a real, unrelated bug: `canContract`
+and `canApproach` both return specific refusal reasons (no crew free, a
+cooldown with days left, cost uncovered), and three separate buttons across
+the two files showed "not possible" / "Not possible" on the button face
+with the real reason only in a hover `title` — the same rule-4 defect
+`refusalShown.test.ts` has caught elsewhere, just never extended to these
+components. Not applied yet at this point — the round's isolated instance
+was about to go live and editing `src/` while it's up is the standing
+don't-do-this (HMR corrupts a live round).
+
+**Round 27**, full, Sonnet, pinned, dispatched with the standard
+tester-facing brief plus a note-preservation instruction (round 23's own
+lesson) and, for the first time, an explicit ask to be concrete about
+*where* Interface friction actually is (screen, control, look, or
+navigation) rather than leave that to inference again. Day 303, **Crime
+Lord** — the first blind round ever to reach the top rank — 24 of 57 crew
+capacity, $337,333 clean, 9 of 12 districts, 9 fronts, a named heir who
+survived three arrests, a formal alliance with the Delgado family.
+
+Scores: First hour 7, Clarity 7, Feedback 9, Depth 9, Pacing 6, Difficulty
+8, Writing 9, Interface 6, Standing in it/Fun both 8 (reported as one
+number for both — PLAYTEST.md's own instruction to check that was
+intentional was not visibly followed; not chased further, both are
+plausible readings of the same run). Difficulty's jump (6/6/7/6 → 8) is the
+single biggest axis move since the merge — one reading, not chased as a
+trend yet.
+
+**Interface's own concrete answer, this time**: not multi-panel navigation
+— a memo-modal/digest interaction (below), icon-only top-bar buttons with
+no visible label, and an intermittent page-width collapse to ~400-500px the
+tester itself flagged as possibly a harness artifact rather than the game.
+No support at all for last session's theory. Retracted.
+
+**MUST FIX 1 — a memo appearing "hidden behind" the digest, reproduced
+twice by the tester (day 267, day 303), NOT reproduced live this session.**
+Checked source first: `MemoModal` reads `state.pendingEvents[0]`
+unconditionally (no gate tied to the Bulletin/digest being open), and
+`.memo-backdrop` is `position: fixed` at `z-index: 50` against `.bulletin`'s
+`z-index: 20` (sticky, in-flow) — nothing in the stacking or render logic
+supports a memo being visually or functionally behind the digest. Live-
+tested on a fresh isolated instance: advanced by month three times in a
+row, hit a real memo each time, and in every case the memo backdrop
+rendered immediately and correctly on top, dimming the page beneath it.
+**Could not reproduce**, which DIRECTOR treats as a finding in its own
+right rather than nothing. Left open rather than guessed at — if it
+recurs, the next report should capture a screenshot at the moment it
+happens, since neither the CSS nor a direct live retest explains the
+tester's account.
+
+**MUST FIX 2 — CLOSED, and it is a real bug, not a display quirk.** The
+tester's exact reproduction: `propose_alliance` refused with "Standing with
+them is 20; this needs 20" — its own message stating the bar was already
+met — and stayed refused; worked normally later on the same relationship.
+Root cause, confirmed by reading `canDo` in `diplomacy.ts`: the refusal
+message rounds `standing` for display (`Math.round(standing)`) but the gate
+compared the *raw* float against `def.minRelationship`, so a standing of
+19.6 displays as "20" and still fails `19.6 < 20`. The rounded figure is
+the only precise reading of this stat the player is ever shown (the roster
+table only ever prints a qualitative label), so the fix rounds before the
+comparison, not only before the message — `Math.round` moved up one line,
+gate and message now read the same number. Test-first: added a case at
+19.4 (still refuses) and 19.6 (now passes) to `diplomacy.test.ts`, watched
+it fail on the exact contradiction, then fixed. This is also, incidentally,
+the first real corroboration that last session's `trustPerPeacefulWeek`
+raise made `propose_alliance` reachable at all — the tester built one.
+
+**The Contract-message fix from before the round, now applied and
+verified.** All three instances (`LawPanel`'s witness-contract row,
+`RivalsPanel`'s shared `ContractButton`, and a third found while fixing the
+second — `RivalsPanel`'s poach-offer button, same `check.message`-in-a-
+tooltip shape) now print the real refusal on the button face. Test-first:
+extended `refusalShown.test.ts` with a static-source scan for all three
+(the same pattern the file already uses for `BusinessesPanel`/`CityPanel`),
+watched each fail on the exact "not possible" string, fixed, watched all
+three pass.
+
+**SHOULD FIX items, checked and left alone this session**: the Why-log's
+raw-numbers-with-no-gloss complaint is a narrower residual of a tonal
+complaint already fixed once (an introductory paragraph was added
+previously) — the page's own stated design is "kept exactly as it
+happened," and glossing every term is real new content, not a quick fix;
+deferred. Word/Ledger's unfinished payoffs are the same known, developer-
+decision item as before, corroborated a second time. The page-width
+collapse is the tester's own flagged-as-possible-harness-artifact; not
+chased without a second, cleaner report.
+
+Verification: `tsc` clean, `npm test` green (130 files, 1,564 passing,
+up from 1,560 — four new tests, all mutation-verified by watching them
+fail before the fix and pass after).
+
+**Result: KEPT.** One real MUST FIX found and fixed (with a genuinely
+lucky side-benefit: it's proof the alliance-reachability fix from
+yesterday works), a second MUST FIX investigated thoroughly and honestly
+left as unreproduced, three real UI-visibility bugs fixed pre-emptively,
+and a wrong hypothesis from the prior session caught and retracted rather
+than built on further.

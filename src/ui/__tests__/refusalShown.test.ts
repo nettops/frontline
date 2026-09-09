@@ -36,6 +36,8 @@ import { describe, expect, it } from 'vitest';
 import businesses from '../panels/BusinessesPanel.tsx?raw';
 import dashboard from '../panels/Dashboard.tsx?raw';
 import city from '../panels/CityPanel.tsx?raw';
+import law from '../panels/LawPanel.tsx?raw';
+import rivals from '../panels/RivalsPanel.tsx?raw';
 
 describe('a refusal on the row that was refused', () => {
   it('prints why a business cannot be bought beside its own button', () => {
@@ -59,6 +61,36 @@ describe('a refusal on the row that was refused', () => {
   it('is the same thing the card tables have always done', () => {
     // The panel this was copied from, so the two screens cannot drift apart.
     expect(city).toMatch(/\{!check\.ok && <div className="tiny faint">\{check\.reason\}<\/div>\}/);
+  });
+});
+
+describe('a contract that cannot be sent, and why', () => {
+  /*
+     Round 27: `canContract` has always returned a real, specific reason —
+     nobody by that name any more, a cooldown with days left, not enough
+     crew free, the cost uncovered — and both places that gate a Contract
+     button put that reason only in a `title` and printed "not possible" (or
+     "Not possible") on the button face itself. `refusalShown.test.ts` had
+     scanned every other refusal-shaped control in this codebase since round
+     21 and never reached these two, because the Contract mechanic did not
+     exist yet when this file was written. Same rule 4 defect, same fix: the
+     reason a control is refused has to be readable without a hover, on the
+     control itself.
+  */
+  it('says why on the witness-contract row, not only in the hover', () => {
+    expect(law).not.toMatch(/:\s*'not possible'/);
+    expect(law).toMatch(/check\.ok \? formatMoney\(check\.cost \?\? 0\) : check\.message/);
+  });
+
+  it('says why on the shared ContractButton, not only in the hover', () => {
+    expect(rivals).not.toMatch(/:\s*'Not possible'/);
+    expect(rivals).toMatch(/check\.ok \? `Send somebody.*?` : check\.message/);
+  });
+
+  it('says why a poach offer cannot be made, not only in the hover', () => {
+    // Same file, same defect, a third instance found alongside the other two:
+    // `canApproach`'s refusal also lived only in a title.
+    expect(rivals).toMatch(/: check\.message\}\s*\n\s*<\/button>/);
   });
 });
 

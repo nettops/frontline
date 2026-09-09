@@ -1,4 +1,4 @@
-# Final report — the merge day, 2026-09-07 night through 2026-09-08 evening
+# Final report — the merge day (2026-09-07/08) and round 27 (2026-09-09)
 
 Commissioned as the next autonomous round, originally to 10am EDT, then
 extended to 7:30pm. Started by being asked to commit and push a small doc
@@ -194,4 +194,85 @@ closed and new ones arrived. One open item still flagged, not done:
 reconciling the two merged histories' F-number findings against each
 other.
 
-All work is committed and pushed to `main` (`a2e1aca` at time of writing).
+All of the above was committed and pushed to `main` by the end of that
+session. Everything below is a new, separate session the next day.
+
+---
+
+## 8. Round 27, 2026-09-09 — a short session, deadline 5pm
+
+Checked `git fetch` against `origin/main` first, per the divergence-check
+rule this project now carries in memory after 2026-09-07's near-miss —
+clean, nothing to reconcile.
+
+**A wrong theory from §5 above, caught and retracted.** That section's
+closing claim — "the remaining Interface gap is multi-panel information-
+architecture complexity multiple testers have independently described" —
+was checked against its own citation before this session built anything on
+it, and it did not hold. No round's actual report says anything like it;
+the phrase traced to a misread of `Dashboard.tsx`'s own comment about a
+*round 15* problem the game's Wanting/waiting/running panels were already
+built to fix. Retracted in `HANDOFF.md` and `.ai/TASKS.md` rather than
+quietly dropped, because presenting an inference as something "multiple
+testers have independently described" was itself the kind of overclaim
+this project's own §3 catalog exists to catch.
+
+**Before dispatching round 27**, read `LawPanel.tsx`/`RivalsPanel.tsx`
+looking for real Interface candidates and found one: `canContract` and
+`canApproach` both return specific refusal reasons (no crew free, a
+cooldown, cost uncovered), and three buttons across the two files showed
+"not possible" on the button face with the reason only in a hover — the
+same rule-4 shape this project has fixed before. Held until the round's
+instance was stopped (editing `src/` while it's live risks HMR corrupting
+the round), then fixed test-first, mutation-verified, all three.
+
+**Round 27 itself**: full, Sonnet, pinned, explicitly asked to be concrete
+about *where* Interface friction is rather than leave it to inference.
+Reached **Crime Lord** — the top rank, first time any blind round has —
+on day 303, with 9 of 12 districts, 9 fronts, a named heir who survived
+three arrests, and a formal Delgado alliance. Scores: First hour 7,
+Clarity 7, Feedback 9, Depth 9, Pacing 6, Difficulty 8 (the largest single
+jump since the merge), Writing 9, Interface 6, Standing in it/Fun both 8.
+
+Two MUST FIX items:
+
+- **CLOSED — a real bug, not a display quirk.** `propose_alliance`
+  refused with "Standing with them is 20; this needs 20," its own bar
+  already met, and stayed refused. `canDo` rounded the figure for display
+  but compared the raw float — 19.6 rounds to 20 and still fails
+  `19.6 < 20`. Fixed by rounding before the comparison, not only before
+  the message. Test-first, mutation-verified. Incidentally the first real
+  proof that yesterday's `trustPerPeacefulWeek` raise makes this reachable
+  at all — the tester built one.
+- **Investigated, NOT reproduced.** A memo reported as rendering "hidden
+  behind" a digest banner. `MemoModal` reads `pendingEvents`
+  unconditionally and sits at `z-index: 50` against the digest's `20` —
+  nothing in source supports the account. Live-tested on a fresh instance,
+  three separate memo-triggering advances, correct immediate rendering
+  every time. Left open and honestly unreproduced rather than guessed at.
+
+Also very likely closed: round 26's own unlocated "negotiation sub-option
+blocked, no reason given" — the same refusal-visibility shape as the
+Contract-button fix above, found by reading rather than by reproducing
+that exact report, so probable rather than certain.
+
+Verification: `tsc` clean, `npm test` green (130 files, 1,564 passing, up
+from 1,560 — four new tests, all mutation-verified). `npm run probe` run
+after all fixes landed; see the commit log for the result.
+
+**Where QA scores stand after round 27**: still not at the 9-10 target.
+Depth (9) and Writing (9) hold strong; Feedback (9) joined them this
+round. Interface remains the clearest unsolved axis — five rounds, four
+real fixes, no movement, and an honest "still don't know" rather than a
+retracted theory in its place. Pacing is still inconsistent across six
+readings (6/6/7/6). Full current queue is `.ai/TASKS.md`.
+
+## 9. Housekeeping, 2026-09-09
+
+`docs/findings/director-log.md` gained one entry for this session,
+including the theory retraction. `HANDOFF.md` §0, §4's scores table and
+§6 are current through round 27. `.ai/TASKS.md` was rewritten to reflect
+the retraction, round 27's two new items, and the closed negotiation-bug
+and alliance-gate findings.
+
+All of this is committed and pushed to `main` by the end of this session.

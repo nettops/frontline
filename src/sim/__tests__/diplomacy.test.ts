@@ -354,6 +354,27 @@ describe('what the player can say', () => {
     expect(canDo(state, 'propose_alliance', 'falcone').ok).toBe(true);
   });
 
+  it('does not refuse at the exact standing its own message would say is enough', () => {
+    /*
+       Round 27's MUST FIX: relationship 19.6 rounds to 20 for display, so a
+       refused `propose_alliance` read "Standing with them is 20; this needs
+       20" — a refusal claiming its own bar was already cleared, then
+       working normally a short time later on the same relationship. The
+       gate compared the raw float; the message rounded it. The rounded
+       figure is the only precise number of this stat the player is ever
+       shown, so it is the number that has to decide the gate — otherwise a
+       refusal can tell the truth about the bar and still lie about clearing
+       it. 19.4 (rounds to 19) still refuses; 19.6 (rounds to 20) now passes.
+    */
+    const state = fresh();
+    state.org.cash = 1_000_000;
+    setRelationship(state, 'player', 'falcone', 19.4);
+    expect(canDo(state, 'propose_alliance', 'falcone').ok).toBe(false);
+
+    setRelationship(state, 'player', 'falcone', 19.6);
+    expect(canDo(state, 'propose_alliance', 'falcone').ok).toBe(true);
+  });
+
   it('starts a war when you say so', () => {
     const state = fresh();
     const result = doDiplomacy(state, new Rng(state.rng), 'declare_war', 'kestler');
