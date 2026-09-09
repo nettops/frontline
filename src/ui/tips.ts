@@ -169,7 +169,16 @@ export const TIPS: Tip[] = [
     text:
       'Payroll runs every seventh day whether the week earned or not, and a missed one is remembered by the man who missed it. Finances shows the bill before it lands.',
     panel: 'finances',
-    when: (s) => crewList(s).length >= 2 && s.day >= 6,
+    /*
+       One man is enough to owe this. Round 27's First-hour complaint —
+       "nothing taught me the payroll-timing danger before I hit my first
+       cash crisis" — traced to this gate wanting a second hire before it
+       would speak, while the one man a career starts with already draws a
+       real wage from day one (`npc.ts`'s `wage` field has no first-hire
+       exception). A player who never brings anybody else in was never
+       warned at all.
+    */
+    when: (s) => crewList(s).length >= 1 && s.day >= 6,
     ceiling: BASICS_UNTIL,
   },
 
