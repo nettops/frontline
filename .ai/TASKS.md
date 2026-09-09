@@ -48,19 +48,25 @@ specifically probes *why* rather than just recording the number — the
 format-fatigue hypothesis was never confirmed and shouldn't be assumed
 again without one.
 
-## 3. Two SHOULD FIX items from round 27, not yet acted on
+## 3. One SHOULD FIX from round 27, checked and probably not a real defect
 
-- **Icon-only top-bar buttons with no visible label** (sound, hints,
-  possibly others) — discoverable only via hover or accessibility
-  inspection. Real first-time-clarity gap, cheap to check: does the icon
-  have an `aria-label`/`title`, and would visible text fit without
-  crowding the bar (which has its own history — see the bar's own comment
-  on a controls-overflow incident at narrow widths).
-- **The "Why" transparency log's raw numbers still have no per-term
-  gloss** (`CONSOLIDATE 0.39 · DIPLOMACY 0.04`). A tonal complaint about
-  this page was already fixed once (an introductory paragraph). This is a
-  narrower, second-order ask — glossing every term is real new content,
-  not a quick fix — and is lower priority than the two items above it.
+**"Icon-only top-bar buttons with no visible label" — checked against
+source 2026-09-09, does not match what's there.** `StatBar.tsx` has
+exactly five buttons: sound and hints both render visible text (`sound`,
+`hints`/`hints off`) rather than an icon, per a round-7 fix already on
+record, and the three day-advance buttons were explicitly excluded by the
+tester's own report. Most likely the same root cause as the "intermittent
+page-width collapse to ~400-500px" SHOULD FIX below it in that report — a
+narrow-width rendering artifact the tester itself flagged as possibly not
+the game's fault could plausibly trigger a responsive breakpoint that
+hides label text, producing both complaints from one event. Not chased
+further without a cleaner second report; if one arrives, check the same
+narrow-viewport theory first rather than assuming a missing label.
+
+The "Why" transparency log's raw-numbers-with-no-gloss complaint is a
+narrower residual of a tonal complaint already fixed once (an
+introductory paragraph exists). Glossing every term is real new content,
+not a quick fix, and lower priority than anything above it.
 
 ## 4. A memo rendering "hidden behind" the digest — investigated, not reproduced
 
@@ -99,13 +105,20 @@ before committing to a rate.
   a real bug, fixed.** Rounding mismatch between the gate and the message;
   see `HANDOFF.md` §6 and `docs/findings/director-log.md` for the full
   account.
+- **The 1,460-day Difficulty regression — stale, re-measured, closed.**
+  The 69-75%-ended-early figure was from weeks-old code and never
+  re-checked; it's now 39.6%, close to the 33% target, and the Difficulty
+  axis reads 6.07 (up from 4.7). Full mechanism traced in `HANDOFF.md` §6.
+  New, smaller, unchased item surfaced by the same measurement:
+  `distinctEnds` (final-rank diversity over four years) was only 2 of a
+  possible 5 in that run — now the axis's actual soft spot.
 
 ## Smaller, lower-priority
 
-- **`informants.probe`'s 29/30 guard, the 1,460-day Difficulty regression,
-  Word/Ledger's unwired verbs, the pressure dial's unreachable `hard`
-  setting, and trade-economy stock cost** — all still open, all carried in
-  `HANDOFF.md` §6 rather than duplicated here.
+- **`informants.probe`'s 29/30 guard, Word/Ledger's unwired verbs, the
+  pressure dial's unreachable `hard` setting, and trade-economy stock
+  cost** — all still open, all carried in `HANDOFF.md` §6 rather than
+  duplicated here.
 - F9 (fear near its ceiling) — Opus's 2026-09-07 diagnosis: fixing the
   *display* moves nothing; the real lever is the same "dominated
   strategies" shape already partly addressed for the favour/dial pair.

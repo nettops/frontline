@@ -658,11 +658,28 @@ restated here rather than only in the archive:
   One world in thirty never has anybody seen to talk, traced to
   `gen_paper_moving` letting a boss with no representation retain counsel
   they never had. The developer's call, not touched since 2026-08-23.
-- **The 1,460-day Difficulty regression's root cause is still unfound.**
-  69-75% of careers end early over four years (against 0% over 300 days) —
-  real, long-predates the 2026-09-08 merge, and separate from anything F24
-  touched. Whether the 1,460-day axis is even the right instrument for a
-  game sized against the first 300 days (§5) is a developer question.
+- **The 1,460-day Difficulty regression — CLOSED, stale, 2026-09-09.**
+  The 69-75%-ended-early figure this bullet used to carry was from
+  2026-08-21-era code and was never re-measured before this session, the
+  same mistake round-17's "job dominance" finding had already made once.
+  Re-run with a one-off diagnostic on `scorecard.probe`'s own 48-world,
+  1,460-day population: **endedEarly is now 39.6% (19/48)**, close to the
+  33% target, and the Difficulty axis itself reads **6.07**, up from the
+  4.7 "lowest ever measured" reading this bullet was written against.
+  Traced the mechanism while at it, since nobody had: `removePlayer` in
+  `succession.ts` is the *only* place `state.gameOver` is ever set, and it
+  is called from exactly one site (`investigation.ts`'s trial verdict) — a
+  career can only end here by a conviction with no eligible, serious
+  successor at that exact moment. Across the 48-world run: 131 removals
+  total (2.73 per career, 119 convictions and 12 killed), of which only 19
+  had zero eligible contenders — and 19 is exactly the ended-early count,
+  confirming the mechanism. Diagnostic was temporary (a `globalThis` push
+  in `removePlayer` plus one throwaway `it()` in `scorecard.probe.test.ts`)
+  and fully reverted; nothing was kept in source. **A smaller, different
+  question surfaced in the same run and is not this one**: `distinctEnds`
+  (how many different final ranks 48 four-year careers reach) was only 2,
+  which is now the axis's actual soft spot rather than survival — not
+  investigated further this session.
 - **Word and Ledger (two Diplomacy verbs) are unwired, and it is a design
   question, not a bug.** `canCallATable`'s gate protects a restriction that
   does not exist; `canBuyIn`/`buyIn` need a referenceable rival-business
