@@ -59,18 +59,71 @@ off the frozen snapshot onto a small pure function (`pendingLines` in
 so it structurally cannot go stale again. Test-first
 (`report.test.ts`), mutation-verified, live-verified.
 
-**4. Interface (6) — five rounds, four real fixes, no movement, and this
-round's three "concrete" answers didn't survive checking.** **Decided
-2026-09-09: the developer plays it directly**, rather than another AI
-round or a targeted AI pass — the one method not yet tried, and the one
-that can tell whether the ceiling is the game or the testing method
-itself. No formal blind-score rubric for this pass (the developer isn't
-blind to the design, so a Part-2-style number wouldn't mean the same
-thing) — just play normally and log friction as it happens: where you
-had to think about *how* to do something rather than *what* to do.
-Confirms when either something concrete turns up that five AI rounds
-missed, or the developer's own read agrees Interface is fine and the
-score has been measuring the AI-tester method the whole time.
+**4. Interface (6) — the developer played it directly, 2026-09-09. Real
+findings came back, none of them the shape anyone guessed.** No formal
+blind-score rubric — this pass was about naming friction as it happened,
+not producing a number. What came back:
+
+- **The sit-down's reads feeling random at low familiarity — CLOSED, a
+  real gap, fixed.** See below.
+- **Text density and tab count** — flagged as a first impression ("seems
+  like a lot of text," "a lot of tabs, someone could get lost"), not yet
+  confirmed as something that actually happened to the developer during
+  play rather than a structural worry. Still open; see "Open design
+  questions" below for what came of trying to act on it directly.
+- **The Armoury and a UI-consolidation idea** — both real proposals, both
+  genuinely open design questions, not yet decided. See below.
+
+This closes the item as *worked* — a live human reading did what five AI
+rounds could not, which answers the standing question ("is the ceiling
+the game or the testing method") with "the testing method, at least in
+part": the AI rounds' specific Interface complaints (icon labels, a
+digest bug that turned out to be Clarity, a width-collapse artifact)
+never named the sit-down issue, and a direct human read found it inside
+one screenshot.
+
+### The sit-down's low-familiarity reads — CLOSED, fixed 2026-09-09
+
+Live-diagnosed from the developer's own play: a crew sit-down "doesn't
+flow... feels like you pick something random and hope." Traced to a real
+mechanism, not a bug in the negotiation logic itself — `sim/sitdown.ts`'s
+registers only reveal what a person is carrying (which unlocks a
+targeted, connected follow-up line) when the register *lands*, and
+landing is judged against a hidden stat read through `perceive()`, which
+is deliberately noisy at low familiarity. Early sit-downs (the reported
+case: 3 days in, 22% known) are correctly a near-guess by design — the
+gap was that nothing on the room screen said so. The only number shown
+was a bare familiarity percentage with no context for what it meant.
+
+Fix: `PERCEPTION_TIERS` (`config/npcs.ts`) already has the right words
+for this ("First impressions only," "You barely know them") and is
+already shown on the crew sheet (`CrewPanel.tsx`) — this was the same
+reading, missing from the one screen where the player is about to spend
+a choice against it. `SitdownModal.tsx` now computes and prints the tier
+label beside the familiarity percentage. Test-first
+(`sitdownFamiliarity.test.ts`, a source-scan test matching this
+codebase's no-jsdom convention), mutation-verified, live-verified.
+
+### Open design questions from the same session, not decided
+
+- **Armoury rework**, proposed: fold into Operations setup, roll for
+  what gear a mission gets. Flagged before building anything: this is
+  close to a design `config/pieces.ts`'s own header says was already
+  tried on paper (a loot table with cost/heat/odds columns) and rejected
+  by name — "one of which dominates each situation, and the choice
+  collapses after the first career." The current system is deliberately
+  a no-balance-figures readout for exactly that reason. Real diagnosis
+  (testers do skip it), proposed mechanism reopens a settled tradeoff —
+  needs a developer decision, not a build.
+- **UI consolidation**, proposed: fold The Trade into Operations, fold
+  the informant "Turn somebody"/"Plant somebody" mechanic into
+  Organization. The informant move doesn't fit the data — that table is
+  scoped per-agency (which police body, contact cost, upkeep, burned
+  status), not per-crew-member, so relocating it would separate it from
+  the context it depends on without solving discoverability. Trade →
+  Operations is more plausible but risks trading "too many tabs" for
+  "too much on one screen," which is the same density complaint from
+  the same session. Neither has a decided direction.
 
 ## A district-holding cost for the player
 

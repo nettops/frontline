@@ -332,13 +332,59 @@ made no attempt to substitute for that.
 at the top of this session). No probe run for any of these three fixes —
 none touch balance or `rng`.
 
-## 10. Housekeeping, 2026-09-09
+## 10. Interface — the developer played it directly, 2026-09-09
+
+Last item of the plan. No blind-scorer rubric; the developer played an
+isolated instance and reported friction live.
+
+**A first impression, not yet confirmed as a lived defect**: "a lot of
+text on every screen," and a worry that with this many tabs a player
+could lose their place. Real enough to log; not yet distinguished from
+"could happen to someone" versus "happened to me."
+
+**A real, diagnosed, fixed bug**: a crew sit-down "doesn't
+flow... feels like you pick something random and hope." Read
+`sim/sitdown.ts`/`config/sitdown.ts` before proposing anything. The
+mechanism: a register only reveals what someone is carrying — which
+unlocks a targeted, connected follow-up — when it *lands*, and landing
+is judged against a hidden stat that's deliberately noisy at low
+familiarity. The reported case was 3 days in, 22% known — correctly a
+near-guess by the design's own stated intent ("inference under
+uncertainty against a perception... noisy and banded"). The actual gap:
+nothing on screen said the read was that shaky. `PERCEPTION_TIERS`
+already had the right words and was already shown on the crew sheet;
+`SitdownModal.tsx` now shows the same reading on the room screen itself.
+Test-first, mutation-verified, live-verified.
+
+**Two real proposals, both genuinely open, neither decided**: reworking
+the Armoury into an Operations-integrated gear roll (flagged before any
+work — this is close to a design `config/pieces.ts`'s own header
+documents was already tried and rejected, for a reason that likely
+still holds); and consolidating tabs, specifically folding the
+informant mechanic into Organization (checked against the data first —
+it's agency-scoped, not crew-scoped, so the move doesn't obviously
+help) and The Trade into Operations (plausible, but risks the density
+complaint from the same session). Both recorded as open questions, not
+built.
+
+`tsc` clean, `npm test` green (131 files, 1,570 passing, up from 1,567).
+
+**Closing this out**: five AI blind rounds scored Interface 6 with no
+movement, and round 27's own direct, unleading ask for concreteness came
+back with three answers that didn't survive checking. One human, one
+screenshot, found a real bug none of them named. That's a real answer to
+the standing question about whether Interface's ceiling was the game or
+the testing method — at least partly the latter.
+
+## 11. Housekeeping, 2026-09-09
 
 `docs/findings/director-log.md` gained entries for round 27, the
-Difficulty regression, and the First hour / Pacing / Clarity fixes,
-including the theory retraction and the corrected Pacing-plan premise.
-`HANDOFF.md` §0, §1, §4's scores table and §6 are current through all of
-the above. `.ai/TASKS.md` tracks the one item still open (Interface,
-waiting on the developer) and the smaller carried-forward findings.
+Difficulty regression, the First hour / Pacing / Clarity fixes, and the
+developer's own Interface playtest, including the theory retraction and
+the corrected Pacing-plan premise. `HANDOFF.md` §0, §1, §4's scores
+table and §6 are current through all of the above. `.ai/TASKS.md` tracks
+the two open design questions (Armoury, tab consolidation) and the
+smaller carried-forward findings; nothing from today's four-axis plan is
+still outstanding as an action item.
 
 All of this is committed and pushed to `main` by the end of this session.

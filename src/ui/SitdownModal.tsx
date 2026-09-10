@@ -20,7 +20,7 @@ import { houseName } from '../sim/houses';
 import { formatShortDay } from '../sim/util';
 import { QUESTION_BY_ID, REASON_BY_ID, REGISTER_BY_ID } from '../config/sitdown';
 import { ROLE_LABEL } from '../config/economy';
-import { READABLE_STATS } from '../config/npcs';
+import { PERCEPTION_TIERS, READABLE_STATS } from '../config/npcs';
 import type { FactionId } from '../config/factions';
 import type { NpcStatId } from '../sim/types';
 
@@ -178,6 +178,24 @@ export default function SitdownModal({ onDone }: { onDone: (days: number) => voi
     : deal
       ? `${territoryDef(deal.territoryId).name} · asking ${formatMoney(deal.listed)} on the open market`
       : (state.factions[sit.factionId ?? '']?.leader?.name ?? 'The other house');
+  /*
+     What the percentage above means, since a number alone does not say it.
+
+     The room's whole premise is choosing a register against a hidden stat
+     you read through `perceive()`, and a register only reveals what he is
+     carrying — the thing that puts a targeted follow-up on the table — when
+     it lands (`sim/sitdown.ts`'s `revealed` push is gated on `landed`).
+     Early on, `perceive()`'s noise is wide enough that landing one is close
+     to a guess, which is the design working correctly: the room is meant to
+     be an honest bet, not a menu. What was missing is anything saying so —
+     "you know them 22%" reads as a fact, not as a warning that the fact is
+     shaky. `PERCEPTION_TIERS` already carries the right words for this and
+     is already shown on the crew sheet; this is the same reading, moved to
+     the one screen where the player is about to spend a choice against it.
+  */
+  const tier = npc
+    ? [...PERCEPTION_TIERS].reverse().find((t) => npc.familiarity >= t.minFamiliarity)
+    : null;
 
   return (
     <div className="room-backdrop" role="dialog" aria-modal="true" aria-label={`Sit-down with ${name}`}>
@@ -203,6 +221,7 @@ export default function SitdownModal({ onDone }: { onDone: (days: number) => voi
         <div className="room-who">
           <h2 className="room-name">{name}</h2>
           <p className="room-sub">{subtitle}</p>
+          {tier && <p className="faint tiny">{tier.label}</p>}
 
           {/*
              The only thing the player has to choose against. A man is read

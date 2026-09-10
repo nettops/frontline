@@ -50,14 +50,16 @@ still saying it long after both had stopped being true.
 14; round 21 has been run and scored. Read this section for the state and the
 rest for how it got here.
 
-`tsc` clean, `npm test` green (130 files, 1,567 passing), `npm run probe`
+`tsc` clean, `npm test` green (131 files, 1,570 passing), `npm run probe`
 last run clean at 96/96 non-skipped (unrun since the diplomacy/refusal/
-tip/report fixes below — none of them touch balance, so not expected to
-move it, but not yet re-confirmed after the most recent ones). F24 (the
-merge's own regression) is fully closed — all four bars. Five blind
-rounds have now run on the merged code (23-27), the fifth reaching
-**Crime Lord**, the top rank, for the first time any blind round has.
-See §4's scores table and §6 for full detail.
+tip/report/sitdown fixes below — none of them touch balance, so not
+expected to move it, but not yet re-confirmed after the most recent
+ones). F24 (the merge's own regression) is fully closed — all four bars.
+Five blind rounds have now run on the merged code (23-27), the fifth
+reaching **Crime Lord**, the top rank, for the first time any blind round
+has. The developer also played Interface directly on 2026-09-09 (§6) and
+found a real gap five AI rounds had missed. See §4's scores table and §6
+for full detail.
 `.ai/FINAL_REPORT.md` has the fuller narrative through round 26; round 27
 is written up in §6 and in `docs/findings/director-log.md` but has not yet
 been folded into that report.
@@ -177,7 +179,7 @@ operations, crew, territory, rival families, and law enforcement.
     npm run playtest   # namespaced instance for blind testers
 
 **Current verified state, 2026-09-09: `tsc` clean, `npm test` green
-(130 files, 1,567 passing).** Last blind measurement: round 27. Read §0
+(131 files, 1,570 passing).** Last blind measurement: round 27. Read §0
 before trusting anything below this line about specific numbers; this
 section is architecture and history, not current state.
 
@@ -548,6 +550,15 @@ about a problem from round 15 already fixed and has been retracted (see
 `docs/findings/director-log.md`'s round-27 entry). Pacing has gone
 6/6/7/6 — still inconsistent, not confirmed either way.
 
+**Interface's five-AI-round plateau ended with a different method, not
+another AI round.** The developer played it directly on 2026-09-09 and
+found a real, fixable gap (the sit-down's low-familiarity reads, see
+below) that none of the five AI rounds — including r27's own direct,
+unleading ask — ever named. Worth reading as real evidence the axis was
+partly measuring the testing method rather than only the game, though
+Interface itself has no new number from this pass by design (it wasn't a
+blind score).
+
 **Round 14 was the high-water mark on seven axes against r10-r13 — it no
 longer is, against the full table.** The tester was explicit about why:
 *"The first sixty days were gripping. The last hundred and eighty were
@@ -691,6 +702,76 @@ restated here rather than only in the archive:
   question, not touched since 2026-08-23.
 - **Stock at 43% of trade revenue is the biggest leak left in the trading
   economy**, per F23's own closing note, and nothing has looked at it since.
+
+### Interface — the developer played it directly, and found what five AI rounds missed, 2026-09-09
+
+Last item of the round-27 four-axis plan. No blind-scorer rubric — the
+developer played an isolated instance directly and reported friction as
+it happened.
+
+**The sit-down's low-familiarity reads — CLOSED, a real bug, fixed.**
+Reported directly from play: a crew negotiation "doesn't flow... feels
+like you pick something random and hope." Diagnosed live rather than
+guessed at: `sim/sitdown.ts`'s registers only reveal what a person is
+carrying — the thing that unlocks a targeted, connected follow-up line —
+when the register *lands*, and landing is judged against a hidden stat
+read through `perceive()`, deliberately noisy at low familiarity. The
+reported case was 3 days in, 22% known — at that familiarity, landing
+anything is close to a genuine guess, which is the design working
+correctly (`config/sitdown.ts`'s own header: "inference under
+uncertainty against a perception of a man that is noisy and banded").
+**The actual gap was that nothing said so.** The only number on the room
+screen was a bare familiarity percentage with no context for what it
+meant, so a mechanic behaving exactly as designed read as broken.
+
+Fix: `PERCEPTION_TIERS` (`config/npcs.ts`) already carries the right
+words — "First impressions only," "You barely know them" — and is
+already shown on the crew sheet. `SitdownModal.tsx` now shows the same
+reading beside the familiarity percentage on the room screen itself,
+where the player is about to spend a choice against it. Test-first
+(new file, `sitdownFamiliarity.test.ts`, a source-scan test matching
+this project's no-jsdom testing convention), mutation-verified,
+live-verified in browser (confirmed: "Associate · 0 days in · you know
+them 30%" now followed by "First impressions only").
+
+**Two proposals surfaced in the same session, both genuinely open,
+neither decided:**
+
+- **Rework the Armoury** — fold it into Operations, roll for gear per
+  mission. Flagged before any work started: `config/pieces.ts`'s own
+  header documents that almost exactly this (a loot table with cost,
+  heat and odds columns) was tried on paper and rejected by name, for a
+  reason that still holds — "one of which dominates each situation, and
+  the choice collapses after the first career." The diagnosis behind the
+  proposal is real (testers do skip the Armoury, confirmed independently
+  by round 27's own report); the proposed mechanism reopens a settled
+  design tradeoff. Needs a decision, not a build.
+- **Consolidate tabs** — fold The Trade into Operations, fold the
+  informant "Turn somebody"/"Plant somebody" mechanic into Organization.
+  Checked the second one against the actual data before agreeing or
+  disagreeing: that table is scoped per-agency (which law-enforcement
+  body, contact cost, upkeep, burned status), not per-crew-member, so
+  moving it to Organization would separate it from the context it
+  depends on. The Trade → Operations pairing is more plausible but risks
+  trading "too many tabs" for "too much on one screen" — the same
+  density complaint raised in the same session. Neither has a decided
+  direction.
+
+**Also raised, not yet confirmed as a lived defect**: text density
+("seems like a lot of text on every screen") and tab count risking a
+player losing their place — both flagged as first impressions rather
+than something that was confirmed to actually happen during the session.
+
+`tsc` clean, `npm test` green (131 files, 1,570 passing, up from 1,567
+— one new test file, three tests, mutation-verified).
+
+**Where this leaves the standing question about Interface**: the
+five-round AI method never named the sit-down issue — its own three
+"concrete" answers this round (icon labels, a digest bug that turned
+out to be Clarity, a width-collapse artifact) were each checked and
+didn't hold up. A direct human read found a real one inside one
+screenshot. That's evidence the ceiling was, at least partly, the
+testing method rather than only the game.
 
 ### Pacing and Clarity — a signpost shipped, and a real staleness bug found and closed, 2026-09-09
 

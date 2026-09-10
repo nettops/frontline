@@ -2143,3 +2143,102 @@ game and living through the exact sequence a tester would, rather than
 reasoning about it from source. The prior session's three failed retests
 all checked "does the modal render on top" and got a clean answer every
 time, because that was never the bug.
+
+---
+
+## Interface, closed out by the developer playing it directly — 2026-09-09
+
+Last item of the round-27 four-axis plan. Five AI rounds had scored this
+6 with no movement across four real fixes, and r27's own direct,
+unleading ask for concreteness came back with three answers that each
+failed to hold up on inspection. Decided plan: the developer plays an
+isolated instance directly, reports friction as it happens, no
+blind-score rubric (not a blind reading, so a number wouldn't mean the
+same thing here).
+
+**What came back, in the order it arrived:**
+
+1. A first impression — "a lot of text on every screen," "a lot of
+   tabs... someone could get lost." Asked to distinguish a lived defect
+   from a structural worry; the conversation moved on to concrete
+   examples before that got confirmed either way. Left open.
+2. A screenshot of a crew sit-down, with: *"this doesn't really make
+   sense to me, the conversations dont flow, it often feels like you
+   just pick something random and hope they dont get up before getting
+   the percentage you want."* Real, concrete, and — per the developer's
+   own request — set aside to "sit with" before acting.
+3. A proposal: rework the Armoury, fold it into Operations setup, add a
+   roll for what gear a mission gets.
+4. A proposal: consolidate tabs — The Trade into Operations, the
+   informant "Turn somebody"/"Plant somebody" mechanic into
+   Organization.
+5. Confirmation the informant mechanic in question was "Turn somebody"
+   in Intelligence, followed by "start fixing."
+
+**Items 3 and 4, checked against source before any agreement or
+disagreement, both genuinely open:**
+
+`config/pieces.ts`'s own header documents that item 3's proposed shape —
+a loot table with cost, heat and odds columns — was the *first* draft of
+the Armoury and was rejected by name: "one of which dominates each
+situation, and the choice collapses after the first career." The
+shipped version deliberately carries no balance figures for exactly that
+reason. The diagnosis behind the proposal is real (testers do skip the
+Armoury — round 27's own report says so independently), but the proposed
+fix reopens a tradeoff that was already settled on paper, for a reason
+that likely still holds. Flagged rather than built.
+
+Item 4's second half doesn't fit the data it would be moved into: the
+"Turn somebody"/"Plant somebody" table (`IntelligencePanel.tsx`) is
+scoped per law-enforcement agency — which body, contact cost, upkeep,
+burned status — not per crew member, so relocating it to Organization
+would separate it from the context it depends on without necessarily
+solving discoverability. The Trade → Operations half is a more plausible
+pairing but risks trading "too many tabs" for "too much on one screen,"
+which is item 1's own complaint from the same session. Neither has a
+decided direction; both are recorded in `.ai/TASKS.md` as open design
+questions rather than acted on.
+
+**Item 2 — diagnosed live, and it was a real, different bug from a
+mismanaged-negotiation feeling.** Read `sim/sitdown.ts` and
+`config/sitdown.ts` before proposing anything. The mechanism: a register
+only reveals what a person is carrying — the thing that unlocks a
+targeted, connected follow-up line, e.g. "Just listen" landing reveals a
+grievance, which unlocks "Name what they are carrying" — when the
+register *lands* (`sim/sitdown.ts`'s `revealed` push is gated on
+`landed`). Landing is judged against a hidden stat read through
+`perceive()`, deliberately noisy at low familiarity. The reported case:
+Lou "Whisper" Feldman, 3 days in, 22% known. At that familiarity,
+landing anything is close to a genuine coin flip **by design** —
+`config/sitdown.ts`'s own header calls this "inference under
+uncertainty against a perception of a man that is noisy and banded." The
+mechanic was not broken. **What was actually missing: nothing on the
+room screen said any of this.** The only number shown was a bare
+familiarity percentage, with no context for what a low one means, so a
+system working exactly as intended read as random.
+
+Fix: `PERCEPTION_TIERS` (`config/npcs.ts`) already has the right words —
+"First impressions only," "You barely know them" — and is already shown
+on the crew sheet (`CrewPanel.tsx`). `SitdownModal.tsx` now computes the
+same tier from `npc.familiarity` and prints it beside the percentage on
+the room screen, the one place the player is about to spend a choice
+against it. Test-first: new file `sitdownFamiliarity.test.ts`, following
+this project's established no-jsdom convention of scanning the raw
+source (`?raw` import) for the structural markers of the fix rather than
+rendering the component — three cases, mutation-verified by removing the
+render line and watching the third case fail for the right reason.
+Live-verified in the browser: a fresh associate at 30% familiarity now
+reads "Associate · 0 days in · you know them 30%" followed immediately
+by "First impressions only."
+
+`tsc` clean, `npm test` green (131 files, 1,570 passing, up from 1,567
+— one new test file).
+
+**Result: KEPT, and the standing question about Interface has a real
+answer.** Five AI rounds' worth of "concrete" Interface findings — icon
+labels, a digest bug that turned out to be Clarity, a width-collapse
+artifact — never named this. One human, one screenshot, found it. That
+is evidence the axis has been measuring the testing method as much as
+the game, at least in part — worth carrying into how the next Interface
+reading gets sized, rather than defaulting straight back to another AI
+round.
