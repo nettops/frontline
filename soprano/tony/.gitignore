@@ -1,0 +1,17 @@
+# Unreal Engine build artifacts — all regeneratable from Source/ + Content/.
+# Intermediate/ alone is ~2.8GB on a fresh compile; none of this belongs in
+# git.
+
+Binaries/
+Intermediate/
+DerivedDataCache/
+Saved/
+.vs/
+*.sln
+*.slnx
+
+# Per-user editor state, not project state
+*.VC.db
+*.opensdf
+*.sdf
+*.sln.docstates
