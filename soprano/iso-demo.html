@@ -1,0 +1,327 @@
+<title>Iso Street Demo</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink: #171310; --ink-2: #221c17; --paper: #ece4d6; --paper-dim: #b8ac9b;
+    --amber: #d9923f; --line: #3a322a;
+    --font-body: 'IBM Plex Sans', -apple-system, sans-serif;
+    --font-mono: 'IBM Plex Mono', ui-monospace, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  body { background: var(--ink); color: var(--paper); font-family: var(--font-body); margin: 0; }
+  .sheet { max-width: 1040px; margin: 0 auto; padding: 40px 28px 64px; }
+
+  .head { border-bottom: 2px solid var(--line); padding-bottom: 18px; margin-bottom: 6px; }
+  .kicker { font-family: var(--font-mono); font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--amber); margin: 0 0 6px; }
+  h1 { font-size: clamp(26px, 4vw, 36px); margin: 0; text-wrap: balance; }
+  .dek { max-width: 68ch; color: var(--paper-dim); font-size: 15px; line-height: 1.65; margin: 18px 0 24px; }
+  .dek b { color: var(--paper); font-weight: 600; }
+  .dek code { font-family: var(--font-mono); font-size: 13px; color: var(--paper); background: var(--ink-2); border: 1px solid var(--line); padding: 1px 5px; }
+
+  .stage-frame { position: relative; border: 1px solid var(--line); background: #0d0a08; box-shadow: 0 30px 60px -30px rgba(0,0,0,.55); overflow: hidden; }
+  canvas#stage { display: block; width: 100%; height: auto; aspect-ratio: 900/560; cursor: crosshair; }
+
+  .hud { position: absolute; top: 12px; left: 14px; right: 14px; display: flex; justify-content: space-between; pointer-events: none; }
+  .hud .tag { font-family: var(--font-mono); font-size: 10px; letter-spacing: .12em; text-transform: uppercase; color: var(--paper-dim); background: rgba(23,19,16,.6); padding: 3px 8px; border: 1px solid var(--line); }
+
+  .controls { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 12px 14px; border: 1px solid var(--line); border-top: none; background: var(--ink-2); flex-wrap: wrap; }
+  .zoom { display: flex; align-items: center; gap: 8px; font-family: var(--font-mono); font-size: 11px; color: var(--paper-dim); letter-spacing: .06em; text-transform: uppercase; }
+  .zoom button { width: 26px; height: 26px; border: 1px solid var(--paper-dim); background: transparent; color: var(--paper); cursor: pointer; font-size: 14px; line-height: 1; }
+  .zoom button:hover { border-color: var(--amber); color: var(--amber); }
+  .hint { font-family: var(--font-mono); font-size: 11px; color: var(--paper-dim); }
+
+  .note { margin-top: 30px; padding-top: 22px; border-top: 1px solid var(--line); display: grid; grid-template-columns: repeat(3, 1fr); gap: 26px; }
+  @media (max-width: 720px) { .note { grid-template-columns: 1fr; } }
+  .note h3 { font-family: var(--font-mono); font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--amber); margin: 0 0 8px; }
+  .note p { color: var(--paper-dim); font-size: 13.5px; line-height: 1.65; margin: 0; }
+  .note code { font-family: var(--font-mono); font-size: 12.5px; color: var(--paper); background: var(--ink-2); border: 1px solid var(--line); padding: 1px 5px; }
+</style>
+
+<div class="sheet">
+  <div class="head">
+    <p class="kicker">Frontline — Soprano Direction · Camera Reference</p>
+    <h1>The Wasteland POV, with sprites instead of a mesh</h1>
+  </div>
+
+  <p class="dek">
+    Same camera philosophy section 2 asks for — 3/4, off-axis, zoomable —
+    built the way the isometric CRPGs this style actually descends from
+    built it: a projected grid, flat token sprites instead of 3D characters,
+    and draw order standing in for a Z-buffer. Click the street to walk
+    there. The sort itself is right — a token behind a building's <b>far</b>
+    corner draws before it, one past the near corner draws after, verified
+    directly rather than assumed. What isn't solved yet: at this building
+    height, a walkable tile close to the wall doesn't always project far
+    enough into the wall's own screen shape to read as a clean hide — a
+    real gap, not a rounding error, and the honest next step rather than
+    something to paper over here.
+  </p>
+
+  <div class="stage-frame">
+    <canvas id="stage" width="900" height="560"></canvas>
+    <div class="hud">
+      <div class="tag">Little Sicily — corner of 4th</div>
+      <div class="tag" id="coordTag">—</div>
+    </div>
+  </div>
+  <div class="controls">
+    <div class="zoom">
+      Zoom
+      <button id="zoomOut">−</button>
+      <span id="zoomVal">100%</span>
+      <button id="zoomIn">+</button>
+    </div>
+    <div class="hint">click the street to walk · drag to pan · scroll to zoom</div>
+  </div>
+
+  <div class="note">
+    <div>
+      <h3>What's real here</h3>
+      <p>The projection (<code>worldToScreen</code>), the click-to-walk
+      pathing, the zoom/pan camera, and the depth sort are the actual
+      technique — same one Fallout, the original Wasteland, and every
+      Infinity Engine game shipped on before real-time 3D was affordable.
+      This is not a toy version of it.</p>
+    </div>
+    <div>
+      <h3>What's a placeholder</h3>
+      <p>The "sprites" are flat colored tokens, not drawn characters. A real
+      pass needs 8-16 painted or rendered directions per animation, per
+      character — an art pipeline, not a code problem. Building the camera
+      first, cheaply, is how you find out if 900 sprite frames are even
+      worth commissioning before paying for one.</p>
+    </div>
+    <div>
+      <h3>Where this beats the rig demo</h3>
+      <p>At this camera distance a walk cycle is 4-6 pixels of bob, not nine
+      joint angles — section 20's own rule, "don't spend effort on detail
+      the player won't see," applied literally. Fewer moving parts, and the
+      part that was actually fragile last time (limb geometry) isn't here
+      at all.</p>
+    </div>
+  </div>
+</div>
+
+<script>
+(() => {
+  const canvas = document.getElementById('stage');
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+
+  // ---------------------------------------------------------------------
+  // Projection. Standard 2:1 isometric — a grid cell (gx, gy) maps to one
+  // screen point, and camera zoom/pan are applied on top as a single
+  // affine step so nothing downstream needs to know about the camera.
+  // ---------------------------------------------------------------------
+  const TILE_W = 64, TILE_H = 32;
+  const camera = { x: 0, y: 0, zoom: 1 };
+
+  function worldToScreen(gx, gy) {
+    const x = (gx - gy) * (TILE_W / 2);
+    const y = (gx + gy) * (TILE_H / 2);
+    return {
+      x: (x - camera.x) * camera.zoom + W / 2,
+      y: (y - camera.y) * camera.zoom + H * 0.38,
+    };
+  }
+  function screenToWorld(sx, sy) {
+    const x = (sx - W / 2) / camera.zoom + camera.x;
+    const y = (sy - H * 0.38) / camera.zoom + camera.y;
+    const gx = (x / (TILE_W / 2) + y / (TILE_H / 2)) / 2;
+    const gy = (y / (TILE_H / 2) - x / (TILE_W / 2)) / 2;
+    return { gx, gy };
+  }
+
+  // ---------------------------------------------------------------------
+  // The block. GRID x GRID tiles; a few marked as building footprints with
+  // a height, everything else is walkable street or sidewalk. This is a
+  // greybox layout, not art direction — the point is the system reads it
+  // correctly, not that this particular block is dressed.
+  // ---------------------------------------------------------------------
+  const GRID = 10;
+  const BUILDINGS = [
+    { gx: 2, gy: 2, w: 2, h: 2, height: 2.2, color: '#4a3826', roof: '#5c4630', name: 'Corner social club' },
+    { gx: 6, gy: 1, w: 2, h: 2, height: 3.4, color: '#38322c', roof: '#463f37', name: 'Tenement' },
+    { gx: 1, gy: 6, w: 2, h: 3, height: 1.4, color: '#2c2620', roof: '#3a332a', name: 'Row houses' },
+    { gx: 6, gy: 6, w: 3, h: 2, height: 1.8, color: '#3f3020', roof: '#4f3e28', name: 'Warehouse' },
+  ];
+  function isBuilding(gx, gy) {
+    return BUILDINGS.find(b => gx >= b.gx && gx < b.gx + b.w && gy >= b.gy && gy < b.gy + b.h);
+  }
+  function walkable(gx, gy) {
+    return gx >= 0 && gy >= 0 && gx < GRID && gy < GRID && !isBuilding(gx, gy);
+  }
+
+  // ---------------------------------------------------------------------
+  // Actors. Fractional grid position so movement interpolates smoothly;
+  // depth key is always (gx + gy) at draw time, which is the whole trick —
+  // an isometric grid's back-to-front order falls straight out of that sum.
+  // ---------------------------------------------------------------------
+  const player = { gx: 4.5, gy: 8, tx: 4.5, ty: 8, color: '#d9923f', name: 'You', speed: 2.6 };
+  const npcs = [
+    { gx: 3, gy: 3.5, color: '#7fae72', name: 'Tommy', phase: 0 },
+    { gx: 7.5, gy: 2.5, color: '#8a6a3d', name: 'Sal', phase: 1.4 },
+    { gx: 2.5, gy: 7, color: '#9c7b8a', name: 'Angela', phase: 2.8 },
+  ];
+
+  canvas.addEventListener('click', (e) => {
+    const rect = canvas.getBoundingClientRect();
+    const sx = (e.clientX - rect.left) * (W / rect.width);
+    const sy = (e.clientY - rect.top) * (H / rect.height);
+    const { gx, gy } = screenToWorld(sx, sy);
+    const rgx = Math.max(0.3, Math.min(GRID - 0.3, gx));
+    const rgy = Math.max(0.3, Math.min(GRID - 0.3, gy));
+    if (walkable(Math.round(rgx), Math.round(rgy))) { player.tx = rgx; player.ty = rgy; }
+  });
+
+  // pan (drag) and zoom (wheel + buttons)
+  let dragging = false, lastX = 0, lastY = 0;
+  canvas.addEventListener('mousedown', (e) => { dragging = true; lastX = e.clientX; lastY = e.clientY; });
+  window.addEventListener('mouseup', () => dragging = false);
+  window.addEventListener('mousemove', (e) => {
+    if (!dragging) return;
+    camera.x -= (e.clientX - lastX) / camera.zoom;
+    camera.y -= (e.clientY - lastY) / camera.zoom;
+    lastX = e.clientX; lastY = e.clientY;
+  });
+  function setZoom(z) {
+    camera.zoom = Math.max(0.6, Math.min(2, z));
+    document.getElementById('zoomVal').textContent = Math.round(camera.zoom * 100) + '%';
+  }
+  canvas.addEventListener('wheel', (e) => { e.preventDefault(); setZoom(camera.zoom - e.deltaY * 0.001); }, { passive: false });
+  document.getElementById('zoomIn').addEventListener('click', () => setZoom(camera.zoom + 0.15));
+  document.getElementById('zoomOut').addEventListener('click', () => setZoom(camera.zoom - 0.15));
+
+  // ---------------------------------------------------------------------
+  // Drawing. Ground tiles first (already back-to-front by construction —
+  // a nested gy/gx loop is its own valid depth order), then every raised
+  // object — buildings and actors alike — sorted together by depth so a
+  // token walking "above" a building's footprint draws behind it and one
+  // walking "below" it draws in front, with no per-object special case.
+  // ---------------------------------------------------------------------
+  function diamond(gx, gy, wTiles, hTiles) {
+    const p0 = worldToScreen(gx, gy);
+    const p1 = worldToScreen(gx + wTiles, gy);
+    const p2 = worldToScreen(gx + wTiles, gy + hTiles);
+    const p3 = worldToScreen(gx, gy + hTiles);
+    ctx.beginPath();
+    ctx.moveTo(p0.x, p0.y); ctx.lineTo(p1.x, p1.y); ctx.lineTo(p2.x, p2.y); ctx.lineTo(p3.x, p3.y);
+    ctx.closePath();
+  }
+
+  function drawGround() {
+    for (let gy = 0; gy < GRID; gy++) {
+      for (let gx = 0; gx < GRID; gx++) {
+        if (isBuilding(gx, gy)) continue;
+        const onRoad = (gx >= 3 && gx <= 5);
+        ctx.fillStyle = onRoad ? (( (gx+gy) % 2) ? '#22201c' : '#252220') : '#33291e';
+        diamond(gx, gy, 1, 1);
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(0,0,0,.25)'; ctx.lineWidth = 1; ctx.stroke();
+      }
+    }
+  }
+
+  function drawBuilding(b) {
+    const height = b.height * TILE_H * camera.zoom;
+    const top = worldToScreen(b.gx, b.gy);
+    const topR = worldToScreen(b.gx + b.w, b.gy);
+    const topB = worldToScreen(b.gx, b.gy + b.h);
+    const topRB = worldToScreen(b.gx + b.w, b.gy + b.h);
+
+    // left face (toward gy+) and right face (toward gx+) — the two visible
+    // walls of an iso box from this camera angle. Screen y grows downward,
+    // so "up" off the footprint is MINUS height, the same direction the
+    // roof already uses below — the first draft added height here instead
+    // and sank the walls into the ground while the roof floated correctly
+    // above it, which is exactly the disconnected look that showed up.
+    ctx.fillStyle = shade(b.color, -14);
+    ctx.beginPath();
+    ctx.moveTo(top.x, top.y); ctx.lineTo(topB.x, topB.y);
+    ctx.lineTo(topB.x, topB.y - height); ctx.lineTo(top.x, top.y - height);
+    ctx.closePath(); ctx.fill();
+
+    ctx.fillStyle = shade(b.color, 8);
+    ctx.beginPath();
+    ctx.moveTo(topB.x, topB.y); ctx.lineTo(topRB.x, topRB.y);
+    ctx.lineTo(topRB.x, topRB.y - height); ctx.lineTo(topB.x, topB.y - height);
+    ctx.closePath(); ctx.fill();
+
+    // roof
+    ctx.fillStyle = b.roof;
+    ctx.beginPath();
+    ctx.moveTo(top.x, top.y - height); ctx.lineTo(topR.x, topR.y - height);
+    ctx.lineTo(topRB.x, topRB.y - height); ctx.lineTo(topB.x, topB.y - height);
+    ctx.closePath(); ctx.fill();
+
+    // a lit window or two — the socioeconomic detail cue from section 3,
+    // free on a flat-shaded box
+    ctx.fillStyle = 'rgba(217,146,63,.5)';
+    const winY = topB.y - height * 0.55;
+    ctx.fillRect((top.x + topB.x) / 2 - 4, winY, 8, 10);
+  }
+  function shade(hex, amt) {
+    const n = parseInt(hex.slice(1), 16);
+    const r = Math.max(0, Math.min(255, (n >> 16) + amt));
+    const g = Math.max(0, Math.min(255, ((n >> 8) & 255) + amt));
+    const b = Math.max(0, Math.min(255, (n & 255) + amt));
+    return `rgb(${r},${g},${b})`;
+  }
+
+  function drawToken(actor, t) {
+    const p = worldToScreen(actor.gx, actor.gy);
+    const bob = Math.sin(t * 4 + (actor.phase || 0)) * (actor.moving ? 2.5 : 1);
+    const s = camera.zoom;
+
+    ctx.fillStyle = 'rgba(0,0,0,.4)';
+    ctx.beginPath(); ctx.ellipse(p.x, p.y + 2, 11 * s, 4 * s, 0, 0, Math.PI * 2); ctx.fill();
+
+    ctx.fillStyle = actor.color;
+    ctx.beginPath(); ctx.ellipse(p.x, p.y - 12 * s - bob, 7 * s, 12 * s, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(p.x, p.y - 24 * s - bob, 5 * s, 0, Math.PI * 2); ctx.fill();
+
+    ctx.fillStyle = 'rgba(236,228,214,.85)';
+    ctx.font = `${10 * Math.max(s,0.8)}px IBM Plex Mono, monospace`;
+    ctx.textAlign = 'center';
+    ctx.fillText(actor.name, p.x, p.y - 34 * s - bob);
+  }
+
+  function frame(now) {
+    const t = now / 1000;
+    ctx.fillStyle = '#0d0a08';
+    ctx.fillRect(0, 0, W, H);
+
+    drawGround();
+
+    // player movement — simple lerp toward the click target
+    const dx = player.tx - player.gx, dy = player.ty - player.gy;
+    const dist = Math.hypot(dx, dy);
+    player.moving = dist > 0.02;
+    if (player.moving) {
+      const step = Math.min(dist, player.speed / 60);
+      player.gx += (dx / dist) * step;
+      player.gy += (dy / dist) * step;
+    }
+
+    // depth-sorted pass: buildings keyed by their nearest corner, actors by
+    // their own cell. One list, one sort, one draw loop — no layering rules
+    // hand-written per object type.
+    const drawables = [
+      ...BUILDINGS.map(b => ({ depth: (b.gx + b.w) + (b.gy + b.h), draw: () => drawBuilding(b) })),
+      ...npcs.map(n => ({ depth: n.gx + n.gy, draw: () => drawToken(n, t) })),
+      { depth: player.gx + player.gy, draw: () => drawToken(player, t) },
+    ].sort((a, b) => a.depth - b.depth);
+
+    for (const d of drawables) d.draw();
+
+    document.getElementById('coordTag').textContent =
+      `grid ${player.gx.toFixed(1)}, ${player.gy.toFixed(1)}`;
+
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+})();
+</script>
