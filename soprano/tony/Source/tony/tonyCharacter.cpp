@@ -12,6 +12,8 @@
 #include "Materials/Material.h"
 #include "Engine/World.h"
 #include "DispositionComponent.h"
+#include "RestaurantBuilder.h"
+#include "tonyGameMode.h"
 #include "tony.h"
 
 AtonyCharacter::AtonyCharacter()
@@ -56,6 +58,20 @@ void AtonyCharacter::BeginPlay()
 {
 	Super::BeginPlay();
 
+	// GameMode's BeginPlay (which spawns the restaurant) runs before any
+	// pawn spawns, so the restaurant is guaranteed to exist by the time
+	// this runs — no timer, no retry, just a straight lookup. Moving the
+	// player to the entrance in code means the level's own PlayerStart
+	// (wherever it sits relative to the template's default playground)
+	// never has to be touched by hand.
+	if (const AtonyGameMode* GM = GetWorld() ? GetWorld()->GetAuthGameMode<AtonyGameMode>() : nullptr)
+	{
+		if (ARestaurantBuilder* Restaurant = GM->GetRestaurant())
+		{
+			SetActorLocation(Restaurant->GetEntranceLocation());
+		}
+	}
+
 	// One line, greppable, that a headless run (-game -nullrhi -unattended)
 	// can check without a renderer or a human: the pawn spawned, the
 	// component hierarchy came up, and the disposition math produces a
@@ -66,7 +82,8 @@ void AtonyCharacter::BeginPlay()
 	if (Disposition)
 	{
 		UE_LOG(LogFrontlineSmoke, Display,
-			TEXT("[Frontline] Character ready. CameraArm=%.0f Loyalty=%.0f Fear=%.0f Tension=%.2f Lean=%.1f Tag=%s"),
+			TEXT("[Frontline] Character ready. Location=%s CameraArm=%.0f Loyalty=%.0f Fear=%.0f Tension=%.2f Lean=%.1f Tag=%s"),
+			*GetActorLocation().ToString(),
 			CameraBoom ? CameraBoom->TargetArmLength : -1.f,
 			Disposition->Loyalty,
 			Disposition->Fear,
