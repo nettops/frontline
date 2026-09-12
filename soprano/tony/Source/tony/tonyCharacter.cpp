@@ -11,6 +11,8 @@
 #include "Components/InputComponent.h"
 #include "Materials/Material.h"
 #include "Engine/World.h"
+#include "DispositionComponent.h"
+#include "tony.h"
 
 AtonyCharacter::AtonyCharacter()
 {
@@ -43,6 +45,8 @@ AtonyCharacter::AtonyCharacter()
 	TopDownCameraComponent->SetupAttachment(CameraBoom, USpringArmComponent::SocketName);
 	TopDownCameraComponent->bUsePawnControlRotation = false;
 
+	Disposition = CreateDefaultSubobject<UDispositionComponent>(TEXT("Disposition"));
+
 	// Activate ticking in order to update the cursor every frame.
 	PrimaryActorTick.bCanEverTick = true;
 	PrimaryActorTick.bStartWithTickEnabled = true;
@@ -52,7 +56,28 @@ void AtonyCharacter::BeginPlay()
 {
 	Super::BeginPlay();
 
-	// stub
+	// One line, greppable, that a headless run (-game -nullrhi -unattended)
+	// can check without a renderer or a human: the pawn spawned, the
+	// component hierarchy came up, and the disposition math produces a
+	// real answer. This is the whole point of the smoke test — most of
+	// tonight's bugs (the axis mapping, the reparent detour) were "does
+	// this even run" questions, not "does it look right" ones, and this
+	// line answers the first category on its own.
+	if (Disposition)
+	{
+		UE_LOG(LogFrontlineSmoke, Display,
+			TEXT("[Frontline] Character ready. CameraArm=%.0f Loyalty=%.0f Fear=%.0f Tension=%.2f Lean=%.1f Tag=%s"),
+			CameraBoom ? CameraBoom->TargetArmLength : -1.f,
+			Disposition->Loyalty,
+			Disposition->Fear,
+			Disposition->GetTension(),
+			Disposition->GetPostureLean(),
+			*Disposition->GetReadoutTag());
+	}
+	else
+	{
+		UE_LOG(LogFrontlineSmoke, Error, TEXT("[Frontline] Character ready, but Disposition component is missing!"));
+	}
 }
 
 void AtonyCharacter::Tick(float DeltaSeconds)
@@ -66,25 +91,21 @@ void AtonyCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCompo
 {
 	Super::SetupPlayerInputComponent(PlayerInputComponent);
 
-	UE_LOG(LogTemp, Warning, TEXT("[Zoom] SetupPlayerInputComponent called, binding scroll keys"));
-
 	// Discrete key events, not an axis — fires once per wheel notch and
 	// needs nothing registered in Project Settings to work.
 	PlayerInputComponent->BindKey(EKeys::MouseScrollUp, IE_Pressed, this, &AtonyCharacter::ZoomIn);
 	PlayerInputComponent->BindKey(EKeys::MouseScrollDown, IE_Pressed, this, &AtonyCharacter::ZoomOut);
 }
 
-void AtonyCharacter::ZoomIn() { UE_LOG(LogTemp, Warning, TEXT("[Zoom] ZoomIn fired")); ZoomBy(-ZoomSpeed); }
-void AtonyCharacter::ZoomOut() { UE_LOG(LogTemp, Warning, TEXT("[Zoom] ZoomOut fired")); ZoomBy(ZoomSpeed); }
+void AtonyCharacter::ZoomIn() { ZoomBy(-ZoomSpeed); }
+void AtonyCharacter::ZoomOut() { ZoomBy(ZoomSpeed); }
 
 void AtonyCharacter::ZoomBy(float Delta)
 {
 	if (!CameraBoom)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("[Zoom] No CameraBoom!"));
 		return;
 	}
 
 	CameraBoom->TargetArmLength = FMath::Clamp(CameraBoom->TargetArmLength + Delta, MinArmLength, MaxArmLength);
-	UE_LOG(LogTemp, Warning, TEXT("[Zoom] ArmLength now %f"), CameraBoom->TargetArmLength);
 }
