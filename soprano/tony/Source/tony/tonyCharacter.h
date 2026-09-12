@@ -8,6 +8,7 @@
 
 class UCameraComponent;
 class USpringArmComponent;
+class UDispositionComponent;
 
 /**
  *  A controllable top-down perspective character
@@ -27,6 +28,13 @@ private:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Components", meta = (AllowPrivateAccess = "true"))
 	TObjectPtr<USpringArmComponent> CameraBoom;
 
+	/** Default subobject rather than something added per-Blueprint: every
+	 *  character has a disposition whether or not anyone has opened the
+	 *  Blueprint editor to add one, and the smoke test below needs it
+	 *  present without requiring an Editor step first. */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Components", meta = (AllowPrivateAccess = "true"))
+	TObjectPtr<UDispositionComponent> Disposition;
+
 public:
 
 	/** Constructor */
@@ -43,6 +51,9 @@ public:
 
 	/** Returns the Camera Boom component **/
 	USpringArmComponent* GetCameraBoom() const { return CameraBoom.Get(); }
+
+	/** Returns the Disposition component **/
+	UDispositionComponent* GetDisposition() const { return Disposition.Get(); }
 
 protected:
 

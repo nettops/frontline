@@ -6,4 +6,5 @@
 IMPLEMENT_PRIMARY_GAME_MODULE( FDefaultGameModuleImpl, tony, "tony" );
 
 DEFINE_LOG_CATEGORY(Logtony)
+DEFINE_LOG_CATEGORY(LogFrontlineSmoke)
  
