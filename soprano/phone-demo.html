@@ -1,0 +1,649 @@
+<title>Boss Line</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink: #171310;
+    --ink-2: #221c17;
+    --paper: #ece4d6;
+    --paper-dim: #b8ac9b;
+    --amber: #d9923f;
+    --cold: #4d6b78;
+    --blood: #9c3b2c;
+    --brass: #9c8b52;
+    --line: #3a322a;
+    --font-body: 'IBM Plex Sans', -apple-system, sans-serif;
+    --font-mono: 'IBM Plex Mono', ui-monospace, Consolas, monospace;
+
+    /* the phone's own OS skin — a warmer, dimmer take on a stock UI,
+       not a literal iOS/Android reskin */
+    --os-bg: #14100d;
+    --os-panel: #1e1813;
+    --os-panel-2: #2a221a;
+    --os-text: #eee6d8;
+    --os-text-dim: #8f8474;
+    --os-accent: var(--amber);
+    --os-bubble-me: #3d5a45;
+    --os-bubble-them: #2a221a;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    background: var(--ink);
+    color: var(--paper);
+    font-family: var(--font-body);
+    margin: 0;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 40px 20px;
+  }
+
+  .wrap {
+    display: flex;
+    gap: 48px;
+    align-items: center;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  .caption {
+    max-width: 300px;
+  }
+  .caption .kicker {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: .14em;
+    text-transform: uppercase;
+    color: var(--amber);
+    margin: 0 0 8px;
+  }
+  .caption h1 {
+    font-size: 26px;
+    line-height: 1.2;
+    margin: 0 0 14px;
+    text-wrap: balance;
+  }
+  .caption p {
+    color: var(--paper-dim);
+    font-size: 14px;
+    line-height: 1.65;
+    margin: 0 0 10px;
+  }
+  .caption code {
+    font-family: var(--font-mono);
+    font-size: 12.5px;
+    color: var(--paper);
+    background: var(--ink-2);
+    border: 1px solid var(--line);
+    padding: 1px 5px;
+  }
+
+  /* ---------------- the physical phone ---------------- */
+
+  .device {
+    width: 300px;
+    height: 620px;
+    background: linear-gradient(160deg, #2b241d, #0f0c0a);
+    border-radius: 42px;
+    padding: 12px;
+    box-shadow:
+      0 40px 80px -30px rgba(0,0,0,.7),
+      inset 0 0 0 1px rgba(255,255,255,.04);
+    position: relative;
+    flex-shrink: 0;
+  }
+
+  .power-btn, .vol-btn {
+    position: absolute;
+    background: #1a1512;
+    border: 1px solid rgba(255,255,255,.06);
+  }
+  .power-btn { right: -3px; top: 130px; width: 3px; height: 56px; border-radius: 2px; cursor: pointer; }
+  .vol-btn { left: -3px; top: 110px; width: 3px; height: 40px; border-radius: 2px; }
+  .vol-btn.two { top: 158px; }
+
+  .screen {
+    width: 100%;
+    height: 100%;
+    background: var(--os-bg);
+    border-radius: 30px;
+    overflow: hidden;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    color: var(--os-text);
+    font-family: var(--font-body);
+    user-select: none;
+  }
+
+  .notch {
+    position: absolute;
+    top: 8px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 70px;
+    height: 16px;
+    background: #0a0806;
+    border-radius: 10px;
+    z-index: 20;
+  }
+
+  .statusbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 20px 4px;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    font-weight: 500;
+    flex-shrink: 0;
+    position: relative;
+    z-index: 10;
+  }
+  .statusbar .icons { display: flex; gap: 5px; align-items: center; }
+  .bars { display: flex; align-items: flex-end; gap: 1.5px; height: 8px; }
+  .bars i { width: 2.5px; background: var(--os-text); border-radius: 1px; display: block; }
+  .bars i:nth-child(1) { height: 3px; } .bars i:nth-child(2) { height: 5px; }
+  .bars i:nth-child(3) { height: 7px; } .bars i:nth-child(4) { height: 9px; margin-top: -1px; }
+  .batt { width: 18px; height: 9px; border: 1px solid var(--os-text); border-radius: 2px; position: relative; padding: 1px; }
+  .batt::after { content: ''; position: absolute; right: -3px; top: 2.5px; width: 2px; height: 4px; background: var(--os-text); border-radius: 0 1px 1px 0; }
+  .batt i { display: block; height: 100%; width: 70%; background: var(--os-text); border-radius: 1px; }
+
+  .view { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+  [hidden] { display: none !important; }
+
+  /* ---------------- lock screen ---------------- */
+
+  #lock {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 30px 0 0;
+    background:
+      radial-gradient(120% 60% at 50% 0%, rgba(217,146,63,.10), transparent 60%),
+      linear-gradient(190deg, #1c2b32 0%, #14100d 55%);
+    cursor: pointer;
+  }
+  #lock .clock-time {
+    font-size: 58px;
+    font-weight: 600;
+    letter-spacing: -.02em;
+    margin-top: 20px;
+    font-variant-numeric: tabular-nums;
+  }
+  #lock .clock-date {
+    font-family: var(--font-mono);
+    font-size: 13px;
+    color: var(--os-text-dim);
+    margin-top: 4px;
+    letter-spacing: .04em;
+  }
+  .lock-notifs {
+    margin-top: 26px;
+    width: 100%;
+    padding: 0 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .lock-notif {
+    background: rgba(30,24,19,.82);
+    border: 1px solid rgba(255,255,255,.06);
+    border-radius: 14px;
+    padding: 10px 12px;
+    backdrop-filter: blur(2px);
+  }
+  .lock-notif .from {
+    display: flex;
+    justify-content: space-between;
+    font-size: 11.5px;
+    font-weight: 600;
+    color: var(--os-text);
+  }
+  .lock-notif .from .app { color: var(--os-text-dim); font-weight: 500; letter-spacing: .04em; text-transform: uppercase; font-size: 9.5px; }
+  .lock-notif .from time { color: var(--os-text-dim); font-weight: 400; font-family: var(--font-mono); font-size: 10px; }
+  .lock-notif .body { font-size: 12.5px; color: var(--os-text); margin-top: 3px; line-height: 1.4; }
+  .lock-hint {
+    margin-top: auto;
+    margin-bottom: 22px;
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: var(--os-text-dim);
+  }
+
+  /* ---------------- home screen ---------------- */
+
+  #home {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    padding: 18px 18px 0;
+    background:
+      radial-gradient(140% 70% at 50% -10%, #26302f 0%, transparent 55%),
+      linear-gradient(180deg, #1a221f 0%, #14100d 60%);
+  }
+
+  .app-grid {
+    flex: 1;
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 20px 12px;
+    align-content: start;
+    margin-top: 8px;
+  }
+
+  .app-icon {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    background: none;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    font-family: var(--font-body);
+  }
+  .app-icon .glyph {
+    width: 52px;
+    height: 52px;
+    border-radius: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 22px;
+    color: #14100d;
+    position: relative;
+  }
+  .app-icon .label {
+    font-size: 10.5px;
+    color: var(--os-text);
+    font-weight: 500;
+  }
+  .badge {
+    position: absolute;
+    top: -4px;
+    right: -4px;
+    min-width: 16px;
+    height: 16px;
+    border-radius: 8px;
+    background: var(--blood);
+    color: #fff;
+    font-family: var(--font-mono);
+    font-size: 9.5px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 4px;
+    border: 1.5px solid var(--os-bg);
+  }
+
+  .dock {
+    display: flex;
+    justify-content: space-around;
+    background: rgba(20,16,13,.6);
+    border-radius: 22px;
+    margin: 10px 0 14px;
+    padding: 10px 8px;
+    backdrop-filter: blur(4px);
+  }
+  .dock .app-icon .label { display: none; }
+
+  /* ---------------- app chrome (shared) ---------------- */
+
+  .app {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    background: var(--os-bg);
+  }
+  .app-bar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 14px 12px;
+    border-bottom: 1px solid rgba(255,255,255,.06);
+    flex-shrink: 0;
+  }
+  .app-bar h2 {
+    font-size: 16px;
+    margin: 0;
+    font-weight: 600;
+    flex: 1;
+  }
+  .back-btn {
+    background: none;
+    border: none;
+    color: var(--amber);
+    font-family: var(--font-mono);
+    font-size: 13px;
+    cursor: pointer;
+    padding: 4px 6px 4px 0;
+    display: flex;
+    align-items: center;
+    gap: 3px;
+  }
+  .app-body { flex: 1; overflow-y: auto; min-height: 0; }
+  .app-body::-webkit-scrollbar { width: 0; }
+
+  /* ---------------- messages app ---------------- */
+
+  .thread-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    border-bottom: 1px solid rgba(255,255,255,.05);
+    cursor: pointer;
+  }
+  .thread-row .av {
+    width: 40px; height: 40px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 600; font-size: 15px; color: #14100d;
+    flex-shrink: 0;
+  }
+  .thread-row .meta { flex: 1; min-width: 0; }
+  .thread-row .name { font-size: 14px; font-weight: 600; display: flex; justify-content: space-between; }
+  .thread-row .name time { font-family: var(--font-mono); font-weight: 400; font-size: 10.5px; color: var(--os-text-dim); }
+  .thread-row .preview { font-size: 12.5px; color: var(--os-text-dim); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .thread-row.unread .preview { color: var(--os-text); font-weight: 500; }
+  .thread-row .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--amber); flex-shrink: 0; margin-left: 4px; }
+
+  .chat-body { padding: 14px; display: flex; flex-direction: column; gap: 10px; }
+  .chat-day { text-align: center; font-family: var(--font-mono); font-size: 10px; color: var(--os-text-dim); text-transform: uppercase; letter-spacing: .08em; margin: 6px 0; }
+  .bubble-row { display: flex; }
+  .bubble-row.me { justify-content: flex-end; }
+  .bubble {
+    max-width: 74%;
+    padding: 9px 12px;
+    border-radius: 16px;
+    font-size: 13.5px;
+    line-height: 1.4;
+  }
+  .bubble-row:not(.me) .bubble { background: var(--os-bubble-them); border-bottom-left-radius: 4px; }
+  .bubble-row.me .bubble { background: var(--os-bubble-me); border-bottom-right-radius: 4px; color: #eaf0e6; }
+  .bubble time { display: block; font-family: var(--font-mono); font-size: 9.5px; color: var(--os-text-dim); margin-top: 3px; text-align: right; }
+
+  /* ---------------- contacts app ---------------- */
+
+  .contact-row { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-bottom: 1px solid rgba(255,255,255,.05); }
+  .contact-row .av { width: 38px; height: 38px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 14px; color: #14100d; flex-shrink: 0; }
+  .contact-row .name { font-size: 14px; font-weight: 600; }
+  .contact-row .role { font-size: 11.5px; color: var(--os-text-dim); margin-top: 1px; }
+
+  /* ---------------- ledger app ---------------- */
+
+  .ledger-total { padding: 18px 16px 10px; }
+  .ledger-total .label { font-family: var(--font-mono); font-size: 10.5px; letter-spacing: .1em; text-transform: uppercase; color: var(--os-text-dim); }
+  .ledger-total .amount { font-size: 32px; font-weight: 600; font-variant-numeric: tabular-nums; margin-top: 2px; }
+  .ledger-row { display: flex; justify-content: space-between; padding: 11px 16px; border-bottom: 1px solid rgba(255,255,255,.05); font-size: 13px; }
+  .ledger-row .who { font-weight: 500; }
+  .ledger-row .what { color: var(--os-text-dim); font-size: 11.5px; margin-top: 1px; }
+  .ledger-row .amt { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-weight: 500; }
+  .ledger-row .amt.neg { color: var(--blood); }
+  .ledger-row .amt.pos { color: #7fae72; }
+
+  /* ---------------- placeholder app ---------------- */
+  .placeholder { flex: 1; display: flex; align-items: center; justify-content: center; color: var(--os-text-dim); font-family: var(--font-mono); font-size: 12px; letter-spacing: .04em; text-align: center; padding: 0 30px; }
+</style>
+
+<div class="wrap">
+
+  <div class="caption">
+    <p class="kicker">Frontline — Soprano Direction</p>
+    <h1>The phone, not the rig</h1>
+    <p>Section 11 of the brief, built the way it's actually going to ship: a
+    real device the player unlocks, reads, and answers — not a menu wearing
+    a phone icon.</p>
+    <p>Every message below is <code>state → notification</code>, no
+    cutscene. A capo's loyalty dropping is a text that reads differently, not
+    a stat you'd have to open a panel to see.</p>
+    <p>Tap the phone to unlock it. Tap an app. There's a back arrow in every
+    one.</p>
+  </div>
+
+  <div class="device">
+    <div class="power-btn"></div>
+    <div class="vol-btn"></div>
+    <div class="vol-btn two"></div>
+    <div class="screen">
+      <div class="notch"></div>
+
+      <div class="statusbar">
+        <span id="clockSmall">9:41</span>
+        <span class="icons">
+          <span class="bars"><i></i><i></i><i></i><i></i></span>
+          <span class="batt"><i></i></span>
+        </span>
+      </div>
+
+      <div class="view" id="view">
+
+        <div id="lock" onclick="unlock()">
+          <div class="clock-time" id="lockTime">9:41</div>
+          <div class="clock-date" id="lockDate">Thursday, September 11</div>
+          <div class="lock-notifs">
+            <div class="lock-notif">
+              <div class="from"><span><span class="app">Messages</span> · Tommy</span><time>now</time></div>
+              <div class="body">Boss, we got a situation at the warehouse.</div>
+            </div>
+            <div class="lock-notif">
+              <div class="from"><span><span class="app">Messages</span> · Rosen, Esq.</span><time>6m</time></div>
+              <div class="body">Call me immediately. Don't text back — call.</div>
+            </div>
+            <div class="lock-notif">
+              <div class="from"><span><span class="app">Messages</span> · Angela</span><time>1h</time></div>
+              <div class="body">Are you coming home tonight or not.</div>
+            </div>
+          </div>
+          <div class="lock-hint">tap to unlock</div>
+        </div>
+
+        <div id="home" hidden>
+          <div class="app-grid" id="appGrid"></div>
+          <div class="dock" id="dock"></div>
+        </div>
+
+        <!-- Messages: thread list -->
+        <div class="app" id="app-messages" hidden>
+          <div class="app-bar"><button class="back-btn" onclick="goHome()">‹ Home</button><h2>Messages</h2></div>
+          <div class="app-body" id="threadList"></div>
+        </div>
+
+        <!-- Messages: one chat -->
+        <div class="app" id="app-chat" hidden>
+          <div class="app-bar"><button class="back-btn" onclick="openApp('messages')">‹ Messages</button><h2 id="chatName"></h2></div>
+          <div class="app-body"><div class="chat-body" id="chatBody"></div></div>
+        </div>
+
+        <!-- Contacts -->
+        <div class="app" id="app-contacts" hidden>
+          <div class="app-bar"><button class="back-btn" onclick="goHome()">‹ Home</button><h2>Contacts</h2></div>
+          <div class="app-body" id="contactList"></div>
+        </div>
+
+        <!-- Ledger -->
+        <div class="app" id="app-ledger" hidden>
+          <div class="app-bar"><button class="back-btn" onclick="goHome()">‹ Home</button><h2>Ledger</h2></div>
+          <div class="app-body">
+            <div class="ledger-total">
+              <div class="label">On hand, clean</div>
+              <div class="amount" id="ledgerTotal">$41,200</div>
+            </div>
+            <div id="ledgerRows"></div>
+          </div>
+        </div>
+
+        <!-- generic placeholder app -->
+        <div class="app" id="app-blank" hidden>
+          <div class="app-bar"><button class="back-btn" onclick="goHome()">‹ Home</button><h2 id="blankName"></h2></div>
+          <div class="placeholder" id="blankMsg"></div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  // ---------------------------------------------------------------------
+  // Data. Every string below is what section 11 already asked for by
+  // name — capo, lawyer, family, underboss — so this reads as the actual
+  // game's voice rather than placeholder copy.
+  // ---------------------------------------------------------------------
+  const PEOPLE = {
+    tommy:  { name: 'Tommy Marchetti', role: 'Capo — Northside',   init: 'TM', color: '#c98a4b' },
+    sal:    { name: 'Sal Greco',       role: 'Underboss',          init: 'SG', color: '#9c7b3a' },
+    rosen:  { name: 'D. Rosen, Esq.',  role: 'Lawyer',             init: 'DR', color: '#5f7d8a' },
+    angela: { name: 'Angela',          role: 'Home',               init: 'A',  color: '#8a5a5a' },
+    marco:  { name: 'Marco Petrosino', role: 'Rival — Petrosino',  init: 'MP', color: '#6b5f52' },
+  };
+
+  const THREADS = [
+    { id: 'tommy', unread: true, time: 'now', preview: 'Boss, we got a situation at the warehouse.',
+      messages: [
+        { me: false, text: 'You got a minute', time: '4:02 PM' },
+        { me: false, text: 'Boss, we got a situation at the warehouse.', time: '4:03 PM' },
+        { me: true, text: 'What kind of situation', time: '4:05 PM' },
+        { me: false, text: 'Two of the new guys are short on the count. Same two.', time: '4:06 PM' },
+        { me: false, text: 'I can handle it quiet or I can wait for you', time: '4:06 PM' },
+      ] },
+    { id: 'rosen', unread: true, time: '6m', preview: "Call me immediately. Don't text back — call.",
+      messages: [
+        { me: false, text: "Call me immediately. Don't text back — call.", time: '4:31 PM' },
+      ] },
+    { id: 'angela', unread: true, time: '1h', preview: 'Are you coming home tonight or not.',
+      messages: [
+        { me: false, text: "Mikey's got the thing at school tomorrow. You said you'd be there.", time: '3:10 PM' },
+        { me: false, text: 'Are you coming home tonight or not.', time: '3:41 PM' },
+      ] },
+    { id: 'sal', unread: false, time: 'Yesterday', preview: "I don't think we can trust him. Just saying it.",
+      messages: [
+        { me: false, text: 'Got a minute later tonight', time: 'Yesterday, 8:14 PM' },
+        { me: false, text: "I don't think we can trust him. Just saying it.", time: 'Yesterday, 8:15 PM' },
+        { me: true, text: 'Who', time: 'Yesterday, 8:20 PM' },
+        { me: false, text: 'Not over text', time: 'Yesterday, 8:20 PM' },
+      ] },
+  ];
+
+  const LEDGER = [
+    { who: 'Tommy — Northside', what: 'weekly, product', amt: 6200, pos: true },
+    { who: 'The wash — Riverside laundromat', what: 'cleaned this week', amt: 2140, pos: true },
+    { who: 'Rosen, Esq.', what: 'retainer', amt: -3500, pos: false },
+    { who: 'Sal — payroll', what: 'crew, this week', amt: -5900, pos: false },
+    { who: 'Marco Petrosino', what: 'courtesy, declined', amt: 0, pos: true },
+  ];
+
+  const APPS = [
+    { id: 'messages', label: 'Messages', glyph: '💬', color: '#7fae72', badge: THREADS.filter(t=>t.unread).length },
+    { id: 'contacts', label: 'Contacts', glyph: '☎', color: '#c9a34b' },
+    { id: 'ledger',   label: 'Ledger',   glyph: '$', color: '#5f7d8a' },
+    { id: 'camera',   label: 'Camera',   glyph: '◎', color: '#6b6b6b', blank: 'Nothing to see. This app has no reason to open yet.' },
+    { id: 'map',      label: 'Streets',  glyph: '⌖', color: '#8a6a3d', blank: "The map doesn't know where you are until you're standing somewhere." },
+    { id: 'notes',    label: 'Notes',    glyph: '✎', color: '#9c8b52', blank: 'Empty. You don\'t write things down — that\'s the point.' },
+    { id: 'settings', label: 'Settings', glyph: '⚙', color: '#5a5248', blank: 'Nothing in here changes how the family runs.' },
+  ];
+  const DOCK_IDS = ['messages', 'contacts'];
+
+  // ---------------------------------------------------------------------
+  // View state. One function shows a view and hides the rest — no
+  // framework, the phone only ever has one screen up at a time anyway.
+  // ---------------------------------------------------------------------
+  const views = ['lock', 'home', 'app-messages', 'app-chat', 'app-contacts', 'app-ledger', 'app-blank'];
+  function show(id) {
+    for (const v of views) document.getElementById(v).hidden = (v !== id);
+  }
+  function unlock() { show('home'); }
+  function goHome() { show('home'); }
+
+  function openApp(id) {
+    const def = APPS.find(a => a.id === id);
+    if (def.blank) {
+      document.getElementById('blankName').textContent = def.label;
+      document.getElementById('blankMsg').textContent = def.blank;
+      show('app-blank');
+      return;
+    }
+    if (id === 'messages') { renderThreads(); show('app-messages'); }
+    if (id === 'contacts') { renderContacts(); show('app-contacts'); }
+    if (id === 'ledger') { renderLedger(); show('app-ledger'); }
+  }
+
+  function openThread(id) {
+    const t = THREADS.find(x => x.id === id);
+    t.unread = false;
+    document.getElementById('chatName').textContent = PEOPLE[id].name;
+    const body = document.getElementById('chatBody');
+    body.innerHTML = '<div class="chat-day">Today</div>' + t.messages.map(m =>
+      `<div class="bubble-row ${m.me ? 'me' : ''}"><div class="bubble">${m.text}<time>${m.time}</time></div></div>`
+    ).join('');
+    show('app-chat');
+    body.parentElement.scrollTop = body.scrollHeight;
+  }
+
+  function renderThreads() {
+    document.getElementById('threadList').innerHTML = THREADS.map(t => {
+      const p = PEOPLE[t.id];
+      return `<div class="thread-row ${t.unread ? 'unread' : ''}" onclick="openThread('${t.id}')">
+        <div class="av" style="background:${p.color}">${p.init}</div>
+        <div class="meta">
+          <div class="name">${p.name}<time>${t.time}</time></div>
+          <div class="preview">${t.preview}</div>
+        </div>
+        ${t.unread ? '<div class="dot"></div>' : ''}
+      </div>`;
+    }).join('');
+  }
+
+  function renderContacts() {
+    document.getElementById('contactList').innerHTML = Object.values(PEOPLE).map(p => `
+      <div class="contact-row">
+        <div class="av" style="background:${p.color}">${p.init}</div>
+        <div><div class="name">${p.name}</div><div class="role">${p.role}</div></div>
+      </div>`).join('');
+  }
+
+  function renderLedger() {
+    document.getElementById('ledgerRows').innerHTML = LEDGER.map(r => `
+      <div class="ledger-row">
+        <div><div class="who">${r.who}</div><div class="what">${r.what}</div></div>
+        <div class="amt ${r.amt > 0 ? 'pos' : r.amt < 0 ? 'neg' : ''}">${r.amt === 0 ? '—' : (r.amt > 0 ? '+' : '−') + '$' + Math.abs(r.amt).toLocaleString('en-US')}</div>
+      </div>`).join('');
+  }
+
+  function iconEl(a) {
+    const badge = a.badge ? `<span class="badge">${a.badge}</span>` : '';
+    return `<button class="app-icon" onclick="openApp('${a.id}')">
+      <span class="glyph" style="background:${a.color}">${a.glyph}${badge}</span>
+      <span class="label">${a.label}</span>
+    </button>`;
+  }
+
+  document.getElementById('appGrid').innerHTML = APPS.map(iconEl).join('');
+  document.getElementById('dock').innerHTML = DOCK_IDS.map(id => iconEl(APPS.find(a => a.id === id))).join('');
+
+  // live clock, status bar + lock screen
+  function tick() {
+    const d = new Date();
+    const hh = ((d.getHours() % 12) || 12);
+    const mm = String(d.getMinutes()).padStart(2, '0');
+    const t = `${hh}:${mm}`;
+    document.getElementById('clockSmall').textContent = t;
+    document.getElementById('lockTime').textContent = t;
+    document.getElementById('lockDate').textContent = d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+  }
+  tick();
+  setInterval(tick, 15000);
+
+  // power button re-locks
+  document.querySelector('.power-btn').addEventListener('click', () => show('lock'));
+</script>

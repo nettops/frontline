@@ -1,0 +1,667 @@
+<title>Procedural Rig Demo</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  /*
+    Deliberately single-theme. The whole point of this page is a lamp-lit
+    office at night against a cold window — forcing a light variant would
+    mean either a different scene or a broken one, so the palette is fixed
+    regardless of host theme, the same way a print noir plate would be.
+  */
+  :root {
+    --ink: #171310;
+    --ink-2: #221c17;
+    --paper: #ece4d6;
+    --paper-dim: #b8ac9b;
+    --amber: #d9923f;
+    --amber-dim: #8a5f2a;
+    --cold: #4d6b78;
+    --cold-dim: #2c3d45;
+    --blood: #9c3b2c;
+    --brass: #9c8b52;
+    --line: #3a322a;
+    --shadow: rgba(0,0,0,.55);
+    --font-display: 'Fraunces', Georgia, 'Times New Roman', serif;
+    --font-body: 'IBM Plex Sans', -apple-system, sans-serif;
+    --font-mono: 'IBM Plex Mono', ui-monospace, 'SF Mono', Consolas, monospace;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    background: var(--ink);
+    color: var(--paper);
+    font-family: var(--font-body);
+    margin: 0;
+  }
+
+  .sheet {
+    max-width: 1040px;
+    margin: 0 auto;
+    padding: 40px 28px 64px;
+  }
+
+  /* ---------- header, styled as a case-file stamp ---------- */
+
+  .head {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    gap: 24px;
+    border-bottom: 2px solid var(--line);
+    padding-bottom: 18px;
+    margin-bottom: 6px;
+    flex-wrap: wrap;
+  }
+
+  .head h1 {
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: clamp(28px, 4vw, 40px);
+    letter-spacing: .01em;
+    margin: 0;
+    text-wrap: balance;
+    color: var(--paper);
+  }
+
+  .head .kicker {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: .14em;
+    text-transform: uppercase;
+    color: var(--amber);
+    margin: 0 0 6px;
+  }
+
+  .file-meta {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--paper-dim);
+    text-align: right;
+    line-height: 1.7;
+    white-space: nowrap;
+  }
+  .file-meta b { color: var(--paper); font-weight: 500; }
+
+  .dek {
+    max-width: 62ch;
+    color: var(--paper-dim);
+    font-size: 15px;
+    line-height: 1.65;
+    margin: 18px 0 28px;
+  }
+  .dek b { color: var(--paper); font-weight: 600; }
+
+  /* ---------- the stage ---------- */
+
+  .stage-frame {
+    position: relative;
+    border: 1px solid var(--line);
+    background: var(--ink-2);
+    box-shadow: 0 30px 60px -30px var(--shadow);
+  }
+
+  canvas#stage {
+    display: block;
+    width: 100%;
+    height: auto;
+    aspect-ratio: 900 / 480;
+  }
+
+  .stage-label {
+    position: absolute;
+    top: 12px;
+    left: 14px;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    color: var(--paper-dim);
+    background: rgba(23,19,16,.55);
+    padding: 3px 8px;
+    border: 1px solid var(--line);
+  }
+
+  .stage-label.rec {
+    right: 14px;
+    left: auto;
+    color: var(--blood);
+  }
+  .stage-label.rec .dot {
+    display: inline-block;
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--blood);
+    margin-right: 6px;
+    animation: pulse 1.6s ease-in-out infinite;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .stage-label.rec .dot { animation: none; }
+  }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .25; } }
+
+  /* ---------- control dossier ---------- */
+
+  .dossier {
+    display: grid;
+    grid-template-columns: 1.1fr 1fr;
+    gap: 1px;
+    background: var(--line);
+    border: 1px solid var(--line);
+    margin-top: 1px;
+  }
+  @media (max-width: 720px) { .dossier { grid-template-columns: 1fr; } }
+
+  .panel {
+    background: var(--ink-2);
+    padding: 22px 24px;
+  }
+
+  .panel h2 {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: .14em;
+    text-transform: uppercase;
+    color: var(--amber);
+    margin: 0 0 16px;
+  }
+
+  .beats {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  button.beat {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    letter-spacing: .04em;
+    color: var(--paper);
+    background: transparent;
+    border: 1px solid var(--paper-dim);
+    padding: 9px 14px;
+    cursor: pointer;
+    transition: background .15s, border-color .15s, color .15s;
+  }
+  button.beat:hover { border-color: var(--amber); color: var(--amber); }
+  button.beat:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
+  button.beat[aria-pressed="true"] {
+    background: var(--amber);
+    border-color: var(--amber);
+    color: var(--ink);
+  }
+
+  .sliders { display: flex; flex-direction: column; gap: 18px; }
+
+  .slider-row .top {
+    display: flex;
+    justify-content: space-between;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    margin-bottom: 8px;
+  }
+  .slider-row .top span:first-child { color: var(--paper-dim); letter-spacing: .06em; text-transform: uppercase; }
+  .slider-row .top span.val { color: var(--paper); font-variant-numeric: tabular-nums; }
+
+  input[type=range] {
+    width: 100%;
+    accent-color: var(--amber);
+    background: transparent;
+  }
+  input[type=range]#fear { accent-color: var(--blood); }
+
+  .read {
+    margin-top: 18px;
+    padding-top: 16px;
+    border-top: 1px solid var(--line);
+    font-family: var(--font-mono);
+    font-size: 13px;
+    line-height: 1.65;
+    color: var(--paper);
+    min-height: 4.4em;
+  }
+  .read .tag {
+    display: inline-block;
+    font-size: 10px;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: var(--brass);
+    border: 1px solid var(--brass);
+    padding: 1px 6px;
+    margin-right: 8px;
+    vertical-align: 1px;
+  }
+
+  /* ---------- footnote ---------- */
+
+  .note {
+    margin-top: 34px;
+    padding-top: 24px;
+    border-top: 1px solid var(--line);
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 28px;
+  }
+  @media (max-width: 720px) { .note { grid-template-columns: 1fr; } }
+
+  .note h3 {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    color: var(--amber);
+    margin: 0 0 8px;
+  }
+  .note p {
+    color: var(--paper-dim);
+    font-size: 13.5px;
+    line-height: 1.65;
+    margin: 0;
+  }
+  .note code {
+    font-family: var(--font-mono);
+    font-size: 12.5px;
+    color: var(--paper);
+    background: var(--ink-2);
+    border: 1px solid var(--line);
+    padding: 1px 5px;
+  }
+</style>
+
+<div class="sheet">
+
+  <div class="head">
+    <div>
+      <p class="kicker">Frontline — Soprano Direction · Technical Reference</p>
+      <h1>What a simplified rig can carry</h1>
+    </div>
+    <div class="file-meta">
+      SUBJECT&nbsp; <b>capo, office</b><br>
+      METHOD&nbsp; <b>procedural, 2D</b><br>
+      ASSETS&nbsp; <b>none</b>
+    </div>
+  </div>
+
+  <p class="dek">
+    No mesh, no rig file, no motion capture. Two humanoid figures drawn as
+    weighted capsules and posed each frame from angle tables — the same
+    keyframes-in, positions-out method the pixel game view uses for a jump
+    shot. Move the sliders: they drive <b>Loyalty</b> and <b>Fear</b>
+    straight into the capo's posture, live, the way section 8 of the brief
+    describes and section 4 asks to see rather than read.
+  </p>
+
+  <div class="stage-frame">
+    <canvas id="stage" width="900" height="480" aria-label="Office scene with two procedural figures"></canvas>
+    <div class="stage-label">Office — night</div>
+    <div class="stage-label rec" id="recLabel" hidden><span class="dot"></span>confrontation beat</div>
+  </div>
+
+  <div class="dossier">
+    <div class="panel">
+      <h2>Scene beat</h2>
+      <div class="beats" role="group" aria-label="Scene beat">
+        <button class="beat" data-beat="idle" aria-pressed="true">Idle — capo waiting</button>
+        <button class="beat" data-beat="enter">Capo enters</button>
+        <button class="beat" data-beat="confront">Confrontation</button>
+      </div>
+    </div>
+    <div class="panel">
+      <h2>Capo — relationship state</h2>
+      <div class="sliders">
+        <div class="slider-row">
+          <div class="top"><span>Loyalty</span><span class="val" id="loyaltyVal">70</span></div>
+          <input type="range" id="loyalty" min="0" max="100" value="70">
+        </div>
+        <div class="slider-row">
+          <div class="top"><span>Fear</span><span class="val" id="fearVal">25</span></div>
+          <input type="range" id="fear" min="0" max="100" value="25">
+        </div>
+      </div>
+      <div class="read" id="readout"></div>
+    </div>
+  </div>
+
+  <div class="note">
+    <div>
+      <h3>Why this counts as a rig</h3>
+      <p>Each figure is a root, a torso lean, a head tilt, and four two-segment
+      limbs — nine angles in, a pose out. That's a skeleton, just not one
+      Unreal or Blender would recognize. Enough joints to carry weight,
+      hesitation, and posture; not enough to need a mesh.</p>
+    </div>
+    <div>
+      <h3>What it can't do</h3>
+      <p>No face. No cloth, no hair, no finger detail, no camera close enough
+      to read an expression. This reads at the <code>3/4</code> distance the
+      brief asks for — it does not survive a push into a dialogue close-up.
+      That gap is exactly where hand-keyed or mocap work still has to live.</p>
+    </div>
+    <div>
+      <h3>Where this goes next</h3>
+      <p>The pose math here (<code>poseFor()</code>) is the reusable part —
+      it doesn't care if it's drawn with <code>canvas</code> strokes or
+      driving bone transforms on a stylized low-poly rig in UE5. Proving the
+      behavior in 2D first is the cheap way to find out if it reads before
+      spending on a single triangle.</p>
+    </div>
+  </div>
+
+</div>
+
+<script>
+(() => {
+  const canvas = document.getElementById('stage');
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+
+  // ---------------------------------------------------------------------
+  // Scene geometry. Fixed marks rather than percentages so the office
+  // doesn't have to be recomputed every frame — same convention pixelMotion
+  // uses for court landmarks.
+  // ---------------------------------------------------------------------
+  const FLOOR_Y = 392;
+  const DESK = { x: 560, y: 300, w: 260, h: 92 };
+  const BOSS_MARK = { x: 700, y: FLOOR_Y - 26 }; // seated, behind the desk
+  const CAPO_MARK = { x: 420, y: FLOOR_Y };      // standing, in front of it
+  const CAPO_OFFSTAGE = { x: -60, y: FLOOR_Y };
+  const DOOR_MARK = { x: 60, y: FLOOR_Y };
+
+  // ---------------------------------------------------------------------
+  // The rig. Nine angles and a root position describe a whole figure:
+  // torso lean, head tilt, two shoulders, two elbows, two hips, two knees.
+  // Everything below either composes a pose from those angles or blends
+  // toward one — nothing here touches pixels directly.
+  // ---------------------------------------------------------------------
+  const REST = {
+    lean: 0, headTilt: 0, weightShift: 0,
+    shoulderL: -12, shoulderR: 12, elbowL: 18, elbowR: -18,
+    hipL: -6, hipR: 6, kneeL: 0, kneeR: 0,
+    seated: false,
+  };
+
+  function lerp(a, b, t) { return a + (b - a) * t; }
+  function blendPose(a, b, t) {
+    const out = {};
+    for (const k in a) out[k] = typeof a[k] === 'number' ? lerp(a[k], b[k] ?? a[k], t) : (t < .5 ? a[k] : b[k]);
+    return out;
+  }
+  function clamp01(x) { return Math.max(0, Math.min(1, x)); }
+  const ease = t => t < .5 ? 2*t*t : 1 - Math.pow(-2*t+2, 2) / 2;
+
+  // Relationship values -> a target pose. This is the whole point of the
+  // demo: the same two numbers the sim already tracks (loyalty, fear) are
+  // the only inputs, and the body language is read off them rather than
+  // authored per-scene. High loyalty stands square. High fear collapses
+  // the chest and turns the feet away from the desk, whether or not the
+  // man is actually about to run.
+  function relationshipPose(loyalty, fear) {
+    const confidence = clamp01(loyalty / 100);
+    const dread = clamp01(fear / 100);
+    return {
+      lean: lerp(1, -6, confidence) - dread * 5,       // upright vs. curling inward
+      headTilt: lerp(-2, 6, dread) - confidence * 2,   // chin drops as fear rises
+      weightShift: lerp(0, -14, dread),                // weight rocks off the back foot
+      shoulderL: lerp(-14, -26, dread),
+      shoulderR: lerp(14, 4, dread) + confidence * 4,
+      elbowL: lerp(16, 34, dread),                     // arms draw in toward the body
+      elbowR: lerp(-16, -6, dread),
+      hipL: -6 - dread * 3,
+      hipR: 6 - dread * 3,
+      kneeL: dread * 6,
+      kneeR: dread * 6,
+      seated: false,
+    };
+  }
+
+  function readout(loyalty, fear) {
+    const L = loyalty >= 60, l = loyalty < 35;
+    const F = fear >= 60, f = fear < 35;
+    if (L && f) return ['STEADY', 'Stands square. Takes the assignment without being asked twice.'];
+    if (L && F) return ['SHAKEN', 'Loyal, but rattled — obeys, and hates that the room can see it.'];
+    if (l && F) return ['COMPLIANT', 'Obeys because he has to. Already rehearsing what he’d say if it ever came apart.'];
+    if (l && f) return ['DRIFTING', 'Nothing holding him here but habit. Watching the door more than the boss.'];
+    return ['READING', 'Somewhere in the middle — the room hasn’t decided what he is yet.'];
+  }
+
+  // ---------------------------------------------------------------------
+  // Walk cycle: four keyframes, cyclic, advancing the root while the limbs
+  // swing through contact/passing/contact/passing. This is the smallest
+  // loop that reads as a walk rather than a shuffle.
+  // ---------------------------------------------------------------------
+  const WALK_KF = [
+    { shoulderL: -30, shoulderR: 22, hipL: 22, hipR: -22, kneeL: 4, kneeR: 28, lean: 2 },
+    { shoulderL: -8, shoulderR: 8, hipL: 4, hipR: -4, kneeL: 14, kneeR: 10, lean: 0 },
+    { shoulderL: 22, shoulderR: -30, hipL: -22, hipR: 22, kneeL: 28, kneeR: 4, lean: 2 },
+    { shoulderL: 8, shoulderR: -8, hipL: -4, hipR: 4, kneeL: 10, kneeR: 14, lean: 0 },
+  ];
+  function walkPose(phase) {
+    const n = WALK_KF.length;
+    const f = phase * n;
+    const i = Math.floor(f) % n, j = (i + 1) % n;
+    return blendPose({ ...REST, ...WALK_KF[i] }, { ...REST, ...WALK_KF[j] }, f - Math.floor(f));
+  }
+
+  const SEATED = { ...REST, seated: true, lean: -3, headTilt: 0, shoulderL: -16, shoulderR: 14, elbowL: 60, elbowR: -30, hipL: -60, hipR: 60, kneeL: 70, kneeR: 70 };
+
+  // ---------------------------------------------------------------------
+  // Drawing. Capsule limbs, round joints, a soft floor shadow. Weighted
+  // strokes rather than thin lines so the silhouette reads at a glance —
+  // the brief's own "strong silhouette first" rule, applied with zero art.
+  // ---------------------------------------------------------------------
+  function limb(x0, y0, len1, len2, ang1, ang2, width, color) {
+    const a1 = ang1 * Math.PI / 180, a2 = (ang1 + ang2) * Math.PI / 180;
+    const x1 = x0 + Math.sin(a1) * len1, y1 = y0 + Math.cos(a1) * len1;
+    const x2 = x1 + Math.sin(a2) * len2, y2 = y1 + Math.cos(a2) * len2;
+    ctx.lineCap = 'round';
+    ctx.strokeStyle = color;
+    ctx.lineWidth = width;
+    ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke();
+    ctx.lineWidth = width * .85;
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+    return { x: x2, y: y2 };
+  }
+
+  function drawFigure(root, pose, opts) {
+    const { skin, suit, height = 1, facing = 1 } = opts;
+    const bob = opts.bob ?? 0;
+    // Seated uses the desk's own height as the reference, not the root —
+    // a chair seat sits at a fixed height regardless of where the mark is,
+    // and deriving it from the standing formula is what put him floating.
+    const rootY = root.y - bob;
+    // Seated clearance above the desk edge, tuned by eye: enough of the
+    // torso has to clear DESK.y for "sitting behind it" to read, rather
+    // than "head resting on the desk."
+    const hipY = pose.seated ? DESK.y + 60 : rootY - 76 * height;
+    const shoulderY = pose.seated ? DESK.y - 30 * height : hipY - 78 * height;
+    const rx = root.x + pose.weightShift * facing;
+
+    // floor shadow
+    ctx.fillStyle = 'rgba(0,0,0,.4)';
+    ctx.beginPath();
+    ctx.ellipse(root.x, root.y + 4, 30 * height, 7, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // legs (skip when seated — the chair reads them)
+    if (!pose.seated) {
+      limb(rx - 9 * height, hipY, 42 * height, 42 * height, pose.hipL * facing, pose.kneeL, 13 * height, suit);
+      limb(rx + 9 * height, hipY, 42 * height, 42 * height, pose.hipR * facing, pose.kneeR, 13 * height, suit);
+    } else {
+      // seated thigh reads flat toward camera; only the shin drops
+      limb(rx - 9 * height, hipY, 30 * height, 34 * height, 78 * facing, -6, 13 * height, suit);
+      limb(rx + 9 * height, hipY, 30 * height, 34 * height, 78 * facing, -6, 13 * height, suit);
+    }
+
+    // torso
+    const leanX = rx + Math.sin(pose.lean * Math.PI / 180) * 20 * height;
+    ctx.strokeStyle = suit;
+    ctx.lineWidth = 22 * height;
+    ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(rx, hipY); ctx.lineTo(leanX, shoulderY); ctx.stroke();
+
+    // arms
+    limb(leanX - 11 * height * facing, shoulderY + 4 * height, 32 * height, 30 * height, pose.shoulderL * facing, pose.elbowL, 9 * height, suit);
+    limb(leanX + 11 * height * facing, shoulderY + 4 * height, 32 * height, 30 * height, pose.shoulderR * facing, pose.elbowR, 9 * height, suit);
+
+    // head
+    const headX = leanX + Math.sin(pose.headTilt * Math.PI / 180) * 10 * height;
+    const headY = shoulderY - 24 * height;
+    ctx.fillStyle = skin;
+    ctx.beginPath(); ctx.arc(headX, headY, 13 * height, 0, Math.PI * 2); ctx.fill();
+  }
+
+  // ---------------------------------------------------------------------
+  // Office backdrop: cold window light on one side, a warm desk lamp pool
+  // on the other. No texture, no photo reference — two gradients and a
+  // rectangle do the whole job of separating "outside" from "his light."
+  // ---------------------------------------------------------------------
+  function drawRoom(t) {
+    ctx.fillStyle = '#120e0b';
+    ctx.fillRect(0, 0, W, H);
+
+    // back wall
+    const wall = ctx.createLinearGradient(0, 0, 0, FLOOR_Y);
+    wall.addColorStop(0, '#241d18');
+    wall.addColorStop(1, '#171310');
+    ctx.fillStyle = wall;
+    ctx.fillRect(0, 0, W, FLOOR_Y);
+
+    // floor
+    const floor = ctx.createLinearGradient(0, FLOOR_Y, 0, H);
+    floor.addColorStop(0, '#1c1611');
+    floor.addColorStop(1, '#0e0b09');
+    ctx.fillStyle = floor;
+    ctx.fillRect(0, FLOOR_Y, W, H - FLOOR_Y);
+
+    // window, cold and indifferent, left side
+    const winX = 60, winY = 60, winW = 150, winH = 210;
+    const win = ctx.createLinearGradient(0, winY, 0, winY + winH);
+    win.addColorStop(0, '#3d5560');
+    win.addColorStop(1, '#22323a');
+    ctx.fillStyle = win;
+    ctx.fillRect(winX, winY, winW, winH);
+    ctx.strokeStyle = '#0e0b09';
+    ctx.lineWidth = 8;
+    ctx.strokeRect(winX, winY, winW, winH);
+    ctx.beginPath(); ctx.moveTo(winX + winW/2, winY); ctx.lineTo(winX + winW/2, winY + winH); ctx.moveTo(winX, winY + winH/2); ctx.lineTo(winX + winW, winY + winH/2); ctx.stroke();
+    // rain streak, ambient not decorative — sells "cold" from section 3
+    ctx.strokeStyle = 'rgba(180,200,210,.15)';
+    ctx.lineWidth = 1;
+    for (let i = 0; i < 5; i++) {
+      const rx = winX + 14 + i * 26 + Math.sin(t * .4 + i) * 3;
+      ctx.beginPath(); ctx.moveTo(rx, winY + 10); ctx.lineTo(rx - 6, winY + winH - 10); ctx.stroke();
+    }
+    ctx.fillStyle = 'rgba(77,107,120,.10)';
+    ctx.fillRect(0, 0, winX + winW + 90, FLOOR_Y);
+
+    // door frame, right — where the capo comes from when offstage
+    ctx.fillStyle = '#0e0b09';
+    ctx.fillRect(-4, 160, 6, FLOOR_Y - 160);
+
+    // lamp pool, ambient — belongs to the background layer, not on top of
+    // the boss. It was drawn after him at first, and a translucent warm
+    // wash sitting right where his torso is just erased the contrast that
+    // made the suit read as a suit.
+    const lamp = ctx.createRadialGradient(DESK.x + DESK.w * .5, DESK.y - 10, 10, DESK.x + DESK.w * .5, DESK.y - 10, 190);
+    lamp.addColorStop(0, 'rgba(217,146,63,.22)');
+    lamp.addColorStop(1, 'rgba(217,146,63,0)');
+    ctx.fillStyle = lamp;
+    ctx.fillRect(0, 0, W, FLOOR_Y);
+  }
+
+  // Drawn AFTER the boss, on purpose: the desk has to occlude his lower
+  // body for "seated behind it" to read at all. Drawing it in the same
+  // pass as the rest of the room put him floating in front of it instead.
+  function drawDesk() {
+    ctx.fillStyle = '#2a1c12';
+    ctx.fillRect(DESK.x, DESK.y, DESK.w, DESK.h);
+    ctx.fillStyle = '#3a2718';
+    ctx.fillRect(DESK.x, DESK.y, DESK.w, 6);
+  }
+
+  // Last, over everyone — a vignette drawn before the figures would just
+  // get painted over by them.
+  function drawVignette() {
+    const vig = ctx.createRadialGradient(W*.5, H*.45, H*.25, W*.5, H*.5, H*.85);
+    vig.addColorStop(0, 'rgba(0,0,0,0)');
+    vig.addColorStop(1, 'rgba(0,0,0,.55)');
+    ctx.fillStyle = vig;
+    ctx.fillRect(0, 0, W, H);
+  }
+
+  // ---------------------------------------------------------------------
+  // Beat / state machine. Three beats: idle (capo already seated-adjacent,
+  // waiting), enter (walk-in from the door to his mark), confront (the
+  // relationship pose takes over). The sliders always drive the capo's
+  // resting posture once he's on his mark, in every beat.
+  // ---------------------------------------------------------------------
+  let beat = 'idle';
+  let beatStart = performance.now();
+  let loyalty = 70, fear = 25;
+
+  const els = {
+    loyalty: document.getElementById('loyalty'),
+    fear: document.getElementById('fear'),
+    loyaltyVal: document.getElementById('loyaltyVal'),
+    fearVal: document.getElementById('fearVal'),
+    readout: document.getElementById('readout'),
+    rec: document.getElementById('recLabel'),
+  };
+
+  function setReadout() {
+    const [tag, line] = readout(loyalty, fear);
+    els.readout.innerHTML = '<span class="tag">' + tag + '</span>' + line;
+  }
+  els.loyalty.addEventListener('input', () => { loyalty = +els.loyalty.value; els.loyaltyVal.textContent = loyalty; setReadout(); });
+  els.fear.addEventListener('input', () => { fear = +els.fear.value; els.fearVal.textContent = fear; setReadout(); });
+  setReadout();
+
+  document.querySelectorAll('.beat').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.beat').forEach(b => b.setAttribute('aria-pressed', 'false'));
+      btn.setAttribute('aria-pressed', 'true');
+      beat = btn.dataset.beat;
+      beatStart = performance.now();
+      els.rec.hidden = beat !== 'confront';
+    });
+  });
+
+  function frame(now) {
+    const t = now / 1000;
+    const since = (now - beatStart) / 1000;
+    drawRoom(t);
+
+    // boss: always seated, a slow idle breathing sway. Drawn before the
+    // desk on purpose — see drawDesk's own note.
+    const bossBreath = Math.sin(t * 1.1) * 1.5;
+    drawFigure(BOSS_MARK, { ...SEATED, lean: SEATED.lean + bossBreath * .2 }, { skin: '#c79a72', suit: '#1f1b17', height: 1.08, facing: -1 });
+    drawDesk();
+
+    // capo: position and pose depend on the beat
+    let capoPos = CAPO_MARK, capoPose = { ...REST };
+    if (beat === 'idle') {
+      const sway = Math.sin(t * 1.4) * 1.2;
+      capoPose = relationshipPose(loyalty, fear);
+      capoPose.lean += sway * .3;
+    } else if (beat === 'enter') {
+      const walkTime = 1.6; // seconds door -> mark
+      const p = clamp01(since / walkTime);
+      capoPos = { x: lerp(DOOR_MARK.x, CAPO_MARK.x, ease(p)), y: FLOOR_Y };
+      capoPose = p < 1 ? walkPose((t * 1.8) % 1) : relationshipPose(loyalty, fear);
+    } else if (beat === 'confront') {
+      const settle = clamp01(since / 0.7);
+      const target = relationshipPose(loyalty, fear);
+      capoPose = blendPose({ ...REST, lean: 2 }, target, ease(settle));
+      capoPose.lean += Math.sin(t * 1.2) * 0.4;
+    }
+
+    drawFigure(capoPos, capoPose, { skin: '#b98a5e', suit: '#3a2e22', height: 1, facing: 1, bob: capoPose.seated ? 0 : 0 });
+    drawVignette();
+
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+})();
+</script>
