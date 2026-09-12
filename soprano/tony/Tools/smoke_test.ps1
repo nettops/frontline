@@ -43,7 +43,11 @@ $proc = Start-Process -FilePath $Editor -ArgumentList @(
     "-nullrhi"
     "-unattended"
     "-nosplash"
-    "-stdout"
+    # NOT -stdout: with -WindowStyle Hidden and no redirect, the process
+    # has nowhere to put that output. It deadlocks the instant the OS pipe
+    # buffer fills (reliably right after the ControlRig Python init log
+    # burst) waiting forever on a write nobody's reading. The log file
+    # below doesn't need this flag at all.
     "-FORCELOGFLUSH"
 ) -PassThru -WindowStyle Hidden
 
