@@ -51,6 +51,7 @@ import {
   standingFor,
 } from '../../sim/standingOrders';
 import { availableCrew } from '../../sim/npc';
+import { squadFor } from '../../sim/crew';
 import { nightsWorked } from '../../sim/standing';
 import {
   controlLevel,
@@ -179,6 +180,16 @@ export default function OperationsPanel() {
         : [...free].sort((a, b) => nightsWorked(state, a.id) - nightsWorked(state, b.id));
     setCrewPicked(order.slice(0, crewNeeded(state, def)).map((n) => n.id));
   };
+
+  /*
+     A third way to fill a crew, additive to the two above: where a capo
+     already has people under him, dispatch him and let his own reports go
+     rather than hand-checking each one. Only offered when that group can
+     cover the job by itself — see `squadFor` — so a roster with no hierarchy
+     yet, or one too small for this job, sees exactly the two buttons above and
+     nothing has changed for it.
+  */
+  const squad = def ? squadFor(free, needed) : null;
 
   const toggleCrew = (id: string) => {
     setCrewPicked((prev) =>
@@ -837,6 +848,15 @@ export default function OperationsPanel() {
                   >
                     Send whoever is rested
                   </button>
+                  {squad && (
+                    <button
+                      className="btn small"
+                      title={`${squad.capo.name} and his own people. Nobody else to pick.`}
+                      onClick={() => setCrewPicked(squad.members.map((n) => n.id))}
+                    >
+                      Dispatch {squad.capo.name}'s crew
+                    </button>
+                  )}
                   {crewPicked.length > 0 && (
                     <button className="btn small" onClick={() => setCrewPicked([])}>
                       Clear
