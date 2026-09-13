@@ -28,7 +28,7 @@ import {
   STEWARD_ACTION_BY_ID,
   type StewardActionDef,
 } from '../config/delegation';
-import { ROLE_ORDER } from '../config/economy';
+import { ROLE_LABEL, ROLE_ORDER } from '../config/economy';
 import { addLog } from './util';
 import { addNote, crewList, somethingGood, wageExpectation } from './npc';
 import { authority } from './authority';
@@ -124,6 +124,49 @@ export function putInCharge(state: GameState, npcId: Id, territoryId: string): C
   somethingGood(state, npc);
   addNote(npc, state.day, `Was given ${territoryDef(t.id).name} to run.`, 'good');
   addLog(state, `${npc.name} has ${territoryDef(t.id).name} now. It is theirs to answer for.`, 'crew');
+  return { ok: true, message: '' };
+}
+
+/**
+ * Put a junior man under a capo, rather than straight under the boss.
+ *
+ * Additive: `reportsTo` is read by nothing that changes behaviour when it is
+ * absent, so a roster nobody assigns behaves exactly as every roster before
+ * this existed. Junior-to-capo only, on `ROLE_ORDER` — a man cannot be put
+ * under a peer or somebody below him, which would be a chain running
+ * backwards rather than a chain at all.
+ */
+export function canAssignToCapo(state: GameState, npcId: Id, capoId: Id): Check {
+  const npc = state.npcs[npcId];
+  const capo = state.npcs[capoId];
+  if (!npc || !capo) return { ok: false, message: 'No such person.' };
+  if (npc.id === capo.id) return { ok: false, message: 'A man cannot report to himself.' };
+  if (npc.status !== 'active' && npc.status !== 'busy') {
+    return { ok: false, message: `${npc.name} is not available.` };
+  }
+  if (capo.status !== 'active' && capo.status !== 'busy') {
+    return { ok: false, message: `${capo.name} is not available.` };
+  }
+  if (ROLE_ORDER.indexOf(capo.role) < ROLE_ORDER.indexOf('capo')) {
+    return {
+      ok: false,
+      message: `${capo.name} is ${ROLE_LABEL[capo.role]} — needs to be ${ROLE_LABEL['capo']} or above to have anybody under them.`,
+    };
+  }
+  if (ROLE_ORDER.indexOf(npc.role) >= ROLE_ORDER.indexOf(capo.role)) {
+    return {
+      ok: false,
+      message: `${npc.name} is ${ROLE_LABEL[npc.role]}, not junior to ${capo.name} (${ROLE_LABEL[capo.role]}).`,
+    };
+  }
+  return { ok: true, message: `Put ${npc.name} under ${capo.name}` };
+}
+
+export function assignToCapo(state: GameState, npcId: Id, capoId: Id): Check {
+  const guard = canAssignToCapo(state, npcId, capoId);
+  if (!guard.ok) return guard;
+  const npc = state.npcs[npcId];
+  npc.reportsTo = capoId;
   return { ok: true, message: '' };
 }
 

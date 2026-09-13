@@ -451,6 +451,19 @@ export interface Npc {
   informingSince?: number;
   /** Set after somebody else was killed for it. He is not stupid. */
   carefulUntilDay?: number;
+  /**
+   * The capo (or above) this man was put under, if the crew has grown a
+   * chain of command.
+   *
+   * `capos.ts`'s `Capo[]` is the equivalent idea for a rival family; this is
+   * not that type, because the player's own men are `Npc` — they draw a wage,
+   * hold traits and memories, and go on jobs, none of which is true of a
+   * rival's capo. Optional with no initialiser, the same idiom as
+   * `informingSince` and `carefulUntilDay` above: a save written before this
+   * existed loads with everybody answering straight to the boss, which is
+   * exactly what a flat roster has always meant.
+   */
+  reportsTo?: Id;
 }
 
 export interface NpcNote {

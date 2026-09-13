@@ -263,6 +263,14 @@ export function promote(state: GameState, npcId: string): ActionResult {
   const next = nextRole(npc.role)!;
   npc.role = next;
   npc.wage = priced(state, ROLE_WAGE[next]);
+  /*
+     A man promoted to capo or above stops answering to one — `Capo[]` in
+     `capos.ts` has no capo-of-capos either, and `reportsTo` should not say
+     something about him that is no longer true the moment he outranks it.
+  */
+  if (ROLE_ORDER.indexOf(next) >= ROLE_ORDER.indexOf('capo')) {
+    delete npc.reportsTo;
+  }
   npc.stats.loyalty = clamp(npc.stats.loyalty + PROMOTION.loyaltyGain, 0, 100);
   npc.stats.respectForBoss = clamp(
     npc.stats.respectForBoss + PROMOTION.respectForBossGain,
@@ -299,6 +307,13 @@ export function dismiss(state: GameState, npcId: string): ActionResult {
   npc.status = 'defected';
   npc.unavailableUntilDay = null;
   addNote(npc, state.day, 'Dismissed from the organization.', 'bad');
+  /*
+     Whoever answered to him answers straight to you again — a chain of
+     command does not keep pointing at an empty chair.
+  */
+  for (const other of crewList(state)) {
+    if (other.reportsTo === npc.id) delete other.reportsTo;
+  }
   // Cutting somebody loose cuts an *inside* thread, which is the one
   // channel going quiet cannot touch. It is now the counterplay to it.
   reduceHeat(state, DISMISS_HEAT_REDUCTION, 'inside');
