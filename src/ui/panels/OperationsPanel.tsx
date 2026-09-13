@@ -5,7 +5,7 @@ import { STAT_BY_ID } from '../../config/build';
 import { useGame, mutate } from '../../store';
 import { Panel, Empty, Bar, StatRead } from '../components';
 import {
-  availableOperations,
+  manualBoard,
   lockedOperations,
   canLaunch,
   cancelOperation,
@@ -95,7 +95,7 @@ export default function OperationsPanel() {
     isLayingLow(state) ? 'quiet' : DEFAULT_APPROACH,
   );
 
-  const open = availableOperations(state);
+  const open = manualBoard(state);
   const locked = lockedOperations(state);
   const active = Object.values(state.activeOperations);
   const free = availableCrew(state);

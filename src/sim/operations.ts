@@ -107,12 +107,13 @@ import {
 } from '../config/operations';
 import { LAWYER_BY_LEVEL } from '../config/lawEnforcement';
 import { CANCEL_OPERATION_HEAT } from '../config/heat';
-import { ATTRIBUTE_MAX, FEAR, ROLE_ORDER } from '../config/economy';
+import { ATTRIBUTE_MAX, FEAR, ROLE_ORDER, rankIndex } from '../config/economy';
 import { civicRoster } from './civic';
 import { bond } from './diplomacy';
 import { rivals } from './faction';
 import { FAMILIARITY_PER_OPERATION, BEHAVIOUR } from '../config/npcs';
 import { DIFFICULTY_BY_ID } from '../config/difficulty';
+import { rankNow } from './rank';
 
 /**
  * Everything a job's unlock condition is allowed to know about.
@@ -233,6 +234,63 @@ export function availableOperations(state: GameState): OperationDef[] {
 export function lockedOperations(state: GameState): OperationDef[] {
   const board = opsBoard(state);
   return OPERATIONS.filter((op) => !isOpen(op, board) && !heldOpen(state, op));
+}
+
+/**
+ * The jobs a boss runs personally, on a corner, with his own hands.
+ *
+ * `work_it_yourself`'s own doc comment says what these are for: the answer to
+ * "what can I do this week" when there is nobody else to send. Once there is
+ * somebody else to send, offering them on the board is offering the player a
+ * downgrade — see `config/operations.ts`'s header on why the free job is
+ * strictly worse money than anything a real crew can run.
+ */
+const STREET_WORK_IDS = new Set([
+  'work_it_yourself',
+  'corner_shakedown',
+  'boost_cars',
+  'burglary_run',
+  'freelance_muscle',
+]);
+
+/**
+ * Whether the organization has grown a layer between the boss and the street.
+ *
+ * Either a district somebody else already answers for (`stewardOf` exists
+ * somewhere), or Crew Leader itself — read off `rankNow`, not a second set of
+ * thresholds, for the same reason `rank.ts`'s own header gives: what a player
+ * is called and what they are allowed to do cannot come apart.
+ *
+ * Backs off the moment there is nowhere else to turn. Two ways that happens:
+ * no district held at all — ground can decay under a steward without ever
+ * running `takeItBack`, so "a steward exists" and "a district is held" are
+ * not the same fact — or nothing else on the board is actually affordable,
+ * which is the exact broke state `work_it_yourself` exists to answer (see
+ * `attention.ts`'s identical check for idle crew with nothing to send them
+ * on).
+ */
+export function outgrewStreetWork(state: GameState): boolean {
+  const delegated = territoryList(state).some((t) => !!t.stewardId);
+  const promoted = rankIndex(rankNow(state).id) >= rankIndex('crew_leader');
+  if (!delegated && !promoted) return false;
+
+  const board = opsBoard(state);
+  if (board.districtsHeld === 0) return false;
+
+  return OPERATIONS.some(
+    (op) =>
+      !STREET_WORK_IDS.has(op.id) &&
+      op.tier > 0 &&
+      isOpen(op, board) &&
+      operationCost(state, op) <= totalFunds(state),
+  );
+}
+
+/** What the manual board actually shows — `availableOperations`, minus street work the organization has outgrown. */
+export function manualBoard(state: GameState): OperationDef[] {
+  const ops = availableOperations(state);
+  if (!outgrewStreetWork(state)) return ops;
+  return ops.filter((op) => !STREET_WORK_IDS.has(op.id));
 }
 
 /**
