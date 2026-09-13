@@ -115,7 +115,10 @@ export default function PixiStage({ map, layerVisibility, onSelect, onPointerMov
 
     return () => {
       disposed = true;
-      appRef.current?.destroy(true);
+      // second arg `true` = full cleanup (children + their textures/geometries), not just
+      // the renderer — otherwise every layer under `layers.world` (and their pointertap
+      // listeners) is detached but never disposed, leaking GPU resources on every remount.
+      appRef.current?.destroy(true, true);
       appRef.current = null;
       layersRef.current = null;
     };
