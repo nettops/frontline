@@ -15,12 +15,27 @@ import type { GameState, Id, Npc } from './types';
 import { crewList, addNote } from './npc';
 import { isRealCapo } from './capoPitches';
 import { promote, canPromote, type ActionResult } from './crew';
+import { districtsHeldBy } from './delegation';
 import { recordTie } from './ties';
 import { remember } from './memory';
 import { addLog } from './util';
 import { TIE_DEPARTURE } from '../config/ties';
 import { BEHAVIOUR, DRIFT } from '../config/npcs';
-import { CAPO_VOUCH } from '../config/capoVouches';
+import { CAPO_CAPACITY, CAPO_VOUCH } from '../config/capoVouches';
+
+/**
+ * How many made men this capo can actually run — see `config/capoVouches.ts`
+ * for why this is shaped like `player.ts`'s `maxCrew` rather than a stored
+ * figure.
+ */
+export function capoCapacity(state: GameState, capo: Npc): number {
+  return CAPO_CAPACITY.base + districtsHeldBy(state, capo.id).length * CAPO_CAPACITY.perDistrict;
+}
+
+/** Everybody currently answering to this capo, made or not — see the Make guard below. */
+function reportsToCount(state: GameState, capoId: Id): number {
+  return crewList(state).filter((n) => n.reportsTo === capoId).length;
+}
 
 /** Whether this capo would put his name behind this associate, today. */
 export function isVouchReady(state: GameState, capo: Npc, associate: Npc): boolean {
@@ -59,11 +74,42 @@ export function vouchCandidates(state: GameState): { capo: Npc; associate: Npc }
   return out;
 }
 
-/** Make: the vouch succeeds. Nothing here but `promote` — no second copy of its effects. */
+/**
+ * Make: the vouch succeeds. Nothing here but `promote` — no second copy of
+ * its effects — plus the one guard `promote` itself knows nothing about: a
+ * capo cannot be handed more made men than he can actually run. Only checked
+ * when the associate reports to a real capo; a boss making somebody who
+ * answers straight to him is not spending anybody's capacity.
+ */
 export function canMakeVouch(state: GameState, associateId: Id): ActionResult {
   const npc = state.npcs[associateId];
   if (!npc) return { ok: false, message: 'No such person.' };
-  return canPromote(state, npc);
+  const promoteCheck = canPromote(state, npc);
+  if (!promoteCheck.ok) return promoteCheck;
+
+  const capo = npc.reportsTo ? state.npcs[npc.reportsTo] : undefined;
+  if (capo && isRealCapo(capo)) {
+    const capacity = capoCapacity(state, capo);
+    const runs = reportsToCount(state, capo.id);
+    if (runs >= capacity) {
+      /*
+         Names the figure, the bar and the way back — the same shape
+         `canRecruit`'s district-cap message already uses, because a live
+         button that just fails silently is exactly what that guard exists
+         to rule out.
+      */
+      const hasGround = districtsHeldBy(state, capo.id).length > 0;
+      return {
+        ok: false,
+        message:
+          `${capo.name} already runs ${runs} ${runs === 1 ? 'man' : 'men'}, which is all ` +
+          (hasGround
+            ? 'even a district gets him. Move somebody out from under him first.'
+            : 'he can hold with no ground of his own. Give him a district first.'),
+      };
+    }
+  }
+  return promoteCheck;
 }
 
 export function makeVouch(state: GameState, associateId: Id): ActionResult {

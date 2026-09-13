@@ -21,3 +21,22 @@ export const CAPO_VOUCH = {
    */
   cooldownDays: 14,
 } as const;
+
+/**
+ * How many made men a capo can actually run, in the absence of a stored
+ * capacity figure.
+ *
+ * Shaped exactly like `player.ts`'s `maxCrew` — a base plus a term per
+ * district — because the same argument applies twice: a number derived from
+ * what a man already holds cannot drift out of sync with a save, and a capo
+ * who runs a district himself can plainly carry more men than one who has
+ * never been given ground. `delegation.ts`'s own rule caps a steward at one
+ * district, so in practice this is base-or-base-plus-one-term rather than an
+ * open scale — which is fine; nothing here claims otherwise.
+ */
+export const CAPO_CAPACITY = {
+  /** Every capo can run this many people with nothing else behind him. */
+  base: 3,
+  /** ...and this many more for the district he actually stewards, if any. */
+  perDistrict: 3,
+} as const;
