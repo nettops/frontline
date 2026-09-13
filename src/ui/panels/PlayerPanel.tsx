@@ -23,7 +23,7 @@ const VERB_NOT_YET_REACHABLE: Partial<Record<StatId, string>> = {
 };
 import { Panel, Bar, KeyValue } from '../components';
 import { estate } from '../../sim/estate';
-import { careerShape, legitimacy } from '../../sim/legacy';
+import { legitimacy, perceivedLeadership } from '../../sim/legacy';
 import { maxCrew } from '../../sim/player';
 import { authorityRead } from '../../sim/authority';
 import { canGoHome, goHome, homeRead } from '../../sim/personal';
@@ -217,6 +217,7 @@ export default function PlayerPanel() {
   const named = nicknameRead(state);
   const rows = buildRead(state);
   const left = pointsLeft(state);
+  const shape = perceivedLeadership(state);
 
   return (
     <>
@@ -381,7 +382,7 @@ export default function PlayerPanel() {
               value={whatItNeeds(state).join(', ')}
             />
           )}
-          <KeyValue label="Shaping into" value={careerShape(state).name} tone="brass" />
+          {shape && <KeyValue label="Shaping into" value={shape.name} tone="brass" />}
           <KeyValue label="Operations completed" value={player.opsCompleted} tone="good" />
           <KeyValue label="Operations failed" value={player.opsFailed} tone="hot" />
           {/*
