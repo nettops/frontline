@@ -417,3 +417,42 @@ export function setWage(state: GameState, npcId: string, wage: number): ActionRe
 
   return { ok: true, message: `${npc.name} now earns ${money(capped)} a week.` };
 }
+
+// --------------------------------------------------------------- squads ---
+
+/**
+ * The best capo-led group inside a pool of free people, if one can cover a
+ * job alone.
+ *
+ * Ticking names one at a time was the single largest cost of playing this
+ * game (`OperationsPanel.tsx`'s own note on its `fill` helper) — and where a
+ * capo already has people under him, the boss should not have to re-pick them
+ * by hand every time. Reads `reportsTo`, writes nothing: additive, the same
+ * way the field itself was built. A roster with no hierarchy yet gets `null`
+ * back, and the manual checkbox path is exactly what it always was.
+ *
+ * Only ever returns a group that can fill the job on its own — a capo with
+ * two free men against a five-man job is not a shortcut, it is a squad
+ * missing three people the caller would still have to pick by hand, which is
+ * worse than one honest list.
+ */
+export function squadFor(
+  free: Npc[],
+  needed: number,
+): { capo: Npc; members: Npc[] } | null {
+  if (needed <= 0) return null;
+
+  const groups = free
+    .map((capo) => ({ capo, reports: free.filter((n) => n.reportsTo === capo.id) }))
+    .filter((g) => g.reports.length > 0)
+    // Most free reports wins; ties break on id so an identical roster always
+    // picks the same capo rather than whichever happened to sort first today.
+    .sort((a, b) => b.reports.length - a.reports.length || (a.capo.id < b.capo.id ? -1 : 1));
+
+  const best = groups[0];
+  if (!best) return null;
+
+  const members = [best.capo, ...best.reports].slice(0, needed);
+  if (members.length < needed) return null;
+  return { capo: best.capo, members };
+}
