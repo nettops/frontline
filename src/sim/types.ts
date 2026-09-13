@@ -464,6 +464,17 @@ export interface Npc {
    * exactly what a flat roster has always meant.
    */
   reportsTo?: Id;
+  /**
+   * The last day a capo's recommendation to make this man was set aside —
+   * by an explicit Wait, or by a Deny, which sets it too. `capoVouches.ts`
+   * reads this only to hold the recommendation off the list for
+   * `CAPO_VOUCH.cooldownDays`; it does not gate whether he is *ready*, only
+   * whether the game should mention it again yet. Optional with no
+   * initialiser, so a save written before this existed loads with every
+   * recommendation free to surface the first time it is checked — exactly
+   * what "never been asked" means.
+   */
+  vouchDeferredDay?: number;
 }
 
 export interface NpcNote {
