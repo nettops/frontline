@@ -12,6 +12,7 @@ import { newGame } from '../state';
 import { Rng } from '../rng';
 import {
   approvePitch,
+  capoSpecialty,
   livePitches,
   pitchCapoPool,
   reassignPitch,
@@ -24,7 +25,7 @@ import { DELEGATION } from '../../config/delegation';
 import { CAPO_PITCH } from '../../config/capoPitches';
 import { territoryList } from '../territory';
 import { crewList } from '../npc';
-import type { GameState } from '../types';
+import type { GameState, Npc } from '../types';
 
 function game(seed = 3): GameState {
   return newGame({ name: 'Pitch', difficulty: 'normal', seed });
@@ -144,6 +145,50 @@ describe('capo pitches', () => {
     expect(original.memories[0].kind).toBe('passed_over');
     // Still live, just under somebody else now.
     expect(livePitches(state).some((x) => x.id === p.id)).toBe(true);
+  });
+
+  it('is stable for a given capo', () => {
+    // A permanent fact about him, not a fresh roll — same id, same answer,
+    // however many times it is asked.
+    const npc = { id: 'stable_check' } as Npc;
+    expect(capoSpecialty(npc)).toBe(capoSpecialty(npc));
+  });
+
+  it('prefers a real capo\'s own trade when it is on the board', () => {
+    const state = game();
+    build(state, 1, 0, 4);
+    const rng = new Rng(state.rng);
+
+    // Find an id whose specialty is 'muscle' — this build opens two muscle
+    // jobs (protection_racket, freelance_muscle) and one contraband job
+    // (truck_hijack), so a muscle specialist always has his own trade to
+    // prefer on the first pitch drafted for him.
+    let capoId = '';
+    for (let i = 0; i < 500; i++) {
+      const candidate = `capo_test_${i}`;
+      if (capoSpecialty({ id: candidate } as Npc) === 'muscle') {
+        capoId = candidate;
+        break;
+      }
+    }
+    expect(capoId, 'need an id that hashes to muscle').not.toBe('');
+
+    // He is the only real capo, so pitchCapoPool has exactly one member and
+    // every pitch this refresh is unambiguously his.
+    const crew = crewList(state);
+    const template = crew[0];
+    state.npcs[capoId] = { ...template, id: capoId, name: 'Test Capo', role: 'capo', status: 'active' };
+    for (const n of crew) n.role = 'soldier';
+
+    tickToDay(state, rng, 7);
+    const pitches = livePitches(state);
+    expect(pitches.length).toBeGreaterThan(0);
+    for (const p of pitches) expect(p.capoId).toBe(capoId);
+
+    const categories = pitches.map((p) => OPERATION_BY_ID[p.defId].category);
+    // A matching op was on the board when the batch started, so it must have
+    // been drafted before the board ran out of muscle work.
+    expect(categories[0]).toBe('muscle');
   });
 
   it('an unanswered pitch goes stale on its own clock', () => {
