@@ -13,8 +13,10 @@ import { Rng } from '../rng';
 import { generateNpc } from '../npc';
 import { assignToCapo, putInCharge } from '../delegation';
 import { territoryList } from '../territory';
+import { dismiss, promote } from '../crew';
 import { TIE_DEPARTURE, TIE_EVENTS } from '../../config/ties';
 import { BEHAVIOUR, DRIFT } from '../../config/npcs';
+import { DELEGATION } from '../../config/delegation';
 import { CAPO_VOUCH, CAPO_CAPACITY } from '../../config/capoVouches';
 import {
   canMakeVouch,
@@ -116,6 +118,20 @@ describe('Make', () => {
     expect(state.npcs[associate.id].role).toBe('soldier');
     expect(state.npcs[associate.id].stats.loyalty).toBeGreaterThan(before);
   });
+
+  it('records who vouched for him', () => {
+    const state = game();
+    const { capo, associate } = readyPair(state);
+    makeVouch(state, associate.id);
+    expect(state.npcs[associate.id].vouchedBy).toBe(capo.id);
+  });
+
+  it('a plain promote (outside the vouch flow) leaves vouchedBy unset', () => {
+    const state = game();
+    const { associate } = readyPair(state);
+    promote(state, associate.id);
+    expect(state.npcs[associate.id].vouchedBy).toBeUndefined();
+  });
 });
 
 describe('Wait', () => {
@@ -201,5 +217,40 @@ describe('a capo can only hold so many made guys', () => {
     const state = game();
     const { associate } = readyPair(state);
     expect(canMakeVouch(state, associate.id).ok).toBe(true);
+  });
+});
+
+describe('a made man cut loose costs the capo who vouched for him', () => {
+  it('charges the vouching capo the same standing hit reassignPitch already prices', () => {
+    const state = game();
+    const { capo, associate } = readyPair(state);
+    makeVouch(state, associate.id);
+    expect(state.npcs[associate.id].vouchedBy).toBe(capo.id);
+
+    const loyaltyBefore = state.npcs[capo.id].stats.loyalty;
+    const grievanceBefore = state.npcs[capo.id].stats.grievance;
+    const memoriesBefore = state.npcs[capo.id].memories.length;
+
+    dismiss(state, associate.id);
+
+    expect(state.npcs[capo.id].stats.loyalty).toBe(
+      Math.max(0, Math.min(100, loyaltyBefore + DELEGATION.recallLoyalty)),
+    );
+    expect(state.npcs[capo.id].stats.grievance).toBe(
+      Math.max(0, Math.min(100, grievanceBefore + DELEGATION.recallGrievance)),
+    );
+    expect(state.npcs[capo.id].memories.length).toBe(memoriesBefore + 1);
+    expect(state.npcs[capo.id].memories[0].kind).toBe('passed_over');
+  });
+
+  it('costs nobody when the dismissed man was never vouched for', () => {
+    const state = game();
+    const { capo, associate } = readyPair(state);
+    promote(state, associate.id); // made, but not through a vouch
+    expect(state.npcs[associate.id].vouchedBy).toBeUndefined();
+
+    const capoBefore = { ...state.npcs[capo.id].stats };
+    dismiss(state, associate.id);
+    expect(state.npcs[capo.id].stats).toEqual(capoBefore);
   });
 });

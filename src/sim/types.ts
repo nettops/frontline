@@ -475,6 +475,15 @@ export interface Npc {
    * what "never been asked" means.
    */
   vouchDeferredDay?: number;
+  /**
+   * The capo who put his name behind this man, if he was made through a
+   * vouch rather than a plain promotion. Set once, by `makeVouch`, and never
+   * cleared — a man does not stop having been vouched for. `crew.ts`'s
+   * `dismiss` reads it to charge the capo when a man he vouched for is cut
+   * loose. Optional with no initialiser: a save written before this existed
+   * loads with every made man's history blank, which for those saves is true.
+   */
+  vouchedBy?: Id;
 }
 
 export interface NpcNote {

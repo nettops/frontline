@@ -35,6 +35,7 @@ import {
 import { WAGE_CEILING_MULTIPLE } from '../config/economy';
 import { DISMISSAL, PROMOTION, RECRUIT_POOL_SIZE, RECRUIT_REFRESH_DAYS } from '../config/npcs';
 import { DISMISS_HEAT_REDUCTION } from '../config/heat';
+import { DELEGATION } from '../config/delegation';
 import { priced } from './market';
 
 // -------------------------------------------------------------- recruits ---
@@ -334,6 +335,27 @@ export function dismiss(state: GameState, npcId: string): ActionResult {
   npc.status = 'defected';
   npc.unavailableUntilDay = null;
   addNote(npc, state.day, 'Dismissed from the organization.', 'bad');
+  /*
+     A made man who was somebody's word coming back on the man who gave it.
+
+     `vouchedBy` (set once, by `capoVouches.ts`'s `makeVouch`) is the only
+     record of that — cutting him loose is the moment it was wrong. Prices it
+     exactly the way `capoPitches.ts`'s `reassignPitch` already prices a capo
+     watching a decision he was owed go against him: `DELEGATION`'s own
+     `recallLoyalty`/`recallGrievance`, not a new number. Silent when the man
+     was never vouched for, which is every dismissal before this existed.
+  */
+  const voucher = npc.vouchedBy ? state.npcs[npc.vouchedBy] : undefined;
+  if (voucher) {
+    voucher.stats.loyalty = clamp(voucher.stats.loyalty + DELEGATION.recallLoyalty, 0, 100);
+    voucher.stats.grievance = clamp(
+      voucher.stats.grievance + DELEGATION.recallGrievance,
+      0,
+      100,
+    );
+    remember(voucher, state.day, 'passed_over', npc.id);
+    addNote(voucher, state.day, `${npc.name}, who they put up, was cut loose.`, 'bad');
+  }
   /*
      Whoever answered to him answers straight to you again — a chain of
      command does not keep pointing at an empty chair.
