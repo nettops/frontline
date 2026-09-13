@@ -23,6 +23,7 @@ import { territoryDef } from './territory';
 import { addLog } from './util';
 import { ownsHome } from './possessions';
 import { POSSESSION } from '../config/possessions';
+import { OPERATION_BY_ID } from '../config/operations';
 import type { GameState, Home, HouseholdMember } from './types';
 
 /**
@@ -86,6 +87,25 @@ export function canGoHome(state: GameState): { ok: boolean; reason?: string } {
         `Going again inside ${HOME.visitAgainAfterDays} days is not worth anything to anybody.`,
     };
   }
+  /*
+     The one body, spent already.
+
+     `operations.ts`'s own `canLaunch` refuses a zero-crew job with "there is
+     only one of you" — the boss's own body is the resource, not a crew slot.
+     An evening at home spends the same body over the same one day, so it
+     reads the same definition table rather than a name copied out of it,
+     which would be a second place for "which job is this" to drift from the
+     first the day another zero-crew job joins the roster.
+  */
+  const outOnItYourself = Object.values(state.activeOperations).some(
+    (op) => (OPERATION_BY_ID[op.defId]?.crewRequired ?? 1) === 0,
+  );
+  if (outOnItYourself) {
+    return {
+      ok: false,
+      reason: 'You are out on a job that needs you personally tonight. That is where you are.',
+    };
+  }
   return { ok: true };
 }
 
@@ -111,6 +131,15 @@ export function goHome(state: GameState): void {
   const cleared = ownsHome(state) ? POSSESSION.clearedByVisitAtHome : HOME.clearedByVisit;
   house.neglect = clamp(house.neglect - cleared, 0, 100);
   house.lastVisitDay = state.day;
+  /*
+     Stamped separately from `lastVisitDay`. That field is also the day
+     `home()` was first lazily built for a career that has never actually
+     visited, so `operations.ts` reading it directly to see "did the boss
+     spend his body here today" would misread the day the household happened
+     to be generated as a visit. This flag is only ever set by an actual
+     evening at home.
+  */
+  state.flags['went_home_day'] = state.day;
   addLog(
     state,
     `You went home. Nobody there wanted anything from you, which took some getting used to.`,

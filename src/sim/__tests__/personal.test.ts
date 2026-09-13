@@ -25,6 +25,9 @@ import { describe, expect, it } from 'vitest';
 import { newGame } from '../state';
 import { advanceDay } from '../clock';
 import { canGoHome, goHome, home, homeRead, neglectRisk, tickHome } from '../personal';
+import { canLaunch, launchOperation } from '../operations';
+import { OPERATION_BY_ID } from '../../config/operations';
+import { HOME_TERRITORY } from '../../config/territories';
 import { HOME, RELATIONS } from '../../config/personal';
 import type { GameState } from '../types';
 
@@ -218,5 +221,71 @@ describe('going home without being asked', () => {
     const after = home(state).neglect;
     goHome(state);
     expect(home(state).neglect, 'a refused visit still cleared neglect').toBe(after);
+  });
+});
+
+/*
+   Brief item 11: going home has to cost something against the business, or
+   it is a free lunch next to every other decision in this game.
+   `work_it_yourself` is the one job that occupies the boss's own body rather
+   than a crew member's — "there is only one of you" is already `canLaunch`'s
+   own refusal for it — and an evening at home occupies exactly the same body
+   for exactly the same one day. Reusing that existing exclusion rather than
+   inventing a new resource: neither can happen on a day the other already
+   has.
+*/
+describe('the one body', () => {
+  it('cannot go home while out on the one job that needs the boss personally', () => {
+    const state = game();
+    weeks(state, 10);
+    expect(canGoHome(state).ok, 'the setup should otherwise allow a visit').toBe(true);
+
+    const launched = launchOperation(state, 'work_it_yourself', [], HOME_TERRITORY);
+    expect(launched, 'the job did not launch, so this test measures nothing').toBeTruthy();
+
+    expect(canGoHome(state).ok).toBe(false);
+  });
+
+  it('refuses work it yourself the same evening the boss went home', () => {
+    const state = game();
+    weeks(state, 10);
+    goHome(state);
+
+    const def = OPERATION_BY_ID['work_it_yourself'];
+    expect(canLaunch(state, def, [], HOME_TERRITORY).ok).toBe(false);
+  });
+
+  it('stops blocking the day after going home', () => {
+    const state = game();
+    weeks(state, 10);
+    goHome(state);
+    advanceDay(state);
+
+    const def = OPERATION_BY_ID['work_it_yourself'];
+    expect(canLaunch(state, def, [], HOME_TERRITORY).ok).toBe(true);
+  });
+
+  /*
+     `home()` lazily stamps `lastVisitDay` at whatever day it happens to be
+     first read on, for a career that has never actually visited — and
+     something in the tick pipeline reads it well before the boss has ever
+     gone anywhere. `lastVisitDay` coincidentally equalling today is not
+     proof of a visit, and `work_it_yourself` must not read it as one. Built
+     directly rather than by advancing to whichever day the coincidence
+     happens to land on, which is a detail of other systems this test is not
+     about.
+  */
+  it('does not mistake home() being read for a visit', () => {
+    const state = game();
+    weeks(state, 3);
+    const house = home(state);
+    house.lastVisitDay = state.day; // the exact coincidence, without goHome ever running
+    expect(state.flags['went_home_day']).not.toBe(state.day);
+
+    const def = OPERATION_BY_ID['work_it_yourself'];
+    expect(
+      canLaunch(state, def, [], HOME_TERRITORY).ok,
+      'a career that never went home was refused work_it_yourself as though it had',
+    ).toBe(true);
   });
 });

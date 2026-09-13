@@ -578,6 +578,25 @@ export function canLaunch(
         reason: 'You are already out on one of these. There is only one of you.',
       };
     }
+    /*
+       And the other place that one body goes.
+
+       An evening at home (`personal.ts`'s `goHome`) spends the same body this
+       job does, over the same one day — see the note there. A flag rather
+       than reading `home(state).lastVisitDay` directly: that field is also
+       the day `home()` was first lazily built, on whichever day `tickHome`
+       first runs for a career that has never visited at all, and comparing
+       it to `state.day` would misread that coincidence as a visit on
+       whichever day it happens to land — the same "went" flag idiom
+       `arrest_pressure` and this file's own `ran_${def.id}` cooldown already
+       use, rather than a field that means two different things.
+    */
+    if (state.flags['went_home_day'] === state.day) {
+      return {
+        ok: false,
+        reason: 'You went home tonight. There is only one of you, and that is where you were.',
+      };
+    }
   }
   for (const id of crewIds) {
     const npc = state.npcs[id];
