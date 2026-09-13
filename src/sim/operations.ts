@@ -245,7 +245,7 @@ export function lockedOperations(state: GameState): OperationDef[] {
  * downgrade — see `config/operations.ts`'s header on why the free job is
  * strictly worse money than anything a real crew can run.
  */
-const STREET_WORK_IDS = new Set([
+export const STREET_WORK_IDS = new Set([
   'work_it_yourself',
   'corner_shakedown',
   'boost_cars',
