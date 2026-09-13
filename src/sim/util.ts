@@ -82,6 +82,27 @@ export function pushEvent(
   return full;
 }
 
+/**
+ * One thing tolerated enough times that it seeds a different, later thing.
+ *
+ * `heir_gone` (npc.ts) and the collective-defection cascade (`followDeparture`,
+ * ties.ts) already have this shape: a consequence elsewhere in the tick
+ * ripples forward instead of stopping at the man it happened to. This is that
+ * shape pulled out to where both events.ts and eventgen.ts can reach it —
+ * neither can import the other, so it lives here rather than in either.
+ *
+ * Kept to "count it, and say so once it is enough" on purpose. What a caller
+ * does with a `true` — spread the skim to somebody else, worsen a number,
+ * push a wholly different memo — stays with the caller, which already knows
+ * the field and the voice; this only owns the counting, on `state.flags`, the
+ * same ledger every other one-off counter in this game already uses.
+ */
+export function seedFollowup(state: GameState, key: string, after: number): boolean {
+  const count = (state.flags[key] ?? 0) + 1;
+  state.flags[key] = count;
+  return count >= after;
+}
+
 // -------------------------------------------------------------- calendar ---
 
 /** The world starts here. Day 1 is this date. */
