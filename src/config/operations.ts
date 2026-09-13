@@ -50,6 +50,28 @@
 import type { OperationDef, OperationRisk } from '../sim/types';
 import { SETUPS } from './scores';
 
+/*
+   `category` sorts the table by what the job actually is, not what rank it
+   sits at — the axis `sim/capoPitches.ts` reads to bias a real capo toward
+   his own trade. Four clusters, and they are the ones the list above already
+   falls into once you read it that way:
+
+       vice        a room that prints money off a standing vice
+       contraband  goods that move, get fenced, or get faked — no bill of sale
+       muscle      a threat, a collection, or a cut taken in person
+       influence   a seat bought with favours, a union card, or a share of
+                   somebody's books
+
+   `work_it_yourself` reads as `contraband` for lack of anywhere better — it is
+   tier 0 and never reaches a pitch, so nothing reads its category yet.
+*/
+export const OPERATION_CATEGORIES: OperationDef['category'][] = [
+  'vice',
+  'contraband',
+  'muscle',
+  'influence',
+];
+
 export const OPERATIONS: OperationDef[] = [
   // ---------------------------------------------------- street criminal ---
   {
@@ -74,6 +96,7 @@ export const OPERATIONS: OperationDef[] = [
        lasts.
     */
     id: 'work_it_yourself',
+    category: 'contraband',
     name: 'Work It Yourself',
     description:
       'Nobody to send, so you go. It is beneath you now and it was all you did once. Small money and nobody else to blame.',
@@ -91,6 +114,7 @@ export const OPERATIONS: OperationDef[] = [
   },
   {
     id: 'corner_shakedown',
+    category: 'muscle',
     name: 'Corner Shakedown',
     description:
       'Lean on a few shopkeepers who have nobody to call. Small money, but it is money tonight.',
@@ -108,6 +132,7 @@ export const OPERATIONS: OperationDef[] = [
   },
   {
     id: 'boost_cars',
+    category: 'contraband',
     name: 'Boost Cars',
     description: 'Lift vehicles off the street and move them the same night.',
     tier: 0,
@@ -124,6 +149,7 @@ export const OPERATIONS: OperationDef[] = [
   },
   {
     id: 'burglary_run',
+    category: 'contraband',
     name: 'Burglary Run',
     description: 'A list of empty houses and a short window to work in.',
     tier: 0,
@@ -153,6 +179,7 @@ export const OPERATIONS: OperationDef[] = [
   // ------------------------------------------------------------ enforcer ---
   {
     id: 'protection_racket',
+    category: 'muscle',
     name: 'Protection Racket',
     description:
       'A block of businesses paying weekly so nothing happens to them. Steady, visible, hard to walk back.',
@@ -179,6 +206,7 @@ export const OPERATIONS: OperationDef[] = [
   */
   {
     id: 'fence_goods',
+    category: 'contraband',
     name: 'Fence Stolen Goods',
     description: 'Buy hot merchandise cheap, move it through people who do not ask.',
     opens: {
@@ -199,6 +227,7 @@ export const OPERATIONS: OperationDef[] = [
   },
   {
     id: 'truck_hijack',
+    category: 'contraband',
     name: 'Truck Hijacking',
     description: 'A loaded trailer, a quiet stretch of road, a fifteen minute window.',
     opens: {
@@ -220,6 +249,7 @@ export const OPERATIONS: OperationDef[] = [
 
   {
     id: 'freelance_muscle',
+    category: 'muscle',
     name: 'Freelance Muscle',
     description:
       'Somebody else has work that needs doing and nobody to do it. Flat fee, their problem, your hands. No outlay — you are selling the only thing you have.',
@@ -243,6 +273,7 @@ export const OPERATIONS: OperationDef[] = [
   // --------------------------------------------------------- crew leader ---
   {
     id: 'backroom_game',
+    category: 'vice',
     name: 'Backroom Card Game',
     description:
       'Run the house on a standing game. Reliable earnings and a room full of people who know your face.',
@@ -270,6 +301,7 @@ export const OPERATIONS: OperationDef[] = [
   },
   {
     id: 'counterfeit_run',
+    category: 'contraband',
     name: 'Counterfeit Goods Run',
     description: 'Fake product, real distribution, and a paper trail you have to manage.',
     opens: {
@@ -295,6 +327,7 @@ export const OPERATIONS: OperationDef[] = [
   },
   {
     id: 'warehouse_job',
+    category: 'contraband',
     name: 'Warehouse Job',
     description:
       'Everything on the floor, out in one night. Big score, big footprint, no way to do it quietly.',
@@ -338,6 +371,7 @@ export const OPERATIONS: OperationDef[] = [
   */
   {
     id: 'debt_collection',
+    category: 'muscle',
     name: 'Debt Collection',
     description:
       'A book of other people’s bad paper, bought at a discount. Collecting it is the job.',
@@ -363,6 +397,7 @@ export const OPERATIONS: OperationDef[] = [
   },
   {
     id: 'union_local',
+    category: 'influence',
     name: 'Union Local',
     description:
       'Put your man in at the hall. Slow, expensive, and afterwards the trucks move when you say so.',
@@ -389,6 +424,7 @@ export const OPERATIONS: OperationDef[] = [
 
   {
     id: 'rent_the_crew',
+    category: 'muscle',
     name: 'Rent Out the Crew',
     description:
       'Another outfit is short of bodies for a job of their own. They pay for the bodies, they keep the score. Costs nothing but the fortnight you do not have your people.',
@@ -416,6 +452,7 @@ export const OPERATIONS: OperationDef[] = [
   // ---------------------------------------------------------------- capo ---
   {
     id: 'underground_club',
+    category: 'vice',
     name: 'Underground Club',
     description:
       'An unlicensed room that prints money six nights a week. Profitable, and a fixed address.',
@@ -437,6 +474,7 @@ export const OPERATIONS: OperationDef[] = [
   },
   {
     id: 'smuggling_run',
+    category: 'contraband',
     name: 'Smuggling Run',
     description:
       'Contraband moved across a long route with too many hands touching it.',
@@ -467,6 +505,7 @@ export const OPERATIONS: OperationDef[] = [
   */
   {
     id: 'protection_route',
+    category: 'muscle',
     name: 'Protection Route',
     description:
       'Every business on four blocks, on the same schedule, run as one book rather than forty conversations.',
@@ -489,6 +528,7 @@ export const OPERATIONS: OperationDef[] = [
 
   {
     id: 'sitdown_fees',
+    category: 'influence',
     name: 'Sit-Down Fees',
     description:
       'Two smaller outfits cannot settle something and both would rather you ruled on it than fight. You take a cut of whatever you award. Slow, and it costs you nothing but the weeks.',
@@ -512,6 +552,7 @@ export const OPERATIONS: OperationDef[] = [
   // ----------------------------------------------------------- underboss ---
   {
     id: 'financial_scheme',
+    category: 'influence',
     name: 'Financial Scheme',
     description:
       'Money moved through instruments nobody in the crew understands, including you.',
@@ -533,6 +574,7 @@ export const OPERATIONS: OperationDef[] = [
   },
   {
     id: 'port_operation',
+    category: 'contraband',
     name: 'Port Operation',
     description:
       'Control of a dock and everything that crosses it. The kind of score that builds task forces.',
@@ -555,6 +597,7 @@ export const OPERATIONS: OperationDef[] = [
 
   {
     id: 'call_in_tribute',
+    category: 'influence',
     name: 'Call In Tribute',
     description:
       'Go round everyone who owes you and ask for it at once. You are spending standing rather than money, and standing spent this way is noticed.',
@@ -579,6 +622,7 @@ export const OPERATIONS: OperationDef[] = [
   // ---------------------------------------------------------------- boss ---
   {
     id: 'citywide_network',
+    category: 'influence',
     name: 'Citywide Distribution Network',
     description:
       'Every corner of the map feeding one operation. Nothing this size stays invisible.',
@@ -615,6 +659,7 @@ export const OPERATIONS: OperationDef[] = [
   },
   {
     id: 'enforce_the_peace',
+    category: 'influence',
     name: 'Enforce the Peace',
     description:
       'Every operation in the city pays you to make sure nothing happens to any of them. It takes no investment and most of a month, and everybody knows exactly who is keeping order.',

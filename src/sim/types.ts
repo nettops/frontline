@@ -539,6 +539,17 @@ export interface GoalBoard {
 export type OperationRisk = 'low' | 'moderate' | 'high' | 'extreme';
 
 /**
+ * What kind of business a job actually is, apart from what tier it sits at.
+ *
+ * Four clusters the table already sorts into once you read it that way: rooms
+ * that print money off a vice (`vice`), goods that move without a bill of sale
+ * (`contraband`), a threat or a debt collected in person (`muscle`), and a
+ * seat bought with favours, a union card or a share of somebody's books
+ * (`influence`). See `config/operations.ts` for which job is which and why.
+ */
+export type OperationCategory = 'vice' | 'contraband' | 'muscle' | 'influence';
+
+/**
  * The board, flattened, so a job's unlock condition can live in config.
  *
  * The same trick `config/goals.ts` and the world conditions use: config
@@ -586,6 +597,8 @@ export interface OperationDef {
   id: string;
   name: string;
   description: string;
+  /** What kind of business this is, apart from its tier. See `OperationCategory`. */
+  category: OperationCategory;
   /**
    * How far up the table this sits, 0 for street work to 5 for the last jobs.
    *

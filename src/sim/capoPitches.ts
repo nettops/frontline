@@ -18,15 +18,22 @@
  * hierarchy the week this lands, and a pitch system that only works after a
  * hierarchy exists would sit dark for most of a career. Phase 3's dispatch
  * reads `reportsTo` where it exists; attribution here does not need to.
+ *
+ * A real capo also has a trade — see `capoSpecialty` — so Paulie brings
+ * construction and Ralph brings bookmaking rather than the board reading like
+ * one man wearing three different names. It is read off him, never stored,
+ * and it never costs a capo a pitch: his own category is preferred only when
+ * it is actually on the board this week, and the seniority fallback above is
+ * never given one at all, because there is no capo yet for it to belong to.
  */
 
 import { Rng, clamp } from './rng';
-import type { GameState, Id, CapoPitch, Npc } from './types';
+import type { GameState, Id, CapoPitch, Npc, OperationCategory, OperationDef } from './types';
 import type { Check } from './delegation';
 import { CAPO_PITCH } from '../config/capoPitches';
 import { DELEGATION } from '../config/delegation';
 import { ROLE_ORDER } from '../config/economy';
-import { OPERATION_BY_ID } from '../config/operations';
+import { OPERATION_BY_ID, OPERATION_CATEGORIES } from '../config/operations';
 import { availableOperations, STREET_WORK_IDS } from './operations';
 import { operableTerritories, territoryDef } from './territory';
 import { addNote, crewList } from './npc';
@@ -63,6 +70,34 @@ function pitchableOperations(state: GameState) {
   );
 }
 
+/** A real capo, as opposed to the seniority stand-in `pitchCapoPool` falls back to. */
+function isRealCapo(npc: Npc): boolean {
+  return ROLE_ORDER.indexOf(npc.role) >= ROLE_ORDER.indexOf('capo');
+}
+
+/**
+ * What a real capo brings, read off him rather than kept as a second stat.
+ *
+ * Nothing already on `Npc` says "runs numbers" or "moves trucks" — the stats
+ * are dispositions (greed, courage, discipline...) and the traits are the
+ * same, so mapping either onto a business category would be inventing a
+ * connection neither was written to carry, the same mistake the design note
+ * on `config/operations.ts` warns against when sorting jobs into categories
+ * that don't fit them. A steward's district was the other candidate and it
+ * fails for a different reason: most capos never hold one, so it cannot give
+ * every capo an answer.
+ *
+ * `id` can. It is permanent, unique, and every `Npc` has one from the moment
+ * he exists — so this reads it through `Rng.stableNoise`, the same idiom
+ * `perceive()` uses for a stat's fuzz: a fact that has to hold still for one
+ * person forever rather than reroll on every tick, without spending a call on
+ * the causal stream or a field in the save.
+ */
+export function capoSpecialty(capo: Npc): OperationCategory {
+  const roll = Rng.stableNoise(`capoSpecialty:${capo.id}`, 0);
+  return OPERATION_CATEGORIES[Math.floor(roll * OPERATION_CATEGORIES.length)];
+}
+
 /**
  * Tops the board back up to `CAPO_PITCH.count`, once a week, and ages out
  * anything that has sat unanswered too long.
@@ -93,14 +128,36 @@ export function tickCapoPitches(state: GameState, rng: Rng): void {
   const ops = pitchableOperations(state);
   if (ops.length === 0) return;
   const fresh = ops.filter((op) => !openIds.has(op.id));
-  const chosen = rng.sample(fresh.length > 0 ? fresh : ops, need);
 
-  for (const op of chosen) {
+  /*
+     Shrinks by one op per pitch drafted, so a job offered this batch cannot
+     be offered again in the same batch — what `rng.sample` used to guarantee
+     in one call, back when the batch was drawn before any capo was attached
+     to it.
+
+     The capo comes first now, because biasing toward his trade means knowing
+     whose trade it is before picking the job. A real capo's own category is
+     preferred whenever it is still in `pool`; the seniority fallback (no real
+     capo yet — see this file's header) never filters at all, so an org with
+     nobody to specialise stays exactly as generic as before this existed.
+  */
+  let pool = fresh.length > 0 ? fresh : ops;
+
+  for (let i = 0; i < need && pool.length > 0; i++) {
+    const capo = rng.pick(capos);
+    let candidates: OperationDef[] = pool;
+    if (isRealCapo(capo)) {
+      const own = pool.filter((op) => op.category === capoSpecialty(capo));
+      if (own.length > 0) candidates = own;
+    }
+    const op = rng.pick(candidates);
+    pool = pool.filter((o) => o.id !== op.id);
+
     pitches.push({
       id: nextId(state, 'pitch'),
       defId: op.id,
       territoryId: rng.pick(districts).territory.id,
-      capoId: rng.pick(capos).id,
+      capoId: capo.id,
       offeredDay: state.day,
       status: 'open',
     });
