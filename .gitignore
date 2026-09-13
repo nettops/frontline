@@ -12,3 +12,5 @@ coverage
 
 # Local Claude Code state, if it ever appears
 .claude/settings.local.json
+
+.worktrees/
