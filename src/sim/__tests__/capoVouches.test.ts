@@ -11,12 +11,14 @@ import { describe, expect, it } from 'vitest';
 import { newGame } from '../state';
 import { Rng } from '../rng';
 import { generateNpc } from '../npc';
-import { assignToCapo } from '../delegation';
+import { assignToCapo, putInCharge } from '../delegation';
+import { territoryList } from '../territory';
 import { TIE_DEPARTURE, TIE_EVENTS } from '../../config/ties';
 import { BEHAVIOUR, DRIFT } from '../../config/npcs';
-import { CAPO_VOUCH } from '../../config/capoVouches';
+import { CAPO_VOUCH, CAPO_CAPACITY } from '../../config/capoVouches';
 import {
   canMakeVouch,
+  capoCapacity,
   denyVouch,
   isVouchReady,
   makeVouch,
@@ -163,5 +165,41 @@ describe('Deny', () => {
     const { associate } = readyPair(state);
     denyVouch(state, associate.id);
     expect(vouchCandidates(state)).toHaveLength(0);
+  });
+});
+
+describe('a capo can only hold so many made guys', () => {
+  it('shaped like maxCrew — a base, plus more for a district he actually runs', () => {
+    const state = game();
+    const capo = hire(state, 'capo', 1);
+    expect(capoCapacity(state, capo)).toBe(CAPO_CAPACITY.base);
+
+    const t = territoryList(state)[0];
+    t.influence = { ...t.influence, player: 60 };
+    putInCharge(state, capo.id, t.id);
+    expect(capoCapacity(state, capo)).toBe(CAPO_CAPACITY.base + CAPO_CAPACITY.perDistrict);
+  });
+
+  it('blocks a Make that would push him over it, and says why', () => {
+    const state = game();
+    const { capo, associate } = readyPair(state);
+    // Fill him up to exactly his capacity with other men first.
+    for (let i = 0; i < CAPO_CAPACITY.base; i++) {
+      const filler = hire(state, 'soldier', 10 + i);
+      filler.reportsTo = capo.id;
+    }
+    const check = canMakeVouch(state, associate.id);
+    expect(check.ok).toBe(false);
+    expect(check.message).toContain(capo.name);
+
+    const result = makeVouch(state, associate.id);
+    expect(result.ok).toBe(false);
+    expect(state.npcs[associate.id].role).toBe('associate');
+  });
+
+  it('does not block a Make while there is still room', () => {
+    const state = game();
+    const { associate } = readyPair(state);
+    expect(canMakeVouch(state, associate.id).ok).toBe(true);
   });
 });
