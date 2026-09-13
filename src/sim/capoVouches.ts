@@ -18,7 +18,7 @@ import { promote, canPromote, type ActionResult } from './crew';
 import { districtsHeldBy } from './delegation';
 import { recordTie } from './ties';
 import { remember } from './memory';
-import { addLog } from './util';
+import { addLog, say } from './util';
 import { TIE_DEPARTURE } from '../config/ties';
 import { BEHAVIOUR, DRIFT } from '../config/npcs';
 import { CAPO_CAPACITY, CAPO_VOUCH } from '../config/capoVouches';
@@ -53,6 +53,25 @@ export function isVouchReady(state: GameState, capo: Npc, associate: Npc): boole
   const tie = capo.ties.find((t) => t.id === associate.id);
   if (!tie || tie.trust < TIE_DEPARTURE.followTrustAbove) return false;
   return true;
+}
+
+/**
+ * The recommendation itself, in this game's voice.
+ *
+ * `say()`, never the causal stream — this reports a fact that is already
+ * true (a real capo, a real associate) rather than deciding anything, and
+ * `Rng.stableNoise` at day 0 (the same idiom `capoSpecialty` uses) holds the
+ * phrasing still for as long as the recommendation is live instead of
+ * rerolling it on every render. Names both men and nothing hidden about
+ * either — no stat, no tie number, the same discipline every other panel in
+ * this game keeps.
+ */
+export function vouchLine(capo: Npc, associate: Npc): string {
+  return say(`vouch:${associate.id}`, 0, [
+    `${capo.name} is putting ${associate.name}'s name forward. Says he is ready.`,
+    `${capo.name} thinks it is time ${associate.name} got made.`,
+    `${capo.name} vouches for ${associate.name}, and wants your word on it.`,
+  ]);
 }
 
 /** Everybody a capo is currently prepared to vouch for, cooldown already applied. */
@@ -115,7 +134,15 @@ export function canMakeVouch(state: GameState, associateId: Id): ActionResult {
 export function makeVouch(state: GameState, associateId: Id): ActionResult {
   const check = canMakeVouch(state, associateId);
   if (!check.ok) return check;
-  return promote(state, associateId);
+  const capoId = state.npcs[associateId]?.reportsTo;
+  const result = promote(state, associateId);
+  // Recorded only once it actually happened, and only who — never a score.
+  // `dismiss` in crew.ts is the one place this gets read back.
+  if (result.ok && capoId) {
+    const npc = state.npcs[associateId];
+    if (npc) npc.vouchedBy = capoId;
+  }
+  return result;
 }
 
 /** Wait: set aside for now. No cost, no state beyond the shared cooldown. */

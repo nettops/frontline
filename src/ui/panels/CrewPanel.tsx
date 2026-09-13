@@ -38,6 +38,14 @@ import {
   recruitCost,
   setWage,
 } from '../../sim/crew';
+import {
+  canMakeVouch,
+  denyVouch,
+  makeVouch,
+  vouchCandidates,
+  vouchLine,
+  waitOnVouch,
+} from '../../sim/capoVouches';
 import { payrollForecast, recentWeeklyTake, wageBillWith } from '../../sim/economy';
 import { nightsWorked } from '../../sim/standing';
 import { canTeach, startTraining, stopTraining, trainingFor } from '../../sim/training';
@@ -84,6 +92,7 @@ export default function CrewPanel() {
      It was doing something. It was not showing it.
   */
   const [meeting, setMeeting] = useState<Meeting | null>(null);
+  const [vouchMessage, setVouchMessage] = useState<string | null>(null);
   /*
      Round 24's blind report, reproduced on essentially every visit: clicking a
      row opens the detail panel below the table, not in a modal, and on a
@@ -96,6 +105,7 @@ export default function CrewPanel() {
   }, [selectedId]);
   const crew = crewList(state);
   const recruits = Object.values(state.recruits);
+  const vouches = vouchCandidates(state);
   const selected = selectedId ? state.npcs[selectedId] : null;
   const cost = recruitCost(state);
   const payroll = payrollForecast(state);
@@ -231,6 +241,64 @@ export default function CrewPanel() {
                   : `Did not come: ${meeting.absent.map((n) => n.name).join(', ')}.`}
               </p>
             </div>
+          )}
+        </Panel>
+      )}
+
+      {/*
+         A capo's own recommendation, not a menu the player browses.
+
+         Reads `vouchCandidates`, which is a pure derived list — nothing here
+         is stored beyond the one cooldown field Wait and Deny both write.
+         Make is the same `promote` the roster button below already calls;
+         this is a shortcut for the case a capo is actually asking for,
+         with a real answer either way instead of a silent skip.
+      */}
+      {vouches.length > 0 && (
+        <Panel title="A capo's word">
+          {vouches.map(({ capo, associate }) => {
+            const makeCheck = canMakeVouch(state, associate.id);
+            return (
+              <div key={associate.id} className="row between" style={{ marginBottom: 8 }}>
+                <span className="dim">{vouchLine(capo, associate)}</span>
+                <div className="btn-row">
+                  <button
+                    className="btn small"
+                    disabled={!makeCheck.ok}
+                    title={makeCheck.message}
+                    onClick={() => {
+                      const result = mutate((s) => makeVouch(s, associate.id), true);
+                      if (result) setVouchMessage(result.message);
+                    }}
+                  >
+                    Make
+                  </button>
+                  <button
+                    className="btn small"
+                    onClick={() => {
+                      const result = mutate((s) => waitOnVouch(s, associate.id), true);
+                      if (result) setVouchMessage(result.message);
+                    }}
+                  >
+                    Wait
+                  </button>
+                  <button
+                    className="btn small danger"
+                    onClick={() => {
+                      const result = mutate((s) => denyVouch(s, associate.id), true);
+                      if (result) setVouchMessage(result.message);
+                    }}
+                  >
+                    Deny
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+          {vouchMessage && (
+            <p className="dim" style={{ margin: '4px 0 0' }}>
+              {vouchMessage}
+            </p>
           )}
         </Panel>
       )}
