@@ -23,6 +23,7 @@ import {
   pitchCapoPool,
   reassignPitch,
   rejectPitch,
+  specialtyLine,
 } from '../../sim/capoPitches';
 import {
   canOpenScore,
@@ -1215,6 +1216,7 @@ function PitchCard({
   const alternatives = pitchCapoPool(state)
     .filter((n) => n.id !== pitch.capoId)
     .slice(0, 2);
+  const specialty = specialtyLine(capo);
 
   return (
     <div className="kv" style={{ alignItems: 'flex-start', marginBottom: 10 }}>
@@ -1224,6 +1226,12 @@ function PitchCard({
           {capo.name} · in {territoryDef(pitch.territoryId)?.name} ·{' '}
           {formatMoney(def.payout[0])}–{formatMoney(def.payout[1])}
         </span>
+        {specialty && (
+          <>
+            <br />
+            <span className="faint tiny">{specialty}</span>
+          </>
+        )}
       </span>
       <div className="btn-row">
         <button

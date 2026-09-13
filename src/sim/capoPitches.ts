@@ -98,6 +98,30 @@ export function capoSpecialty(capo: Npc): OperationCategory {
   return OPERATION_CATEGORIES[Math.floor(roll * OPERATION_CATEGORIES.length)];
 }
 
+/** Worded from `config/operations.ts`'s own gloss on what each category is. */
+const SPECIALTY_LINE: Record<OperationCategory, string> = {
+  vice: 'a standing vice',
+  contraband: 'goods that move',
+  muscle: 'a threat or a collection',
+  influence: 'a favour bought',
+};
+
+/**
+ * The line under a pitch's capo, naming the trade `capoSpecialty` already
+ * computed for him.
+ *
+ * Ungated, on the same footing as his role and the operation itself — both
+ * already print on the pitch card with no `perceive()` check, because a
+ * trade is what somebody does, not a read on who they are. Null for the
+ * seniority fallback `pitchCapoPool` uses when there is no real capo yet:
+ * that pool was never given a specialty (see this file's header), so there
+ * is nothing here to name.
+ */
+export function specialtyLine(capo: Npc): string | null {
+  if (!isRealCapo(capo)) return null;
+  return `${capo.name}'s usual line: ${SPECIALTY_LINE[capoSpecialty(capo)]}`;
+}
+
 /**
  * Tops the board back up to `CAPO_PITCH.count`, once a week, and ages out
  * anything that has sat unanswered too long.
