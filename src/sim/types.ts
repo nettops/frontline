@@ -710,6 +710,32 @@ export interface Score {
 }
 
 /**
+ * Work somebody else brought you, rather than a row you picked off a menu.
+ *
+ * See `sim/capoPitches.ts` for the machine and `config/capoPitches.ts` for the
+ * table. `defId` and `territoryId` are the same job-and-place pair a normal
+ * launch takes; what a pitch adds is whose idea it was, which is what
+ * `reassign` spends.
+ */
+export interface CapoPitch {
+  id: Id;
+  /** An existing `OperationDef.id`, tier 1 or above — street work has no pitches. */
+  defId: string;
+  territoryId: string;
+  /** Whose idea this is. Reassigning it costs whoever it is now. */
+  capoId: Id;
+  offeredDay: number;
+  /**
+   * `open` until the boss answers it. `approved` hands it to the assemble
+   * screen exactly the same way choosing a job off the old board did — this
+   * never runs `resolveOperation` itself. `rejected` and `expired` both clear
+   * it for nothing; the difference is only which of the two decided that.
+   */
+  status: 'open' | 'approved' | 'rejected' | 'expired';
+  settledDay?: number;
+}
+
+/**
  * One man being shown how by another.
  *
  * Both are off the board for the run of it. `status` carries the lifecycle the
@@ -1964,6 +1990,15 @@ export interface GameState {
    * which for those saves is exactly true.
    */
   orders?: Order[];
+  /**
+   * Work a capo brought to you, rather than a row you picked off a menu.
+   *
+   * Optional with a lazy initialiser in `capoPitches.ts`, the same idiom as
+   * `promises`, `civic` and `orders` — so `SAVE_VERSION` does not move and a
+   * save written before this existed loads with nobody having pitched you
+   * anything, which for those saves is exactly true.
+   */
+  capoPitches?: CapoPitch[];
   /**
    * The half of a boss that is not the business.
    *

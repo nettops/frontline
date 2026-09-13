@@ -18,6 +18,13 @@ import {
   sentimentOutlook,
 } from '../../sim/operations';
 import {
+  approvePitch,
+  livePitches,
+  pitchCapoPool,
+  reassignPitch,
+  rejectPitch,
+} from '../../sim/capoPitches';
+import {
   canOpenScore,
   kitOf,
   liveScores,
@@ -64,7 +71,7 @@ import {
 } from '../../config/operations';
 import { CONTROL_LABEL, SENTIMENT_HOSTILE_BELOW } from '../../config/territories';
 import { ATTRIBUTE_LABEL, ROLE_LABEL } from '../../config/economy';
-import type { OperationDef } from '../../sim/types';
+import type { CapoPitch, OperationDef } from '../../sim/types';
 
 const RISKS = Object.keys(AUTOPILOT_RISK) as AutopilotRisk[];
 
@@ -95,7 +102,14 @@ export default function OperationsPanel() {
     isLayingLow(state) ? 'quiet' : DEFAULT_APPROACH,
   );
 
-  const open = manualBoard(state);
+  /*
+     Tier 0 only. Tier 1 and above used to be a permanent row per open job def
+     — every one of them, every time, no matter how large the organization had
+     grown. That is what `pitches` below replaces: a short live list a capo
+     actually brought, rather than a menu the boss keeps browsing himself.
+  */
+  const open = manualBoard(state).filter((op) => op.tier === 0);
+  const pitches = livePitches(state);
   const locked = lockedOperations(state);
   const active = Object.values(state.activeOperations);
   const free = availableCrew(state);
@@ -130,6 +144,16 @@ export default function OperationsPanel() {
     // same job, and making the player re-pick it every time would be four
     // clicks to say something the score already said.
     setTerritoryPicked(at ?? null);
+  };
+
+  /*
+     Approving a pitch consumes it — the slot it held frees up on the next
+     weekly refresh — and opens the same assemble screen a hand-picked job
+     always used. Nothing about resolution changed; only how you got here.
+  */
+  const approve = (pitchId: string, defId: string, territoryId: string) => {
+    mutate((s) => approvePitch(s, pitchId), true);
+    choose(defId, territoryId);
   };
 
   /*
@@ -516,6 +540,25 @@ export default function OperationsPanel() {
           <p className="faint tiny" style={{ margin: 0 }}>
             Whatever is in hand is used on the night and then got rid of. Getting rid of it
             badly is how the police come to have it.
+          </p>
+        </Panel>
+      )}
+
+      {pitches.length > 0 && (
+        <Panel title="Brought to you">
+          {pitches.map((p) => (
+            <PitchCard
+              key={p.id}
+              pitch={p}
+              selected={p.defId === selected && p.territoryId === territoryId}
+              onApprove={() => approve(p.id, p.defId, p.territoryId)}
+              onReject={() => mutate((s) => rejectPitch(s, p.id), true)}
+              onReassign={(capoId) => mutate((s) => reassignPitch(s, p.id, capoId), true)}
+            />
+          ))}
+          <p className="faint tiny" style={{ margin: '8px 0 0' }}>
+            What a capo brings you this week. Turn one down and it costs nothing; hand it to
+            somebody else and the man it was taken from remembers it.
           </p>
         </Panel>
       )}
@@ -1120,6 +1163,71 @@ function SameAgain({ onLaunched }: { onLaunched: () => void }) {
     >
       Same again — {def.name}
     </button>
+  );
+}
+
+/**
+ * One thing a capo has brought you, and the three answers you can give him.
+ *
+ * Reads its own state rather than taking every field as a prop, the same
+ * shape `SameAgain` uses — a card knows what it needs to say about itself.
+ */
+function PitchCard({
+  pitch,
+  selected,
+  onApprove,
+  onReject,
+  onReassign,
+}: {
+  pitch: CapoPitch;
+  selected: boolean;
+  onApprove: () => void;
+  onReject: () => void;
+  onReassign: (capoId: string) => void;
+}) {
+  const state = useGame();
+  const def = OPERATION_BY_ID[pitch.defId];
+  const capo = state.npcs[pitch.capoId];
+  if (!def || !capo) return null;
+
+  // Whoever else could take it instead — the same pool a pitch is drawn from,
+  // capped so this row stays a row and not a second crew sheet.
+  const alternatives = pitchCapoPool(state)
+    .filter((n) => n.id !== pitch.capoId)
+    .slice(0, 2);
+
+  return (
+    <div className="kv" style={{ alignItems: 'flex-start', marginBottom: 10 }}>
+      <span className="kv-key">
+        <span className="name-main">{def.name}</span>{' '}
+        <span className="faint tiny">
+          {capo.name} · in {territoryDef(pitch.territoryId)?.name} ·{' '}
+          {formatMoney(def.payout[0])}–{formatMoney(def.payout[1])}
+        </span>
+      </span>
+      <div className="btn-row">
+        <button
+          className={selected ? 'btn small primary' : 'btn small'}
+          title={def.description}
+          onClick={onApprove}
+        >
+          Approve
+        </button>
+        <button className="btn small" onClick={onReject}>
+          Reject
+        </button>
+        {alternatives.map((alt) => (
+          <button
+            key={alt.id}
+            className="btn small danger"
+            title={`${capo.name} watches ${alt.name} get this instead. Not free for him.`}
+            onClick={() => onReassign(alt.id)}
+          >
+            Give it to {alt.name}
+          </button>
+        ))}
+      </div>
+    </div>
   );
 }
 
