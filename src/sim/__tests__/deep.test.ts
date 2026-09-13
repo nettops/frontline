@@ -306,6 +306,26 @@ describe('people want things', () => {
     const npc = crewList(state)[0];
     npc.stats.loyalty = 20;
     npc.stats.grievance = 60;
+    /*
+       Pinned rather than left to whatever `seated`'s capo rolled.
+
+       This npc is senior (a capo), so an unconstrained ambition above 68 also
+       qualifies him for 'run_it' (poachable 0.8) and an unconstrained fear
+       above 45 (or the family_man trait) also qualifies him for 'protect'
+       (poachable 0.75) or, past 52, 'go_straight' (poachable 0.6) — three
+       goals from the "contented half" this test means to rule out, each
+       reachable purely from stats this test never used to pin. It only ever
+       passed because the exact rng draw `reviewGoal` happens to land on
+       depends on how many calls came before it, and capo-attributed recruits
+       (this session's change to `refreshRecruits`) shift that count by
+       exactly the kind of margin the file's own header warns about. Pinning
+       these closes the gap instead of relying on the next unrelated change
+       not to land on a bad draw again.
+    */
+    npc.stats.fear = 20;
+    npc.stats.ambition = 50;
+    npc.age = 30;
+    npc.traits = npc.traits.filter((t) => t !== 'family_man');
     npc.goal = null;
     reviewGoal(state, new Rng(state.rng), npc, goalBoard(state));
     expect(npc.goal).not.toBeNull();

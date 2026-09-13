@@ -16,6 +16,7 @@ import {
   isOutOfReach,
   traitEffect,
 } from './npc';
+import { isRealCapo, pitchCapoPool } from './capoPitches';
 import { passedOver } from './ties';
 import { remember } from './memory';
 import { keepPromise } from './promises';
@@ -56,10 +57,28 @@ export function recruitCost(state: GameState): number {
 export function refreshRecruits(state: GameState, rng: Rng, force = false): void {
   if (!force && state.day - state.recruitsRefreshedDay < RECRUIT_REFRESH_DAYS) return;
 
+  /*
+     Whose introduction this is, if anybody's.
+
+     Real capos only — `pitchCapoPool`'s seniority fallback (nobody at capo or
+     above yet) is for attributing a *pitch*, which needs somebody to hand a
+     job to regardless. A recruit does not need an author at all, and handing
+     one to the fallback would put every early associate under a soldier who
+     is not actually a capo, which `reportsTo`'s own contract says never
+     happens except by the player's own hand (`assignToCapo`). Filtering the
+     fallback out of the pool leaves it empty until the org has a real capo,
+     which is exactly the "keep today's behaviour" case this is for.
+  */
+  const capos = pitchCapoPool(state).filter(isRealCapo);
+
   const had = Object.keys(state.recruits).length;
   state.recruits = {};
   for (let i = 0; i < RECRUIT_POOL_SIZE; i++) {
     const npc = generateNpc(state, rng, 'associate');
+    if (capos.length > 0) {
+      const capo = rng.pick(capos);
+      npc.reportsTo = capo.id;
+    }
     state.recruits[npc.id] = npc;
   }
   state.recruitsRefreshedDay = state.day;
@@ -86,6 +105,8 @@ export function refreshRecruits(state: GameState, rng: Rng, force = false): void
   if (had > 0) {
     const fresh = Object.values(state.recruits);
     const face = fresh.length ? fresh[0] : null;
+    // Whoever brought the face on the list, if it was a real capo's doing.
+    const faceCapo = face?.reportsTo ? state.npcs[face.reportsTo] : undefined;
     addLog(
       state,
       say(
@@ -105,6 +126,11 @@ export function refreshRecruits(state: GameState, rng: Rng, force = false): void
            fallback available on every draw wins every draw. So the fallback
            names a person too, and the only line left without one is the case
            where there is genuinely nobody on the list.
+
+           Once there is a real capo behind the face, one more variant joins
+           the pool naming him too — sometimes, not always, the same way the
+           other five compete for the draw. It never replaces them: an
+           organization with no capo yet still gets every line above.
         */
         [
           face ? `${face.name} has been asking after you. So have ${fresh.length - 1} others.` : null,
@@ -114,6 +140,7 @@ export function refreshRecruits(state: GameState, rng: Rng, force = false): void
           face
             ? `${face.name} claims a connection to somebody you know. On the list either way.`
             : null,
+          faceCapo ? `${faceCapo.name} is putting ${face!.name} forward. Says he vouches for him.` : null,
           // Not `fresh.length > 1`, which is true nearly every week and put
           // this back at the top of the probe's loudest lines within one run.
           face ? null : `${fresh.length} new names and nobody you would write down.`,

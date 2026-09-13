@@ -70,8 +70,14 @@ function pitchableOperations(state: GameState) {
   );
 }
 
-/** A real capo, as opposed to the seniority stand-in `pitchCapoPool` falls back to. */
-function isRealCapo(npc: Npc): boolean {
+/**
+ * A real capo, as opposed to the seniority stand-in `pitchCapoPool` falls back to.
+ *
+ * Exported for `crew.ts`'s recruit attribution and `capoVouches.ts`'s
+ * eligibility check, both of which need the identical distinction this file
+ * already draws rather than a second copy of the role comparison.
+ */
+export function isRealCapo(npc: Npc): boolean {
   return ROLE_ORDER.indexOf(npc.role) >= ROLE_ORDER.indexOf('capo');
 }
 
