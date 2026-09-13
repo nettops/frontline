@@ -18,7 +18,7 @@ import type {
   PendingEvent,
   Territory,
 } from './types';
-import { addEvidence, addLog, pushEvent, weightedPick, withArticle } from './util';
+import { addEvidence, addLog, pushEvent, seedFollowup, weightedPick, withArticle } from './util';
 import { askable, money, oneOf, payable, shortOf } from './memo';
 import { GEN_DEFS, isGenerated, resolveGenerated } from './eventgen';
 import { GEN_CHANCE_PER_DAY, GEN_WHEN } from '../config/eventgen';
@@ -1916,9 +1916,24 @@ export function resolveEvent(
         addLog(state, `${npc.name} is out. The money is not coming back.`, 'crew');
       } else {
         // Watching costs you nothing today, which is the trap.
-        state.flags['tolerated_skimming'] = (state.flags['tolerated_skimming'] ?? 0) + 1;
         npc.stats.greed = clamp(npc.stats.greed + 8, 0, 100);
         addLog(state, 'You let it run. For now.', 'neutral');
+        /*
+           Tolerated twice, and it gets round. A man who was never confronted
+           for taking is the reason somebody else decides it is safe to try —
+           the ripple `heir_gone` already has, applied to the one flag in this
+           file that used to count for nothing.
+        */
+        if (seedFollowup(state, 'tolerated_skimming', 2)) {
+          const others = crewList(state).filter(
+            (n) => n.id !== npc.id && n.status === 'active' && !n.isSkimming,
+          );
+          if (others.length) {
+            const spreadTo = rng.pick(others);
+            spreadTo.isSkimming = true;
+            spreadTo.skimTotal = Math.max(spreadTo.skimTotal, npc.skimTotal * 1.5);
+          }
+        }
       }
       return;
     }

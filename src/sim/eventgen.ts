@@ -25,7 +25,7 @@ import { Rng, clamp } from './rng';
 import type { EventDef } from './events';
 import type { GameState, Npc, PendingEvent, Territory } from './types';
 import { money, oneOf, payable } from './memo';
-import { addLog } from './util';
+import { addLog, seedFollowup } from './util';
 import { addNote, crewList } from './npc';
 import { remember } from './memory';
 import { recordTie } from './ties';
@@ -993,7 +993,7 @@ export const GEN_DEFS: EventDef[] = [
  */
 export function resolveGenerated(
   state: GameState,
-  _rng: Rng,
+  rng: Rng,
   event: PendingEvent,
   choiceId: string,
 ): void {
@@ -1215,6 +1215,23 @@ export function resolveGenerated(
       }
       npc.stats.loyalty = clamp(npc.stats.loyalty + GEN_EFFECT.letItGoLoyalty, 0, 100);
       npc.skimTotal += GEN_EFFECT.letItGoTakes;
+      /*
+         Let go twice, and a steward who was never called on it is what tells
+         the others it is safe. Spreads to a different man holding a
+         district, with a total already past the floor `applies` reads —
+         the next steward asked about it is found by the same check that
+         found this one, not by a case built specially for him.
+      */
+      if (seedFollowup(state, 'let_take_go', 2)) {
+        const others = territoryList(state)
+          .map((t) => (t.stewardId ? state.npcs[t.stewardId] : null))
+          .filter((n): n is Npc => !!n && n.id !== npc.id && !n.isSkimming);
+        if (others.length) {
+          const spreadTo = rng.pick(others);
+          spreadTo.isSkimming = true;
+          spreadTo.skimTotal = Math.max(spreadTo.skimTotal, GEN_WHEN.skimmed * 1.5);
+        }
+      }
       return;
     }
 
