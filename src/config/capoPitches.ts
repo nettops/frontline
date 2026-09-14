@@ -26,4 +26,14 @@ export const CAPO_PITCH = {
    * that prices "how long before this comes round again".
    */
   windowDays: 14,
+
+  /**
+   * How much more often an ambitious capo's pitch gets drafted, next to a man
+   * content running his crew — the design brief's "wants more responsibility"
+   * read as a standing bias rather than a one-off scripted ask. A capo at 0
+   * ambition keeps weight 1 (the old even odds); one at 100 gets weight 2, so
+   * the most ambitious man in a two-capo pool brings you roughly twice as many
+   * pitches as the least ambitious, not a guarantee, never a lock-out.
+   */
+  ambitionWeight: 1,
 } as const;

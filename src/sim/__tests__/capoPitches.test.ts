@@ -191,6 +191,38 @@ describe('capo pitches', () => {
     expect(categories[0]).toBe('muscle');
   });
 
+  it('a more ambitious capo gets attributed more of the pitches — a standing bias, not a lock-out', () => {
+    const state = game();
+    build(state, 1, 0, 6);
+    const rng = new Rng(state.rng);
+    const crew = crewList(state);
+    const [low, high, ...rest] = crew;
+    low.role = 'capo';
+    high.role = 'capo';
+    // `build`'s clones are a shallow spread of the same template, so `.stats`
+    // is one shared object across them until replaced outright — mutating it
+    // in place would silently set both men's ambition at once.
+    low.stats = { ...low.stats, ambition: 5 };
+    high.stats = { ...high.stats, ambition: 95 };
+    for (const n of rest) n.role = 'soldier';
+
+    const counts: Record<string, number> = { [low.id]: 0, [high.id]: 0 };
+    for (let day = state.day; day <= 7 * 40; day++) {
+      state.day = day;
+      tickCapoPitches(state, rng);
+      if (day % CAPO_PITCH.refreshIntervalDays === 0) {
+        for (const p of livePitches(state)) {
+          counts[p.capoId] = (counts[p.capoId] ?? 0) + 1;
+          rejectPitch(state, p.id); // clear it so next week drafts fresh
+        }
+      }
+    }
+
+    // Weight 2 vs weight 1 is roughly a 2:1 split over enough draws — a wide
+    // margin (1.3x) so this reads the bias, not sampling noise.
+    expect(counts[high.id]).toBeGreaterThan(counts[low.id] * 1.3);
+  });
+
   it('an unanswered pitch goes stale on its own clock', () => {
     const state = game();
     build(state, 1, 0, 4);
