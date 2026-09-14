@@ -20,6 +20,18 @@ export const CAPO_VOUCH = {
    * to set one aside) even though they should cost about the same.
    */
   cooldownDays: 14,
+
+  /**
+   * How many of a capo's own vouches have to go bad before the game says so.
+   *
+   * Sized off this project's own "three is a pattern" convention rather than
+   * picked fresh: `events.ts`'s `let_it_go` escalates and changes its line on
+   * the third occurrence ("Nobody is going to raise it with you again."), and
+   * `util.ts`'s `seedFollowup` is the general form of the same count-then-say
+   * shape. Two is a coincidence a boss can still explain away; three is a
+   * record.
+   */
+  mistakesBeforeWarning: 3,
 } as const;
 
 /**
