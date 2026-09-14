@@ -23,6 +23,7 @@ import type {
 import { addEvidence, addLog, formatMoney, nextId, pushEvent, say, weightedPick } from './util';
 import { addHeat, channelHeat } from './heat';
 import { addNote, crewList } from './npc';
+import { applyVoucherConsequence } from './capoVouches';
 import { nightsWorked } from './standing';
 import { playerInfluence, territoryList } from './territory';
 import { remember } from './memory';
@@ -477,6 +478,8 @@ export function sweep(state: GameState, rng: Rng, agencyName = 'the police'): Np
     npc.unavailableUntilDay = state.day + Math.max(7, Math.round(rolled * shorten));
     npc.stats.fear = clamp(npc.stats.fear + 20, 0, 100);
     addNote(npc, state.day, `Swept up by ${agencyName}.`, 'bad');
+    // He was somebody's word before he was somebody's exposure.
+    applyVoucherConsequence(state, npc, state.day, 'was swept up');
   }
   return taken;
 }

@@ -26,6 +26,7 @@ import { tickLaunderer } from './launderers';
 import { tickTerritory } from './territory';
 import { tickAnnouncements } from './announce';
 import { tickDelegation } from './delegation';
+import { tickCapoPitches } from './capoPitches';
 import { tickPromises } from './promises';
 import { markStanding } from './standing';
 import { tickInformants } from './informants';
@@ -193,6 +194,8 @@ export function advanceDay(state: GameState): void {
   //     running it the other way round would bleed influence out of districts
   //     somebody is standing in.
   tickDelegation(state, rng);
+  // 6b. What a capo is bringing the boss this week, above street work.
+  tickCapoPitches(state, rng);
   // 7. Influence bleeds where you stopped showing up; feeling drifts back.
   if (state.day % 7 === 0) tickTerritory(state);
   // 7a. Whatever reached you this week, and how sure whoever brought it was.

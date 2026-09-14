@@ -28,6 +28,7 @@ import type {
 import { neglectRisk } from './personal';
 import { addLog, pushEvent, withArticle } from './util';
 import { addNote, crewList, isOutOfReach, perceive } from './npc';
+import { applyVoucherConsequence } from './capoVouches';
 import { goalEffect } from './goals';
 import { passedOver, recordTie } from './ties';
 import { claimFromMemory } from './memory';
@@ -607,6 +608,8 @@ function applyHandoverCosts(
       npc.status = 'defected';
       npc.unavailableUntilDay = null;
       addNote(npc, state.day, 'Left rather than work for the new boss.', 'bad');
+      // The same walkout `npc.ts`'s drift charges a voucher for.
+      applyVoucherConsequence(state, npc, state.day, 'left rather than work for the new boss');
     } else {
       // Whatever they thought of the old man does not transfer.
       npc.stats.respectForBoss = clamp(npc.stats.respectForBoss - 15, 0, 100);

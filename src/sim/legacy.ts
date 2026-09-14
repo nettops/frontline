@@ -15,8 +15,10 @@ import { territoryList, playerInfluence, controlLevel } from './territory';
 import { figure } from './civic';
 import { workingHoldings } from './holdings';
 import { possessions } from './possessions';
+import { crewList } from './npc';
 import { POSSESSION_BY_ID } from '../config/possessions';
 import { CIVIC_FIGURES } from '../config/civic';
+import { GOAL_CERTAIN_ABOVE } from '../config/goals';
 import {
   CAREER_SHAPES,
   LEGITIMACY,
@@ -183,6 +185,27 @@ export function careerShape(state: GameState): CareerShape {
     verdict: won.def.verdict,
     because: won.because,
   };
+}
+
+/**
+ * The same nine-way read, mid-career rather than only at the end.
+ *
+ * F5/F15: an emergent leadership archetype, and an org that can react to it —
+ * which needs a read that exists before the career is over. `careerShape`
+ * already is that scoring function; nothing here duplicates it.
+ *
+ * Gated the way every other opinion of you in this game is gated, even though
+ * `perceive()` itself has no stat for it: nobody hands over a read on your
+ * leadership before somebody has been around long enough to have formed one.
+ * `GOAL_CERTAIN_ABOVE` is the same familiarity line `perceivedGoal` uses for
+ * its own most-confident read, reused here rather than invented — a second
+ * threshold for "I know this man" would be a second definition of a thing
+ * this file did not create.
+ */
+export function perceivedLeadership(state: GameState): CareerShape | null {
+  const known = crewList(state).some((n) => n.familiarity >= GOAL_CERTAIN_ABOVE);
+  if (!known) return null;
+  return careerShape(state);
 }
 
 export interface LegacyLine {

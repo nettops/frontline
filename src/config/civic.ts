@@ -343,6 +343,31 @@ export const CIVIC_FIGURES: CivicFigureDef[] = [
     owesAbove: 85,
     needsInfluence: 6,
   },
+  {
+    id: 'lawyer',
+    title: 'A defense lawyer',
+    blurb:
+      'Keeps a card for every judge in the building and remembers exactly whose retainer cleared. Wants a client whose file is worth minding.',
+    /*
+       Same shape as every figure above: reads a quantity the game already
+       keeps, grants a favour the machinery already knows how to do. Watches
+       what the judge watches — legal exposure is exactly what a defense
+       lawyer is exposed to — and grants what the captain grants, which is
+       the literal job: getting evidence struck off a case. Nobody else on
+       the roster pairs those two, so this needed no new `CivicWatches` or
+       `FavourKind` and no new case in `scoreFor` or `apply`.
+
+       `owesAbove` is set by analogy with the judge, the only other figure
+       reading this quantity, rather than plotted against a population —
+       there is no measured distribution for a figure that did not exist
+       until now. Below the midpoint on purpose, the same rule the note
+       above this table used for all four original figures.
+    */
+    watches: 'discretion',
+    grants: 'bury_a_case',
+    owesAbove: 50,
+    needsInfluence: 2,
+  },
 ];
 
 export const CIVIC_BY_ID: Record<string, CivicFigureDef> = Object.fromEntries(

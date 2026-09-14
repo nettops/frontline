@@ -14,7 +14,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { newGame } from '../state';
-import { careerShape, legitimacy, postMortem } from '../legacy';
+import { careerShape, legitimacy, perceivedLeadership, postMortem } from '../legacy';
 import { estate } from '../estate';
 import { figure } from '../civic';
 import { SHAPE_BARS } from '../../config/legacy';
@@ -24,6 +24,7 @@ import { Rng } from '../rng';
 import { generateNpc } from '../npc';
 import { eligibleStewards, putInCharge } from '../delegation';
 import { CONTROL_THRESHOLDS } from '../../config/territories';
+import { GOAL_CERTAIN_ABOVE } from '../../config/goals';
 import type { GameState } from '../types';
 
 /** The floor of the top control band, which is what the Kingpin reads. */
@@ -285,5 +286,38 @@ describe('the post-mortem', () => {
     const lines = postMortem(game());
     expect(lines.length).toBeGreaterThan(4);
     expect(lines.every((l) => l.label.length > 0 && l.value.length > 0)).toBe(true);
+  });
+});
+
+describe('the mid-game read', () => {
+  /*
+     F5/F15: an emergent leadership archetype the org can react to, without
+     turning it into a free readout. `careerShape` already answers "what was
+     this career", once, at the end. This is the same question asked while it
+     is still running, and it has to be earned the way everything else a
+     person could tell you is earned — nobody has an opinion of you worth
+     printing until somebody has been around long enough to form one.
+  */
+  it('has no read at all until somebody in the crew knows you that well', () => {
+    const state = game();
+    const rng = new Rng(state.rng);
+    const npc = generateNpc(state, rng, 'soldier');
+    npc.familiarity = GOAL_CERTAIN_ABOVE - 1;
+    state.npcs[npc.id] = npc;
+
+    expect(perceivedLeadership(state)).toBeNull();
+  });
+
+  it('reads the same shape careerShape would, once somebody does', () => {
+    const state = game();
+    state.org.fear = SHAPE_BARS.streetKingFear + 5;
+    const rng = new Rng(state.rng);
+    const npc = generateNpc(state, rng, 'soldier');
+    npc.familiarity = GOAL_CERTAIN_ABOVE;
+    state.npcs[npc.id] = npc;
+
+    const read = perceivedLeadership(state);
+    expect(read).not.toBeNull();
+    expect(read!.id).toBe(careerShape(state).id);
   });
 });

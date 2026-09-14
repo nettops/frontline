@@ -451,6 +451,39 @@ export interface Npc {
   informingSince?: number;
   /** Set after somebody else was killed for it. He is not stupid. */
   carefulUntilDay?: number;
+  /**
+   * The capo (or above) this man was put under, if the crew has grown a
+   * chain of command.
+   *
+   * `capos.ts`'s `Capo[]` is the equivalent idea for a rival family; this is
+   * not that type, because the player's own men are `Npc` — they draw a wage,
+   * hold traits and memories, and go on jobs, none of which is true of a
+   * rival's capo. Optional with no initialiser, the same idiom as
+   * `informingSince` and `carefulUntilDay` above: a save written before this
+   * existed loads with everybody answering straight to the boss, which is
+   * exactly what a flat roster has always meant.
+   */
+  reportsTo?: Id;
+  /**
+   * The last day a capo's recommendation to make this man was set aside —
+   * by an explicit Wait, or by a Deny, which sets it too. `capoVouches.ts`
+   * reads this only to hold the recommendation off the list for
+   * `CAPO_VOUCH.cooldownDays`; it does not gate whether he is *ready*, only
+   * whether the game should mention it again yet. Optional with no
+   * initialiser, so a save written before this existed loads with every
+   * recommendation free to surface the first time it is checked — exactly
+   * what "never been asked" means.
+   */
+  vouchDeferredDay?: number;
+  /**
+   * The capo who put his name behind this man, if he was made through a
+   * vouch rather than a plain promotion. Set once, by `makeVouch`, and never
+   * cleared — a man does not stop having been vouched for. `crew.ts`'s
+   * `dismiss` reads it to charge the capo when a man he vouched for is cut
+   * loose. Optional with no initialiser: a save written before this existed
+   * loads with every made man's history blank, which for those saves is true.
+   */
+  vouchedBy?: Id;
 }
 
 export interface NpcNote {
@@ -526,6 +559,17 @@ export interface GoalBoard {
 export type OperationRisk = 'low' | 'moderate' | 'high' | 'extreme';
 
 /**
+ * What kind of business a job actually is, apart from what tier it sits at.
+ *
+ * Four clusters the table already sorts into once you read it that way: rooms
+ * that print money off a vice (`vice`), goods that move without a bill of sale
+ * (`contraband`), a threat or a debt collected in person (`muscle`), and a
+ * seat bought with favours, a union card or a share of somebody's books
+ * (`influence`). See `config/operations.ts` for which job is which and why.
+ */
+export type OperationCategory = 'vice' | 'contraband' | 'muscle' | 'influence';
+
+/**
  * The board, flattened, so a job's unlock condition can live in config.
  *
  * The same trick `config/goals.ts` and the world conditions use: config
@@ -573,6 +617,8 @@ export interface OperationDef {
   id: string;
   name: string;
   description: string;
+  /** What kind of business this is, apart from its tier. See `OperationCategory`. */
+  category: OperationCategory;
   /**
    * How far up the table this sits, 0 for street work to 5 for the last jobs.
    *
@@ -693,6 +739,32 @@ export interface Score {
    * the lifecycle without naming the field that carries it.
    */
   status: 'open' | 'running' | 'done' | 'expired';
+  settledDay?: number;
+}
+
+/**
+ * Work somebody else brought you, rather than a row you picked off a menu.
+ *
+ * See `sim/capoPitches.ts` for the machine and `config/capoPitches.ts` for the
+ * table. `defId` and `territoryId` are the same job-and-place pair a normal
+ * launch takes; what a pitch adds is whose idea it was, which is what
+ * `reassign` spends.
+ */
+export interface CapoPitch {
+  id: Id;
+  /** An existing `OperationDef.id`, tier 1 or above — street work has no pitches. */
+  defId: string;
+  territoryId: string;
+  /** Whose idea this is. Reassigning it costs whoever it is now. */
+  capoId: Id;
+  offeredDay: number;
+  /**
+   * `open` until the boss answers it. `approved` hands it to the assemble
+   * screen exactly the same way choosing a job off the old board did — this
+   * never runs `resolveOperation` itself. `rejected` and `expired` both clear
+   * it for nothing; the difference is only which of the two decided that.
+   */
+  status: 'open' | 'approved' | 'rejected' | 'expired';
   settledDay?: number;
 }
 
@@ -1951,6 +2023,15 @@ export interface GameState {
    * which for those saves is exactly true.
    */
   orders?: Order[];
+  /**
+   * Work a capo brought to you, rather than a row you picked off a menu.
+   *
+   * Optional with a lazy initialiser in `capoPitches.ts`, the same idiom as
+   * `promises`, `civic` and `orders` — so `SAVE_VERSION` does not move and a
+   * save written before this existed loads with nobody having pitched you
+   * anything, which for those saves is exactly true.
+   */
+  capoPitches?: CapoPitch[];
   /**
    * The half of a boss that is not the business.
    *

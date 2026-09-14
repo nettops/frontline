@@ -16,6 +16,8 @@ import {
   isOutOfReach,
   traitEffect,
 } from './npc';
+import { isRealCapo, pitchCapoPool } from './capoPitches';
+import { applyVoucherConsequence } from './capoVouches';
 import { passedOver } from './ties';
 import { remember } from './memory';
 import { keepPromise } from './promises';
@@ -56,10 +58,28 @@ export function recruitCost(state: GameState): number {
 export function refreshRecruits(state: GameState, rng: Rng, force = false): void {
   if (!force && state.day - state.recruitsRefreshedDay < RECRUIT_REFRESH_DAYS) return;
 
+  /*
+     Whose introduction this is, if anybody's.
+
+     Real capos only — `pitchCapoPool`'s seniority fallback (nobody at capo or
+     above yet) is for attributing a *pitch*, which needs somebody to hand a
+     job to regardless. A recruit does not need an author at all, and handing
+     one to the fallback would put every early associate under a soldier who
+     is not actually a capo, which `reportsTo`'s own contract says never
+     happens except by the player's own hand (`assignToCapo`). Filtering the
+     fallback out of the pool leaves it empty until the org has a real capo,
+     which is exactly the "keep today's behaviour" case this is for.
+  */
+  const capos = pitchCapoPool(state).filter(isRealCapo);
+
   const had = Object.keys(state.recruits).length;
   state.recruits = {};
   for (let i = 0; i < RECRUIT_POOL_SIZE; i++) {
     const npc = generateNpc(state, rng, 'associate');
+    if (capos.length > 0) {
+      const capo = rng.pick(capos);
+      npc.reportsTo = capo.id;
+    }
     state.recruits[npc.id] = npc;
   }
   state.recruitsRefreshedDay = state.day;
@@ -86,6 +106,8 @@ export function refreshRecruits(state: GameState, rng: Rng, force = false): void
   if (had > 0) {
     const fresh = Object.values(state.recruits);
     const face = fresh.length ? fresh[0] : null;
+    // Whoever brought the face on the list, if it was a real capo's doing.
+    const faceCapo = face?.reportsTo ? state.npcs[face.reportsTo] : undefined;
     addLog(
       state,
       say(
@@ -105,6 +127,11 @@ export function refreshRecruits(state: GameState, rng: Rng, force = false): void
            fallback available on every draw wins every draw. So the fallback
            names a person too, and the only line left without one is the case
            where there is genuinely nobody on the list.
+
+           Once there is a real capo behind the face, one more variant joins
+           the pool naming him too — sometimes, not always, the same way the
+           other five compete for the draw. It never replaces them: an
+           organization with no capo yet still gets every line above.
         */
         [
           face ? `${face.name} has been asking after you. So have ${fresh.length - 1} others.` : null,
@@ -114,6 +141,7 @@ export function refreshRecruits(state: GameState, rng: Rng, force = false): void
           face
             ? `${face.name} claims a connection to somebody you know. On the list either way.`
             : null,
+          faceCapo ? `${faceCapo.name} is putting ${face!.name} forward. Says he vouches for him.` : null,
           // Not `fresh.length > 1`, which is true nearly every week and put
           // this back at the top of the probe's loudest lines within one run.
           face ? null : `${fresh.length} new names and nobody you would write down.`,
@@ -263,6 +291,14 @@ export function promote(state: GameState, npcId: string): ActionResult {
   const next = nextRole(npc.role)!;
   npc.role = next;
   npc.wage = priced(state, ROLE_WAGE[next]);
+  /*
+     A man promoted to capo or above stops answering to one — `Capo[]` in
+     `capos.ts` has no capo-of-capos either, and `reportsTo` should not say
+     something about him that is no longer true the moment he outranks it.
+  */
+  if (ROLE_ORDER.indexOf(next) >= ROLE_ORDER.indexOf('capo')) {
+    delete npc.reportsTo;
+  }
   npc.stats.loyalty = clamp(npc.stats.loyalty + PROMOTION.loyaltyGain, 0, 100);
   npc.stats.respectForBoss = clamp(
     npc.stats.respectForBoss + PROMOTION.respectForBossGain,
@@ -299,6 +335,16 @@ export function dismiss(state: GameState, npcId: string): ActionResult {
   npc.status = 'defected';
   npc.unavailableUntilDay = null;
   addNote(npc, state.day, 'Dismissed from the organization.', 'bad');
+  // A made man who was somebody's word coming back on the man who gave it —
+  // see `capoVouches.ts`'s `applyVoucherConsequence`, which owns the price.
+  applyVoucherConsequence(state, npc, state.day, 'was cut loose');
+  /*
+     Whoever answered to him answers straight to you again — a chain of
+     command does not keep pointing at an empty chair.
+  */
+  for (const other of crewList(state)) {
+    if (other.reportsTo === npc.id) delete other.reportsTo;
+  }
   // Cutting somebody loose cuts an *inside* thread, which is the one
   // channel going quiet cannot touch. It is now the counterplay to it.
   reduceHeat(state, DISMISS_HEAT_REDUCTION, 'inside');
@@ -401,4 +447,43 @@ export function setWage(state: GameState, npcId: string, wage: number): ActionRe
   if (!raised) npc.stats.grievance = clamp(npc.stats.grievance + 8, 0, 100);
 
   return { ok: true, message: `${npc.name} now earns ${money(capped)} a week.` };
+}
+
+// --------------------------------------------------------------- squads ---
+
+/**
+ * The best capo-led group inside a pool of free people, if one can cover a
+ * job alone.
+ *
+ * Ticking names one at a time was the single largest cost of playing this
+ * game (`OperationsPanel.tsx`'s own note on its `fill` helper) — and where a
+ * capo already has people under him, the boss should not have to re-pick them
+ * by hand every time. Reads `reportsTo`, writes nothing: additive, the same
+ * way the field itself was built. A roster with no hierarchy yet gets `null`
+ * back, and the manual checkbox path is exactly what it always was.
+ *
+ * Only ever returns a group that can fill the job on its own — a capo with
+ * two free men against a five-man job is not a shortcut, it is a squad
+ * missing three people the caller would still have to pick by hand, which is
+ * worse than one honest list.
+ */
+export function squadFor(
+  free: Npc[],
+  needed: number,
+): { capo: Npc; members: Npc[] } | null {
+  if (needed <= 0) return null;
+
+  const groups = free
+    .map((capo) => ({ capo, reports: free.filter((n) => n.reportsTo === capo.id) }))
+    .filter((g) => g.reports.length > 0)
+    // Most free reports wins; ties break on id so an identical roster always
+    // picks the same capo rather than whichever happened to sort first today.
+    .sort((a, b) => b.reports.length - a.reports.length || (a.capo.id < b.capo.id ? -1 : 1));
+
+  const best = groups[0];
+  if (!best) return null;
+
+  const members = [best.capo, ...best.reports].slice(0, needed);
+  if (members.length < needed) return null;
+  return { capo: best.capo, members };
 }
