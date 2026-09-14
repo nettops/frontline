@@ -10,14 +10,21 @@
 import { describe, expect, it } from 'vitest';
 import { newGame } from '../state';
 import { Rng } from '../rng';
-import { generateNpc } from '../npc';
+import { crewList, driftNpcs, generateNpc } from '../npc';
 import { assignToCapo, putInCharge } from '../delegation';
 import { territoryList } from '../territory';
 import { dismiss, promote } from '../crew';
+import { defectToRival } from '../diplomacy';
+import { sweep } from '../investigation';
+import { applyFailureConsequence } from '../operations';
+import { silence } from '../silence';
+import { removePlayer } from '../succession';
 import { TIE_DEPARTURE, TIE_EVENTS } from '../../config/ties';
 import { BEHAVIOUR, DRIFT } from '../../config/npcs';
 import { DELEGATION } from '../../config/delegation';
 import { CAPO_VOUCH, CAPO_CAPACITY } from '../../config/capoVouches';
+import { RIVAL_IDS } from '../../config/factions';
+import { OPERATION_BY_ID } from '../../config/operations';
 import {
   canMakeVouch,
   capoCapacity,
@@ -252,5 +259,193 @@ describe('a made man cut loose costs the capo who vouched for him', () => {
     const capoBefore = { ...state.npcs[capo.id].stats };
     dismiss(state, associate.id);
     expect(state.npcs[capo.id].stats).toEqual(capoBefore);
+  });
+});
+
+/**
+ * The other six places a vouched man's run can end badly. `dismiss` was the
+ * first site wired to `applyVoucherConsequence`; these are the rest of them,
+ * one per real transition named in Phase D's follow-up. Every one reuses
+ * `DELEGATION.recallLoyalty`/`recallGrievance` rather than its own number,
+ * because nothing in this codebase sizes a third-party vouch charge more
+ * specifically than that for any of these outcomes either.
+ */
+describe('the same charge, from every other way a vouch goes bad', () => {
+  it('defecting to a rival costs the vouching capo exactly like a dismissal', () => {
+    const state = game();
+    const { capo, associate } = readyPair(state);
+    makeVouch(state, associate.id);
+    const loyaltyBefore = state.npcs[capo.id].stats.loyalty;
+    const grievanceBefore = state.npcs[capo.id].stats.grievance;
+
+    defectToRival(state, state.npcs[associate.id], RIVAL_IDS[0]);
+
+    expect(state.npcs[associate.id].status).toBe('defected');
+    expect(state.npcs[capo.id].stats.loyalty).toBe(
+      Math.max(0, Math.min(100, loyaltyBefore + DELEGATION.recallLoyalty)),
+    );
+    expect(state.npcs[capo.id].stats.grievance).toBe(
+      Math.max(0, Math.min(100, grievanceBefore + DELEGATION.recallGrievance)),
+    );
+  });
+
+  it('a police sweep that takes a vouched man costs the capo who backed him', () => {
+    const state = game();
+    const { capo, associate } = readyPair(state);
+    makeVouch(state, associate.id);
+    // Only the vouched man is left available, so the weighted draw has
+    // nowhere else to land.
+    for (const npc of crewList(state)) {
+      if (npc.id !== associate.id) npc.status = 'arrested';
+    }
+    const loyaltyBefore = state.npcs[capo.id].stats.loyalty;
+
+    sweep(state, new Rng(state.rng), 'the police');
+
+    expect(state.npcs[associate.id].status).toBe('arrested');
+    expect(state.npcs[capo.id].stats.loyalty).toBe(
+      Math.max(0, Math.min(100, loyaltyBefore + DELEGATION.recallLoyalty)),
+    );
+  });
+
+  it('an arrest on a job that went wrong costs the capo who backed the man taken', () => {
+    const state = game();
+    const { capo, associate } = readyPair(state);
+    makeVouch(state, associate.id);
+    // Neutral traits, so escalation stays at 1 and the outcome table's own
+    // weights decide this rather than a trait multiplier.
+    state.npcs[associate.id].traits = [];
+    const def = OPERATION_BY_ID.port_operation; // risk: 'extreme'
+    const territoryId = territoryList(state)[0].id;
+    // Fixed at a roll that lands on 'crew_arrested' in the extreme table
+    // (cumulative 45..69 of 100) and, with one man in `crew`, always picks him.
+    const rng = new Rng(state.rng);
+    rng.next = () => 0.5;
+    const loyaltyBefore = state.npcs[capo.id].stats.loyalty;
+
+    applyFailureConsequence(state, rng, def, [state.npcs[associate.id]], territoryId);
+
+    expect(state.npcs[associate.id].status).toBe('arrested');
+    expect(state.npcs[capo.id].stats.loyalty).toBe(
+      Math.max(0, Math.min(100, loyaltyBefore + DELEGATION.recallLoyalty)),
+    );
+  });
+
+  it('silencing a vouched man costs the capo who put his name behind him', () => {
+    const state = game();
+    const { capo, associate } = readyPair(state);
+    makeVouch(state, associate.id);
+    const rng = new Rng(state.rng);
+    rng.chance = () => true; // the act lands
+    const loyaltyBefore = state.npcs[capo.id].stats.loyalty;
+
+    silence(state, rng, associate.id);
+
+    expect(state.npcs[associate.id].status).toBe('dead');
+    expect(state.npcs[capo.id].stats.loyalty).toBe(
+      Math.max(0, Math.min(100, loyaltyBefore + DELEGATION.recallLoyalty)),
+    );
+  });
+
+  it('a botched silencing costs the same, even though the man survives it', () => {
+    const state = game();
+    const { capo, associate } = readyPair(state);
+    makeVouch(state, associate.id);
+    const rng = new Rng(state.rng);
+    rng.chance = () => false; // the act fails
+    const loyaltyBefore = state.npcs[capo.id].stats.loyalty;
+
+    silence(state, rng, associate.id);
+
+    expect(state.npcs[associate.id].status).toBe('defected');
+    expect(state.npcs[capo.id].stats.loyalty).toBe(
+      Math.max(0, Math.min(100, loyaltyBefore + DELEGATION.recallLoyalty)),
+    );
+  });
+
+  it('drifting out on his own low loyalty costs the capo who vouched for him', () => {
+    const state = game();
+    const { capo, associate } = readyPair(state);
+    makeVouch(state, associate.id);
+    // Frozen so the capo's own ordinary weekly drift cannot move his stats —
+    // isolates the one change under test to the vouch consequence itself.
+    capo.status = 'arrested';
+    associate.stats.loyalty = 0;
+    const rng = new Rng(state.rng);
+    rng.chance = () => true;
+    const loyaltyBefore = capo.stats.loyalty;
+    const grievanceBefore = capo.stats.grievance;
+
+    driftNpcs(state, rng);
+
+    expect(associate.status).toBe('defected');
+    expect(capo.stats.loyalty).toBe(
+      Math.max(0, Math.min(100, loyaltyBefore + DELEGATION.recallLoyalty)),
+    );
+    expect(capo.stats.grievance).toBe(
+      Math.max(0, Math.min(100, grievanceBefore + DELEGATION.recallGrievance)),
+    );
+  });
+
+  it('following a departing man out costs whoever vouched for the follower, not the leaver', () => {
+    const state = game();
+    const { capo: leaverCapo, associate: leaver } = readyPair(state);
+    makeVouch(state, leaver.id);
+    leaverCapo.status = 'arrested'; // freeze — this test is about the follower's voucher
+
+    const followerCapo = hire(state, 'capo', 5);
+    const follower = hire(state, 'associate', 6);
+    assignToCapo(state, follower.id, followerCapo.id);
+    follower.joinedDay = state.day - DRIFT.daysInRoleBeforeStagnation - 1;
+    makeVouch(state, follower.id);
+    followerCapo.status = 'arrested'; // freeze this one too
+    // High enough that the follower never drifts out on his own — the only
+    // way he leaves here is by following the leaver.
+    follower.stats.loyalty = 90;
+    // The tie that makes him follow — trust in the leaver, not in his own capo.
+    follower.ties.push({
+      id: leaver.id,
+      trust: TIE_DEPARTURE.followTrustAbove + 5,
+      resentment: 0,
+      debt: 0,
+      cause: 'worked_together',
+      since: state.day,
+    });
+
+    leaver.stats.loyalty = 0;
+    const rng = new Rng(state.rng);
+    rng.chance = () => true;
+    const followerCapoLoyaltyBefore = followerCapo.stats.loyalty;
+
+    driftNpcs(state, rng);
+
+    expect(leaver.status).toBe('defected');
+    expect(follower.status).toBe('defected');
+    expect(followerCapo.stats.loyalty).toBe(
+      Math.max(0, Math.min(100, followerCapoLoyaltyBefore + DELEGATION.recallLoyalty)),
+    );
+  });
+
+  it('walking out rather than serve a new boss costs the capo who vouched for the man who left', () => {
+    const state = game();
+    const winner = hire(state, 'capo', 7);
+    winner.stats.ambition = 90;
+    winner.stats.leadership = 80;
+    const { capo, associate: walker } = readyPair(state);
+    makeVouch(state, walker.id);
+    // High enough that the voucher himself is never the one the floor picks
+    // to leave — walker, forced to the bottom, is.
+    capo.stats.loyalty = 80;
+    walker.stats.loyalty = 1; // well under HANDOVER.walkOutLoyaltyBelow
+    const rng = new Rng(state.rng);
+    rng.chance = () => true; // the walkout roll lands
+    const loyaltyBefore = state.npcs[capo.id].stats.loyalty;
+
+    removePlayer(state, rng, 'killed', 'Shot outside a restaurant.', winner);
+
+    expect(state.npcs[walker.id].status).toBe('defected');
+    expect(state.npcs[capo.id].stats.loyalty).toBe(
+      Math.max(0, Math.min(100, loyaltyBefore + DELEGATION.recallLoyalty)),
+    );
   });
 });

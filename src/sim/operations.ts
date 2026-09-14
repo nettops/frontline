@@ -35,6 +35,7 @@ import {
   traitEffect,
 } from './npc';
 import { tiesFromOperation, tookTheBlame } from './ties';
+import { applyVoucherConsequence } from './capoVouches';
 import { patternDelta, patternHeat, patternOn } from './standingOrders';
 import { remember } from './memory';
 import { keepPromise } from './promises';
@@ -1160,7 +1161,9 @@ function resolveSetup(
  */
 const VIOLENT_OUTCOMES = ['crew_injured', 'crew_arrested', 'heat_spike'];
 
-function applyFailureConsequence(
+// Exported so a test can reach `crew_arrested` directly, the same reason
+// `investigation.ts`'s `sweep` was pulled out of its own stage machine.
+export function applyFailureConsequence(
   state: GameState,
   rng: Rng,
   def: OperationDef,
@@ -1250,6 +1253,8 @@ function applyFailureConsequence(
       victim.stats.fear = clamp(victim.stats.fear + ARREST_FEAR_INCREASE, 0, 100);
       victim.stats.loyalty = clamp(victim.stats.loyalty - ARREST_LOYALTY_HIT, 0, 100);
       addNote(victim, state.day, `Arrested on the ${def.name}.`, 'bad');
+      // He was somebody's word before he was somebody's exposure.
+      applyVoucherConsequence(state, victim, state.day, 'was taken on a job');
       addEvidence(state, {
         day: state.day,
         source: 'operation',
