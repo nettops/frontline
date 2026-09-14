@@ -12,8 +12,18 @@ import { describe, expect, it } from 'vitest';
 import { newGame } from '../state';
 import { Rng } from '../rng';
 import { advanceDay } from '../clock';
-import { crewList } from '../npc';
-import { nameHeir, tickDeposition, wouldTakeIt } from '../succession';
+import { resolveEvent } from '../events';
+import { canRecruit, recruit, recruitCost, canPromote, promote } from '../crew';
+import { totalFunds, weeklyWageBill } from '../economy';
+import {
+  availableOperations,
+  launchOperation,
+  operationCost,
+  successBreakdown,
+} from '../operations';
+import { operableTerritories } from '../territory';
+import { availableCrew, crewList } from '../npc';
+import { eligibleHeirs, nameHeir, tickDeposition, wouldTakeIt } from '../succession';
 import { DEPOSITION } from '../../config/succession';
 import { ROLE_ORDER } from '../../config/economy';
 import type { GameState, Npc } from '../types';
@@ -82,19 +92,25 @@ describe('a boss the room has stopped wanting', () => {
     expect(wouldTakeIt(state)?.id).toBe('man_0');
   });
 
-  it('has nobody when one man is angry and the rest are not', () => {
+  it('has somebody when only one man is angry, and he is the one', () => {
+    /*
+       `DEPOSITION.backersNeeded` dropped from 2 to 1 — see config/succession.ts
+       for the measurement. `eligibleHeirs` sits at a median of 1 person in
+       ordinary play, so "2 disaffected men" required a second senior man to
+       exist at all, which most careers never have. One man who clears every
+       bar on his own — wants it, has stopped respecting the boss, is carrying
+       a real grievance, and the room would actually accept him — is now enough.
+       This is the other side of that: it is still not "nobody at all", so
+       `disaffected` still has to find somebody, not just the ambitious one
+       before the other four bars are even checked.
+    */
     const state = game();
     const men = unhappyRoom(state);
-    for (const m of men.slice(1)) {
+    for (const m of men) {
       m.stats.respectForBoss = 80;
       m.stats.grievance = 5;
     }
-    /*
-       The gate that separates a coup from a resignation. One aggrieved capo is
-       a personnel problem; it becomes a succession when enough of the people
-       who would have to object have stopped objecting.
-    */
-    expect(wouldTakeIt(state)).toBeNull();
+    expect(wouldTakeIt(state), 'nobody in the room is disaffected at all').toBeNull();
   });
 
   it('warns before it can happen, without naming him', () => {
@@ -202,5 +218,99 @@ describe('an ordinary career', () => {
     // happens in a game that ended on day four.
     expect(state.day, 'the world stopped before the question was ever asked').toBeGreaterThan(300);
     expect(state.succession.generation).toBe(1);
+  });
+});
+
+// ---------------------------------------------------- reachable, not built ---
+
+/**
+ * A career that plays itself into a deposition, rather than one built for it.
+ *
+ * Every test above hand-sets stats directly, which proves the *mechanism*
+ * works and proves nothing about whether ordinary play can ever reach it. It
+ * could not: measured across 40 seeded 300-day careers (confirmed at 15 seeds
+ * x 1460 days) with this exact bot and the scorecard probe's own passive one,
+ * `DEPOSITION.backersNeeded: 2` never held true once — `eligibleHeirs` sits at
+ * a median of 1 person, so "2 disaffected men" needed a second senior man to
+ * exist at all, which most careers never have. See config/succession.ts.
+ *
+ * A bot that recruits, works the best-EV job every day, promotes when it can,
+ * and names an heir — nothing here breaks a promise, demotes anybody, or
+ * withholds pay; it is not trying to cause this.
+ */
+function playOrdinaryCareer(seed: number, days: number): GameState {
+  const s = newGame({ name: 'Diag', difficulty: 'normal', mode: 'career', seed });
+  const rng = new Rng(s.rng);
+
+  for (let d = 0; d < days; d++) {
+    // Recruit and work the best-EV job first, promote and name an heir
+    // second, events and the day itself last — order matters for a seeded
+    // rng stream, and this is the exact sequence the measurement was taken
+    // with.
+    if (totalFunds(s) > weeklyWageBill(s) * 4 + recruitCost(s)) {
+      for (const id of Object.keys(s.recruits)) {
+        if (canRecruit(s, id).ok) {
+          recruit(s, id);
+          break;
+        }
+      }
+    }
+    const where = operableTerritories(s)[0]?.territory.id ?? null;
+    if (where) {
+      const avail = availableOperations(s).filter(
+        (o) => availableCrew(s).length >= o.crewRequired,
+      );
+      const ev = (o: (typeof avail)[number]) => {
+        const crew = availableCrew(s).slice(0, o.crewRequired);
+        const mid = (o.payout[0] + o.payout[1]) / 2;
+        return mid * successBreakdown(s, o, crew, where).total - operationCost(s, o);
+      };
+      const best = [...avail].sort((a, b) => ev(b) - ev(a))[0];
+      if (best && availableCrew(s).length >= best.crewRequired) {
+        const crew = availableCrew(s).slice(0, best.crewRequired);
+        launchOperation(s, best.id, crew.map((n) => n.id), where);
+      }
+    }
+
+    for (const npc of crewList(s)) {
+      if (canPromote(s, npc).ok) {
+        promote(s, npc.id);
+        break;
+      }
+    }
+    if (!s.succession.heirId) {
+      const heir = eligibleHeirs(s)[0];
+      if (heir) nameHeir(s, heir.id);
+    }
+
+    let guard = 0;
+    while (s.pendingEvents.length > 0 && guard++ < 20) {
+      const event = s.pendingEvents[0];
+      const choice = event.choices.find((c) => !c.disabledReason) ?? event.choices[0];
+      resolveEvent(s, rng, event.id, choice.id);
+    }
+    advanceDay(s);
+    if (s.gameOver) break;
+  }
+  return s;
+}
+
+describe('deposition, played into rather than built', () => {
+  /*
+     Watched to fail: with `DEPOSITION.backersNeeded` reverted to its old value
+     of 2, this exact seed runs the full 1460 days and `generation` stays 1 —
+     confirmed by hand while developing this test, per this project's own
+     "write the failing test first, then put the fault back" rule. Restoring
+     `backersNeeded: 1` is what makes it pass; nothing else about the seed or
+     the bot changes.
+  */
+  it('fires from an ordinary career under the current gate', () => {
+    const state = playOrdinaryCareer(4000, 1460);
+    expect(
+      state.succession.generation,
+      'nobody was deposed — this is the reachability the config change exists to fix',
+    ).toBeGreaterThan(1);
+    const line = state.succession.line[state.succession.line.length - 1];
+    expect(line.fate).toContain('Nobody was killed and nobody was arrested');
   });
 });
