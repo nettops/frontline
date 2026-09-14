@@ -503,6 +503,64 @@ describe('capo_political_tension: privately warn the stronger capo (design brief
   });
 });
 
+describe('capo_political_tension: a stale escalation count does not survive a real natural resolution (design brief §17)', () => {
+  function put(state: GameState, weaker: Npc, stronger: Npc) {
+    const rng = new Rng({ seed: 2, calls: 0 });
+    return pushEvent(state, DEF.build(state, rng, { npc: weaker, other: stronger }));
+  }
+
+  it('clears the pair\'s ignored-count once the tie itself is no longer lost_the_room, so an unrelated later tension is not born already escalated', () => {
+    const state = game();
+    const { weaker, stronger } = withResentfulPair(state);
+
+    // Let it sit enough times to actually reach escalateAfter — the count is
+    // now sitting right at the threshold that would read as a pattern.
+    for (let i = 0; i < CAPO_TENSION.escalateAfter; i++) {
+      const e = put(state, weaker, stronger);
+      resolveEvent(state, new Rng(state.rng), e.id, 'let_it_sit');
+    }
+
+    // The old tension genuinely resolves on its own — `decayTies` fading it
+    // below `forgetBelow` drops the tie entirely, exactly as `ties.ts`'s own
+    // filter does. Nothing the Boss did; it just stopped being true.
+    weaker.ties = weaker.ties.filter((t) => t.id !== stronger.id);
+
+    // A day passes with no pending event and the def's own cooldown clear —
+    // `applies()` runs, finds no live `lost_the_room` tie for this pair, and
+    // should notice the old escalation count is now stale.
+    expect(DEF.applies(state, new Rng({ seed: 1, calls: 0 }))).toBeNull();
+
+    // Much later, a brand new, unrelated gap opens between the very same two
+    // men. This is the *first* time this fresh tension has ever been raised.
+    recordTie(state.day, weaker, stronger, 'lost_the_room');
+    const built = DEF.build(state, new Rng({ seed: 2, calls: 0 }), { npc: weaker, other: stronger });
+
+    // It must read as a first complaint, not a pattern the Boss already let
+    // slide once — the leftover count from the old, resolved tension would
+    // otherwise punish a problem that has not been ignored even once.
+    expect(built.severity).toBe('warning');
+  });
+
+  it('leaves the count alone while the same tie is still genuinely live', () => {
+    const state = game();
+    const { weaker, stronger } = withResentfulPair(state);
+
+    const e = put(state, weaker, stronger);
+    resolveEvent(state, new Rng(state.rng), e.id, 'let_it_sit');
+
+    // The tie is still there, still `lost_the_room` — nothing resolved.
+    DEF.applies(state, new Rng({ seed: 1, calls: 0 }));
+
+    const built = DEF.build(state, new Rng({ seed: 2, calls: 0 }), { npc: weaker, other: stronger });
+    // One more "let it sit" reaches escalateAfter (2) and must still escalate.
+    const e2 = put(state, weaker, stronger);
+    resolveEvent(state, new Rng(state.rng), e2.id, 'let_it_sit');
+    const built2 = DEF.build(state, new Rng({ seed: 2, calls: 0 }), { npc: weaker, other: stronger });
+    expect(built.severity).toBe('warning');
+    expect(built2.severity).toBe('danger');
+  });
+});
+
 describe('capo_political_tension: your other officers get their own read on the stronger capo', () => {
   it('adds neither line when neither seat is filled', () => {
     const state = game();
