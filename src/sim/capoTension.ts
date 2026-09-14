@@ -38,8 +38,12 @@ import { CAPO_TENSION } from '../config/capoTension';
 
 const TENSION_CAUSE = 'lost_the_room';
 
-/** Capos proper — not the underboss or consigliere above them, and not a stand-in. */
-function activeCapos(state: GameState): Npc[] {
+/**
+ * Capos proper — not the underboss or consigliere above them, and not a
+ * stand-in. Exported for `capoFavoritism.ts`, which asks the identical
+ * "which capos count" question of the identical roster.
+ */
+export function activeCapos(state: GameState): Npc[] {
   return crewList(state).filter(
     (n) => n.role === 'capo' && (n.status === 'active' || n.status === 'busy'),
   );
