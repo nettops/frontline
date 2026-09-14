@@ -34,6 +34,7 @@ import {
 } from '../../sim/territory';
 import { yieldRead } from '../../sim/holdings';
 import { businessDef } from '../../sim/business';
+import { sentimentOutlook } from '../../sim/operations';
 import { formatMoney, formatShortDay } from '../../sim/util';
 import {
   CONTROL_LABEL,
@@ -603,20 +604,22 @@ function DistrictDetail({
             a front, at any price. A round-7 tester watched this fall 45 → 5,
             was refused every business in Little Sicily for ninety days, and
             never learned that this was the reason — the row was a bare integer
-            with no label and no log line ever mentioned it moving.
+            with no label and no log line ever mentioned it moving. A label was
+            added, but the explanation stayed a hover-only `title` — "the older
+            mistake" `operations.ts`'s own `sentimentOutlook` comment names —
+            and a second blind round hit it from the buying side instead: found
+            out only when a front purchase was refused. Same fix `sentimentOutlook`
+            already gave the job-assembly screen, given to this one too: body
+            text, not a tooltip.
           */}
           <KeyValue
             label="Public feeling"
             value={Math.round(territory.sentiment)}
             tone={territory.sentiment < SENTIMENT_HOSTILE_BELOW ? 'hot' : undefined}
-            title={
-              territory.sentiment < SENTIMENT_HOSTILE_BELOW
-                ? `Below ${SENTIMENT_HOSTILE_BELOW}, nobody here will sell you a business at any price. ` +
-                  `Violence and hard trade push it down; leaving the district alone lets it recover.`
-                : `How the neighbourhood feels about you. Below ${SENTIMENT_HOSTILE_BELOW} nobody here ` +
-                  `will sell you a business. Violence and hard trade push it down.`
-            }
           />
+          <p className="faint tiny" style={{ margin: '-4px 0 8px' }}>
+            {sentimentOutlook(state, territory.id)}
+          </p>
           <KeyValue
             label="Business slots"
             value={`${usedSlots(state, territory)} of ${businessSlots(territory)}`}
