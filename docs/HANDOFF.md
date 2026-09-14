@@ -1822,3 +1822,58 @@ read was one conservative session's ceiling, not the game's.
 
 `tsc -b` clean, `npm test` unaffected (1,650 passing), `npm run probe`
 unaffected by this addition (reporting-only, no new assertion).
+
+### Deposition unreachable — root cause found and fixed, not the four bars everyone would have guessed, 2026-09-14
+
+Director-approved balance change. A completed, unsaved measurement (40
+seeded 300-day careers, confirmed at 15 seeds x 1460 days, two bots — the
+scorecard probe's passive one and a second that also promotes and names
+an heir) found `DEPOSITION` (`config/succession.ts`) never held true once
+in over 1,700 career-weeks. The obvious read is that `ambitionAbove: 62`,
+`respectBelow: 34`, `grievanceAbove: 45` and `claimAbove: 0.34` are too
+strict. They are not the bottleneck.
+
+`eligibleHeirs` (soldier rank or above) sits at a median of 1 person and a
+90th percentile of 2, at day 200-300, under both bots. `backersNeeded: 2`
+required a *second* eligible senior man to exist at all before he could
+even be checked for being disaffected — which most careers never have,
+independent of how loose the other four numbers are. Confirmed directly:
+holding all four of those at their exact original values and only
+dropping `backersNeeded` to 1 took the same instrument from 0/15 (1460
+days) to 7/15 (47%), while 300-day reachability stayed at 0/40 — the drift
+that produces a disaffected man takes longer than a young career to
+mature, which reads as correct rather than as a miss.
+
+`backersNeeded: 2` → `1`. Nothing else in `DEPOSITION` moved.
+`wouldTakeIt`'s own four-condition filter is unchanged and is still
+strictly tighter than the backer bar beneath it, so a lone disaffected man
+still has to clear ambition, respect, grievance and claim on his own — the
+"room" pillar becomes "does the room's own math (ties, memory) make this
+one man's claim strong enough", not "quorum abolished".
+
+Rarity band: comparable to the other self-inflicted removal risk in this
+file — `HANDOVER`'s own prior measurement found a bot that never manages
+heat gets convicted in 9 of 12 careers — without being the same number.
+47% of neglected 4-year careers, 0% inside the first 300 days, is
+occasional rather than negligible or dominant.
+
+New permanent test: `src/sim/__tests__/deposition.test.ts`, "deposition,
+played into rather than built" — plays an ordinary seeded career (seed
+4000, ordinary bot, no hand-set stats) to day 1460 and asserts a
+deposition actually fires. Watched to fail with `backersNeeded` reverted
+to 2 (confirmed by hand), passes restored. One pre-existing test
+(`'has nobody when one man is angry and the rest are not'`) directly
+encoded the old `backersNeeded: 2` boundary and was rewritten to encode
+the new one (0 disaffected → still null; 1 disaffected → now found) rather
+than deleted or weakened.
+
+Throwaway diagnostic (`_deposition_diag.probe.test.ts`) built, run, and
+deleted per this project's own convention — nothing from it survives
+except the numbers quoted above and in `config/succession.ts`'s own
+comment on `backersNeeded`.
+
+`tsc -b` clean, `npm test` 162 files / 1,852 passing, 0 failures.
+`npm run probe` (`ladder.probe.test.ts`, the one file that reads
+succession/handover outcomes) — see the numbers quoted in this pass's own
+report; not reproduced here to avoid a second, aging copy of the same
+figures.

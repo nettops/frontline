@@ -322,10 +322,35 @@ export const DEPOSITION = {
   claimAbove: 0.34,
 
   /**
-   * How many other senior men have to be disaffected before it is a room
-   * rather than a man. Counted among everyone eligible to be an heir.
+   * How many disaffected men it takes before it is a room rather than a man.
+   * Counted among everyone eligible to be an heir, the mover included.
+   *
+   * Was 2. Measured across 40 seeded 300-day careers and confirmed at 15
+   * seeds x 1460 days, with two bots — the scorecard probe's passive one
+   * (recruit, one job a day, cheapest event choice) and a second that also
+   * promotes and names an heir — this gate never held true once, in over
+   * 1,700 career-weeks checked. Root cause was not the other three numbers:
+   * `eligibleHeirs` (soldier rank or above) sits at a median of 1 person and a
+   * 90th percentile of 2, at day 200-300, under both bots. Requiring 2
+   * disaffected men therefore required a second eligible senior man to exist
+   * *at all*, which most careers never have, let alone one who is also
+   * disaffected — so the gate was never about the ambition, respect, grievance
+   * or claim bars beneath it.
+   *
+   * Dropped to 1 and reran the same instrument with every other number here
+   * unchanged: 0/40 at 300 days (the drift takes longer than a young career to
+   * mature), 7/15 (47%) at 1460 days. That is comparable to the other
+   * self-inflicted removal risk in this file — HANDOVER's own measurement
+   * found a bot that never manages heat gets convicted in 9 of 12 careers —
+   * without being the same number, and it leaves a career that is actually
+   * managed with a real way to avoid it, which is the point of the route.
+   *
+   * `wouldTakeIt`'s own candidate filter (ambitionAbove, respectBelow,
+   * grievanceAbove, claimAbove) is unchanged and still strictly tighter than
+   * this bar, so nothing here is checked only once: a lone disaffected man
+   * still has to clear all four bars below on his own to be a mover.
    */
-  backersNeeded: 2,
+  backersNeeded: 1,
   backerRespectBelow: 45,
   backerGrievanceAbove: 35,
 
