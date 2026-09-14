@@ -38,7 +38,7 @@ import { availableOperations, STREET_WORK_IDS } from './operations';
 import { operableTerritories, territoryDef } from './territory';
 import { addNote, crewList } from './npc';
 import { remember } from './memory';
-import { addLog, nextId } from './util';
+import { addLog, nextId, weightedPick } from './util';
 
 function list(state: GameState): CapoPitch[] {
   if (!state.capoPitches) state.capoPitches = [];
@@ -174,7 +174,14 @@ export function tickCapoPitches(state: GameState, rng: Rng): void {
   let pool = fresh.length > 0 ? fresh : ops;
 
   for (let i = 0; i < need && pool.length > 0; i++) {
-    const capo = rng.pick(capos);
+    // Weighted rather than even odds: a man reaching for more brings you more
+    // of his own pitches. Weight 1 at zero ambition keeps the old even split;
+    // `CAPO_PITCH.ambitionWeight` (1) doubles it at 100 — a bias, never a
+    // lock-out, so a low-ambition capo still gets his share.
+    const capo = weightedPick(
+      capos.map((c) => ({ capo: c, weight: 1 + (c.stats.ambition / 100) * CAPO_PITCH.ambitionWeight })),
+      rng.next(),
+    ).capo;
     let candidates: OperationDef[] = pool;
     if (isRealCapo(capo)) {
       const own = pool.filter((op) => op.category === capoSpecialty(capo));
