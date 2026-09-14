@@ -265,6 +265,36 @@ function tensionEscalated(state: GameState, weaker: Npc, stronger: Npc): boolean
   return (state.flags[tensionIgnoredKey(weaker, stronger)] ?? 0) >= CAPO_TENSION.escalateAfter;
 }
 
+/**
+ * Design brief §17: letting a problem sit is a genuinely valid choice, and
+ * `ties.ts`'s own weekly `decayTies` already lets `lost_the_room` resentment
+ * fade to nothing and the tie itself drop out when nothing renews it — no new
+ * randomness needed for "sometimes it resolves on its own", because the same
+ * honest simulation already does that.
+ *
+ * What it does not do on its own is forget that the Boss once let this exact
+ * pair sit. `tensionIgnoredKey`'s counter is only cleared by a real choice
+ * (`address`/`delegate_to_underboss`/`warn_stronger`) — so a count run up
+ * against a tension that later resolved by drift, with nobody ever answering
+ * it, would sit in `state.flags` forever. If the same two men later drift into
+ * a brand new, unrelated gap, that stale count would make the first complaint
+ * about it read as an already-tolerated pattern, which is exactly backwards:
+ * it punishes the good outcome design brief §17 asks for.
+ *
+ * Called from `applies()` itself — the only place that already asks "is this
+ * pair's tie still really `lost_the_room`" — so a pair whose tie has moved on
+ * (decayed away entirely, or overwritten by some other cause) has its stale
+ * count cleared right there rather than left to rot.
+ */
+function clearResolvedTensionCounts(state: GameState): void {
+  for (const key of Object.keys(state.flags)) {
+    if (!key.startsWith('capo_tension_ignored:')) continue;
+    const [, weakerId, strongerId] = key.split(':');
+    const tie = state.npcs[weakerId]?.ties.find((t) => t.id === strongerId);
+    if (!tie || tie.cause !== 'lost_the_room') delete state.flags[key];
+  }
+}
+
 const EVENT_DEFS: EventDef[] = [
   // -- crew pressure ------------------------------------------------------
   {
@@ -558,6 +588,7 @@ const EVENT_DEFS: EventDef[] = [
         const stronger = tie ? state.npcs[tie.id] : undefined;
         if (stronger) pairs.push({ npc: weaker, other: stronger });
       }
+      clearResolvedTensionCounts(state);
       if (!pairs.length) return null;
       const { npc: weaker, other: stronger } = rng.pick(pairs);
       return underbossFields(state, weaker, stronger);
