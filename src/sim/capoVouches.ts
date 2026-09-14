@@ -208,15 +208,24 @@ export function applyVoucherConsequence(
   if (!voucher) return;
   voucher.stats.loyalty = clamp(voucher.stats.loyalty + DELEGATION.recallLoyalty, 0, 100);
   voucher.stats.grievance = clamp(voucher.stats.grievance + DELEGATION.recallGrievance, 0, 100);
+  // Read before this mistake is recorded, so the warning below can tell
+  // whether this is the event that pushes him to the bar rather than one
+  // that merely keeps him there or past it.
+  const netBefore = netVoucherCredibility(voucher);
   remember(voucher, day, 'vouch_soured', npc.id);
   addNote(voucher, day, `${npc.name}, who they put up, ${reason}.`, 'bad');
 
-  // Fires once, the moment the count reaches the bar, the same way
-  // `business.ts`'s `HEALTH.warnBelow` fires once on the tick health crosses
-  // it rather than every day it stays under. `silence()` already works on a
-  // capo like anyone else — this only makes it legible that it might be
-  // worth pointing at this one.
-  if (voucherMistakeCount(voucher) === CAPO_VOUCH.mistakesBeforeWarning) {
+  // Fires the moment net credibility *crosses* the bar, not merely sits at or
+  // above it — the same shape `business.ts`'s `HEALTH.warnBelow` uses to fire
+  // once on the tick health crosses it rather than every day it stays under.
+  // Written as a crossing rather than the old `=== mistakesBeforeWarning`
+  // because a net figure can also come back down: a capo who recovers below
+  // the bar and then earns a fresh bad vouch crosses it again and is told
+  // again, but a capo already sitting at or past it is not re-nagged every
+  // time the count ticks further up. `silence()` already works on a capo
+  // like anyone else — this only makes it legible that it might be worth
+  // pointing at this one.
+  if (netBefore < CAPO_VOUCH.mistakesBeforeWarning && netBefore + 1 >= CAPO_VOUCH.mistakesBeforeWarning) {
     addLog(state, `${voucher.name}'s word hasn't been worth much lately.`, 'crew');
   }
 }
@@ -237,4 +246,23 @@ export function applyVoucherConsequence(
  */
 export function voucherMistakeCount(capo: Npc): number {
   return capo.memories.filter((m) => m.kind === 'vouch_soured').length;
+}
+
+/**
+ * How many men this capo put up who then kept earning it — see `crew.ts`'s
+ * `promote()` for the checkpoint that records one. Same shape as
+ * `voucherMistakeCount` and the same `MAX_MEMORIES` caveat applies.
+ */
+export function voucherPaidOffCount(capo: Npc): number {
+  return capo.memories.filter((m) => m.kind === 'vouch_paid_off').length;
+}
+
+/**
+ * Credibility is dynamic, not a one-way ratchet to "his word isn't worth
+ * much" forever — design brief §7. A raw count difference, matching the raw
+ * (unweighted) counts on both sides of it: three bad vouches and two good
+ * ones reads as net 1, not the same as three bad and none.
+ */
+export function netVoucherCredibility(capo: Npc): number {
+  return voucherMistakeCount(capo) - voucherPaidOffCount(capo);
 }
