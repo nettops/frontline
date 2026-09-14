@@ -32,7 +32,7 @@ import { isLayingLow } from './heat';
 import { liveStanding, patternOn } from './standingOrders';
 import { territoryDef } from './territory';
 import { playerWars } from './diplomacy';
-import { eligibleHeirs, heirOf } from './succession';
+import { eligibleHeirs, heirOf, wouldTakeIt } from './succession';
 import { activeCases } from './investigation';
 import { ownedBusinesses, businessDef } from './business';
 import { tradeUnlocked } from './contraband';
@@ -128,26 +128,44 @@ export function attention(state: GameState): Wanting[] {
   }
 
   /*
-     A war with nobody named to survive you.
+     Nobody named to survive you — a war, or a room that has already stopped
+     believing in you.
 
-     Round 18's blind report is the reason this exists: a tester fought a
-     war for a hundred days, was killed in it, and the death screen named
-     the exact cause — "there was nobody senior enough to take it." Nothing
-     on the war screen, the overview, or anywhere else had pointed back at
-     Succession while it still mattered, and by the time the war made it
-     urgent it was too late to do anything about it.
+     Round 18's blind report is the reason the war half exists: a tester
+     fought a war for a hundred days, was killed in it, and the death screen
+     named the exact cause — "there was nobody senior enough to take it."
+     Nothing on the war screen, the overview, or anywhere else had pointed
+     back at Succession while it still mattered, and by the time the war
+     made it urgent it was too late to do anything about it.
 
-     Gated on there being somebody who actually could be named, the same
-     discipline `steward` and `teaching` use above — a badge demanding
-     something the player has no way to satisfy is worse than no badge.
+     An audit found the same gap on the other two doors out of the chair
+     (`succession.ts`'s own words: "being removed is not the same as
+     losing... losing is having nobody"). Deposition does not need a war —
+     `tickDeposition` rolls it off `wouldTakeIt` alone — and it was only
+     ever visible here as a bare log line naming no destination and no
+     action, which is exactly the failure this file's header exists to
+     rule out. `wouldTakeIt` is cheap (no rng, reused as-is) and already
+     exported for this purpose; reusing it here is a read, not a new
+     mechanism. Conviction (`removePlayer` in investigation.ts) has no
+     equivalent standing signal to read cheaply and stays a gap — it would
+     need new plumbing, not a call site.
+
+     Still one nudge, one id, one panel — the cause changes only the
+     sentence, never the mechanism. Gated on there being somebody who
+     actually could be named, the same discipline `steward` and `teaching`
+     use above — a badge demanding something the player has no way to
+     satisfy is worse than no badge.
   */
-  if (playerWars(state).length > 0 && !heirOf(state)) {
+  const atWar = playerWars(state).length > 0;
+  const atRisk = wouldTakeIt(state) !== null;
+  if ((atWar || atRisk) && !heirOf(state)) {
     const candidate = eligibleHeirs(state)[0];
+    const situation = atWar
+      ? 'You are at war and nobody is named to take this if it goes wrong.'
+      : 'There is enough bad blood in the room to lose this, and nobody is named to take it if you do.';
     out.push({
       id: 'heir',
-      text: candidate
-        ? `You are at war and nobody is named to take this if it goes wrong. ${candidate.name} is senior enough.`
-        : 'You are at war and nobody is named to take this if it goes wrong.',
+      text: candidate ? `${situation} ${candidate.name} is senior enough.` : situation,
       panel: 'succession',
     });
   }

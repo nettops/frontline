@@ -21,8 +21,8 @@ import { crewList, generateNpc } from '../npc';
 import { openScore } from '../scores';
 import { startTraining } from '../training';
 import { setStanding } from '../standingOrders';
-import { declareWar } from '../diplomacy';
-import { eligibleHeirs, nameHeir } from '../succession';
+import { declareWar, playerWars } from '../diplomacy';
+import { eligibleHeirs, nameHeir, wouldTakeIt } from '../succession';
 import { HOME_TERRITORY } from '../../config/territories';
 import { PATTERN } from '../../config/standingOrders';
 import { territoryDef, territoryList } from '../territory';
@@ -231,6 +231,34 @@ describe('what wants you today', () => {
   it('says nothing about an heir at peace', () => {
     const state = game();
     expect(attention(state).some((l) => l.id === 'heir')).toBe(false);
+  });
+
+  /*
+     Deposition and conviction are the other two doors out of the chair, and
+     until now only war got a nudge. A boss can be one meeting away from a
+     coup with nobody named and never hear a word about it from this list.
+  */
+  it('names the same heir nudge for a real deposition risk, no war needed', () => {
+    const state = game();
+    const risky = crewList(state)
+      .filter((n) => n.status === 'active' && n.role !== 'associate')
+      .slice(0, 2);
+    for (const npc of risky) {
+      npc.stats.ambition = 90;
+      npc.stats.respectForBoss = 10;
+      npc.stats.grievance = 80;
+      npc.stats.leadership = 100;
+      npc.stats.skill = 100;
+      npc.stats.courage = 100;
+      npc.opsCompleted = 25;
+      npc.daysInCrew = 365;
+    }
+    expect(wouldTakeIt(state)).toBeTruthy();
+    expect(playerWars(state)).toHaveLength(0);
+
+    const line = attention(state).find((l) => l.id === 'heir');
+    expect(line).toBeTruthy();
+    expect(line!.panel).toBe('succession');
   });
 
   it('keeps the list short enough to read', () => {
