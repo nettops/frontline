@@ -31,6 +31,7 @@ import { Rng, clamp } from './rng';
 import type { GameState, Id, CapoPitch, Npc, OperationCategory, OperationDef } from './types';
 import type { Check } from './delegation';
 import { CAPO_PITCH, PITCH_REACTION } from '../config/capoPitches';
+import { isPitchDisfavored } from './capoFavoritism';
 import { DELEGATION } from '../config/delegation';
 import { ROLE_ORDER } from '../config/economy';
 import { GOAL_CERTAIN_ABOVE, GOAL_VISIBLE_ABOVE } from '../config/goals';
@@ -180,8 +181,19 @@ export function tickCapoPitches(state: GameState, rng: Rng): void {
     // of his own pitches. Weight 1 at zero ambition keeps the old even split;
     // `CAPO_PITCH.ambitionWeight` (1) doubles it at 100 — a bias, never a
     // lock-out, so a low-ambition capo still gets his share.
+    //
+    // A capo who has registered as disfavored enough times (`capoFavoritism.
+    // ts`'s `isPitchDisfavored`) has that same weight cut by `disfavoredWeight`
+    // on top — he brings you less, for as long as the read holds. Biases this
+    // draw rather than adding one: `rng.next()` below is the only roll this
+    // loop spends per pitch, same as before either bias existed.
     const capo = weightedPick(
-      capos.map((c) => ({ capo: c, weight: 1 + (c.stats.ambition / 100) * CAPO_PITCH.ambitionWeight })),
+      capos.map((c) => ({
+        capo: c,
+        weight:
+          (1 + (c.stats.ambition / 100) * CAPO_PITCH.ambitionWeight) *
+          (isPitchDisfavored(state, c.id) ? CAPO_PITCH.disfavoredWeight : 1),
+      })),
       rng.next(),
     ).capo;
     let candidates: OperationDef[] = pool;

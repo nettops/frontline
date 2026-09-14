@@ -36,6 +36,18 @@ export const CAPO_PITCH = {
    * pitches as the least ambitious, not a guarantee, never a lock-out.
    */
   ambitionWeight: 1,
+
+  /**
+   * How much a capo who has registered as disfavored `CAPO_FAVORITISM.
+   * pitchDisfavorAfter` times over — `capoFavoritism.ts`'s `isPitchDisfavored`
+   * — has his own weekly weight cut, for as long as that read stays true.
+   * The design brief's "he stops bringing you his best," modeled as bringing
+   * you less of it rather than a second stat penalty stacked on the grievance
+   * `applyFavoritism` already charges. Halves rather than zeroes: `ambitionWeight`
+   * above only ever doubles a man's odds for wanting more, never locks another
+   * man out entirely, and this is that same restraint run the other way.
+   */
+  disfavoredWeight: 0.5,
 } as const;
 
 /**
