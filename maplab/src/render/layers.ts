@@ -1,14 +1,42 @@
-import { Container, Graphics, Text } from 'pixi.js';
+import { Container, Graphics, Sprite, Text, Texture } from 'pixi.js';
 import type { Bounds } from './camera';
 import type { MapDef, MapObject, SpawnPoint } from '../map/types';
 import type { WalkGrid } from '../map/grid';
 import { cellRoomIndex } from '../map/grid';
-import { cellToScreen, heightOffset, TILE_W, TILE_H } from './iso';
+import { cellToScreen, heightOffset } from './iso';
 import {
-  ROOM_COLORS, OBJECT_COLOR, WALL_COLOR, DOOR_COLOR, VOID_COLOR,
+  ROOM_COLORS, WALL_COLOR, DOOR_COLOR, VOID_COLOR,
   GRID_LINE_COLOR, NAV_EDGE_COLOR, COLLISION_COLOR,
   SPAWN_PLAYER_COLOR, SPAWN_NPC_COLOR, ROOM_BOUNDS_COLOR,
 } from './palette';
+import { SPRITES, PERSON_PALETTES, blitIsoSprite, hash } from './isoSprites';
+
+/** Sprite pixels per iso-sprite row/column unit; sprites are authored at
+ * roughly 5 columns per footprint cell, so this keeps a 2x2 table's drawn
+ * width close to its floor diamond's screen width (2 * TILE_W / 2 = 64px). */
+const SPRITE_SCALE = 6;
+
+const objectTextures = new Map<string, Texture>();
+function objectTexture(kind: string): Texture {
+  let tex = objectTextures.get(kind);
+  if (!tex) {
+    const sprite = SPRITES[kind] ?? SPRITES.table;
+    tex = Texture.from(blitIsoSprite(sprite, SPRITE_SCALE));
+    objectTextures.set(kind, tex);
+  }
+  return tex;
+}
+
+const personTextures = new Map<number, Texture>();
+function personTexture(paletteIndex: number): Texture {
+  let tex = personTextures.get(paletteIndex);
+  if (!tex) {
+    const variant = { ...SPRITES.person, palette: PERSON_PALETTES[paletteIndex] };
+    tex = Texture.from(blitIsoSprite(variant, SPRITE_SCALE));
+    personTextures.set(paletteIndex, tex);
+  }
+  return tex;
+}
 
 export interface MapLayers {
   world: Container;
@@ -22,7 +50,8 @@ export interface MapLayers {
   spawns: Container;
 }
 
-export type SelectableGraphics = Graphics & { mapEntity?: MapObject | SpawnPoint };
+export type SelectableGraphics = Container & { mapEntity?: MapObject | SpawnPoint };
+type SelectableSprite = Sprite & { mapEntity?: MapObject | SpawnPoint };
 
 export interface LayerVisibility {
   floor: boolean;
@@ -86,21 +115,18 @@ export function buildMapLayers(map: MapDef, grid: WalkGrid): MapLayers {
     (a, b) => (Math.floor(a.y) + Math.floor(a.x)) - (Math.floor(b.y) + Math.floor(b.x)),
   );
   for (const obj of orderedObjects) {
+    // Base-center of the footprint, at floor level — the sprite's own art
+    // (top face + front faces) depicts the object's height, so no vertical
+    // lift here or the sprite would float above its cell.
     const base = cellToScreen(obj.x + obj.footprint.w / 2, obj.y + obj.footprint.h / 2);
-    const lift = heightOffset(obj.height);
-    const halfW = (obj.footprint.w * TILE_W) / 4;
-    const halfH = (obj.footprint.h * TILE_H) / 4;
-    const g: SelectableGraphics = new Graphics();
-    g.poly([
-      base.x, base.y + lift - halfH,
-      base.x + halfW, base.y + lift,
-      base.x, base.y + lift + halfH,
-      base.x - halfW, base.y + lift,
-    ]).fill(OBJECT_COLOR);
-    g.eventMode = 'static';
-    g.cursor = 'pointer';
-    g.mapEntity = obj;
-    objects.addChild(g);
+    const sprite: SelectableSprite = new Sprite(objectTexture(obj.kind));
+    sprite.anchor.set(0.5, 1);
+    sprite.x = base.x;
+    sprite.y = base.y;
+    sprite.eventMode = 'static';
+    sprite.cursor = 'pointer';
+    sprite.mapEntity = obj;
+    objects.addChild(sprite);
   }
 
   const gLines = new Graphics();
@@ -171,14 +197,23 @@ export function buildMapLayers(map: MapDef, grid: WalkGrid): MapLayers {
 
   for (const spawn of map.spawns) {
     const base = cellToScreen(spawn.x, spawn.y);
-    const lift = heightOffset(0.5);
-    const g: SelectableGraphics = new Graphics();
-    const color = spawn.kind === 'player' ? SPAWN_PLAYER_COLOR : SPAWN_NPC_COLOR;
-    g.circle(base.x, base.y + lift, cs * 0.3).fill(color);
-    g.eventMode = 'static';
-    g.cursor = 'pointer';
-    g.mapEntity = spawn;
-    spawns.addChild(g);
+    const container: SelectableGraphics = new Container();
+    // A small ground ring keeps the player/npc colour distinction the flat
+    // marker used to carry; the person sprite stands on top of it, anchored
+    // at its feet so it reads as standing on the spawn cell.
+    const ring = new Graphics();
+    const ringColor = spawn.kind === 'player' ? SPAWN_PLAYER_COLOR : SPAWN_NPC_COLOR;
+    ring.ellipse(base.x, base.y, cs * 0.28, cs * 0.14).fill({ color: ringColor, alpha: 0.6 });
+    const paletteIndex = hash(spawn.id) % PERSON_PALETTES.length;
+    const person = new Sprite(personTexture(paletteIndex));
+    person.anchor.set(0.5, 1);
+    person.x = base.x;
+    person.y = base.y;
+    container.addChild(ring, person);
+    container.eventMode = 'static';
+    container.cursor = 'pointer';
+    container.mapEntity = spawn;
+    spawns.addChild(container);
   }
 
   world.addChild(floor, walls, objects, roomBounds, gridLines, collision, nav, spawns);
