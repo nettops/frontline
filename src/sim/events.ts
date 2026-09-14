@@ -563,6 +563,14 @@ const EVENT_DEFS: EventDef[] = [
       return underbossFields(state, weaker, stronger);
     },
     build: (state, rng, { npc, other, distrustedUnderboss }) => {
+      // Design brief §16: a player-initiated version of the same handoff
+      // `underbossFields` already does automatically — only offered when
+      // there is a real Underboss to hand it to. Reached here at all means
+      // either there is no Underboss, or the automatic check already failed
+      // him (not trusted enough, not competent enough) — this choice lets
+      // the Boss delegate anyway, at his own judgement rather than the
+      // filter's.
+      const underbossNpc = currentOfficer(state, 'underboss');
       // Design brief §15: not every problem needs the final stage, but a
       // problem the Boss keeps hearing and leaving alone should read as more
       // than the first complaint did. `escalated` is read once, off the pair's
@@ -634,6 +642,24 @@ const EVENT_DEFS: EventDef[] = [
             hint: escalated
               ? `This has waited long enough. It eases him more than it would have the first time.`
               : `It eases something in him. ${other!.name} will hear that you noticed.`,
+          },
+          // Design brief §16: only real when there is somebody to hand it
+          // to. No trust/competence gate here — that gate is what
+          // `underbossFields` already checked before the memo ever raised,
+          // and it already failed once for this to be on screen at all.
+          ...(underbossNpc
+            ? [
+                {
+                  id: 'delegate_to_underboss',
+                  label: `Have ${underbossNpc.name} handle it`,
+                  hint: `He fields it the way he would have if it had reached him first. It eases things, but only half of what sitting down yourself would.`,
+                },
+              ]
+            : []),
+          {
+            id: 'warn_stronger',
+            label: `Warn ${other!.name} privately`,
+            hint: `${other!.name} hears it from you directly, not from a room. ${npc!.name} hears nothing back.`,
           },
           {
             id: 'let_it_sit',
@@ -2248,15 +2274,15 @@ export function resolveEvent(
       // Read before either branch touches the count, so the consequence
       // below matches the stakes `build` actually showed for this memo.
       const escalated = tensionEscalated(state, npc, other);
+      // Once escalated, a real answer settles more than one that comes on
+      // the first complaint — shared by every choice below that actually
+      // does something about it, not just `address`.
+      const reliefMult = escalated ? 2 : 1;
       if (choiceId === 'address') {
         // Half of what `lost_the_room` itself wrote (30) — enough to read as
         // a real answer, not enough to erase a standing gap that is still
         // true. Direct rather than through `recordTie`, which would also
         // overwrite `cause`/`since` on a tie this event did not create.
-        // Once escalated, the same relief doubles — a Boss who finally sits
-        // down after a real pattern of ignoring it settles more than one who
-        // answers the first time it comes up.
-        const reliefMult = escalated ? 2 : 1;
         if (tie) tie.resentment = clamp(tie.resentment - 15 * reliefMult, 0, 100);
         npc.stats.respectForBoss = clamp(npc.stats.respectForBoss + 5 * reliefMult, 0, 100);
         // Addressing it plays as taking the complaining man's side, and the
@@ -2268,6 +2294,47 @@ export function resolveEvent(
         // Design brief §15: good management lets it resolve early. Addressing
         // it — escalated or not — clears the streak; it takes a fresh run of
         // `let_it_sit` to earn the harsher variant again.
+        delete state.flags[tensionKey];
+      } else if (choiceId === 'delegate_to_underboss') {
+        // Design brief §16. The Underboss may or may not have been good
+        // enough to field this on his own (`underbossFields`'s own trust/
+        // competence gate already ran, before the memo raised) — this is the
+        // Boss overriding that judgement and handing it to him anyway, so it
+        // always lands at the exact flat rate `underbossFields` computes for
+        // the case where it does work, never scaled by `reliefMult`: an
+        // Underboss fields a standing complaint the same way regardless of
+        // how long the Boss sat on it, which a personal sit-down does not.
+        const boss = currentOfficer(state, 'underboss');
+        if (!boss) return;
+        if (tie) tie.resentment = clamp(tie.resentment - 7, 0, 100);
+        npc.stats.respectForBoss = clamp(npc.stats.respectForBoss + 2, 0, 100);
+        other.stats.respectForBoss = clamp(other.stats.respectForBoss - 2, 0, 100);
+        // Same countable trace `underbossFields` leaves when he fields it
+        // unasked — `officers.ts`'s `underbossStanding` cannot tell the two
+        // apart, and there is no reason it should: both are him doing the
+        // job for real.
+        remember(boss, state.day, 'handled_it_quietly', npc.id);
+        addNote(npc, state.day, `${boss.name} sat him down about it instead of you.`, 'good');
+        addNote(other, state.day, `${boss.name} heard about it. Word still travels.`, 'bad');
+        addLog(state, `You had ${boss.name} handle it. ${npc.name} and ${other.name} both heard from him instead of you.`, 'crew');
+        // A real intervention at second hand is still a real intervention —
+        // the same reset `address` earns, for the same reason.
+        delete state.flags[tensionKey];
+      } else if (choiceId === 'warn_stronger') {
+        // Design brief §16: the mirror of `address`, aimed at the man
+        // causing it rather than the man complaining. `address` already
+        // costs `other` some respect as a side effect of soothing `npc` (4,
+        // doubled to 8 escalated); this makes managing the aggressor the
+        // whole point instead of a side effect, at the same half-of-`address`
+        // rate `underbossFields` already established for a real-but-lesser
+        // answer (7, doubled to 14 escalated) — no new number invented, and
+        // nothing here touches `npc` at all, since he was never in the room.
+        other.stats.respectForBoss = clamp(other.stats.respectForBoss - 7 * reliefMult, 0, 100);
+        addNote(other, state.day, `You warned him about ${npc.name} directly.`, 'bad');
+        addLog(state, `You went to ${other.name} yourself, privately. ${npc.name} was not in the room.`, 'crew');
+        // The man causing the friction was managed, not the man who
+        // complained about it — a real answer to the complaint, so it
+        // resets the streak the same way `address` does.
         delete state.flags[tensionKey];
       } else {
         // A real, non-punishing choice on the *first* occurrence: nothing
