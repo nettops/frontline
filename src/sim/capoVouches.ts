@@ -208,6 +208,33 @@ export function applyVoucherConsequence(
   if (!voucher) return;
   voucher.stats.loyalty = clamp(voucher.stats.loyalty + DELEGATION.recallLoyalty, 0, 100);
   voucher.stats.grievance = clamp(voucher.stats.grievance + DELEGATION.recallGrievance, 0, 100);
-  remember(voucher, day, 'passed_over', npc.id);
+  remember(voucher, day, 'vouch_soured', npc.id);
   addNote(voucher, day, `${npc.name}, who they put up, ${reason}.`, 'bad');
+
+  // Fires once, the moment the count reaches the bar, the same way
+  // `business.ts`'s `HEALTH.warnBelow` fires once on the tick health crosses
+  // it rather than every day it stays under. `silence()` already works on a
+  // capo like anyone else — this only makes it legible that it might be
+  // worth pointing at this one.
+  if (voucherMistakeCount(voucher) === CAPO_VOUCH.mistakesBeforeWarning) {
+    addLog(state, `${voucher.name}'s word hasn't been worth much lately.`, 'crew');
+  }
+}
+
+/**
+ * How many men this capo has put up who then went bad on him.
+ *
+ * A raw count of `vouch_soured` memories, not the weighted read `memory.ts`
+ * uses everywhere else — `weightOf` fades how much an old mistake still
+ * stings, never whether it happened, and "how many times" is asking the
+ * second question, not the first. Derived rather than stored for the reason
+ * `rank.ts` and the rest of this file's own readiness checks are: nothing
+ * here can drift out of sync with a save. It shares memory.ts's one existing
+ * bound — `MAX_MEMORIES` drops a capo's faintest memory first once he is
+ * carrying more than ten, so a mistake old and small enough could in
+ * principle fall off the list. That is the memory system's standing
+ * trade-off, not a new one this feature introduces.
+ */
+export function voucherMistakeCount(capo: Npc): number {
+  return capo.memories.filter((m) => m.kind === 'vouch_soured').length;
 }

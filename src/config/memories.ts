@@ -25,6 +25,7 @@ export type MemoryKind =
   | 'was_hurt'
   | 'went_unpaid'
   | 'passed_over'
+  | 'vouch_soured'
   | 'promoted'
   | 'looked_after'
   | 'lost_a_friend'
@@ -109,6 +110,24 @@ export const MEMORIES: Record<MemoryKind, MemoryDef> = {
   passed_over: {
     kind: 'passed_over',
     text: 'watched somebody else get what they were owed',
+    tone: 'bad',
+    weight: 55,
+    fadePerYear: 8,
+    floor: 10,
+  },
+  /*
+     A capo's own word coming back on him — not the same thing as being
+     `passed_over`, which is watching somebody *else* get what he wanted.
+     This is the reverse: a man he put his name behind turned out to be a
+     mistake. `capoVouches.ts`'s `applyVoucherConsequence` used to write
+     `passed_over` here, which conflated "denied a vouch" with "burned by
+     one" — two different facts about a capo that a count could not tell
+     apart. Same order of magnitude as `passed_over`, because both are a
+     credibility hit of the kind a boss remembers about a man's judgment.
+  */
+  vouch_soured: {
+    kind: 'vouch_soured',
+    text: 'put their name behind a man who let them down',
     tone: 'bad',
     weight: 55,
     fadePerYear: 8,

@@ -31,6 +31,7 @@ import {
   denyVouch,
   isVouchReady,
   makeVouch,
+  voucherMistakeCount,
   vouchCandidates,
   waitOnVouch,
 } from '../capoVouches';
@@ -247,7 +248,9 @@ describe('a made man cut loose costs the capo who vouched for him', () => {
       Math.max(0, Math.min(100, grievanceBefore + DELEGATION.recallGrievance)),
     );
     expect(state.npcs[capo.id].memories.length).toBe(memoriesBefore + 1);
-    expect(state.npcs[capo.id].memories[0].kind).toBe('passed_over');
+    // Its own kind, distinct from Deny's `passed_over` above — a vouch going
+    // bad is not the same thing as a capo being passed over for one.
+    expect(state.npcs[capo.id].memories[0].kind).toBe('vouch_soured');
   });
 
   it('costs nobody when the dismissed man was never vouched for', () => {
@@ -447,5 +450,69 @@ describe('the same charge, from every other way a vouch goes bad', () => {
     expect(state.npcs[capo.id].stats.loyalty).toBe(
       Math.max(0, Math.min(100, loyaltyBefore + DELEGATION.recallLoyalty)),
     );
+  });
+});
+
+/**
+ * A capo's judgment does not get worse the third time it goes wrong, but the
+ * player is entitled to be told it keeps happening — `silence()` already
+ * works on a capo exactly like anybody else; what was missing was a reason to
+ * point it at one.
+ */
+describe('a running count of a capo\'s bad vouches', () => {
+  /** One vouch, made and then soured, for a fresh associate each time. */
+  function sourOneVouch(state: GameState, capo: Npc, calls: number): void {
+    const associate = hire(state, 'associate', calls);
+    assignToCapo(state, associate.id, capo.id);
+    associate.joinedDay = state.day - DRIFT.daysInRoleBeforeStagnation - 1;
+    associate.stats.loyalty = BEHAVIOUR.demandLoyaltyBelow + 5;
+    capo.ties.push({
+      id: associate.id,
+      trust: TIE_DEPARTURE.followTrustAbove + 5,
+      resentment: 0,
+      debt: 0,
+      cause: 'worked_together',
+      since: state.day,
+    });
+    makeVouch(state, associate.id);
+    dismiss(state, associate.id);
+  }
+
+  it('starts at zero for a capo who has never had a vouch go bad', () => {
+    const state = game();
+    const capo = hire(state, 'capo', 1);
+    expect(voucherMistakeCount(capo)).toBe(0);
+  });
+
+  it('counts each vouch that goes bad, not just the last one', () => {
+    const state = game();
+    const capo = hire(state, 'capo', 1);
+    sourOneVouch(state, capo, 10);
+    expect(voucherMistakeCount(capo)).toBe(1);
+    sourOneVouch(state, capo, 20);
+    expect(voucherMistakeCount(capo)).toBe(2);
+  });
+
+  it('says nothing while the count sits under the threshold', () => {
+    const state = game();
+    const capo = hire(state, 'capo', 1);
+    for (let i = 0; i < CAPO_VOUCH.mistakesBeforeWarning - 1; i++) {
+      sourOneVouch(state, capo, 10 + i * 10);
+    }
+    expect(state.log.some((l) => l.text.includes(capo.name))).toBe(false);
+  });
+
+  it('surfaces a warning the moment the count crosses the threshold, and only then', () => {
+    const state = game();
+    const capo = hire(state, 'capo', 1);
+    for (let i = 0; i < CAPO_VOUCH.mistakesBeforeWarning; i++) {
+      sourOneVouch(state, capo, 10 + i * 10);
+    }
+    const hits = state.log.filter((l) => l.text.includes(capo.name));
+    expect(hits).toHaveLength(1);
+
+    // One more bad vouch afterwards does not repeat the warning.
+    sourOneVouch(state, capo, 200);
+    expect(state.log.filter((l) => l.text.includes(capo.name))).toHaveLength(1);
   });
 });
