@@ -190,11 +190,21 @@ export function withArticle(word: string): string {
 export function weightedPick<T extends { weight: number }>(
   items: readonly T[],
   roll: number,
+  /**
+   * Sharpens (>0) or flattens (<0) selection without touching a single
+   * item's own weight — `e^(weight * sharpness)` in place of the raw weight.
+   * Omitted (every existing caller) keeps the original linear-proportional
+   * behaviour exactly; this only matters to a caller that explicitly wants a
+   * real gap between two weights to translate into a bigger gap in odds than
+   * a flat multiplier does. See `EVENT_WEIGHT_SHARPNESS`.
+   */
+  sharpness?: number,
 ): T {
-  const total = items.reduce((sum, i) => sum + i.weight, 0);
+  const effective = (w: number) => (sharpness === undefined ? w : Math.exp(w * sharpness));
+  const total = items.reduce((sum, i) => sum + effective(i.weight), 0);
   let target = roll * total;
   for (const item of items) {
-    target -= item.weight;
+    target -= effective(item.weight);
     if (target <= 0) return item;
   }
   return items[items.length - 1];

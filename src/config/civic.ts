@@ -305,8 +305,20 @@ export const CIVIC_FIGURES: CivicFigureDef[] = [
        `unionPayroll`: a score of 70 / 76 / 82, so the bar sits between the
        median and the 75th, which is where DIRECTOR section 5 puts one and
        where the other three figures were placed.
+
+       78 stopped being that placement without anyone moving it: the quantity
+       underneath moved again, the same way it did twice before. Measured
+       fresh at 2026-09-10 against `ladder.probe`'s own 36-career population,
+       peak union score reads (sorted) 15, 53, 61, 61, 65, 65, 67, 67, 67, 68,
+       69×4, 71×3, 73×7, 77×4, 79×2, 81×5, 83 — median 73, 75th 77. A bar of
+       78 sat above both, past the top of the distribution's own upper
+       quarter, and read 8 of 36: a figure that had quietly become unreachable
+       rather than rare. 76 sits back inside "between the median and the
+       75th" against the population as it stands today, and reads 12 of 36 —
+       the same shape as the other three, a relationship a third of careers
+       reach rather than a fixture or a wall.
     */
-    owesAbove: 78,
+    owesAbove: 76,
     needsInfluence: 0,
   },
   {
@@ -494,6 +506,41 @@ export const FAVOUR_EFFECT = {
   quietSentiment: 30,
   /** Days city-hall pressure is held down, matching the old arrangement. */
   paperworkDays: 90,
+  /**
+   * Days a rival's payroll stops earning them anything, once the union boss
+   * calls a walkout on them.
+   *
+   * The first outward use of this currency — everything else the network
+   * buys is spent on a problem of your own. Sized against `buryColdDays`,
+   * the other favour that reads as "this stops mattering for a while"
+   * rather than a one-time jolt.
+   */
+  walkoutDays: 21,
+  /**
+   * Heat put on a rival, once the captain's division takes an interest.
+   *
+   * The second outward use — `bury_a_case` cools a live file of yours, and
+   * this is the same lever pointed the other way: a division that would
+   * like to be boring can be made to notice somebody else instead. Sized
+   * to clear `AGENDA.quietAbove` (45) for a rival sitting at the population
+   * mean and to cross `heatAlarmAbove` (60) for one already running hot,
+   * so the favour buys a real change in posture rather than a number that
+   * `heatDecayPerWeek` (2.5) erases before anyone would notice it moved.
+   */
+  heatOnRival: 20,
+  /**
+   * Days one specific rival business stops paying its owner anything,
+   * once the alderman finds a problem with its paperwork.
+   *
+   * The third outward use, and the narrowest — `lose_the_paperwork` holds
+   * off pressure on a file that is the player's own, and a rival family
+   * has no city-hall file of its own to lose. What it does have, since
+   * `RivalBusiness` gave a rival's fronts real identity, is permits: a
+   * specific front an alderman's signature can specifically make trouble
+   * for. Sized the same as `walkoutDays` — this is the same mechanism at
+   * the scale of one business rather than a whole family's payroll.
+   */
+  permitPulledDays: 21,
 } as const;
 
 /**

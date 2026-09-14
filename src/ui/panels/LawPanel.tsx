@@ -305,6 +305,43 @@ function CaseDetail({
           <div style={{ marginTop: 12 }}>
             <KeyValue label="Stage" value={read.stageName ?? 'unknown'} tone="hot" />
             <KeyValue label="Case strength" value={read.strength} tone="hot" />
+            {/*
+               What last week's number was actually made of.
+
+               Section 15/16 of the 2026-09-10 polish pass: `tickInvestigations`
+               already computes three named, causal terms every week — evidence
+               they absorbed, the agency's own work, and ambient visibility from
+               how loud the player has been — and none of it ever reached the
+               screen, so a case's growth read as one undifferentiated fact
+               nothing on screen could trace to a decision, to neglect, or to
+               chance. Same intel gate as the strength number itself.
+            */}
+            {read.growth &&
+              (read.growth.absorbed > 0 || read.growth.work > 0 || read.growth.visibility > 0) && (
+                <div className="tiny" style={{ margin: '4px 0 8px' }}>
+                  <div className="faint" style={{ marginBottom: 2 }}>
+                    Last week's growth
+                  </div>
+                  {read.growth.absorbed > 0 && (
+                    <div className="kv">
+                      <span className="kv-key">Evidence they found</span>
+                      <span className="kv-val hot">+{Math.round(read.growth.absorbed)}</span>
+                    </div>
+                  )}
+                  {read.growth.work > 0 && (
+                    <div className="kv">
+                      <span className="kv-key">Their own work</span>
+                      <span className="kv-val hot">+{Math.round(read.growth.work)}</span>
+                    </div>
+                  )}
+                  {read.growth.visibility > 0 && (
+                    <div className="kv">
+                      <span className="kv-key">How loud you have been</span>
+                      <span className="kv-val hot">+{Math.round(read.growth.visibility)}</span>
+                    </div>
+                  )}
+                </div>
+              )}
             <KeyValue label="Opened" value={formatShortDay(investigation.openedDay)} />
             <KeyValue
               label="They have named"

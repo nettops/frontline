@@ -8,6 +8,7 @@ import {
   inheritRank,
   nameHeir,
   perceivedClaim,
+  weakClaim,
 } from '../../sim/succession';
 import { formatShortDay } from '../../sim/util';
 import { chronicle, chronicleSummary } from '../../sim/chronicle';
@@ -233,20 +234,31 @@ export default function SuccessionPanel() {
                         <Bar value={claim * 100} />
                       </td>
                       <td className="num">
+                        {/*
+                           Round 28's blind report never once tried this
+                           button in a 300-day career — every candidate sat
+                           in the worst claim band, which reads exactly like
+                           `nameHeir`'s own refusal for a rank too low to be
+                           eligible at all ("Nobody would follow them" /
+                           "Move them up first"). The button was never
+                           disabled; nothing on it said so. See `weakClaim`.
+                        */}
                         <button
                           className="btn small"
                           disabled={isHeir}
                           title={
                             isHeir
                               ? 'They are already next'
-                              : 'Everyone senior enough to have hoped will hear about it'
+                              : weakClaim(claim)
+                                ? 'The room is against it, but the choice is still yours to make'
+                                : 'Everyone senior enough to have hoped will hear about it'
                           }
                           onClick={() => {
                             const result = mutate((s) => nameHeir(s, npc.id), true);
                             if (result) setMessage(result.message);
                           }}
                         >
-                          {isHeir ? 'Named' : 'Name them'}
+                          {isHeir ? 'Named' : weakClaim(claim) ? 'Name them anyway' : 'Name them'}
                         </button>
                       </td>
                     </tr>

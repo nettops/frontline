@@ -48,9 +48,10 @@ import { nicknameOf } from './nicknames';
 import { priced } from './market';
 import { readWhispers } from './whispers';
 import { goHome, home } from './personal';
-import { RELATIONS } from '../config/personal';
+import { HOME, RELATIONS } from '../config/personal';
 import { CIVIC_FIGURES } from '../config/civic';
-import { GEN_EFFECT, GEN_SHAPES, GEN_WHEN } from '../config/eventgen';
+import { GEN_EFFECT, GEN_SEVERITY_WEIGHT_MAX, GEN_SHAPES, GEN_WHEN } from '../config/eventgen';
+import { recordCareerEvent } from './career';
 import { ROLE_LABEL } from '../config/economy';
 import { MEMORIES } from '../config/memories';
 
@@ -252,6 +253,25 @@ function tieCause(cause: string): string {
 const frontTrouble: EventDef = {
   id: 'gen_front_trouble',
   ...shape('gen_front_trouble'),
+  /*
+     Live severity, not a flat constant — see EVENT_WEIGHT_SHARPNESS and
+     GEN_SEVERITY_WEIGHT_MAX. A front barely past the bar scores its plain
+     base weight; one genuinely collapsing climbs toward
+     GEN_SEVERITY_WEIGHT_MAX times it, so a real crisis actually crowds out
+     flavour on a bad week instead of only reading worse in the prose.
+  */
+  weight: (_state, ctx) => {
+    const base = shape('gen_front_trouble').weight;
+    const b = ctx.business;
+    if (!b) return base;
+    const health = clamp((GEN_WHEN.frontHealthUnder - b.health) / GEN_WHEN.frontHealthUnder, 0, 1);
+    const exposure = clamp(
+      (b.exposure - GEN_WHEN.frontExposureOver) / (100 - GEN_WHEN.frontExposureOver),
+      0,
+      1,
+    );
+    return base * (1 + Math.max(health, exposure) * (GEN_SEVERITY_WEIGHT_MAX - 1));
+  },
   applies(state, rng) {
     const bad = ownedBusinesses(state).filter(
       (b) =>
@@ -427,6 +447,14 @@ const someoneOutside: EventDef = {
 const paperMoving: EventDef = {
   id: 'gen_paper_moving',
   ...shape('gen_paper_moving'),
+  /* Live severity — see gen_front_trouble's identical reasoning above. */
+  weight: (_state, ctx) => {
+    const base = shape('gen_paper_moving').weight;
+    const c = ctx.investigation;
+    if (!c) return base;
+    const severity = clamp((c.strength - GEN_WHEN.caseStrength) / (100 - GEN_WHEN.caseStrength), 0, 1);
+    return base * (1 + severity * (GEN_SEVERITY_WEIGHT_MAX - 1));
+  },
   applies(state, rng) {
     /*
        Only for a boss with nobody acting for them.
@@ -522,6 +550,60 @@ const askedForYou: EventDef = {
           id: 'later',
           label: 'Not this week',
           hint: 'It has been said before.',
+        },
+      ],
+    };
+  },
+};
+
+/**
+ * The same house, and this time something is actually on the table.
+ *
+ * `gen_asked_for_you` costs nothing to answer either way, which makes it a
+ * reminder rather than a decision. This is the same subject at the same
+ * gate, except staying pays and going home costs — a real choice between
+ * business and personal life, the thing Section 17 of the 2026-09-10 polish
+ * pass named as missing. Nothing here is a new mechanic: `earnDirty`,
+ * `gainRespect` and `home(state).neglect` are all numbers other systems
+ * already own.
+ */
+const homeOrBusiness: EventDef = {
+  id: 'gen_home_or_business',
+  ...shape('gen_home_or_business'),
+  applies(state) {
+    const house = home(state);
+    return house.neglect >= GEN_WHEN.neglect && house.people.length > 0 ? { atHome: true } : null;
+  },
+  build(state, rng) {
+    const house = home(state);
+    const who = house.people[Math.min(house.people.length - 1, Math.floor(rng.next() * house.people.length))];
+    const def = RELATIONS.find((r) => r.id === who.relationId);
+    const relation = def ? def.label : 'somebody at home';
+    const cash = money(priced(state, GEN_EFFECT.homeOrBusinessStayCash));
+    return {
+      defId: 'gen_home_or_business',
+      title: `${who.name} wants tonight, and so does the street`,
+      body: oneOf(rng, [
+        `${who.name}, ${relation}, asked for tonight specifically, not some evening. ` +
+          `Tonight is also the best night in weeks to be out working.`,
+        `You could be two places and you are not. ${who.name}, ${relation}, is waiting ` +
+          `on one of them, and there is real money in the other.`,
+        `${who.name}, ${relation}, did not ask for much. Just tonight, and not to be ` +
+          `told about it after the fact. Tonight is also a good night to be seen working.`,
+      ]),
+      severity: 'opportunity',
+      npcId: null,
+      data: {},
+      choices: [
+        {
+          id: 'go',
+          label: 'Go home for the evening',
+          hint: `Costs a little respect — word gets around. ${who.name} gets tonight.`,
+        },
+        {
+          id: 'stay',
+          label: 'This can\'t wait',
+          hint: `Pays ${cash} tonight. ${who.name} was told no, in as many words.`,
         },
       ],
     };
@@ -976,6 +1058,7 @@ export const GEN_DEFS: EventDef[] = [
   takeIsShort,
   nameCameUp,
   askedForYou,
+  homeOrBusiness,
   stewardAsks,
   theNameStuck,
   oldOwner,
@@ -1250,6 +1333,24 @@ export function resolveGenerated(
 
     case 'gen_asked_for_you': {
       if (choiceId === 'go') goHome(state);
+      return;
+    }
+
+    case 'gen_home_or_business': {
+      if (choiceId === 'go') {
+        goHome(state);
+        gainRespect(state, GEN_EFFECT.homeOrBusinessGoRespect);
+        return;
+      }
+      // 'stay': the night's take, and the house is told no to its face —
+      // worse than simply not visiting, which is why this goes straight at
+      // `neglect` rather than through `goHome`'s own (positive-only) door.
+      earnDirty(state, priced(state, GEN_EFFECT.homeOrBusinessStayCash));
+      const house = home(state);
+      house.neglect = clamp(house.neglect + GEN_EFFECT.homeOrBusinessRefusedNeglect, 0, 100);
+      if (house.neglect >= HOME.depositionFrom) {
+        recordCareerEvent(state, 'Chose business over family, again.', 'bad');
+      }
       return;
     }
 

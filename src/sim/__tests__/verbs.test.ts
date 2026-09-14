@@ -16,7 +16,9 @@ import { spendPoint, statLevel } from '../build';
 import { VERB_AT, type StatId } from '../../config/build';
 import { VERBS } from '../../config/verbs';
 import {
+  buyIn,
   callEverybodyIn,
+  canBuyIn,
   canCallATable,
   canCallEverybodyIn,
   canPlant,
@@ -28,11 +30,16 @@ import {
   isInside,
   plant,
   putOnCard,
+  rivalBusinesses,
+  rivalBusinessRead,
+  stakeIncome,
   takeTheWeight,
   tickCard,
+  tickStakes,
 } from '../verbs';
 import { PAYDAY_INTERVAL } from '../../config/economy';
-import type { GameState } from '../types';
+import { AI } from '../../config/factions';
+import type { GameState, RivalBusiness } from '../types';
 
 function game(seed = 9): GameState {
   const state = newGame({ name: 'Verbs', difficulty: 'normal', seed });
@@ -235,5 +242,84 @@ describe('planting somebody', () => {
     const men = crewList(state).filter((n) => n.status === 'active');
     for (let i = 0; i < VERBS.plantsAtOnce; i++) plant(state, `house_${i}`, men[i].id);
     expect(canPlant(state, 'one_more').ok).toBe(false);
+  });
+});
+
+/*
+   Buying into somebody else's business.
+
+   `state.businesses` only ever holds the player's own fronts — see
+   `RivalBusiness`'s doc comment in `sim/types.ts` for why this verb could
+   never have resolved against it. A fixture built directly through
+   `rivalBusinesses`, rather than through a rival's own AI, because this file
+   is about the verb, not about when a rival happens to invest.
+*/
+describe('buying into somebody else’s business', () => {
+  function aFront(state: GameState): RivalBusiness {
+    const biz: RivalBusiness = {
+      id: 'rbiz_test',
+      factionId: 'falcone',
+      defId: 'laundromat',
+      territoryId: 'northside',
+    };
+    rivalBusinesses(state)[biz.id] = biz;
+    return biz;
+  }
+
+  it('is a real business or nothing — not a business you already own', () => {
+    const state = game();
+    build(state, 'ledger');
+    expect(canBuyIn(state, 'nothing_here').ok).toBe(false);
+  });
+
+  it('takes a piece of it once, and refuses a second time', () => {
+    const state = game();
+    build(state, 'ledger');
+    const biz = aFront(state);
+
+    expect(buyIn(state, biz.id).ok).toBe(true);
+    expect(biz.stake).toBe(VERBS.stakeShare);
+    expect(canBuyIn(state, biz.id).ok).toBe(false);
+  });
+
+  it('names the house and the street, for the screen that lists them', () => {
+    const state = game();
+    aFront(state);
+    const rows = rivalBusinessRead(state);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].house.length).toBeGreaterThan(0);
+    expect(rows[0].where).toBe('Northside');
+  });
+
+  it('pays exactly the stake share of what the business earns', () => {
+    expect(stakeIncome(1000, { stake: 0.3 })).toBe(300);
+    expect(stakeIncome(1000, {})).toBe(0);
+  });
+
+  it('a held stake pays out weekly, and nothing pays without one', () => {
+    const state = game();
+    build(state, 'ledger');
+    const biz = aFront(state);
+    buyIn(state, biz.id);
+    const before = state.org.dirtyCash;
+
+    state.day = Math.ceil((state.day + 1) / PAYDAY_INTERVAL) * PAYDAY_INTERVAL;
+    tickStakes(state);
+
+    expect(state.org.dirtyCash - before).toBe(
+      stakeIncome(AI.invest.incomePerBusiness, biz),
+    );
+  });
+
+  it('pays nothing on an off day, and nothing for a business nobody bought into', () => {
+    const state = game();
+    build(state, 'ledger');
+    aFront(state);
+    const before = state.org.dirtyCash;
+
+    state.day = Math.ceil((state.day + 1) / PAYDAY_INTERVAL) * PAYDAY_INTERVAL;
+    tickStakes(state);
+
+    expect(state.org.dirtyCash).toBe(before);
   });
 });

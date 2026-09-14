@@ -321,11 +321,19 @@ export function attention(state: GameState): Wanting[] {
 
      One-shot rather than persistent: once a supplier arrangement exists,
      the player has found the door, whatever they did with it next.
+
+     Round 28's blind report is the third to name this trade, from the other
+     direction: unlocked at $2,800 with a solvency crisis under way, saw
+     this exact line, went and looked, and hit a retainer running from
+     $40,000 — filed under "wanted to, was blocked." `tips.ts`'s own `trade`
+     tip had the identical gap and was fixed the same way; no figure quoted
+     here either, since `priced()` scales the real cost 0.6x to 8x with the
+     market and a number could be wrong by the time anybody reads it.
   */
   if (tradeUnlocked(state, 'product') && !state.contraband?.supplierId) {
     out.push({
       id: 'trade',
-      text: 'You have enough fronts to run product through them. Look at The Trade.',
+      text: 'You have enough fronts to run product through them — it costs a retainer up front, so see what one runs before you go looking.',
       panel: 'contraband',
     });
   }

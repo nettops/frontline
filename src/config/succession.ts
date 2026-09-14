@@ -180,6 +180,21 @@ export const HANDOVER = {
   rivalRespectHit: -14,
   /** The new boss starts one rung below the man he replaces. */
   ranksLost: 1,
+
+  /**
+   * How long a weak-claim handover leaves the room genuinely unsettled.
+   *
+   * `weakClaim` already changes the odds of who wins; it never changed what a
+   * shaky win *costs*. This is the honest, synchronous stand-in for a real
+   * multi-day interregnum — no leaderless gap between removal and resolution,
+   * which this codebase's turn structure has no scheduling hook for — a
+   * lingering vulnerability window instead, read by `driftNpcs`'s existing
+   * collective-defection term (see `BEHAVIOUR.shakyHandoverDefectBoost`) so a
+   * badly-supported new boss is visibly more likely to lose people to it, not
+   * just more likely to have lost the room in the first place. New,
+   * conservative, not yet probe-measured.
+   */
+  shakyHandoverDays: 45,
 } as const;
 
 /**

@@ -125,3 +125,31 @@ export const TIE_DEPARTURE = {
 
 /** Chance a completed job writes a `worked_together` edge between two of the crew. */
 export const TIE_FROM_OPERATION = 0.45;
+
+/**
+ * How much who two people *are* changes what a shared job builds between them.
+ *
+ * `worked_together` used to land identically on any pair — a `loyalist` and a
+ * `greedy` man built exactly the same trust from the same job as two
+ * `old_school` men. Sparse on purpose: most trait pairs are simply different,
+ * not opposed, and `TraitDef.clashesWith` is only populated for the pairs that
+ * genuinely read as a clash. New, conservative, not yet probe-measured.
+ */
+export const TIE_COMPAT = {
+  /** Multiplies a tie event when both people share a trait. */
+  sameTraitMult: 1.25,
+  /** Multiplies a tie event when one holds a trait the other's clashes with. */
+  clashTraitMult: 0.65,
+
+  /**
+   * Peer contagion: a job that already found two well-trusted people together
+   * lets one's grievance nudge the other's — a real grapevine, rather than
+   * every tie being a static, independent modifier. Trust needed, both
+   * directions, before this fires at all.
+   */
+  contagionTrustAbove: 40,
+  /** How far the junior of the pair moves toward the senior's reading. */
+  contagionJuniorPull: 0.05,
+  /** ...and how far the senior moves toward the junior's — inertia, not none. */
+  contagionSeniorPull: 0.015,
+};

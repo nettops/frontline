@@ -38,7 +38,8 @@ import { prices } from './market';
 import { CREW_SKILL_VS_DISCIPLINE } from '../config/operations';
 import { BOSS_CONTRACT, CONTRACT, WITNESS_CONTRACT } from '../config/contract';
 import { CHARGE, PROVENANCE } from '../config/pieces';
-import { armFor, leftBehind, spent, usingCharge } from './pieces';
+import { armFor, leftBehind, spent } from './pieces';
+import { recordCareerEvent } from './career';
 
 export type ContractTarget =
   | { kind: 'capo'; factionId: FactionId; capoId: string }
@@ -251,7 +252,11 @@ function targetKeyOf(contract: Contract): string {
  * the men go, and then it is out of your hands for `CONTRACT.days`. That gap
  * is deliberate and it is the whole texture of the mechanic.
  */
-export function openContract(state: GameState, target: ContractTarget): ContractCheck {
+export function openContract(
+  state: GameState,
+  target: ContractTarget,
+  charged = false,
+): ContractCheck {
   const guard = canContract(state, target);
   if (!guard.ok) return guard;
 
@@ -283,6 +288,7 @@ export function openContract(state: GameState, target: ContractTarget): Contract
     openedDay: state.day,
     endDay: state.day + CONTRACT.days,
     chance: guard.chance!,
+    charged: charged && target.kind !== 'witness',
     paid: cost,
     status: 'open',
   };
@@ -330,6 +336,11 @@ function comeHome(state: GameState, rng: Rng, contract: Contract, worked: boolea
 function landCapo(state: GameState, contract: Contract): void {
   if (!contract.factionId || !contract.targetId) return;
   removeCapo(state, contract.factionId, contract.targetId, CONTRACT.wearinessOnDeath);
+  recordCareerEvent(
+    state,
+    `Had ${contract.targetName} of the ${houseShort(state, contract.factionId)} killed.`,
+    'good',
+  );
 }
 
 function landBoss(state: GameState, rng: Rng, contract: Contract): void {
@@ -340,6 +351,11 @@ function landBoss(state: GameState, rng: Rng, contract: Contract): void {
     `${contract.targetName} of the ${houseShort(state, contract.factionId)} is dead. ` +
       'Somebody else has that chair now.',
     'failure',
+  );
+  recordCareerEvent(
+    state,
+    `Had ${contract.targetName}, boss of the ${houseShort(state, contract.factionId)}, killed.`,
+    'good',
   );
   replaceLeader(state, rng, faction, contract.factionId);
 }
@@ -431,15 +447,13 @@ export function tickContracts(state: GameState, rng: Rng): void {
 
     const act = armFor(state);
     /*
-       A charge, if that is the standing decision and the target is somebody
-       with an address rather than one of your own.
-
-       Not a piece off the shelf — the family keeps no inventory of these and
-       nothing is spent using one. What it buys is certainty; what it costs is
-       the street, and the fact that no local force works `ordnance`. See
-       `CHARGE` in `config/pieces.ts`.
+       A charge, if that is what was decided when the men went — snapshotted
+       on the contract itself (`openContract`), not a standing policy read
+       here. What it buys is certainty; what it costs is the street, and the
+       fact that no local force works `ordnance`. See `CHARGE` in
+       `config/pieces.ts`.
     */
-    const charged = usingCharge(state) && contract.kind !== 'witness';
+    const charged = contract.charged;
     const odds = charged ? CHARGE.odds : act.odds;
     const worked = rng.chance(clamp(contract.chance + odds, 0, 1));
     const shape = shapeOf(contract.kind);

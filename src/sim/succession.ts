@@ -180,6 +180,23 @@ export function claimBand(claim: number): string {
   return CLAIM_BANDS[clamp(Math.floor(claim / 0.2), 0, 4)];
 }
 
+/**
+ * Whether the worst band is showing.
+ *
+ * `nameHeir` never reads claim at all — it refuses only for a rank too low
+ * to be `eligibleHeirs` in the first place, per its own message ("Move them
+ * up first"). The worst band's wording ("Nobody would follow them") reads
+ * exactly like that same refusal, sitting beside a button that is not
+ * disabled and works precisely because it is the identical sentence for two
+ * different things. Round 28's blind report never once tried naming a
+ * successor across a 300-day career for exactly this reason. `SuccessionPanel`
+ * uses this to say so on the button itself, rather than only in the column
+ * next to it.
+ */
+export function weakClaim(claim: number): boolean {
+  return claimBand(claim) === CLAIM_BANDS[0];
+}
+
 // ------------------------------------------------------- naming, in life ---
 
 export interface NameResult {
@@ -451,6 +468,15 @@ function resolveSuccession(
   };
 
   applyHandoverCosts(state, rng, winner, usurped, contested, kind);
+
+  /*
+     A weak claim costs more than the odds of who won — see
+     HANDOVER.shakyHandoverDays. `winner` is read here as the new player, so
+     this has to run after `state.player` above is already the successor.
+  */
+  if (weakClaim(claimStrength(state, winner))) {
+    state.org.shakyHandoverUntilDay = state.day + HANDOVER.shakyHandoverDays;
+  }
 
   const body = successionMemo(state, kind, detail, winner, named, usurped, contested);
   pushEvent(state, {

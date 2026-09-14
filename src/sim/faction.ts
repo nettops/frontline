@@ -24,9 +24,12 @@ import type {
   FactionActionKind,
   FactionAgenda,
   GameState,
+  RivalBusiness,
   Territory,
 } from './types';
-import { addLog, formatMoneyShort, pushEvent, say } from './util';
+import { addLog, formatMoneyShort, nextId, pushEvent, say } from './util';
+import { rivalBusinesses } from './verbs';
+import { BUSINESSES } from '../config/businesses';
 import {
   adjustRelationship,
   atWar,
@@ -639,9 +642,39 @@ function executePressure(
   }
 }
 
-function executeInvest(state: GameState, faction: Faction): void {
+/** Exported so a rival business's materialization can be tested directly. */
+export function executeInvest(state: GameState, faction: Faction): void {
   faction.wealth -= AI.invest.cost;
   faction.businessCount += 1;
+
+  /*
+     Named and addressable, not only counted.
+
+     `businessCount` alone was enough for this family's own income line, and
+     stayed enough right up until a player could buy a piece of one — see
+     `RivalBusiness`'s own doc comment. Materialized here, at the one place a
+     rival's front actually comes into being, rather than backfilled for a
+     `businessCount` a family was already carrying: an old save simply has
+     fewer of a rival's fronts on record than it has counted, which is
+     honest, not a bug to paper over.
+
+     The type and the street are flavour a player can look at, never an input
+     anything reads back — so they come off `Rng.stableNoise` through `say()`,
+     the same instrument the line below already uses, not the causal `rng`
+     this function was never even passed.
+  */
+  const held = districtsHeld(state, faction.id);
+  const bizId = nextId(state, 'rbiz');
+  const rival: RivalBusiness = {
+    id: bizId,
+    factionId: faction.id,
+    defId: BUSINESSES[Math.floor(Rng.stableNoise(`rbiz_type_${bizId}`, state.day) * BUSINESSES.length)].id,
+    territoryId:
+      held.length > 0
+        ? held[Math.floor(Rng.stableNoise(`rbiz_where_${bizId}`, state.day) * held.length)].id
+        : null,
+  };
+  rivalBusinesses(state)[bizId] = rival;
 
   const def = houseDef(state, faction.id);
   record(
@@ -862,11 +895,37 @@ function executePoach(state: GameState, faction: Faction, rng: Rng): void {
 
 // ------------------------------------------------------------------- tick ---
 
-/** Weekly income and the bill that comes with being an organization. */
-function collectIncome(state: GameState, faction: Faction): void {
+/**
+ * Weekly income and the bill that comes with being an organization.
+ *
+ * Exported so a walkout's effect can be measured on its own — `tickFactions`
+ * also runs each faction's weekly decision (invest, expand, pressure), which
+ * spends its own money through the same shared `rng` stream, and a test that
+ * went through `tickFactions` to reach this would be measuring that decision
+ * as much as the income term it meant to isolate.
+ */
+export function collectIncome(state: GameState, faction: Faction): void {
   const held = districtsHeld(state, faction.id).length;
+  // A walkout the union boss called on them — see `civic.ts:callWalkout` —
+  // stops the fronts from paying out for its duration. The upkeep below is
+  // untouched: idle men and idle premises still cost what they always cost.
+  const walkedOut = !!faction.walkoutUntilDay && state.day < faction.walkoutUntilDay;
+  /*
+     A permit the alderman pulled on one specific front — see
+     `civic.ts:pullPermit`. Same idea as the walkout, at the scale of one
+     business: `businessCount` is a count, not a list, so a business that
+     cannot currently pay out is subtracted from it for the income term
+     rather than removed from anywhere, which is also why this can never
+     go negative.
+  */
+  const permitsPulled = Object.values(rivalBusinesses(state)).filter(
+    (b) => b.factionId === faction.id && b.permitPulledUntilDay && state.day < b.permitPulledUntilDay,
+  ).length;
+  const earningBusinesses = Math.max(0, faction.businessCount - permitsPulled);
   const income =
-    AI.incomeBase + held * AI.incomePerDistrict + faction.businessCount * AI.invest.incomePerBusiness;
+    AI.incomeBase +
+    held * AI.incomePerDistrict +
+    (walkedOut ? 0 : earningBusinesses * AI.invest.incomePerBusiness);
 
   /*
    * The bill.

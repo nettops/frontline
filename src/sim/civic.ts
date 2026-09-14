@@ -46,6 +46,11 @@ import { SENTIMENT_HOSTILE_BELOW } from '../config/territories';
 import { PATRON } from '../config/perception';
 import type { CivicStanding, GameState } from './types';
 import { holdingShare } from './holdings';
+import { rivals } from './faction';
+import { houseShort } from './houses';
+import { rivalBusinesses } from './verbs';
+import { BUSINESS_BY_ID } from '../config/businesses';
+import type { FactionId } from '../config/factions';
 
 /** Lazily created, so a save written before this existed still loads. */
 function roster(state: GameState): CivicStanding[] {
@@ -407,6 +412,147 @@ export function askForWork(state: GameState, id: string): FavourResult {
     `${def.title} put something your way. $${pay.toLocaleString('en-US')}, and they ` +
     `will remember that you asked for it.`;
   addLog(state, message, 'money');
+  return { ok: true, message };
+}
+
+/**
+ * The first of three favours in this network spent outward, on a rival,
+ * rather than inward on a problem of the player's own.
+ *
+ * Every one of `apply()`'s four grants fixes something happening to the
+ * player — a case, a man in custody, a district, city-hall pressure. Three
+ * of the four figures turn out to have an honest reading pointed the other
+ * way as well. The union boss does not just calm a street, he can also
+ * empty one, and there is nothing else in this game that lets a boss reach
+ * a rival's payroll without a bullet involved. See `callTheLaw` for the
+ * captain's own outward reading, added the same day for the same reason,
+ * and `pullPermit` for the alderman's — added later the same day, once
+ * `RivalBusiness` gave a rival's fronts a real identity to point a permit
+ * at, which this comment originally (and at the time correctly) said did
+ * not exist.
+ *
+ * Deliberately not extended to all four. The judge is the one grant with
+ * no honest outward reading and none has turned up since: `open_the_door`
+ * springs a specific man from a specific cell, and a rival's own men are
+ * `Capo[]` and a count rather than individuals the sim can name one of.
+ * Inventing a use for him would be manufacturing parity rather than
+ * following where a relationship actually reaches, which is the same
+ * judgment call this comment's own history has already made twice.
+ */
+export function canCallWalkout(state: GameState, targetFactionId: FactionId): FavourCheck {
+  const check = canSpendFavour(state, 'union');
+  if (!check.ok) return check;
+  const target = rivals(state).find((f) => f.id === targetFactionId);
+  if (!target || target.strength <= 0) return { ok: false, reason: 'There is nobody there to walk out.' };
+  if (target.walkoutUntilDay && state.day < target.walkoutUntilDay) {
+    const left = target.walkoutUntilDay - state.day;
+    return {
+      ok: false,
+      reason: `${houseShort(state, targetFactionId)} is already sitting idle — ${left} ${left === 1 ? 'day' : 'days'} left on it.`,
+    };
+  }
+  return { ok: true };
+}
+
+export function callWalkout(state: GameState, targetFactionId: FactionId): FavourResult {
+  const check = canCallWalkout(state, targetFactionId);
+  if (!check.ok) return { ok: false, message: check.reason ?? 'No.' };
+
+  const held = figure(state, 'union');
+  held.owed -= 1;
+  const target = state.factions[targetFactionId];
+  target.walkoutUntilDay = state.day + FAVOUR_EFFECT.walkoutDays;
+
+  const message =
+    `Nobody is showing up to work for the ${houseShort(state, targetFactionId)} for ` +
+    `${FAVOUR_EFFECT.walkoutDays} days. Their fronts are not making them anything until it lifts.`;
+  addLog(state, message, 'crew');
+  return { ok: true, message };
+}
+
+/**
+ * The captain's own outward reading — see `canCallWalkout`'s doc comment
+ * for why he and the union boss are the two figures this applies to.
+ *
+ * `bury_a_case` cools a live file of the player's own; this is the same
+ * lever pointed at a rival. A rival family has no individually tracked
+ * case the way the player does, so there is nothing here to bury or build
+ * — what exists instead is `Faction.heat`, a real number their own weekly
+ * decisions already read (a hot family scores every option more
+ * cautiously, and `AGENDA`'s go-quiet option scores higher above
+ * `quietAbove`), so a captain's division taking an interest in somebody
+ * else genuinely changes how that family behaves, not only what it feels
+ * like to have spent the favour.
+ *
+ * No duration to track, unlike the walkout: heat already decays on its
+ * own every week (`AI.heatDecayPerWeek`), so a one-time addition ages out
+ * by the mechanism the game already has rather than needing a second one.
+ */
+export function canCallTheLaw(state: GameState, targetFactionId: FactionId): FavourCheck {
+  const check = canSpendFavour(state, 'captain');
+  if (!check.ok) return check;
+  const target = rivals(state).find((f) => f.id === targetFactionId);
+  if (!target || target.strength <= 0) {
+    return { ok: false, reason: 'There is nobody there for a division to take an interest in.' };
+  }
+  return { ok: true };
+}
+
+export function callTheLaw(state: GameState, targetFactionId: FactionId): FavourResult {
+  const check = canCallTheLaw(state, targetFactionId);
+  if (!check.ok) return { ok: false, message: check.reason ?? 'No.' };
+
+  const held = figure(state, 'captain');
+  held.owed -= 1;
+  const target = state.factions[targetFactionId];
+  target.heat = clamp(target.heat + FAVOUR_EFFECT.heatOnRival, 0, 100);
+
+  const message = `A division has started asking questions about the ${houseShort(state, targetFactionId)}. That is their problem now.`;
+  addLog(state, message, 'crew');
+  return { ok: true, message };
+}
+
+/**
+ * The alderman's own outward reading — see `canCallWalkout`'s doc comment
+ * for the third of the three figures this applies to, and why.
+ *
+ * Scoped narrower than the other two on purpose: a permit is pulled on one
+ * specific business, not on a family generally, because that is genuinely
+ * what an alderman controls and a captain or a union boss does not — a
+ * signature on one particular building rather than a division or a
+ * membership. The mechanism is the walkout's own, at the scale of one
+ * business rather than a whole payroll: `collectIncome` in `faction.ts`
+ * already reads `businessCount` for its income term, so pulling a permit
+ * simply excludes this one business from that count for the duration
+ * rather than needing a second formula.
+ */
+export function canPullPermit(state: GameState, businessId: string): FavourCheck {
+  const check = canSpendFavour(state, 'alderman');
+  if (!check.ok) return check;
+  const biz = rivalBusinesses(state)[businessId];
+  if (!biz) return { ok: false, reason: 'No such business.' };
+  if (biz.permitPulledUntilDay && state.day < biz.permitPulledUntilDay) {
+    const left = biz.permitPulledUntilDay - state.day;
+    return {
+      ok: false,
+      reason: `Already tied up in paperwork — ${left} ${left === 1 ? 'day' : 'days'} left on it.`,
+    };
+  }
+  return { ok: true };
+}
+
+export function pullPermit(state: GameState, businessId: string): FavourResult {
+  const check = canPullPermit(state, businessId);
+  if (!check.ok) return { ok: false, message: check.reason ?? 'No.' };
+
+  const held = figure(state, 'alderman');
+  held.owed -= 1;
+  const biz = rivalBusinesses(state)[businessId];
+  biz.permitPulledUntilDay = state.day + FAVOUR_EFFECT.permitPulledDays;
+
+  const name = BUSINESS_BY_ID[biz.defId]?.name ?? 'The business';
+  const message = `${name} has a permit problem that will take ${FAVOUR_EFFECT.permitPulledDays} days to sort out. It is not making anybody anything until then.`;
+  addLog(state, message, 'crew');
   return { ok: true, message };
 }
 

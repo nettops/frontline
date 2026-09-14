@@ -255,10 +255,28 @@ export function tickBonds(state: GameState, districtsOf: (id: FactionId) => numb
 
       if (!fighting) {
         record.grudge = Math.max(0, record.grudge - BOND.grudgeDecayPerWeek);
+        /*
+           Ambient friction from sharing ground, on top of whatever an actual
+           clash there already does. See BOND.contestedGrudgePerWeek — without
+           this a settled map has no reason left to move at all.
+        */
+        if (contestedBetween(state, from, to).length > 0) {
+          record.grudge = clamp(record.grudge + BOND.contestedGrudgePerWeek, 0, 100);
+        }
         // Peace held for another week is the only way ordinary trust is built.
         record.trust = clamp(record.trust + BOND.trustPerPeacefulWeek, -100, 100);
         if (record.trust >= BOND.allianceTrust) {
           record.trust = clamp(record.trust + BOND.trustPerAlliedWeek, -100, 100);
+        }
+        /*
+           Common enemy. Fighting the same third party builds trust between
+           two organizations whether or not they are allied — see
+           BOND.commonEnemyTrustPerWeek. Applies to the player exactly the
+           same as any rival; this is the free standing-builder F17 found
+           missing.
+        */
+        if (ALL_FACTIONS.some((w) => w !== from && w !== to && atWar(state, from, w) && atWar(state, to, w))) {
+          record.trust = clamp(record.trust + BOND.commonEnemyTrustPerWeek, -100, 100);
         }
       } else {
         record.trust = clamp(record.trust - BOND.trustDecayPerWeek, -100, 100);
@@ -291,6 +309,14 @@ export function tickBonds(state: GameState, districtsOf: (id: FactionId) => numb
           : 0;
       const target = clamp(
         factionStrength(state, to) * BOND.respectFromStrength +
+          /*
+             The gap, not only the absolute number — see
+             BOND.respectFromStrengthGap. A family sizing up somebody it
+             matches and a family sizing up somebody far above it used to read
+             the same target off the target's strength alone.
+          */
+          (factionStrength(state, to) - factionStrength(state, from)) *
+            BOND.respectFromStrengthGap +
           districtsOf(to) * BOND.respectFromDistricts +
           Math.min(BOND.respectFromCasesCap, beaten * BOND.respectFromCaseBeaten) +
           (to === 'player' ? state.org.respect * BOND.respectFromStanding : 0),
@@ -299,6 +325,26 @@ export function tickBonds(state: GameState, districtsOf: (id: FactionId) => numb
       );
       const step = Math.min(BOND.respectSettlePerWeek, Math.abs(target - record.respect));
       record.respect += record.respect < target ? step : -step;
+    }
+  }
+
+  /*
+     Tall poppy. The strongest of three or more rivals draws grudge from the
+     others just for being on top — see BOND.tallPoppyGrudgePerWeek. This is
+     scoped to the rivals rather than the player: F17 already established the
+     player trails every family in strength for the whole game, so this term
+     would almost never fire on the player's side and is not worth the extra
+     bookkeeping `bond`'s player-symmetry trick would need.
+  */
+  const contenders = RIVAL_IDS.filter((id) => state.factions[id]);
+  if (contenders.length >= 3) {
+    const strongest = contenders.reduce((a, b) =>
+      factionStrength(state, b) > factionStrength(state, a) ? b : a,
+    );
+    for (const other of contenders) {
+      if (other === strongest) continue;
+      const record = bond(state, other, strongest);
+      record.grudge = clamp(record.grudge + BOND.tallPoppyGrudgePerWeek, 0, 100);
     }
   }
 }
@@ -716,6 +762,9 @@ export function makePeace(state: GameState, a: FactionId, b: FactionId): void {
     // Nobody forgets, but the shooting stops and the grudge starts fading from
     // a known point rather than from wherever the war happened to leave it.
     record.grudge = Math.min(record.grudge, PEACE_GRUDGE);
+    // The truce clock starts now, independent of how fast the grudge itself
+    // rebuilds — see BOND.truceDays.
+    record.peaceSince = state.day;
   }
 
   for (const id of [a, b]) {
@@ -733,6 +782,12 @@ export function makePeace(state: GameState, a: FactionId, b: FactionId): void {
 
 export function declareWar(state: GameState, a: FactionId, b: FactionId): void {
   if (atWar(state, a, b)) return;
+  // The truce timer. A separate dial from grudge decay — see BOND.truceDays —
+  // so peace holds for a fixed window regardless of how fast standing itself
+  // moves. Silent no-op rather than a refusal here: this is the AI's own path
+  // too, and `canDo` is what tells the player why the button is refused.
+  const sincePeace = state.day - (bond(state, a, b).peaceSince ?? -Infinity);
+  if (sincePeace < BOND.truceDays) return;
 
   /*
    * Whether this is a betrayal, decided before the war record is written.
@@ -915,6 +970,19 @@ export function canDo(
   }
   if (action === 'declare_war' && war) {
     return { ok: false, message: 'You are already at war with them.' };
+  }
+  if (action === 'declare_war') {
+    // `war` is already false by this point, so a truce is the only other
+    // reason this button can still be refused.
+    const sincePeace = state.day - (bond(state, 'player', target).peaceSince ?? -Infinity);
+    if (sincePeace < BOND.truceDays) {
+      return {
+        ok: false,
+        message: `You made peace with them ${sincePeace} days ago. Give it ${
+          BOND.truceDays - sincePeace
+        } more before this is on the table again.`,
+      };
+    }
   }
   if (action === 'demand_tribute') {
     // Either they can see you are stronger, or they already take you

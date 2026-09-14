@@ -322,6 +322,21 @@ describe('the men on the list who are already gone', () => {
     expect(timesPresent(state).find((r) => r.id === men[1].id)!.gone).toBe(false);
   });
 
+  /*
+     2026-09-10 polish pass: dead and defected used to collapse into one
+     label, "no longer with you" — and those are not the same fact. A
+     defector can surface again as a witness against you; a dead man cannot.
+  */
+  it('says which — dead is not the same fact as defected', () => {
+    const { state, men } = withACorpse(43);
+    men[1].status = 'defected';
+    const rows = timesPresent(state);
+    expect(rows.find((r) => r.id === men[0].id)!.fate, 'the corpse should read dead').toBe('dead');
+    expect(rows.find((r) => r.id === men[1].id)!.fate, 'the defector should read defected').toBe(
+      'defected',
+    );
+  });
+
   it('never puts one above a man you can still do something about', () => {
     const { state, men } = withACorpse(42);
     const rows = timesPresent(state);

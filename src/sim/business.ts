@@ -55,6 +55,7 @@ import {
   LAUNDER_CUT_MIN,
   BUSINESS_FROM,
   LEGITIMATE_REVENUE_SCALE,
+  REINVEST,
   SHUTTER_REFUND_SHARE,
   WEALTH_REVENUE_BASE,
   WEALTH_REVENUE_RANGE,
@@ -123,6 +124,9 @@ export function weeklyRevenue(state: GameState, business: Business): number {
       wealthScale(state, business.territoryId) *
       LEGITIMATE_REVENUE_SCALE *
       scale *
+      // A permanent bump once the place has paid for itself several times
+      // over and been reinvested into. See REINVEST.
+      (business.reinvested ? 1 + REINVEST.bonus : 1) *
       /*
          Less whatever the man who sold it kept.
 
@@ -710,6 +714,18 @@ export function tickBusinesses(
     );
     revenue += earned;
     business.revenueTotal += earned;
+
+    // The middle path: a front that has paid for itself several times over
+    // gets reinvested into, once. See REINVEST.
+    if (!business.reinvested && business.revenueTotal >= REINVEST.thresholdRevenue) {
+      business.reinvested = true;
+      addLog(
+        state,
+        `The place in ${territoryDef(business.territoryId).name} has paid for itself several times ` +
+          `over. What comes back in stays in, and it shows.`,
+        'money',
+      );
+    }
 
     // `capacity` is still reduced sharply once investigators are inside the
     // books, and again when the whole city's books are being looked at. On a

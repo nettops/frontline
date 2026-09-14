@@ -48,7 +48,7 @@ import { tickWhispers } from './whispers';
 import { tickEvents } from './events';
 import { tickWorld } from './world';
 import { tickFear, tickRecord, tickStanding } from './player';
-import { tickCard, tickInside } from './verbs';
+import { tickCard, tickInside, tickStakes } from './verbs';
 import { tickPoints } from './build';
 import { tickNickname } from './nicknames';
 import { refreshRecruits } from './crew';
@@ -58,12 +58,23 @@ import { DRIFT_INTERVAL_DAYS } from '../config/npcs';
 import { PAYDAY_INTERVAL } from '../config/economy';
 import { RIVAL_IDS, type FactionId } from '../config/factions';
 import { houseShort } from './houses';
+import { careerSnapshot, recordCareerMilestones } from './career';
 
 export function advanceDay(state: GameState): void {
   if (state.gameOver) return;
 
   state.day += 1;
   const rng = new Rng(state.rng);
+  /*
+     Taken before anything below moves, so `recordCareerMilestones` (see its
+     own call sites) has something to diff against. In Simulation mode there
+     is no player and no career to keep a chapter of, so this stays unread —
+     the snapshot itself is cheap, three derived reads and an object walk,
+     and skipping it would just be a second special case to keep in sync
+     with the one already guarding the block near the bottom of this
+     function.
+  */
+  const careerBefore = state.mode !== 'simulation' ? careerSnapshot(state) : null;
 
   // 0. What a dollar is worth today. First, because every figure produced by
   //    every system below is quoted in it.
@@ -161,6 +172,7 @@ export function advanceDay(state: GameState): void {
   tickNickname(state);
   tickCard(state);
   tickInside(state);
+  tickStakes(state);
   tickStanding(state);
   tickHoldings(state);
   // 5. Availability timers, familiarity, and the calendar turning over.
@@ -252,10 +264,20 @@ export function advanceDay(state: GameState): void {
   //     it is the only way out of the chair that is entirely the player's own
   //     work, and the only one a boss who is thirty can reach.
   tickDeposition(state, rng);
-  if (state.gameOver) return;
+  if (state.gameOver) {
+    // The run just ended mid-tick — the most career-worthy thing that can
+    // happen, and the diff still only reads what is already true in state,
+    // so an early exit costs nothing but a few later systems' worth of the
+    // same day's chapters.
+    if (careerBefore) recordCareerMilestones(state, careerBefore);
+    return;
+  }
   // 10. Agencies read what you left behind. This is where the bill comes due.
   tickInvestigations(state, rng);
-  if (state.gameOver) return;
+  if (state.gameOver) {
+    if (careerBefore) recordCareerMilestones(state, careerBefore);
+    return;
+  }
   // 10a. The city reads about all of the above and forms a view; city hall
   //      catches up with the city some weeks later. This has to sit after
   //      everything that generates coverage and before the conditions that
@@ -283,6 +305,7 @@ export function advanceDay(state: GameState): void {
     // 15. Has the organization earned the next rank?
   }
 
+  if (careerBefore) recordCareerMilestones(state, careerBefore);
 }
 
 /**

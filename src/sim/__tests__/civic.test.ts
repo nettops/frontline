@@ -16,20 +16,29 @@
 import { describe, expect, it } from 'vitest';
 import { newGame } from '../state';
 import {
+  callTheLaw,
+  callWalkout,
+  canCallTheLaw,
+  canCallWalkout,
+  canPullPermit,
   canSpendFavour,
   civicRead,
   figure,
   helpFigure,
+  pullPermit,
   scoreFor,
   spendFavour,
   tickCivic,
 } from '../civic';
+import { collectIncome } from '../faction';
+import { rivalBusinesses } from '../verbs';
 import { withFronts } from './helpers';
 import { Rng } from '../rng';
 import { crewList, generateNpc } from '../npc';
 import { CIVIC, CIVIC_BY_ID, CIVIC_FIGURES, FAVOUR_EFFECT } from '../../config/civic';
 import { SENTIMENT_HOSTILE_BELOW, HOME_TERRITORY } from '../../config/territories';
-import type { GameState } from '../types';
+import { AI, RIVAL_IDS, type FactionId } from '../../config/factions';
+import type { GameState, RivalBusiness } from '../types';
 
 function game(seed = 12): GameState {
   return newGame({ name: 'Pull', difficulty: 'normal', seed });
@@ -550,6 +559,202 @@ describe('helping somebody outside the family', () => {
     const state = game();
     helpFigure(state, 'captain', 12);
     expect(helpFigure(state, 'judge', 12)).toBe(true);
+  });
+
+  /*
+     The one favour this network spends outward, rather than on a problem of
+     the player's own.
+
+     Reuses the same setup `civic.test.ts` already uses to get the union boss
+     owing one — a real payroll, through the real tick — because a fixture
+     that grants the favour by hand measures nothing about reachability.
+  */
+  function unionOwed(state: GameState): void {
+    const rng = new Rng(state.rng);
+    for (let i = 0; i < CIVIC.unionPayroll; i++) {
+      const npc = generateNpc(state, rng, 'soldier');
+      state.npcs[npc.id] = npc;
+    }
+    weeks(state, 20);
+  }
+
+  describe('calling a walkout on a rival', () => {
+    const target: FactionId = RIVAL_IDS[0];
+
+    it('refuses when the union boss owes you nothing', () => {
+      const state = game();
+      expect(canCallWalkout(state, target).ok).toBe(false);
+    });
+
+    /*
+       Isolated to `collectIncome` directly, on the same faction run twice,
+       rather than the full weekly tick or two different houses — `tickFactions`
+       also runs each faction's own decision (invest, expand, pressure) through
+       the shared `rng` stream, and two different houses start with different
+       territory and strength, either of which would confound a diff. Running
+       the identical object once plain and once walked-out, from the same
+       restored wealth, isolates exactly the term this feature is supposed to
+       zero.
+    */
+    it('costs a rival exactly their businesses’ worth of income for the week', () => {
+      const state = game();
+      unionOwed(state);
+      const owedBefore = figure(state, 'union').owed;
+      expect(owedBefore, 'the setup produced no favour to spend').toBeGreaterThan(0);
+
+      const rival = state.factions[target];
+      rival.businessCount = 4;
+      const wealthBefore = 500_000;
+
+      rival.wealth = wealthBefore;
+      collectIncome(state, rival);
+      const normalDelta = rival.wealth - wealthBefore;
+
+      rival.wealth = wealthBefore;
+      const result = callWalkout(state, target);
+      expect(result.ok).toBe(true);
+      expect(figure(state, 'union').owed).toBe(owedBefore - 1);
+      expect(rival.walkoutUntilDay).toBe(state.day + FAVOUR_EFFECT.walkoutDays);
+
+      collectIncome(state, rival);
+      const walkedOutDelta = rival.wealth - wealthBefore;
+
+      expect(
+        normalDelta - walkedOutDelta,
+        'a walked-out rival earned the same as one nobody touched',
+      ).toBe(rival.businessCount * AI.invest.incomePerBusiness);
+    });
+
+    it('refuses a second walkout on the same house while the first is running', () => {
+      const state = game();
+      unionOwed(state);
+      callWalkout(state, target);
+      expect(canCallWalkout(state, target).ok).toBe(false);
+    });
+
+    it('is open again once the walkout runs out', () => {
+      const state = game();
+      unionOwed(state);
+      callWalkout(state, target);
+      state.day = state.factions[target].walkoutUntilDay!;
+      unionOwed(state);
+      expect(canCallWalkout(state, target).ok).toBe(true);
+    });
+  });
+
+  describe('having a rival looked at', () => {
+    const target: FactionId = RIVAL_IDS[0];
+
+    /** A quiet family the captain has come to owe, same setup the captain's own tests use. */
+    function captainOwed(state: GameState): void {
+      state.org.heat = 0;
+      weeks(state, 20);
+    }
+
+    it('refuses when the captain owes you nothing', () => {
+      const state = game();
+      expect(canCallTheLaw(state, target).ok).toBe(false);
+    });
+
+    it('spends the captain’s favour and puts real heat on the house', () => {
+      const state = game();
+      captainOwed(state);
+      const owedBefore = figure(state, 'captain').owed;
+      expect(owedBefore, 'the setup produced no favour to spend').toBeGreaterThan(0);
+
+      const rival = state.factions[target];
+      const before = rival.heat;
+
+      const result = callTheLaw(state, target);
+      expect(result.ok).toBe(true);
+      expect(figure(state, 'captain').owed).toBe(owedBefore - 1);
+      expect(rival.heat).toBe(Math.min(100, before + FAVOUR_EFFECT.heatOnRival));
+    });
+
+    it('has nothing to spend it on once that house is finished', () => {
+      const state = game();
+      captainOwed(state);
+      state.factions[target].strength = 0;
+      expect(canCallTheLaw(state, target).ok).toBe(false);
+    });
+  });
+
+  describe('pulling a permit on a rival’s front', () => {
+    const target: FactionId = RIVAL_IDS[0];
+
+    /** A ward the alderman has come to respect, same shape the alderman's own tests use. */
+    function aldermanOwed(state: GameState): void {
+      const made = withFronts(state, CIVIC.respectableFronts);
+      for (const b of made) {
+        state.territories[b.territoryId].sentiment = Math.max(
+          state.territories[b.territoryId].sentiment,
+          SENTIMENT_HOSTILE_BELOW + 1,
+        );
+      }
+      state.player.attributes.influence = CIVIC_BY_ID['alderman'].needsInfluence;
+      weeks(state, 20);
+    }
+
+    function aFront(state: GameState): RivalBusiness {
+      const biz: RivalBusiness = {
+        id: 'rbiz_permit_test',
+        factionId: target,
+        defId: 'laundromat',
+        territoryId: 'northside',
+      };
+      rivalBusinesses(state)[biz.id] = biz;
+      return biz;
+    }
+
+    it('refuses when the alderman owes you nothing', () => {
+      const state = game();
+      const biz = aFront(state);
+      expect(canPullPermit(state, biz.id).ok).toBe(false);
+    });
+
+    it('spends the alderman’s favour and stops the business earning', () => {
+      const state = game();
+      aldermanOwed(state);
+      const owedBefore = figure(state, 'alderman').owed;
+      expect(owedBefore, 'the setup produced no favour to spend').toBeGreaterThan(0);
+
+      const biz = aFront(state);
+      const rival = state.factions[target];
+      rival.businessCount = 4;
+      const wealthBefore = 500_000;
+
+      rival.wealth = wealthBefore;
+      collectIncome(state, rival);
+      const normalDelta = rival.wealth - wealthBefore;
+
+      rival.wealth = wealthBefore;
+      const result = pullPermit(state, biz.id);
+      expect(result.ok).toBe(true);
+      expect(figure(state, 'alderman').owed).toBe(owedBefore - 1);
+      expect(biz.permitPulledUntilDay).toBe(state.day + FAVOUR_EFFECT.permitPulledDays);
+
+      collectIncome(state, rival);
+      const pulledDelta = rival.wealth - wealthBefore;
+
+      expect(
+        normalDelta - pulledDelta,
+        'pulling one permit cost the whole family’s payroll, not one business’ worth',
+      ).toBe(AI.invest.incomePerBusiness);
+    });
+
+    it('refuses a second pull on the same business while the first is running', () => {
+      const state = game();
+      aldermanOwed(state);
+      // A favour still in hand afterwards, so the refusal below is provably
+      // about the permit already pulled and not about the account running dry.
+      figure(state, 'alderman').owed = 2;
+      const biz = aFront(state);
+      pullPermit(state, biz.id);
+      expect(figure(state, 'alderman').owed, 'the setup left nothing to isolate the guard with').toBeGreaterThan(0);
+      const check = canPullPermit(state, biz.id);
+      expect(check.ok).toBe(false);
+      expect(check.reason).toMatch(/paperwork/i);
+    });
   });
 
   it('buys nothing at all in the way of general pull', () => {

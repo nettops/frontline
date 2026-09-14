@@ -207,7 +207,21 @@ export function buildReport(before: Snapshot, state: GameState): DayReport | nul
     push(`${list(held)} ${held.length === 1 ? 'was' : 'were'} picked up.`, 'bad', 'crew');
   }
   if (hurt.length > 0) {
-    push(`${list(hurt)} got hurt and ${hurt.length === 1 ? 'is' : 'are'} out.`, 'bad', 'crew');
+    /*
+       Round 28's blind report read "is out" as permanent — reasonably: this
+       codebase uses that exact phrase elsewhere for somebody gone for good
+       (`crew.ts`'s "is out. That is one less thread", `events.ts`'s "is out.
+       The money is not coming back."). Injured is temporary and the
+       underlying event already says so ("Hurt on the {job}. Out for {days}
+       days.", `operations.ts`) — the digest just never carried the word that
+       makes the difference. "recovering" is already this game's own word for
+       the other end of it (`npc.ts`'s "Recovered and back to work.").
+    */
+    push(
+      `${list(hurt)} got hurt and ${hurt.length === 1 ? 'is' : 'are'} recovering.`,
+      'bad',
+      'crew',
+    );
   }
 
   const joined = Object.keys(now.crew).filter((id) => !(id in before.crew));

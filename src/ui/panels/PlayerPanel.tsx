@@ -5,22 +5,28 @@ import { nicknameRead } from '../../sim/nicknames';
 import { BUILD, STAT_BY_ID, type StatId } from '../../config/build';
 
 /**
- * Verbs with a config entry, real sim logic, and nowhere on any screen to
- * press them. `canCallATable` gates a sit-down that has never actually been
- * gated — houses are reachable from Diplomacy regardless of Word — and
- * `canBuyIn`/`buyIn` only ever resolve against `state.businesses`, which
- * holds the player's own fronts and nothing belonging to a rival, so "take a
- * piece of somebody else's business" cannot address the business it names.
- * Both are real design gaps, not missing buttons, and building either
- * properly is bigger than a session's worth of wiring — see the session
- * report. Naming them here stops the allocation screen promising an action
- * that does not exist, which is worse than saying plainly that it does not
- * exist yet.
+ * A verb with a config entry and real sim logic, but nowhere on any screen
+ * to press it. Empty as of 2026-09-10 — both entries this ever held are
+ * closed:
+ *
+ * Word's `canCallATable` used to gate a sit-down that had never actually
+ * been gated, houses being reachable from Diplomacy regardless. Closed when
+ * `canSitDownWith` picked up its one real restriction: a house you are at
+ * war with will not sit down with a boss whose word does not carry anything
+ * yet. See `sim/sitdown.ts`.
+ *
+ * Ledger's `canBuyIn`/`buyIn` used to resolve only against `state.businesses`,
+ * which holds the player's own fronts and nothing belonging to a rival, so
+ * "take a piece of somebody else's business" could not address the business
+ * it named. Closed by `RivalBusiness` (`sim/types.ts`) giving a rival's front
+ * an actual identity, materialized as a family invests, with a "Buy in"
+ * button on each rival's own page in `RivalsPanel.tsx`.
+ *
+ * Left wired rather than deleted: this is what stopped the allocation screen
+ * promising either action while it did not exist, and the next verb that
+ * ships a config entry before its screen is worth catching the same way.
  */
-const VERB_NOT_YET_REACHABLE: Partial<Record<StatId, string>> = {
-  word: 'Nowhere on any screen does this yet — a house sit-down is already open to everybody.',
-  ledger: 'Nowhere on any screen does this yet — there is no rival business to name.',
-};
+const VERB_NOT_YET_REACHABLE: Partial<Record<StatId, string>> = {};
 import { Panel, Bar, KeyValue } from '../components';
 import { estate } from '../../sim/estate';
 import { legitimacy, perceivedLeadership } from '../../sim/legacy';
