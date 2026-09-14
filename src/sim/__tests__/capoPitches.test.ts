@@ -244,6 +244,80 @@ describe('capo pitches', () => {
     expect(mildNpc.notes[0].text).not.toBe(sourNpc.notes[0].text);
   });
 
+  it('at low familiarity, the reaction note is vague and never names who got it or predicts what he will do', () => {
+    const state = game(11);
+    build(state, 1, 0, 4);
+    const rng = new Rng(state.rng);
+    tickToDay(state, rng, 7);
+    const p = livePitches(state)[0];
+    const alt = pitchCapoPool(state).find((n) => n.id !== p.capoId)!;
+
+    const sourNpc = state.npcs[p.capoId];
+    // Same open-resentment temperament the existing high-familiarity test
+    // uses, so this pins the *same sting tier* reading differently, not a
+    // different tier altogether.
+    sourNpc.stats = { ...sourNpc.stats, ambition: 100, loyalty: 0 };
+    sourNpc.familiarity = 10; // below GOAL_VISIBLE_ABOVE
+
+    reassignPitch(state, p.id, alt.id);
+
+    const text = sourNpc.notes[0].text;
+    expect(text).not.toContain(alt.name);
+    expect(text.toLowerCase()).not.toContain('probably');
+  });
+
+  it('at moderate familiarity, the note names the fact but hedges the prediction, still varying by sting tier', () => {
+    const quiet = game(11);
+    build(quiet, 1, 0, 4);
+    const rngQuiet = new Rng(quiet.rng);
+    tickToDay(quiet, rngQuiet, 7);
+    const pQuiet = livePitches(quiet)[0];
+    const altQuiet = pitchCapoPool(quiet).find((n) => n.id !== pQuiet.capoId)!;
+    const midTier = Object.values(OPERATION_BY_ID).find((op) => op.tier === 3)!;
+    pQuiet.defId = midTier.id;
+    const quietCapo = quiet.npcs[pQuiet.capoId];
+    quietCapo.stats = { ...quietCapo.stats, ambition: 50, loyalty: 50 }; // tier 1, quiet withdrawal
+    quietCapo.familiarity = 50; // between GOAL_VISIBLE_ABOVE and GOAL_CERTAIN_ABOVE
+
+    reassignPitch(quiet, pQuiet.id, altQuiet.id);
+    const quietText = quietCapo.notes[0].text;
+    expect(quietText).not.toContain(altQuiet.name);
+    expect(quietText).toContain('passed over');
+    expect(quietText.toLowerCase()).toContain('probably let it go');
+
+    const sour = game(11);
+    build(sour, 1, 0, 4);
+    const rngSour = new Rng(sour.rng);
+    tickToDay(sour, rngSour, 7);
+    const pSour = livePitches(sour)[0];
+    const altSour = pitchCapoPool(sour).find((n) => n.id !== pSour.capoId)!;
+    const sourCapo = sour.npcs[pSour.capoId];
+    sourCapo.stats = { ...sourCapo.stats, ambition: 100, loyalty: 0 }; // tier 2, open resentment
+    sourCapo.familiarity = 50;
+
+    reassignPitch(sour, pSour.id, altSour.id);
+    const sourText = sourCapo.notes[0].text;
+    expect(sourText).not.toContain(altSour.name);
+    expect(sourText).toContain('passed over');
+    expect(sourText).not.toBe(quietText);
+  });
+
+  it('at or above certain familiarity, the reaction note is unchanged: full confidence, names who got it', () => {
+    const state = game(11);
+    build(state, 1, 0, 4);
+    const rng = new Rng(state.rng);
+    tickToDay(state, rng, 7);
+    const p = livePitches(state)[0];
+    const alt = pitchCapoPool(state).find((n) => n.id !== p.capoId)!;
+
+    const sourNpc = state.npcs[p.capoId];
+    sourNpc.stats = { ...sourNpc.stats, ambition: 100, loyalty: 0 };
+    sourNpc.familiarity = 90; // at/above GOAL_CERTAIN_ABOVE
+
+    reassignPitch(state, p.id, alt.id);
+    expect(sourNpc.notes[0].text).toContain(alt.name);
+  });
+
   it('is stable for a given capo', () => {
     // A permanent fact about him, not a fresh roll — same id, same answer,
     // however many times it is asked.
