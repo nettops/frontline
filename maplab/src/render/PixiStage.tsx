@@ -92,14 +92,23 @@ export default function PixiStage({ map, layerVisibility, onSelect, onPointerMov
             const maxY = Math.max(...ys);
             selBounds = { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
           } else {
-            const w = 'footprint' in sel ? sel.footprint.w : 2;
-            const h = 'footprint' in sel ? sel.footprint.h : 2;
-            selBounds = {
-              x: sel.x * map.grid.cellSize,
-              y: sel.y * map.grid.cellSize,
-              width: w * map.grid.cellSize,
-              height: h * map.grid.cellSize,
-            };
+            // MapObject/SpawnPoint: same corner-transform idiom as mapPixelBounds above,
+            // over the footprint's cell-space box (spawns get a small 1x1 fallback box).
+            const w = 'footprint' in sel ? sel.footprint.w : 1;
+            const h = 'footprint' in sel ? sel.footprint.h : 1;
+            const corners = [
+              cellToScreen(sel.x, sel.y),
+              cellToScreen(sel.x + w, sel.y),
+              cellToScreen(sel.x + w, sel.y + h),
+              cellToScreen(sel.x, sel.y + h),
+            ];
+            const xs = corners.map((p) => p.x);
+            const ys = corners.map((p) => p.y);
+            const minX = Math.min(...xs);
+            const maxX = Math.max(...xs);
+            const minY = Math.min(...ys);
+            const maxY = Math.max(...ys);
+            selBounds = { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
           }
           applyTransform(fitTransform(selBounds, { width: host.clientWidth, height: host.clientHeight }, 80));
         },
