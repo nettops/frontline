@@ -8,7 +8,10 @@ export function cellOf(x: number, y: number): Point {
   return [Math.floor(x), Math.floor(y)];
 }
 
-/** Shared cell -> owning room lookup, keyed "col,row". */
+/** Shared cell -> owning room lookup, keyed "col,row". If two rooms' `cells` overlap the
+    same coordinate, the last room in `map.rooms` wins (plain `Map.set` overwrite) — fine
+    for maps with disjoint rooms (the current restaurant map), but a real tie-break rule a
+    future overlapping-rooms map should know about. */
 export function cellRoomIndex(map: MapDef): Map<string, RoomDef> {
   const index = new Map<string, RoomDef>();
   for (const room of map.rooms) {

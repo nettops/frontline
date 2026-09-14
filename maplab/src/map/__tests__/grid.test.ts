@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { buildWalkGrid, findPath } from '../grid';
-import type { MapDef } from '../types';
+import { buildWalkGrid, findPath, cellRoomIndex, cellOf } from '../grid';
+import type { MapDef, RoomDef } from '../types';
 
 function tinyMap(overrides: Partial<MapDef> = {}): MapDef {
   return {
@@ -60,5 +60,32 @@ describe('buildWalkGrid', () => {
       exits: [],
     };
     expect(findPath(map, [0, 0], [1, 0])).toEqual([[0, 0], [0, 1], [1, 1], [1, 0]]);
+  });
+});
+
+describe('cellRoomIndex', () => {
+  it('maps each room cell to that room, and leaves cells owned by no room absent', () => {
+    const dining: RoomDef = { id: 'dining', name: 'Dining', kind: 'dining', cells: [[0, 0], [1, 0]], level: 0 };
+    const kitchen: RoomDef = { id: 'kitchen', name: 'Kitchen', kind: 'kitchen', cells: [[2, 0]], level: 0 };
+    const map = tinyMap({
+      grid: { cols: 4, rows: 1, cellSize: 32 },
+      cells: [['floor', 'floor', 'floor', 'floor']],
+      rooms: [dining, kitchen],
+    });
+    const index = cellRoomIndex(map);
+    expect(index.get('0,0')).toBe(dining);
+    expect(index.get('1,0')).toBe(dining);
+    expect(index.get('2,0')).toBe(kitchen);
+    expect(index.get('3,0')).toBeUndefined();
+  });
+});
+
+describe('cellOf', () => {
+  it('floors fractional coordinates', () => {
+    expect(cellOf(3.7, 2.1)).toEqual([3, 2]);
+  });
+
+  it('passes integer input through unchanged', () => {
+    expect(cellOf(5, 5)).toEqual([5, 5]);
   });
 });

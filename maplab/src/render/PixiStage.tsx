@@ -99,7 +99,12 @@ export default function PixiStage({ map, layerVisibility, onSelect, onPointerMov
 
       let dragging = false;
       let last = { x: 0, y: 0 };
-      app.stage.on('pointerdown', (e) => { dragging = true; last = { x: e.global.x, y: e.global.y }; });
+      let downAt = { x: 0, y: 0 };
+      app.stage.on('pointerdown', (e) => {
+        dragging = true;
+        last = { x: e.global.x, y: e.global.y };
+        downAt = { x: e.global.x, y: e.global.y };
+      });
       app.stage.on('pointerup', () => { dragging = false; });
       app.stage.on('pointerupoutside', () => { dragging = false; });
       app.stage.on('pointermove', (e) => {
@@ -135,8 +140,12 @@ export default function PixiStage({ map, layerVisibility, onSelect, onPointerMov
 
       // Fires after any child's pointertap (Pixi bubbles child -> stage). If a child already
       // handled the tap, e.target is that child, not the stage — skip the room fallback then.
+      // Also skip if the pointer moved more than a few pixels between down and up — that's
+      // the release of a drag-pan, not a tap, and shouldn't touch selection.
       app.stage.on('pointertap', (e) => {
         if (e.target !== app.stage) return;
+        const moved = Math.hypot(e.global.x - downAt.x, e.global.y - downAt.y);
+        if (moved > 4) return;
         const local = layers.world.toLocal(e.global);
         const cell: [number, number] = [Math.floor(local.x / map.grid.cellSize), Math.floor(local.y / map.grid.cellSize)];
         const room = roomIndex.get(`${cell[0]},${cell[1]}`) ?? null;
