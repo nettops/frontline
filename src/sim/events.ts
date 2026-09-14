@@ -18,7 +18,7 @@ import type {
   PendingEvent,
   Territory,
 } from './types';
-import { addEvidence, addLog, pushEvent, seedFollowup, weightedPick, withArticle } from './util';
+import { addEvidence, addLog, pushEvent, say, seedFollowup, weightedPick, withArticle } from './util';
 import { askable, money, oneOf, payable, shortOf } from './memo';
 import { GEN_DEFS, isGenerated, resolveGenerated } from './eventgen';
 import { EVENT_WEIGHT_SHARPNESS, GEN_CHANCE_PER_DAY, GEN_WHEN } from '../config/eventgen';
@@ -27,6 +27,8 @@ import { addNote, creditOperation, crewList, generateNpc } from './npc';
 import { informFromMemory, remember } from './memory';
 import { recordTie } from './ties';
 import { activeCapos } from './capoTension';
+import { currentOfficer } from './officers';
+import { UNDERBOSS_FILTER } from '../config/underboss';
 import { earnDirty, refund, spend, spendSplit, totalFunds } from './economy';
 import { addHeat, reduceHeat, startLayLow } from './heat';
 import { gainFear, gainRespect, trainAttribute } from './player';
@@ -126,6 +128,13 @@ export interface EventContext {
   civicId?: string;
   /** Set when the memo is about the house rather than the business. */
   atHome?: true;
+  /**
+   * Set only by `capo_political_tension`, only when a real Underboss exists
+   * and the weaker capo's own tie to him carries real resentment — the case
+   * where the capo went around him on purpose rather than there being nobody
+   * to go around. See `underbossFields` below.
+   */
+  distrustedUnderboss?: Npc;
 }
 
 export interface EventDef {
@@ -168,6 +177,61 @@ function pickWhere(
 ): Npc | null {
   const matches = activeCrew(state).filter(predicate);
   return matches.length ? rng.pick(matches) : null;
+}
+
+/**
+ * Whether a real Underboss fields this pair's tension quietly before it ever
+ * becomes the Boss's memo.
+ *
+ * Three deterministic reads, no dice: is there an Underboss at all, does the
+ * *weaker* capo's own tie to him carry decent trust and nothing that reads as
+ * a real grudge, and is the Underboss himself competent enough to be trusted
+ * with it. All three hold — he handles it, at half of what the Boss's own
+ * `address` choice would move (`UNDERBOSS_FILTER` names the thresholds), and
+ * the memo never raises this cycle: returning `null` here does exactly what
+ * it does for any other def whose `applies` finds nothing, letting
+ * `eligible()` treat this as already resolved rather than inventing a second
+ * "pre-resolved event" state. The same flag `raise()` sets on an actual raise
+ * is set here too, so the cooldown gate that already stops this event
+ * refiring every eligible day stops the quiet handling from doing the same.
+ *
+ * Any of the three failing lets the memo through unchanged — except when the
+ * specific reason was real resentment on that tie, which is worth the player
+ * knowing about: the capo did not merely fail to reach the Underboss, he
+ * went around him on purpose. That case is carried on the context as
+ * `distrustedUnderboss` for `build` to name.
+ */
+function underbossFields(state: GameState, weaker: Npc, stronger: Npc): EventContext | null {
+  const boss = currentOfficer(state, 'underboss');
+  if (!boss) return { npc: weaker, other: stronger };
+
+  const tie = weaker.ties.find((t) => t.id === boss.id);
+  const trusted = (tie?.trust ?? 0) >= UNDERBOSS_FILTER.trustAbove;
+  const noRealGrudge = (tie?.resentment ?? 0) < UNDERBOSS_FILTER.resentmentBelow;
+  const competent = boss.stats.leadership >= UNDERBOSS_FILTER.leadershipAbove;
+
+  if (trusted && noRealGrudge && competent) {
+    // Half of what `address` itself moves below — a real answer, not a
+    // second copy of the Boss's own intervention.
+    const tension = weaker.ties.find((t) => t.id === stronger.id);
+    if (tension) tension.resentment = clamp(tension.resentment - 7, 0, 100);
+    weaker.stats.respectForBoss = clamp(weaker.stats.respectForBoss + 2, 0, 100);
+    stronger.stats.respectForBoss = clamp(stronger.stats.respectForBoss - 2, 0, 100);
+
+    addLog(
+      state,
+      say(`underbossHandledTension:${weaker.id}:${stronger.id}`, state.day, [
+        'Your Underboss smoothed it over before it reached you.',
+        `${boss.name} sat ${weaker.name} down himself. It never got to you.`,
+        `${boss.name} handled it quietly. You heard about it after the fact.`,
+      ]),
+      'crew',
+    );
+    state.flags['evt_capo_political_tension'] = state.day;
+    return null;
+  }
+
+  return noRealGrudge ? { npc: weaker, other: stronger } : { npc: weaker, other: stronger, distrustedUnderboss: boss };
 }
 
 const EVENT_DEFS: EventDef[] = [
@@ -440,6 +504,12 @@ const EVENT_DEFS: EventDef[] = [
      re-derive the detection — it reads the tie the weekly check already
      wrote, the same way `crew_dispute` above reads two names off `rng.sample`
      rather than deciding on its own who is feuding.
+
+     Phase 8 gives the Underboss, if there is one, first crack at it —
+     see `underbossFields` below. A capo going *around* the Underboss only
+     means something once there is a normal, unremarked case of the
+     Underboss handling this quietly; before that, "he went around him"
+     had nothing to be around.
   */
   {
     id: 'capo_political_tension',
@@ -457,29 +527,36 @@ const EVENT_DEFS: EventDef[] = [
         const stronger = tie ? state.npcs[tie.id] : undefined;
         if (stronger) pairs.push({ npc: weaker, other: stronger });
       }
-      return pairs.length ? rng.pick(pairs) : null;
+      if (!pairs.length) return null;
+      const { npc: weaker, other: stronger } = rng.pick(pairs);
+      return underbossFields(state, weaker, stronger);
     },
-    build: (_state, rng, { npc, other }) => ({
+    build: (_state, rng, { npc, other, distrustedUnderboss }) => ({
       defId: 'capo_political_tension',
       title: oneOf(rng, [
         `${npc!.name} has been talking about ${other!.name}`,
         `Word about ${other!.name} is going around`,
         `${npc!.name} wants you to know something`,
       ]),
-      body: oneOf(rng, [
-        `${npc!.name} has been saying, to anybody who will listen, that ${other!.name} is ` +
-          `getting too big for his crew. Not to ${other!.name}'s face — to yours, by way of ` +
-          `everybody else's.\n\n` +
-          `It is not wrong, exactly. It is also not nothing, coming from a man who used to ` +
-          `run the bigger operation.`,
-        `It came to you sideways, the way these things do: ${npc!.name} thinks ${other!.name} ` +
-          `has been let grow past his own reach, and thinks somebody besides him has noticed ` +
-          `too.\n\n` +
-          `Nobody said it was a problem. Nobody said it wasn't, either.`,
-        `${npc!.name} put it to you plainly, for once: ${other!.name}'s crew has gotten bigger ` +
-          `than his, and he wants to know whether that is the arrangement now or an accident ` +
-          `somebody is going to fix.`,
-      ]),
+      body:
+        oneOf(rng, [
+          `${npc!.name} has been saying, to anybody who will listen, that ${other!.name} is ` +
+            `getting too big for his crew. Not to ${other!.name}'s face — to yours, by way of ` +
+            `everybody else's.\n\n` +
+            `It is not wrong, exactly. It is also not nothing, coming from a man who used to ` +
+            `run the bigger operation.`,
+          `It came to you sideways, the way these things do: ${npc!.name} thinks ${other!.name} ` +
+            `has been let grow past his own reach, and thinks somebody besides him has noticed ` +
+            `too.\n\n` +
+            `Nobody said it was a problem. Nobody said it wasn't, either.`,
+          `${npc!.name} put it to you plainly, for once: ${other!.name}'s crew has gotten bigger ` +
+            `than his, and he wants to know whether that is the arrangement now or an accident ` +
+            `somebody is going to fix.`,
+        ]) +
+        (distrustedUnderboss
+          ? `\n\n${npc!.name} came to you directly about it — he didn't want ` +
+            `${distrustedUnderboss.name} hearing about it first.`
+          : ''),
       severity: 'warning',
       npcId: npc!.id,
       data: { otherId: other!.id },
