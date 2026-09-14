@@ -78,6 +78,18 @@ describe('cellRoomIndex', () => {
     expect(index.get('2,0')).toBe(kitchen);
     expect(index.get('3,0')).toBeUndefined();
   });
+
+  it('gives the last room in array order when two rooms claim the same cell', () => {
+    const first: RoomDef = { id: 'first', name: 'First', kind: 'dining', cells: [[0, 0]], level: 0 };
+    const second: RoomDef = { id: 'second', name: 'Second', kind: 'kitchen', cells: [[0, 0]], level: 0 };
+    const map = tinyMap({
+      grid: { cols: 1, rows: 1, cellSize: 32 },
+      cells: [['floor']],
+      rooms: [first, second],
+    });
+    const index = cellRoomIndex(map);
+    expect(index.get('0,0')).toBe(second);
+  });
 });
 
 describe('cellOf', () => {
