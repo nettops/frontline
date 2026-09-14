@@ -134,10 +134,26 @@ export function buildMapLayers(map: MapDef, grid: WalkGrid): MapLayers {
     const color = wall.kind === 'wall' ? WALL_COLOR : wall.kind === 'door' ? DOOR_COLOR : 0x666666;
     const g = new Graphics();
     g.poly([a.x, a.y, b.x, b.y, b.x, b.y + lift, a.x, a.y + lift]).fill(color);
+    // Same global depth-sort as objects/spawns (entities RenderLayer) — a wall and a
+    // piece of furniture at comparable cx+cy now paint in correct relative order instead
+    // of walls always drawing under everything.
+    g.zIndex = Math.floor(c) + Math.floor(r);
     walls.addChild(g);
+    entities.attach(g);
   }
 
-  for (const obj of map.objects) {
+  // Depth key shared by the pre-sort below (for hit-test child order) and the RenderLayer
+  // zIndex (for draw order) — keyed off the footprint's centre, matching where the sprite
+  // is actually drawn (anchor 0.5,1 at base = x+w/2, y+h/2), not its origin corner.
+  const objectDepthKey = (obj: MapObject) =>
+    Math.floor(obj.x + obj.footprint.w / 2) + Math.floor(obj.y + obj.footprint.h / 2);
+
+  // Pixi's hit-test/event system picks the last/front-most child of a container on an
+  // overlapping hit, independent of the RenderLayer zIndex that controls paint order —
+  // so `objects`/`spawns` (the containers PixiStage's pointertap picking walks) still
+  // need their own children added in depth order, same as before the RenderLayer change.
+  const orderedObjects = [...map.objects].sort((a, b) => objectDepthKey(a) - objectDepthKey(b));
+  for (const obj of orderedObjects) {
     // Base-center of the footprint, at floor level — the sprite's own art
     // (top face + front faces) depicts the object's height, so no vertical
     // lift here or the sprite would float above its cell.
@@ -146,7 +162,7 @@ export function buildMapLayers(map: MapDef, grid: WalkGrid): MapLayers {
     sprite.anchor.set(0.5, 1);
     sprite.x = base.x;
     sprite.y = base.y;
-    sprite.zIndex = Math.floor(obj.x) + Math.floor(obj.y);
+    sprite.zIndex = objectDepthKey(obj);
     sprite.eventMode = 'static';
     sprite.cursor = 'pointer';
     sprite.mapEntity = obj;
@@ -220,7 +236,13 @@ export function buildMapLayers(map: MapDef, grid: WalkGrid): MapLayers {
     roomBounds.addChild(label);
   }
 
-  for (const spawn of map.spawns) {
+  // Same depth-ordered-insertion reasoning as orderedObjects above, for spawns' own
+  // container. Spawns have no footprint (a single point), so the key is already
+  // centre-based — no origin-vs-centre discrepancy to fix here (Fix 4 doesn't apply).
+  const orderedSpawns = [...map.spawns].sort(
+    (a, b) => (Math.floor(a.x) + Math.floor(a.y)) - (Math.floor(b.x) + Math.floor(b.y)),
+  );
+  for (const spawn of orderedSpawns) {
     const base = cellToScreen(spawn.x, spawn.y);
     const container: SelectableNode = new Container();
     // A small ground ring keeps the player/npc colour distinction the flat
@@ -244,7 +266,12 @@ export function buildMapLayers(map: MapDef, grid: WalkGrid): MapLayers {
     entities.attach(container);
   }
 
-  world.addChild(floor, walls, objects, spawns, roomBounds, gridLines, collision, nav, entities);
+  // entities (the shared RenderLayer holding the actual visible sprites/wall graphics)
+  // sits right after walls so debug overlays (collision/nav/grid/room-bounds) draw on
+  // top of them, as before the RenderLayer change — objects/spawns/walls stay in the
+  // child list too since MapLayers fields and PixiStage's .visible toggling/child
+  // lookups still resolve against those containers.
+  world.addChild(floor, walls, objects, spawns, entities, roomBounds, gridLines, collision, nav);
   return { world, floor, walls, objects, grid: gridLines, collision, nav, roomBounds, spawns };
 }
 
