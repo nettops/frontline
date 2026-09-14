@@ -27,7 +27,8 @@ export type TieCause =
   | 'took_the_blame'
   | 'owes_money'
   | 'lost_the_room'
-  | 'saved_him';
+  | 'saved_him'
+  | 'crowded_ground';
 
 export const TIE_CAUSE_TEXT: Record<TieCause, string> = {
   worked_together: 'have worked together',
@@ -37,6 +38,7 @@ export const TIE_CAUSE_TEXT: Record<TieCause, string> = {
   owes_money: 'owes them money',
   lost_the_room: 'lost the room to them',
   saved_him: 'got them out of something',
+  crowded_ground: 'has ground that runs up against theirs',
 };
 
 /** Most ties one person can hold. The oldest and weakest is dropped first. */
@@ -65,6 +67,13 @@ export const TIE_EVENTS: Record<
   lost_the_room: { resentment: 30, trust: -18 },
   /** Pulled him out of something. The strongest positive edge there is. */
   saved_him: { trust: 24, debt: -25, mutual: false },
+  /**
+   * Two capos whose ground shares a border. Unlike `lost_the_room`, neither
+   * man outranks the other here — proximity is the fact, not a result — so
+   * this lands on both ties at once. Smaller than `lost_the_room`'s 30/-18:
+   * a shared border is a standing irritant, not a real defeat.
+   */
+  crowded_ground: { resentment: 20, trust: -6, mutual: true },
 };
 
 /**

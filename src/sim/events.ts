@@ -26,6 +26,7 @@ import { endConditionEarly } from './world';
 import { addNote, creditOperation, crewList, generateNpc } from './npc';
 import { informFromMemory, remember } from './memory';
 import { recordTie } from './ties';
+import type { TieCause } from '../config/ties';
 import { activeCapos } from './capoTension';
 import { CAPO_TENSION } from '../config/capoTension';
 import { consiglierRead, currentOfficer, underbossOpinion, type OfficerRead } from './officers';
@@ -136,6 +137,13 @@ export interface EventContext {
    * to go around. See `underbossFields` below.
    */
   distrustedUnderboss?: Npc;
+  /**
+   * Set only by `capo_political_tension`: which of the causes `capoTension.ts`
+   * can land on two capos' tie is the one actually driving this memo —
+   * `lost_the_room` (power) or `crowded_ground` (territory) — so `build` tells
+   * the right story instead of always narrating a power gap.
+   */
+  tensionCause?: TieCause;
 }
 
 export interface EventDef {
@@ -202,9 +210,14 @@ function pickWhere(
  * went around him on purpose. That case is carried on the context as
  * `distrustedUnderboss` for `build` to name.
  */
-function underbossFields(state: GameState, weaker: Npc, stronger: Npc): EventContext | null {
+function underbossFields(
+  state: GameState,
+  weaker: Npc,
+  stronger: Npc,
+  tensionCause: TieCause,
+): EventContext | null {
   const boss = currentOfficer(state, 'underboss');
-  if (!boss) return { npc: weaker, other: stronger };
+  if (!boss) return { npc: weaker, other: stronger, tensionCause };
 
   const tie = weaker.ties.find((t) => t.id === boss.id);
   const trusted = (tie?.trust ?? 0) >= UNDERBOSS_FILTER.trustAbove;
@@ -235,7 +248,9 @@ function underbossFields(state: GameState, weaker: Npc, stronger: Npc): EventCon
     return null;
   }
 
-  return noRealGrudge ? { npc: weaker, other: stronger } : { npc: weaker, other: stronger, distrustedUnderboss: boss };
+  return noRealGrudge
+    ? { npc: weaker, other: stronger, tensionCause }
+    : { npc: weaker, other: stronger, tensionCause, distrustedUnderboss: boss };
 }
 
 /** One attributed extra line for a memo, or nothing at all if that seat is empty. */
@@ -282,16 +297,22 @@ function tensionEscalated(state: GameState, weaker: Npc, stronger: Npc): boolean
  * it punishes the good outcome design brief §17 asks for.
  *
  * Called from `applies()` itself — the only place that already asks "is this
- * pair's tie still really `lost_the_room`" — so a pair whose tie has moved on
+ * pair's tie still really a tension cause" — so a pair whose tie has moved on
  * (decayed away entirely, or overwritten by some other cause) has its stale
  * count cleared right there rather than left to rot.
+ *
+ * Covers every cause `capoTension.ts` can land on a capo-capo tie — power
+ * (`lost_the_room`) and territory (`crowded_ground`) both — rather than only
+ * the one this event originally shipped with.
  */
+const TENSION_CAUSES: readonly TieCause[] = ['lost_the_room', 'crowded_ground'];
+
 function clearResolvedTensionCounts(state: GameState): void {
   for (const key of Object.keys(state.flags)) {
     if (!key.startsWith('capo_tension_ignored:')) continue;
     const [, weakerId, strongerId] = key.split(':');
     const tie = state.npcs[weakerId]?.ties.find((t) => t.id === strongerId);
-    if (!tie || tie.cause !== 'lost_the_room') delete state.flags[key];
+    if (!tie || !TENSION_CAUSES.includes(tie.cause)) delete state.flags[key];
   }
 }
 
@@ -558,13 +579,18 @@ const EVENT_DEFS: EventDef[] = [
   },
 
   /*
-     Design brief §8's political sub-type — one capo resents another's
-     growing power — surfaced for the first time. `capoTension.ts` already
-     detects the fact and lands it on the weaker capo's own tie as
-     `lost_the_room`; nothing had ever shown it to the player. This does not
-     re-derive the detection — it reads the tie the weekly check already
-     wrote, the same way `crew_dispute` above reads two names off `rng.sample`
-     rather than deciding on its own who is feuding.
+     Design brief §8's political sub-type — one capo resents another,
+     for a real reason — surfaced for the first time. `capoTension.ts`
+     already detects the fact and lands it on a tie as `lost_the_room`
+     (power) or `crowded_ground` (territory, added later against Part 9's
+     six named causes); nothing had ever shown either to the player. This
+     does not re-derive the detection — it reads whichever cause the weekly
+     check already wrote, the same way `crew_dispute` above reads two names
+     off `rng.sample` rather than deciding on its own who is feuding.
+
+     `crowded_ground` is mutual (`TIE_EVENTS`), so both capos carry the
+     identical tie back at each other — deduped below by unordered pair so
+     the same border does not enter the draw twice.
 
      Phase 8 gives the Underboss, if there is one, first crack at it —
      see `underbossFields` below. A capo going *around* the Underboss only
@@ -582,18 +608,27 @@ const EVENT_DEFS: EventDef[] = [
     applies: (state, rng) => {
       const capos = activeCapos(state);
       const capoIds = new Set(capos.map((c) => c.id));
-      const pairs: { npc: Npc; other: Npc }[] = [];
+      const pairs: { npc: Npc; other: Npc; cause: TieCause }[] = [];
+      const seen = new Set<string>();
       for (const weaker of capos) {
-        const tie = weaker.ties.find((t) => t.cause === 'lost_the_room' && capoIds.has(t.id));
+        const tie = weaker.ties.find((t) => TENSION_CAUSES.includes(t.cause) && capoIds.has(t.id));
         const stronger = tie ? state.npcs[tie.id] : undefined;
-        if (stronger) pairs.push({ npc: weaker, other: stronger });
+        if (!stronger) continue;
+        // `crowded_ground` is mutual — both sides carry the identical tie
+        // back at each other. One entry per unordered pair, same as
+        // `lost_the_room` (which only ever exists on one side) already gets.
+        const key = [weaker.id, stronger.id].sort().join(':');
+        if (seen.has(key)) continue;
+        seen.add(key);
+        pairs.push({ npc: weaker, other: stronger, cause: tie!.cause });
       }
       clearResolvedTensionCounts(state);
       if (!pairs.length) return null;
-      const { npc: weaker, other: stronger } = rng.pick(pairs);
-      return underbossFields(state, weaker, stronger);
+      const { npc: weaker, other: stronger, cause } = rng.pick(pairs);
+      return underbossFields(state, weaker, stronger, cause);
     },
-    build: (state, rng, { npc, other, distrustedUnderboss }) => {
+    build: (state, rng, { npc, other, distrustedUnderboss, tensionCause }) => {
+      const territory = tensionCause === 'crowded_ground';
       // Design brief §16: a player-initiated version of the same handoff
       // `underbossFields` already does automatically — only offered when
       // there is a real Underboss to hand it to. Reached here at all means
@@ -609,47 +644,88 @@ const EVENT_DEFS: EventDef[] = [
       const escalated = tensionEscalated(state, npc!, other!);
       return {
         defId: 'capo_political_tension',
-        title: escalated
-          ? oneOf(rng, [
-              `${npc!.name} is done being quiet about ${other!.name}`,
-              `${npc!.name} said it to your face this time`,
-              `This is not sideways any more`,
-            ])
-          : oneOf(rng, [
-              `${npc!.name} has been talking about ${other!.name}`,
-              `Word about ${other!.name} is going around`,
-              `${npc!.name} wants you to know something`,
-            ]),
-        body:
-          (escalated
+        title: territory
+          ? escalated
             ? oneOf(rng, [
-                `${npc!.name} did not put it sideways this time. He has raised ${other!.name} ` +
-                  `with you before, nothing changed, and he wants to know whether that is the ` +
-                  `answer or just the delay.\n\n` +
-                  `He is not asking you to notice quietly any more. He is asking you to decide.`,
-                `${npc!.name} said it in front of two other men this time, which is not an ` +
-                  `accident. He has brought this to you already and nothing came of it, and now ` +
-                  `he wants it said where somebody besides you heard it.\n\n` +
-                  `That is not a complaint any more. That is a position.`,
-                `${npc!.name} did not soften it. ${other!.name} has grown past him, he has told ` +
-                  `you as much before, and the fact that you already knew is the part he keeps ` +
-                  `coming back to.\n\n` +
-                  `He is done waiting to see whether you were going to do something about it.`,
+                `${npc!.name} is done being quiet about the line`,
+                `${npc!.name} said it to your face this time`,
+                `This is not sideways any more`,
               ])
             : oneOf(rng, [
-                `${npc!.name} has been saying, to anybody who will listen, that ${other!.name} is ` +
-                  `getting too big for his crew. Not to ${other!.name}'s face — to yours, by way of ` +
-                  `everybody else's.\n\n` +
-                  `It is not wrong, exactly. It is also not nothing, coming from a man who used to ` +
-                  `run the bigger operation.`,
-                `It came to you sideways, the way these things do: ${npc!.name} thinks ${other!.name} ` +
-                  `has been let grow past his own reach, and thinks somebody besides him has noticed ` +
-                  `too.\n\n` +
-                  `Nobody said it was a problem. Nobody said it wasn't, either.`,
-                `${npc!.name} put it to you plainly, for once: ${other!.name}'s crew has gotten bigger ` +
-                  `than his, and he wants to know whether that is the arrangement now or an accident ` +
-                  `somebody is going to fix.`,
-              ])) +
+                `${npc!.name} has words about ${other!.name}'s ground`,
+                `${other!.name}'s ground keeps bumping into ${npc!.name}'s`,
+                `${npc!.name} wants to talk about where the lines are`,
+              ])
+          : escalated
+            ? oneOf(rng, [
+                `${npc!.name} is done being quiet about ${other!.name}`,
+                `${npc!.name} said it to your face this time`,
+                `This is not sideways any more`,
+              ])
+            : oneOf(rng, [
+                `${npc!.name} has been talking about ${other!.name}`,
+                `Word about ${other!.name} is going around`,
+                `${npc!.name} wants you to know something`,
+              ]),
+        body:
+          (territory
+            ? escalated
+              ? oneOf(rng, [
+                  `${npc!.name} did not put it sideways this time. He has raised the line with ` +
+                    `${other!.name} before, nothing moved, and he wants to know whether that is the ` +
+                    `answer or just the delay.\n\n` +
+                    `He is not asking you to notice quietly any more. He is asking you to decide.`,
+                  `${npc!.name} said it in front of two other men this time, which is not an ` +
+                    `accident. He has brought this to you already and nothing came of it, and now ` +
+                    `he wants it said where somebody besides you heard it.\n\n` +
+                    `That is not a complaint any more. That is a position.`,
+                  `${npc!.name} did not soften it. ${other!.name}'s ground has kept creeping since ` +
+                    `he first mentioned it, he has told you as much before, and the fact that you ` +
+                    `already knew is the part he keeps coming back to.\n\n` +
+                    `He is done waiting to see whether you were going to do something about it.`,
+                ])
+              : oneOf(rng, [
+                  `${npc!.name} says ${other!.name}'s people have been working streets that sit ` +
+                    `right up against his own, and it is not a coincidence twice running.\n\n` +
+                    `Nobody has thrown a punch over it. Nobody has agreed on where the line is ` +
+                    `either.`,
+                  `It came to you sideways, the way these things do: ${npc!.name} thinks ` +
+                    `${other!.name}'s ground has been creeping toward his, one block at a time, ` +
+                    `and thinks somebody besides him has noticed too.\n\n` +
+                    `Nobody said it was a problem. Nobody said it wasn't, either.`,
+                  `${npc!.name} put it to you plainly, for once: his ground and ${other!.name}'s ` +
+                    `ground touch now, and he wants to know whether that is the arrangement or an ` +
+                    `accident somebody is going to fix.`,
+                ])
+            : escalated
+              ? oneOf(rng, [
+                  `${npc!.name} did not put it sideways this time. He has raised ${other!.name} ` +
+                    `with you before, nothing changed, and he wants to know whether that is the ` +
+                    `answer or just the delay.\n\n` +
+                    `He is not asking you to notice quietly any more. He is asking you to decide.`,
+                  `${npc!.name} said it in front of two other men this time, which is not an ` +
+                    `accident. He has brought this to you already and nothing came of it, and now ` +
+                    `he wants it said where somebody besides you heard it.\n\n` +
+                    `That is not a complaint any more. That is a position.`,
+                  `${npc!.name} did not soften it. ${other!.name} has grown past him, he has told ` +
+                    `you as much before, and the fact that you already knew is the part he keeps ` +
+                    `coming back to.\n\n` +
+                    `He is done waiting to see whether you were going to do something about it.`,
+                ])
+              : oneOf(rng, [
+                  `${npc!.name} has been saying, to anybody who will listen, that ${other!.name} is ` +
+                    `getting too big for his crew. Not to ${other!.name}'s face — to yours, by way of ` +
+                    `everybody else's.\n\n` +
+                    `It is not wrong, exactly. It is also not nothing, coming from a man who used to ` +
+                    `run the bigger operation.`,
+                  `It came to you sideways, the way these things do: ${npc!.name} thinks ${other!.name} ` +
+                    `has been let grow past his own reach, and thinks somebody besides him has noticed ` +
+                    `too.\n\n` +
+                    `Nobody said it was a problem. Nobody said it wasn't, either.`,
+                  `${npc!.name} put it to you plainly, for once: ${other!.name}'s crew has gotten bigger ` +
+                    `than his, and he wants to know whether that is the arrangement now or an accident ` +
+                    `somebody is going to fix.`,
+                ])) +
           (distrustedUnderboss
             ? `\n\n${npc!.name} came to you directly about it — he didn't want ` +
               `${distrustedUnderboss.name} hearing about it first.`

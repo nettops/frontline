@@ -89,6 +89,36 @@ describe('capo_political_tension: applies', () => {
   });
 });
 
+/** The mutual fact `checkCapoPowerImbalance` leaves behind for two capos whose ground borders — see `capoTension.ts`. */
+function withCrowdedPair(state: GameState): { a: Npc; b: Npc } {
+  const a = capo(state, 1);
+  const b = capo(state, 10);
+  recordTie(state.day, a, b, 'crowded_ground');
+  return { a, b };
+}
+
+describe('capo_political_tension: territory cause (design brief Part 9)', () => {
+  it('fires on a pair carrying the crowded_ground tie, same as lost_the_room does', () => {
+    const state = game();
+    const { a, b } = withCrowdedPair(state);
+
+    const ctx = DEF.applies(state, new Rng({ seed: 1, calls: 0 }));
+    expect(ctx).not.toBeNull();
+    expect([a.id, b.id]).toContain(ctx!.npc!.id);
+    expect([a.id, b.id]).toContain(ctx!.other!.id);
+  });
+
+  it('writes a body that talks about ground, not the power cause\'s "growing past his own reach"', () => {
+    const state = game();
+    withCrowdedPair(state);
+    const ctx = DEF.applies(state, new Rng({ seed: 1, calls: 0 }))!;
+    const built = DEF.build(state, new Rng({ seed: 2, calls: 0 }), ctx);
+
+    expect(built.title + built.body).not.toMatch(/crew has gotten bigger|growing past|too big for his crew/i);
+    expect(built.title + built.body).toMatch(/ground|border|line/i);
+  });
+});
+
 describe('capo_political_tension: build', () => {
   it('names both capos', () => {
     const state = game();

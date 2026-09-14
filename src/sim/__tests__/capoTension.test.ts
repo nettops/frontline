@@ -131,6 +131,58 @@ describe('checkCapoPowerImbalance', () => {
   });
 });
 
+describe('checkCapoPowerImbalance: territory cause', () => {
+  /** Same standing both sides — no power gap, so any tie has to be the ground. */
+  function evenCapo(state: GameState, calls: number, districtId: string): Npc {
+    const capo = hire(state, 'capo', calls);
+    capo.familiarity = GOAL_CERTAIN_ABOVE;
+    capo.stats.leadership = 50;
+    state.territories[districtId].stewardId = capo.id;
+    return capo;
+  }
+
+  it('records crowded_ground on both ties when their districts border each other', () => {
+    const state = game(707);
+    const a = evenCapo(state, 1, 'northside');
+    const b = evenCapo(state, 5, 'the_heights'); // northside.adjacent includes the_heights
+    state.day = CAPO_TENSION.checkIntervalDays;
+
+    checkCapoPowerImbalance(state);
+
+    const tieA = a.ties.find((t) => t.id === b.id);
+    const tieB = b.ties.find((t) => t.id === a.id);
+    expect(tieA?.cause).toBe('crowded_ground');
+    expect(tieB?.cause).toBe('crowded_ground');
+    expect(tieA!.resentment).toBeGreaterThan(0);
+  });
+
+  it('says nothing about two capos whose districts do not border each other', () => {
+    const state = game(708);
+    const a = evenCapo(state, 1, 'northside');
+    const b = evenCapo(state, 5, 'fairgrounds'); // not in northside.adjacent
+    state.day = CAPO_TENSION.checkIntervalDays;
+
+    checkCapoPowerImbalance(state);
+
+    expect(a.ties.find((t) => t.id === b.id)).toBeUndefined();
+    expect(b.ties.find((t) => t.id === a.id)).toBeUndefined();
+  });
+
+  it('lets a real power gap explain the pair instead of also filing it as ground', () => {
+    const state = game(709);
+    const weak = weakCapo(state, 1);
+    const strong = dangerousCapo(state, 10); // claims territories[0], northside
+    state.territories['the_heights'].stewardId = weak.id; // borders northside too
+    state.day = CAPO_TENSION.checkIntervalDays;
+
+    checkCapoPowerImbalance(state);
+
+    const tie = weak.ties.find((t) => t.id === strong.id);
+    expect(tie).toBeDefined();
+    expect(tie!.cause).toBe('lost_the_room');
+  });
+});
+
 describe('wired into the daily loop', () => {
   it('records the gap on its own, with nobody calling checkCapoPowerImbalance directly', () => {
     const state = game(706);
