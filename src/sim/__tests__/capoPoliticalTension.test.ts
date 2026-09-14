@@ -11,7 +11,8 @@ import { generateNpc } from '../npc';
 import { recordTie } from '../ties';
 import { EVENT_DEF_BY_ID, resolveEvent } from '../events';
 import { pushEvent } from '../util';
-import type { GameState, Npc } from '../types';
+import { UNDERBOSS_FILTER } from '../../config/underboss';
+import type { GameState, Npc, Tie } from '../types';
 
 function game(seed = 9001): GameState {
   return newGame({ name: 'CapoPolitics', difficulty: 'normal', seed });
@@ -30,6 +31,20 @@ function withResentfulPair(state: GameState): { weaker: Npc; stronger: Npc } {
   const stronger = capo(state, 10);
   recordTie(state.day, weaker, stronger, 'lost_the_room');
   return { weaker, stronger };
+}
+
+function underboss(state: GameState, calls: number): Npc {
+  const npc = generateNpc(state, new Rng({ seed: 44, calls }), 'underboss');
+  npc.status = 'active';
+  state.npcs[npc.id] = npc;
+  return npc;
+}
+
+/** A weaker capo's tie to the Underboss, set directly rather than accumulated. */
+function tieTo(npc: Npc, other: Npc, trust: number, resentment: number): Tie {
+  const tie: Tie = { id: other.id, trust, resentment, debt: 0, cause: 'worked_together', since: 0 };
+  npc.ties.push(tie);
+  return tie;
 }
 
 const DEF = EVENT_DEF_BY_ID['capo_political_tension'];
@@ -113,5 +128,123 @@ describe('capo_political_tension: resolve', () => {
     expect(weaker.stats.grievance).toBe(grievanceBefore);
     expect(weaker.stats.loyalty).toBe(loyaltyBefore);
     expect(weaker.stats.respectForBoss).toBeLessThanOrEqual(respectBefore);
+  });
+});
+
+describe('capo_political_tension: a trusted, competent Underboss fields it quietly', () => {
+  function withHandlingUnderboss(state: GameState, weaker: Npc) {
+    const boss = underboss(state, 20);
+    boss.stats.leadership = UNDERBOSS_FILTER.leadershipAbove + 10;
+    tieTo(weaker, boss, UNDERBOSS_FILTER.trustAbove + 10, UNDERBOSS_FILTER.resentmentBelow - 10);
+    return boss;
+  }
+
+  it('never raises the event, and eases the tie at half of what `address` itself moves', () => {
+    const state = game();
+    const { weaker, stronger } = withResentfulPair(state);
+    withHandlingUnderboss(state, weaker);
+
+    const tensionBefore = weaker.ties.find((t) => t.id === stronger.id)!.resentment;
+    const weakerRespectBefore = weaker.stats.respectForBoss;
+    const strongerRespectBefore = stronger.stats.respectForBoss;
+
+    const ctx = DEF.applies(state, new Rng({ seed: 1, calls: 0 }));
+
+    expect(ctx).toBeNull();
+    const tensionAfter = weaker.ties.find((t) => t.id === stronger.id)!.resentment;
+    expect(tensionBefore - tensionAfter).toBe(7);
+    expect(weaker.stats.respectForBoss - weakerRespectBefore).toBe(2);
+    expect(strongerRespectBefore - stronger.stats.respectForBoss).toBe(2);
+  });
+
+  it('sets the same cooldown flag an actual raise would, so it does not refire every eligible day', () => {
+    const state = game();
+    const { weaker } = withResentfulPair(state);
+    withHandlingUnderboss(state, weaker);
+
+    DEF.applies(state, new Rng({ seed: 1, calls: 0 }));
+    expect(state.flags['evt_capo_political_tension']).toBe(state.day);
+  });
+
+  it('logs a brief note that it was handled', () => {
+    const state = game();
+    const { weaker } = withResentfulPair(state);
+    withHandlingUnderboss(state, weaker);
+
+    const logBefore = state.log.length;
+    DEF.applies(state, new Rng({ seed: 1, calls: 0 }));
+    expect(state.log.length).toBe(logBefore + 1);
+    expect(state.log[0].text.length).toBeGreaterThan(0);
+  });
+});
+
+describe('capo_political_tension: the Underboss does not field it, and the event raises as before', () => {
+  it('with no Underboss at all', () => {
+    const state = game();
+    const { weaker, stronger } = withResentfulPair(state);
+    const ctx = DEF.applies(state, new Rng({ seed: 1, calls: 0 }));
+    expect(ctx).not.toBeNull();
+    expect(ctx!.npc!.id).toBe(weaker.id);
+    expect(ctx!.other!.id).toBe(stronger.id);
+    expect(ctx!.distrustedUnderboss).toBeUndefined();
+  });
+
+  it('when the weaker capo does not trust the Underboss enough, absent any real resentment', () => {
+    const state = game();
+    const { weaker } = withResentfulPair(state);
+    const boss = underboss(state, 20);
+    boss.stats.leadership = UNDERBOSS_FILTER.leadershipAbove + 10;
+    tieTo(weaker, boss, UNDERBOSS_FILTER.trustAbove - 20, 0);
+
+    const ctx = DEF.applies(state, new Rng({ seed: 1, calls: 0 }));
+    expect(ctx).not.toBeNull();
+    expect(ctx!.distrustedUnderboss).toBeUndefined();
+  });
+
+  it('when the Underboss himself is not competent enough', () => {
+    const state = game();
+    const { weaker } = withResentfulPair(state);
+    const boss = underboss(state, 20);
+    boss.stats.leadership = UNDERBOSS_FILTER.leadershipAbove - 20;
+    tieTo(weaker, boss, UNDERBOSS_FILTER.trustAbove + 10, 0);
+
+    const ctx = DEF.applies(state, new Rng({ seed: 1, calls: 0 }));
+    expect(ctx).not.toBeNull();
+    expect(ctx!.distrustedUnderboss).toBeUndefined();
+  });
+});
+
+describe('capo_political_tension: real distrust of the Underboss gets named', () => {
+  it('carries the Underboss on the context when the weaker capo genuinely resents him', () => {
+    const state = game();
+    const { weaker } = withResentfulPair(state);
+    const boss = underboss(state, 20);
+    boss.stats.leadership = UNDERBOSS_FILTER.leadershipAbove + 10;
+    tieTo(weaker, boss, UNDERBOSS_FILTER.trustAbove + 10, UNDERBOSS_FILTER.resentmentBelow + 10);
+
+    const ctx = DEF.applies(state, new Rng({ seed: 1, calls: 0 }));
+    expect(ctx).not.toBeNull();
+    expect(ctx!.distrustedUnderboss?.id).toBe(boss.id);
+  });
+
+  it('names him in the built body text when the context carries him', () => {
+    const state = game();
+    const { weaker, stronger } = withResentfulPair(state);
+    const boss = underboss(state, 20);
+
+    const built = DEF.build(state, new Rng({ seed: 2, calls: 0 }), {
+      npc: weaker,
+      other: stronger,
+      distrustedUnderboss: boss,
+    });
+    expect(built.body).toContain(boss.name);
+    expect(built.body).toContain('hearing about it first');
+  });
+
+  it('says nothing about being kept from an Underboss when the context carries none', () => {
+    const state = game();
+    const { weaker, stronger } = withResentfulPair(state);
+    const built = DEF.build(state, new Rng({ seed: 2, calls: 0 }), { npc: weaker, other: stronger });
+    expect(built.body).not.toContain('hearing about it first');
   });
 });

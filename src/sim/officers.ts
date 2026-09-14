@@ -38,8 +38,13 @@ import { say } from './util';
 import { clamp } from './rng';
 import { GOAL_CERTAIN_ABOVE } from '../config/goals';
 
-/** The one Underboss or Consigliere currently in the organization, if any. */
-function currentOfficer(state: GameState, role: 'underboss' | 'consigliere'): Npc | null {
+/**
+ * The one Underboss or Consigliere currently in the organization, if any.
+ * Exported for `events.ts`'s `capo_political_tension`, which asks the
+ * identical "is there one, and who" question before deciding whether the
+ * Underboss fields a capo's complaint quietly.
+ */
+export function currentOfficer(state: GameState, role: 'underboss' | 'consigliere'): Npc | null {
   return crewList(state).find((n) => n.role === role) ?? null;
 }
 
