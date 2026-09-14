@@ -118,16 +118,24 @@ describe('capo pitches', () => {
     expect(state.npcs[p.capoId].stats.grievance).toBe(capo.stats.grievance);
   });
 
-  it('reassigning costs the passed-over man exactly what taking back a district costs', () => {
+  it('at a neutral temperament and a mid-tier job, costs exactly what taking back a district costs', () => {
+    // ambition 50 and loyalty 50 cancel (0.35 up, 0.35 down); a tier-3 job is
+    // this file's own neutral point for `PITCH_REACTION.importanceWeight` —
+    // together the scaling multiplier is exactly 1, the same flat charge
+    // this test asserted before reassignPitch started reading temperament.
     const state = game();
     build(state, 1, 0, 4);
     const rng = new Rng(state.rng);
     tickToDay(state, rng, 7);
     const p = livePitches(state)[0];
+    const midTier = Object.values(OPERATION_BY_ID).find((op) => op.tier === 3);
+    expect(midTier, 'need a tier-3 operation to test the neutral point').toBeTruthy();
+    p.defId = midTier!.id;
     const pool = pitchCapoPool(state);
     const alt = pool.find((n) => n.id !== p.capoId);
     expect(alt, 'need a second candidate to reassign to').toBeTruthy();
     const original = state.npcs[p.capoId];
+    original.stats = { ...original.stats, ambition: 50, loyalty: 50 };
     const loyaltyBefore = original.stats.loyalty;
     const grievanceBefore = original.stats.grievance;
     const memoriesBefore = original.memories.length;
@@ -145,6 +153,95 @@ describe('capo pitches', () => {
     expect(original.memories[0].kind).toBe('passed_over');
     // Still live, just under somebody else now.
     expect(livePitches(state).some((x) => x.id === p.id)).toBe(true);
+  });
+
+  it('scales the charge up for a man who wants it and does not trust you to make it right', () => {
+    const state = game();
+    build(state, 1, 0, 4);
+    const rng = new Rng(state.rng);
+    tickToDay(state, rng, 7);
+    const p = livePitches(state)[0];
+    const alt = pitchCapoPool(state).find((n) => n.id !== p.capoId);
+    expect(alt, 'need a second candidate to reassign to').toBeTruthy();
+
+    const original = state.npcs[p.capoId];
+    // 60, not 5 — high enough above zero that the extra loyalty loss this
+    // scaling adds cannot be masked by the stat's own floor clamp.
+    original.stats = { ...original.stats, ambition: 95, loyalty: 60 };
+    const loyaltyBefore = original.stats.loyalty;
+    const grievanceBefore = original.stats.grievance;
+
+    reassignPitch(state, p.id, alt!.id);
+
+    // Bigger than the flat charge in both directions.
+    expect(original.stats.loyalty).toBeLessThan(loyaltyBefore + DELEGATION.recallLoyalty);
+    expect(original.stats.grievance).toBeGreaterThan(grievanceBefore + DELEGATION.recallGrievance);
+  });
+
+  it('scales the charge down for a loyal, unambitious man', () => {
+    const state = game();
+    build(state, 1, 0, 4);
+    const rng = new Rng(state.rng);
+    tickToDay(state, rng, 7);
+    const p = livePitches(state)[0];
+    const alt = pitchCapoPool(state).find((n) => n.id !== p.capoId);
+    expect(alt, 'need a second candidate to reassign to').toBeTruthy();
+
+    const original = state.npcs[p.capoId];
+    original.stats = { ...original.stats, ambition: 5, loyalty: 95 };
+    const loyaltyBefore = original.stats.loyalty;
+    const grievanceBefore = original.stats.grievance;
+
+    reassignPitch(state, p.id, alt!.id);
+
+    // Smaller than the flat charge in both directions.
+    expect(original.stats.loyalty).toBeGreaterThan(loyaltyBefore + DELEGATION.recallLoyalty);
+    expect(original.stats.grievance).toBeLessThan(grievanceBefore + DELEGATION.recallGrievance);
+  });
+
+  it('writes a tie from the passed-over capo toward the one who got it', () => {
+    const state = game();
+    build(state, 1, 0, 4);
+    const rng = new Rng(state.rng);
+    tickToDay(state, rng, 7);
+    const p = livePitches(state)[0];
+    const alt = pitchCapoPool(state).find((n) => n.id !== p.capoId);
+    expect(alt, 'need a second candidate to reassign to').toBeTruthy();
+
+    const original = state.npcs[p.capoId];
+    expect(original.ties.find((t) => t.id === alt!.id)).toBeUndefined();
+
+    reassignPitch(state, p.id, alt!.id);
+
+    const tie = original.ties.find((t) => t.id === alt!.id);
+    expect(tie, 'expected a tie toward the man who got the pitch').toBeTruthy();
+    expect(tie!.resentment).toBeGreaterThan(0);
+    expect(tie!.trust).toBeLessThan(0 + 1); // fell, or started and stayed at the floor
+  });
+
+  it('reaction note reads as a shrug for a man who takes it well, and as resentment for one who does not', () => {
+    const low = game(11);
+    build(low, 1, 0, 4);
+    const rngLow = new Rng(low.rng);
+    tickToDay(low, rngLow, 7);
+    const pLow = livePitches(low)[0];
+    const altLow = pitchCapoPool(low).find((n) => n.id !== pLow.capoId)!;
+    const mildNpc = low.npcs[pLow.capoId];
+    mildNpc.stats = { ...mildNpc.stats, ambition: 0, loyalty: 100 };
+    reassignPitch(low, pLow.id, altLow.id);
+    expect(mildNpc.notes[0].kind).toBe('neutral');
+
+    const high = game(11);
+    build(high, 1, 0, 4);
+    const rngHigh = new Rng(high.rng);
+    tickToDay(high, rngHigh, 7);
+    const pHigh = livePitches(high)[0];
+    const altHigh = pitchCapoPool(high).find((n) => n.id !== pHigh.capoId)!;
+    const sourNpc = high.npcs[pHigh.capoId];
+    sourNpc.stats = { ...sourNpc.stats, ambition: 100, loyalty: 0 };
+    reassignPitch(high, pHigh.id, altHigh.id);
+    expect(sourNpc.notes[0].kind).toBe('bad');
+    expect(mildNpc.notes[0].text).not.toBe(sourNpc.notes[0].text);
   });
 
   it('is stable for a given capo', () => {
