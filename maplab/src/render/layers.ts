@@ -3,6 +3,7 @@ import type { Bounds } from './camera';
 import type { MapDef, MapObject, SpawnPoint } from '../map/types';
 import type { WalkGrid } from '../map/grid';
 import { cellRoomIndex } from '../map/grid';
+import { cellToScreen, heightOffset, TILE_W, TILE_H } from './iso';
 import {
   ROOM_COLORS, OBJECT_COLOR, WALL_COLOR, DOOR_COLOR, VOID_COLOR,
   GRID_LINE_COLOR, NAV_EDGE_COLOR, COLLISION_COLOR,
@@ -55,32 +56,47 @@ export function buildMapLayers(map: MapDef, grid: WalkGrid): MapLayers {
   for (let r = 0; r < map.grid.rows; r++) {
     for (let c = 0; c < map.grid.cols; c++) {
       if (map.cells[r][c] !== 'floor') continue;
-      const kind = roomIndex.get(`${c},${r}`)?.kind;
+      const room = roomIndex.get(`${c},${r}`);
+      const color = room ? ROOM_COLORS[room.kind] : VOID_COLOR;
+      const p0 = cellToScreen(c, r);
+      const p1 = cellToScreen(c + 1, r);
+      const p2 = cellToScreen(c + 1, r + 1);
+      const p3 = cellToScreen(c, r + 1);
       const g = new Graphics();
-      g.rect(c * cs, r * cs, cs, cs).fill(kind ? ROOM_COLORS[kind] : VOID_COLOR);
+      g.poly([p0.x, p0.y, p1.x, p1.y, p2.x, p2.y, p3.x, p3.y]).fill(color);
       floor.addChild(g);
     }
   }
 
+  const WALL_HEIGHT = 3; // world-height units, tall enough to read as a wall
   for (const wall of map.walls) {
+    if (wall.side !== 'N' && wall.side !== 'W') continue; // only the two visible faces
     const [c, r] = wall.cell;
-    const x0 = c * cs;
-    const y0 = r * cs;
-    const g = new Graphics();
+    // Ground-level endpoints of this cell edge.
+    const a = cellToScreen(c, r);
+    const b = wall.side === 'N' ? cellToScreen(c + 1, r) : cellToScreen(c, r + 1);
+    const lift = heightOffset(wall.kind === 'door' ? WALL_HEIGHT * 0.4 : WALL_HEIGHT);
     const color = wall.kind === 'wall' ? WALL_COLOR : wall.kind === 'door' ? DOOR_COLOR : 0x666666;
-    const thickness = wall.kind === 'wall' ? 4 : 2;
-    if (wall.side === 'N') g.moveTo(x0, y0).lineTo(x0 + cs, y0);
-    else if (wall.side === 'S') g.moveTo(x0, y0 + cs).lineTo(x0 + cs, y0 + cs);
-    else if (wall.side === 'W') g.moveTo(x0, y0).lineTo(x0, y0 + cs);
-    else g.moveTo(x0 + cs, y0).lineTo(x0 + cs, y0 + cs);
-    g.stroke({ width: thickness, color });
+    const g = new Graphics();
+    g.poly([a.x, a.y, b.x, b.y, b.x, b.y + lift, a.x, a.y + lift]).fill(color);
     walls.addChild(g);
   }
 
-  const orderedObjects = [...map.objects].sort((a, b) => (a.y + a.height) - (b.y + b.height));
+  const orderedObjects = [...map.objects].sort(
+    (a, b) => (Math.floor(a.y) + Math.floor(a.x)) - (Math.floor(b.y) + Math.floor(b.x)),
+  );
   for (const obj of orderedObjects) {
+    const base = cellToScreen(obj.x + obj.footprint.w / 2, obj.y + obj.footprint.h / 2);
+    const lift = heightOffset(obj.height);
+    const halfW = (obj.footprint.w * TILE_W) / 4;
+    const halfH = (obj.footprint.h * TILE_H) / 4;
     const g: SelectableGraphics = new Graphics();
-    g.rect(obj.x * cs, obj.y * cs, obj.footprint.w * cs, obj.footprint.h * cs).fill(OBJECT_COLOR);
+    g.poly([
+      base.x, base.y + lift - halfH,
+      base.x + halfW, base.y + lift,
+      base.x, base.y + lift + halfH,
+      base.x - halfW, base.y + lift,
+    ]).fill(OBJECT_COLOR);
     g.eventMode = 'static';
     g.cursor = 'pointer';
     g.mapEntity = obj;
@@ -134,9 +150,11 @@ export function buildMapLayers(map: MapDef, grid: WalkGrid): MapLayers {
   }
 
   for (const spawn of map.spawns) {
+    const base = cellToScreen(spawn.x, spawn.y);
+    const lift = heightOffset(0.5);
     const g: SelectableGraphics = new Graphics();
     const color = spawn.kind === 'player' ? SPAWN_PLAYER_COLOR : SPAWN_NPC_COLOR;
-    g.circle(spawn.x * cs + cs / 2, spawn.y * cs + cs / 2, cs * 0.3).fill(color);
+    g.circle(base.x, base.y + lift, cs * 0.3).fill(color);
     g.eventMode = 'static';
     g.cursor = 'pointer';
     g.mapEntity = spawn;
@@ -148,6 +166,17 @@ export function buildMapLayers(map: MapDef, grid: WalkGrid): MapLayers {
 }
 
 export function mapPixelBounds(map: MapDef): Bounds {
-  const cs = map.grid.cellSize;
-  return { x: 0, y: 0, width: map.grid.cols * cs, height: map.grid.rows * cs };
+  const corners = [
+    cellToScreen(0, 0),
+    cellToScreen(map.grid.cols, 0),
+    cellToScreen(map.grid.cols, map.grid.rows),
+    cellToScreen(0, map.grid.rows),
+  ];
+  const xs = corners.map((p) => p.x);
+  const ys = corners.map((p) => p.y);
+  const minX = Math.min(...xs);
+  const maxX = Math.max(...xs);
+  const minY = Math.min(...ys);
+  const maxY = Math.max(...ys);
+  return { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
 }
