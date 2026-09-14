@@ -217,6 +217,9 @@ function underbossFields(state: GameState, weaker: Npc, stronger: Npc): EventCon
     if (tension) tension.resentment = clamp(tension.resentment - 7, 0, 100);
     weaker.stats.respectForBoss = clamp(weaker.stats.respectForBoss + 2, 0, 100);
     stronger.stats.respectForBoss = clamp(stronger.stats.respectForBoss - 2, 0, 100);
+    // The one countable trace that this was a real thing the Underboss did,
+    // not just a good outcome — `officers.ts`'s `underbossStanding` reads it.
+    remember(boss, state.day, 'handled_it_quietly', weaker.id);
 
     addLog(
       state,
