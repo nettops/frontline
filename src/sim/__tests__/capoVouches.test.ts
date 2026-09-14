@@ -14,6 +14,7 @@ import { crewList, driftNpcs, generateNpc } from '../npc';
 import { assignToCapo, putInCharge } from '../delegation';
 import { territoryList } from '../territory';
 import { dismiss, promote } from '../crew';
+import { remember } from '../memory';
 import { defectToRival } from '../diplomacy';
 import { sweep } from '../investigation';
 import { applyFailureConsequence } from '../operations';
@@ -26,12 +27,15 @@ import { CAPO_VOUCH, CAPO_CAPACITY } from '../../config/capoVouches';
 import { RIVAL_IDS } from '../../config/factions';
 import { OPERATION_BY_ID } from '../../config/operations';
 import {
+  applyVoucherConsequence,
   canMakeVouch,
   capoCapacity,
   denyVouch,
   isVouchReady,
   makeVouch,
+  netVoucherCredibility,
   voucherMistakeCount,
+  voucherPaidOffCount,
   vouchCandidates,
   waitOnVouch,
 } from '../capoVouches';
@@ -514,5 +518,111 @@ describe('a running count of a capo\'s bad vouches', () => {
     // One more bad vouch afterwards does not repeat the warning.
     sourOneVouch(state, capo, 200);
     expect(state.log.filter((l) => l.text.includes(capo.name))).toHaveLength(1);
+  });
+});
+
+/**
+ * Design brief §7: a capo's credibility should recover, not only ratchet
+ * downward. The cheapest real checkpoint for "this vouch worked out" is a
+ * promotion past the rung the vouch itself bought — the first promotion
+ * (associate to soldier) is the vouch succeeding; this is him earning it
+ * again afterwards.
+ */
+describe('a vouch that keeps paying off', () => {
+  it('promoting the made man past soldier credits the capo who vouched for him', () => {
+    const state = game();
+    const { capo, associate } = readyPair(state);
+    makeVouch(state, associate.id); // associate -> soldier; the vouch itself
+    const before = voucherPaidOffCount(capo);
+
+    promote(state, associate.id); // soldier -> enforcer: not past soldier yet
+    expect(voucherPaidOffCount(capo)).toBe(before);
+
+    promote(state, associate.id); // enforcer -> lieutenant: the checkpoint
+    expect(voucherPaidOffCount(capo)).toBe(before + 1);
+    expect(capo.memories[0].kind).toBe('vouch_paid_off');
+  });
+
+  it('does not credit anybody when the promoted man was never vouched for', () => {
+    const state = game();
+    const { capo, associate } = readyPair(state);
+    promote(state, associate.id); // made, but not through a vouch
+    promote(state, associate.id); // soldier -> enforcer
+    promote(state, associate.id); // enforcer -> lieutenant
+
+    expect(voucherPaidOffCount(capo)).toBe(0);
+  });
+});
+
+/**
+ * These exercise `applyVoucherConsequence`'s own warning guard and
+ * `netVoucherCredibility`'s arithmetic directly, rather than through
+ * `promote()`'s full chain — a capo outranks every rung the payoff
+ * checkpoint fires on, so each real promotion also adds him to its own
+ * `passed_over` watch list (crew.ts), and enough of those collide with
+ * `MAX_MEMORIES` and evict the very memories these tests need to hold
+ * still. The checkpoint itself (that `promote()` writes `vouch_paid_off`
+ * at the right rung, and only then) is proven end to end above.
+ */
+describe('net credibility, not a one-way ratchet', () => {
+  /** A fresh associate vouched for by `capo`, then soured — no promotion involved. */
+  function sour(state: GameState, capo: Npc, calls: number): void {
+    const associate = hire(state, 'associate', calls);
+    associate.vouchedBy = capo.id;
+    applyVoucherConsequence(state, associate, state.day, 'let them down');
+  }
+
+  /** The other side of the same ledger, without routing through `promote()`. */
+  function payOff(state: GameState, capo: Npc, calls: number): void {
+    remember(capo, state.day, 'vouch_paid_off', `debug_${calls}`);
+  }
+
+  it('reads a capo with 3 bad and 2 good vouches differently from one with 3 bad and none', () => {
+    const state = game();
+    const heavy = hire(state, 'capo', 1);
+    for (let i = 0; i < 3; i++) sour(state, heavy, 10 + i * 10);
+    expect(netVoucherCredibility(heavy)).toBe(3);
+
+    const recovering = hire(state, 'capo', 2);
+    for (let i = 0; i < 3; i++) sour(state, recovering, 110 + i * 10);
+    for (let i = 0; i < 2; i++) payOff(state, recovering, 150 + i * 10);
+    expect(netVoucherCredibility(recovering)).toBe(1);
+  });
+
+  it('does not re-fire the warning while net stays at or above the bar', () => {
+    const state = game();
+    const capo = hire(state, 'capo', 1);
+    for (let i = 0; i < CAPO_VOUCH.mistakesBeforeWarning; i++) {
+      sour(state, capo, 10 + i * 10);
+    }
+    expect(state.log.filter((l) => l.text.includes(capo.name))).toHaveLength(1);
+
+    sour(state, capo, 200); // net now 4, still above the bar
+    expect(state.log.filter((l) => l.text.includes(capo.name))).toHaveLength(1);
+  });
+
+  it('goes quiet once enough vouches pay off to drop the net back under the bar', () => {
+    const state = game();
+    const capo = hire(state, 'capo', 1);
+    for (let i = 0; i < CAPO_VOUCH.mistakesBeforeWarning; i++) {
+      sour(state, capo, 10 + i * 10);
+    }
+    expect(netVoucherCredibility(capo)).toBe(3);
+    payOff(state, capo, 200);
+    expect(netVoucherCredibility(capo)).toBe(2);
+  });
+
+  it('crossing back up to the bar after recovering fires the warning again', () => {
+    const state = game();
+    const capo = hire(state, 'capo', 1);
+    for (let i = 0; i < CAPO_VOUCH.mistakesBeforeWarning; i++) {
+      sour(state, capo, 10 + i * 10);
+    }
+    expect(state.log.filter((l) => l.text.includes(capo.name))).toHaveLength(1);
+
+    payOff(state, capo, 200); // net 3 -> 2, below the bar
+    sour(state, capo, 300); // net 2 -> 3, crossing back up
+
+    expect(state.log.filter((l) => l.text.includes(capo.name))).toHaveLength(2);
   });
 });

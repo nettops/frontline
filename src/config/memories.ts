@@ -26,6 +26,7 @@ export type MemoryKind =
   | 'went_unpaid'
   | 'passed_over'
   | 'vouch_soured'
+  | 'vouch_paid_off'
   | 'promoted'
   | 'looked_after'
   | 'lost_a_friend'
@@ -129,6 +130,22 @@ export const MEMORIES: Record<MemoryKind, MemoryDef> = {
     kind: 'vouch_soured',
     text: 'put their name behind a man who let them down',
     tone: 'bad',
+    weight: 55,
+    fadePerYear: 8,
+    floor: 10,
+  },
+  /*
+     The reverse of `vouch_soured` above — a man a capo put his name behind
+     kept earning it, checkpointed at `crew.ts`'s `promote()` the day that man
+     rises past the rung the vouch itself bought him. Same order of magnitude
+     as `vouch_soured` on purpose: `voucherMistakeCount`'s net figure
+     (`capoVouches.ts`) subtracts one from the other, and a comparison is only
+     honest if neither side is thumbed.
+  */
+  vouch_paid_off: {
+    kind: 'vouch_paid_off',
+    text: 'put their name behind a man who proved them right',
+    tone: 'good',
     weight: 55,
     fadePerYear: 8,
     floor: 10,
