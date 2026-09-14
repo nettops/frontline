@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Application, type Container } from 'pixi.js';
 import type { MapDef, SelectedEntity } from '../map/types';
 import { buildWalkGrid, cellRoomIndex } from '../map/grid';
-import { buildMapLayers, mapPixelBounds, type MapLayers, type LayerVisibility, type SelectableGraphics } from './layers';
+import { buildMapLayers, mapPixelBounds, type MapLayers, type LayerVisibility, type SelectableNode } from './layers';
 import { fitTransform, clampZoom } from './camera';
 import { cellToScreen, screenToCell } from './iso';
 import { hash } from './isoSprites';
@@ -154,7 +154,7 @@ export default function PixiStage({ map, layerVisibility, onSelect, onPointerMov
       };
       host.addEventListener('wheel', onWheel, { passive: false });
 
-      for (const child of [...layers.objects.children, ...layers.spawns.children] as SelectableGraphics[]) {
+      for (const child of [...layers.objects.children, ...layers.spawns.children] as SelectableNode[]) {
         child.on('pointertap', () => handleSelect(child.mapEntity ?? null));
       }
 
@@ -181,8 +181,8 @@ export default function PixiStage({ map, layerVisibility, onSelect, onPointerMov
       // fully static scene.
       if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
         let tableCount = 0;
-        const flicker: { target: SelectableGraphics; phase: number }[] = [];
-        for (const child of layers.objects.children as SelectableGraphics[]) {
+        const flicker: { target: SelectableNode; phase: number }[] = [];
+        for (const child of layers.objects.children as SelectableNode[]) {
           const ent = child.mapEntity;
           if (!ent || !('kind' in ent)) continue;
           const isStove = ent.kind === 'stove';
@@ -195,9 +195,9 @@ export default function PixiStage({ map, layerVisibility, onSelect, onPointerMov
         }
 
         const sway: { target: Container; baseY: number; phase: number }[] = [];
-        for (const child of layers.spawns.children as SelectableGraphics[]) {
+        for (const child of layers.spawns.children as SelectableNode[]) {
           const ent = child.mapEntity;
-          const person = child.children[1];
+          const person = child.getChildByLabel('person');
           if (!ent || !person) continue;
           sway.push({ target: person, baseY: person.y, phase: ((hash(ent.id) % 1000) / 1000) * Math.PI * 2 });
         }

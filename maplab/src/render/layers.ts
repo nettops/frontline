@@ -1,9 +1,9 @@
-import { Container, Graphics, Sprite, Text, Texture } from 'pixi.js';
+import { Container, Graphics, RenderLayer, Sprite, Text, Texture } from 'pixi.js';
 import type { Bounds } from './camera';
-import type { MapDef, MapObject, SpawnPoint } from '../map/types';
+import type { MapDef, MapObject, SpawnPoint, WallEdge } from '../map/types';
 import type { WalkGrid } from '../map/grid';
 import { cellRoomIndex } from '../map/grid';
-import { cellToScreen, heightOffset } from './iso';
+import { cellToScreen, heightOffset, TILE_W, TILE_H, HEIGHT_PX } from './iso';
 import {
   ROOM_COLORS, WALL_COLOR, DOOR_COLOR, VOID_COLOR,
   GRID_LINE_COLOR, NAV_EDGE_COLOR, COLLISION_COLOR,
@@ -12,31 +12,10 @@ import {
 import { SPRITES, PERSON_PALETTES, blitIsoSprite, hash } from './isoSprites';
 
 /** Sprite pixels per iso-sprite row/column unit; sprites are authored at
- * roughly 5 columns per footprint cell, so this keeps a 2x2 table's drawn
- * width close to its floor diamond's screen width (2 * TILE_W / 2 = 64px). */
+ * roughly 5 columns per footprint cell, so this keeps a footprint's drawn
+ * width close to its floor diamond's screen width — a W x H footprint's
+ * diamond spans (W + H) * TILE_W / 2 px in this 2:1 projection. */
 const SPRITE_SCALE = 6;
-
-const objectTextures = new Map<string, Texture>();
-function objectTexture(kind: string): Texture {
-  let tex = objectTextures.get(kind);
-  if (!tex) {
-    const sprite = SPRITES[kind] ?? SPRITES.table;
-    tex = Texture.from(blitIsoSprite(sprite, SPRITE_SCALE));
-    objectTextures.set(kind, tex);
-  }
-  return tex;
-}
-
-const personTextures = new Map<number, Texture>();
-function personTexture(paletteIndex: number): Texture {
-  let tex = personTextures.get(paletteIndex);
-  if (!tex) {
-    const variant = { ...SPRITES.person, palette: PERSON_PALETTES[paletteIndex] };
-    tex = Texture.from(blitIsoSprite(variant, SPRITE_SCALE));
-    personTextures.set(paletteIndex, tex);
-  }
-  return tex;
-}
 
 export interface MapLayers {
   world: Container;
@@ -50,8 +29,7 @@ export interface MapLayers {
   spawns: Container;
 }
 
-export type SelectableGraphics = Container & { mapEntity?: MapObject | SpawnPoint };
-type SelectableSprite = Sprite & { mapEntity?: MapObject | SpawnPoint };
+export type SelectableNode = Container & { mapEntity?: MapObject | SpawnPoint };
 
 export interface LayerVisibility {
   floor: boolean;
@@ -69,8 +47,24 @@ export const DEFAULT_LAYER_VISIBILITY: LayerVisibility = {
   collision: false, nav: false, roomBounds: true, spawns: true,
 };
 
+// World-height units, tall enough to read as a wall. Module-scope so
+// mapPixelBounds (below) can account for how far a lifted wall top reaches
+// above the floor-corner box, without duplicating the number.
+const WALL_HEIGHT = 3;
+
+/** S/E door edges render nowhere (autoWalls never draws a wall on top of a door, and the
+ * N/W-only wall loop below skips S/E outright), so fold every door onto the mirror edge
+ * of its neighboring cell — the same physical boundary, expressed from the other side —
+ * before drawing. Render-only transform; `map.walls` itself is left untouched. */
+function foldToVisibleFace(wall: WallEdge): WallEdge {
+  if (wall.kind !== 'door') return wall;
+  const [c, r] = wall.cell;
+  if (wall.side === 'S') return { ...wall, cell: [c, r + 1], side: 'N' };
+  if (wall.side === 'E') return { ...wall, cell: [c + 1, r], side: 'W' };
+  return wall;
+}
+
 export function buildMapLayers(map: MapDef, grid: WalkGrid): MapLayers {
-  const cs = map.grid.cellSize;
   const roomIndex = cellRoomIndex(map);
   const world = new Container();
   const floor = new Container();
@@ -81,6 +75,38 @@ export function buildMapLayers(map: MapDef, grid: WalkGrid): MapLayers {
   const nav = new Container();
   const roomBounds = new Container();
   const spawns = new Container();
+  // Global painter's-order pass: objects and spawns keep their own logical Containers
+  // above (for the Objects/Spawns visibility toggle and PixiStage's child lookups), but
+  // both attach their sprites here so one shared, depth-sorted layer decides draw order
+  // across furniture AND people — a RenderLayer draws attached objects by this layer's
+  // zIndex order without reparenting them, so the logical grouping above still holds.
+  const entities = new RenderLayer({ sortableChildren: true });
+
+  // Per-build texture caches. Local to this call (not module-scope) so a cache's
+  // lifetime matches the display tree it populates: `app.destroy(true, true)` on
+  // unmount destroys every sprite's texture, and a module-scope cache would keep
+  // handing out those now-destroyed textures to the next buildMapLayers call.
+  const objectTextures = new Map<string, Texture>();
+  function objectTexture(kind: string): Texture {
+    let tex = objectTextures.get(kind);
+    if (!tex) {
+      const sprite = SPRITES[kind] ?? SPRITES.table;
+      tex = Texture.from(blitIsoSprite(sprite, SPRITE_SCALE));
+      objectTextures.set(kind, tex);
+    }
+    return tex;
+  }
+
+  const personTextures = new Map<number, Texture>();
+  function personTexture(paletteIndex: number): Texture {
+    let tex = personTextures.get(paletteIndex);
+    if (!tex) {
+      const variant = { ...SPRITES.person, palette: PERSON_PALETTES[paletteIndex] };
+      tex = Texture.from(blitIsoSprite(variant, SPRITE_SCALE));
+      personTextures.set(paletteIndex, tex);
+    }
+    return tex;
+  }
 
   for (let r = 0; r < map.grid.rows; r++) {
     for (let c = 0; c < map.grid.cols; c++) {
@@ -97,8 +123,8 @@ export function buildMapLayers(map: MapDef, grid: WalkGrid): MapLayers {
     }
   }
 
-  const WALL_HEIGHT = 3; // world-height units, tall enough to read as a wall
-  for (const wall of map.walls) {
+  for (const rawWall of map.walls) {
+    const wall = foldToVisibleFace(rawWall);
     if (wall.side !== 'N' && wall.side !== 'W') continue; // only the two visible faces
     const [c, r] = wall.cell;
     // Ground-level endpoints of this cell edge.
@@ -111,22 +137,21 @@ export function buildMapLayers(map: MapDef, grid: WalkGrid): MapLayers {
     walls.addChild(g);
   }
 
-  const orderedObjects = [...map.objects].sort(
-    (a, b) => (Math.floor(a.y) + Math.floor(a.x)) - (Math.floor(b.y) + Math.floor(b.x)),
-  );
-  for (const obj of orderedObjects) {
+  for (const obj of map.objects) {
     // Base-center of the footprint, at floor level — the sprite's own art
     // (top face + front faces) depicts the object's height, so no vertical
     // lift here or the sprite would float above its cell.
     const base = cellToScreen(obj.x + obj.footprint.w / 2, obj.y + obj.footprint.h / 2);
-    const sprite: SelectableSprite = new Sprite(objectTexture(obj.kind));
+    const sprite = new Sprite(objectTexture(obj.kind)) as Sprite & SelectableNode;
     sprite.anchor.set(0.5, 1);
     sprite.x = base.x;
     sprite.y = base.y;
+    sprite.zIndex = Math.floor(obj.x) + Math.floor(obj.y);
     sprite.eventMode = 'static';
     sprite.cursor = 'pointer';
     sprite.mapEntity = obj;
     objects.addChild(sprite);
+    entities.attach(sprite);
   }
 
   const gLines = new Graphics();
@@ -197,26 +222,29 @@ export function buildMapLayers(map: MapDef, grid: WalkGrid): MapLayers {
 
   for (const spawn of map.spawns) {
     const base = cellToScreen(spawn.x, spawn.y);
-    const container: SelectableGraphics = new Container();
+    const container: SelectableNode = new Container();
     // A small ground ring keeps the player/npc colour distinction the flat
     // marker used to carry; the person sprite stands on top of it, anchored
     // at its feet so it reads as standing on the spawn cell.
     const ring = new Graphics();
     const ringColor = spawn.kind === 'player' ? SPAWN_PLAYER_COLOR : SPAWN_NPC_COLOR;
-    ring.ellipse(base.x, base.y, cs * 0.28, cs * 0.14).fill({ color: ringColor, alpha: 0.6 });
+    ring.ellipse(base.x, base.y, TILE_W * 0.28, TILE_H * 0.28).fill({ color: ringColor, alpha: 0.6 });
     const paletteIndex = hash(spawn.id) % PERSON_PALETTES.length;
     const person = new Sprite(personTexture(paletteIndex));
+    person.label = 'person';
     person.anchor.set(0.5, 1);
     person.x = base.x;
     person.y = base.y;
     container.addChild(ring, person);
+    container.zIndex = Math.floor(spawn.x) + Math.floor(spawn.y);
     container.eventMode = 'static';
     container.cursor = 'pointer';
     container.mapEntity = spawn;
     spawns.addChild(container);
+    entities.attach(container);
   }
 
-  world.addChild(floor, walls, objects, roomBounds, gridLines, collision, nav, spawns);
+  world.addChild(floor, walls, objects, spawns, roomBounds, gridLines, collision, nav, entities);
   return { world, floor, walls, objects, grid: gridLines, collision, nav, roomBounds, spawns };
 }
 
@@ -233,5 +261,10 @@ export function mapPixelBounds(map: MapDef): Bounds {
   const maxX = Math.max(...xs);
   const minY = Math.min(...ys);
   const maxY = Math.max(...ys);
-  return { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
+  // N/W wall tops are lifted `heightOffset(WALL_HEIGHT)` px above the floor corners
+  // computed above; pad the top edge by that much rather than re-deriving the box from
+  // each wall's lifted corners — cheaper, and exact for this map (every wall sits on
+  // the floor's outer boundary, so no wall reaches further sideways than a floor corner).
+  const topPad = WALL_HEIGHT * HEIGHT_PX;
+  return { x: minX, y: minY - topPad, width: maxX - minX, height: maxY - minY + topPad };
 }
