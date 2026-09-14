@@ -176,6 +176,15 @@ describe('capo_political_tension: a trusted, competent Underboss fields it quiet
     expect(state.log.length).toBe(logBefore + 1);
     expect(state.log[0].text.length).toBeGreaterThan(0);
   });
+
+  it('leaves the Underboss a countable trace that he actually did something real', () => {
+    const state = game();
+    const { weaker } = withResentfulPair(state);
+    const boss = withHandlingUnderboss(state, weaker);
+
+    DEF.applies(state, new Rng({ seed: 1, calls: 0 }));
+    expect(boss.memories.some((m) => m.kind === 'handled_it_quietly')).toBe(true);
+  });
 });
 
 describe('capo_political_tension: the Underboss does not field it, and the event raises as before', () => {

@@ -12,6 +12,7 @@ import { newGame } from '../state';
 import { Rng } from '../rng';
 import { generateNpc } from '../npc';
 import { GOAL_CERTAIN_ABOVE } from '../../config/goals';
+import { remember } from '../memory';
 import {
   consiglierRead,
   underbossOpinion,
@@ -179,5 +180,41 @@ describe('underbossStanding', () => {
     }
 
     expect(underbossStanding(seasoned)!.tier).toBeGreaterThan(underbossStanding(fresh)!.tier);
+  });
+
+  it('reads higher for a track record of actually handling things than for the same leadership/headcount/tenure alone', () => {
+    const noRecord = game(25);
+    const bossA = hire(noRecord, 'underboss', 1);
+    bossA.familiarity = GOAL_CERTAIN_ABOVE;
+    bossA.stats.leadership = 50;
+    bossA.daysInCrew = 10;
+
+    const withRecord = game(26);
+    const bossB = hire(withRecord, 'underboss', 1);
+    bossB.familiarity = GOAL_CERTAIN_ABOVE;
+    bossB.stats.leadership = 50;
+    bossB.daysInCrew = 10;
+    for (let i = 0; i < 3; i++) remember(bossB, withRecord.day, 'handled_it_quietly', null);
+
+    expect(underbossStanding(withRecord)!.tier).toBeGreaterThan(underbossStanding(noRecord)!.tier);
+  });
+
+  it('reaches a dangerous top tier once an already-strong Underboss also has a track record of real handled problems', () => {
+    const state = game(27);
+    const boss = hire(state, 'underboss', 1);
+    boss.familiarity = GOAL_CERTAIN_ABOVE;
+    boss.stats.leadership = 50; // bandIndex 2, so headcount+tenure alone plateau below the top
+    boss.daysInCrew = 400;
+    for (let i = 0; i < 4; i++) {
+      const soldier = hire(state, 'soldier', 2 + i);
+      soldier.reportsTo = boss.id;
+    }
+
+    const beforeRecord = underbossStanding(state)!.tier;
+    for (let i = 0; i < 3; i++) remember(boss, state.day, 'handled_it_quietly', null);
+    const afterRecord = underbossStanding(state)!;
+
+    expect(afterRecord.tier).toBeGreaterThan(beforeRecord);
+    expect(afterRecord.text.toLowerCase()).toMatch(/nobody comes to you first|runs through him|isn't waiting on you/);
   });
 });

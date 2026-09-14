@@ -184,6 +184,17 @@ function reportCount(state: GameState, officerId: Id): number {
 }
 
 /**
+ * How many times this Underboss has actually fielded a capo's political
+ * tension quietly rather than merely holding the title — see `events.ts`'s
+ * `underbossFields`, the one place that writes `handled_it_quietly`. Derived
+ * from the memory array rather than stored, the same discipline
+ * `capoVouches.ts`'s `voucherMistakeCount` uses for an identical count.
+ */
+function handledQuietlyCount(officer: Npc): number {
+  return officer.memories.filter((m) => m.kind === 'handled_it_quietly').length;
+}
+
+/**
  * Long enough in the seat that "runs a real room" is a pattern rather than a
  * lucky quarter. No existing constant means this, so it is its own number —
  * a Phase-0 placeholder a later pass can size against a probe once this read
@@ -194,30 +205,56 @@ const SEATED_TENURE_DAYS = 180;
 /** Enough men answering to him that it reads as a room, not a title. */
 const REAL_ROOM_REPORTS = 3;
 
+/**
+ * Enough real problems actually handled that it reads as a track record
+ * rather than one lucky night — same Phase-1-style placeholder status as
+ * `REAL_ROOM_REPORTS` and `SEATED_TENURE_DAYS` above: no probe has sized it,
+ * because no caller put this on screen before this pass.
+ */
+const HANDLED_QUIETLY_ENOUGH = 3;
+
 export interface OfficerStanding {
-  /** 0..4. Never shown — the text is the read; this is what tests check. */
+  /** 0..5. Never shown — the text is the read; this is what tests check. */
   tier: number;
   text: string;
 }
 
-const UNDERBOSS_STANDING_LINES: ((name: string, reports: number) => string)[] = [
-  (name) => `${name} holds the title and not much more — nobody routes through him, and it shows.`,
+/*
+   Design brief §10: an Underboss who has actually accumulated real
+   organizational influence — problems handled, a room he runs, tenure in the
+   seat — eventually becomes something the Boss has to think about, not just
+   a good outcome. Tier 5 is that "not just a good outcome" case: it only
+   fires once several of those signals stack (see `underbossStanding` below),
+   never off headcount or tenure alone. `capoStanding.ts`'s own top tier
+   ("making enough money that people don't need to come to you anymore") is
+   the model for the voice; this is that same warning one rung up.
+*/
+const UNDERBOSS_STANDING_LINES: ((name: string, reports: number) => string[])[] = [
+  (name) => [`${name} holds the title and not much more — nobody routes through him, and it shows.`],
   (name, reports) =>
     reports > 0
-      ? `${name} is respected without really being obeyed. ${reports} answer to him on paper.`
-      : `${name} is respected without really being obeyed. Nobody answers to him yet.`,
-  (name, reports) => `${name} runs a real room — ${reports} of the crew answer to him, and mostly listen.`,
-  (name, reports) => `${name} is the second boss in everything but name. ${reports} take their orders from him first.`,
-  (name) => `${name} is who this family actually runs through. Nobody moves without him hearing about it.`,
+      ? [`${name} is respected without really being obeyed. ${reports} answer to him on paper.`]
+      : [`${name} is respected without really being obeyed. Nobody answers to him yet.`],
+  (name, reports) => [`${name} runs a real room — ${reports} of the crew answer to him, and mostly listen.`],
+  (name, reports) => [`${name} is the second boss in everything but name. ${reports} take their orders from him first.`],
+  (name) => [`${name} is who this family actually runs through. Nobody moves without him hearing about it.`],
+  (name, reports) => [
+    `${name} has become extremely powerful. The organization runs through him now, not you.`,
+    reports > 0
+      ? `Nobody comes to you first anymore. ${reports} of the crew go to ${name}, and you hear about it after.`
+      : `Nobody comes to you first anymore. They go to ${name}, and you hear about it after.`,
+    `${name} isn't waiting on you for anything at this point. He has his own room, and it listens to him.`,
+  ],
 ];
 
 /**
  * The Underboss's own standing, read the way `perceivedLeadership` reads the
- * player's: several real signals (his own perceived leadership, how many of
- * the crew actually route through him via `reportsTo`, and how long he has
- * held the seat) into one verdict, gated behind the same certainty line
- * `perceivedLeadership` gates on. `null` with no Underboss, or before the
- * player knows him well enough to have a read at all.
+ * player's: four real signals — his own perceived leadership, how many of
+ * the crew actually route through him via `reportsTo`, how long he has held
+ * the seat, and how many times he has actually handled something real
+ * (`handledQuietlyCount`) — into one verdict, gated behind the same
+ * certainty line `perceivedLeadership` gates on. `null` with no Underboss,
+ * or before the player knows him well enough to have a read at all.
  */
 export function underbossStanding(state: GameState): OfficerStanding | null {
   const boss = currentOfficer(state, 'underboss');
@@ -229,10 +266,14 @@ export function underbossStanding(state: GameState): OfficerStanding | null {
   const tier = clamp(
     leadership.bandIndex +
       (reports >= REAL_ROOM_REPORTS ? 1 : 0) +
-      (boss.daysInCrew >= SEATED_TENURE_DAYS ? 1 : 0),
+      (boss.daysInCrew >= SEATED_TENURE_DAYS ? 1 : 0) +
+      (handledQuietlyCount(boss) >= HANDLED_QUIETLY_ENOUGH ? 1 : 0),
     0,
     UNDERBOSS_STANDING_LINES.length - 1,
   );
 
-  return { tier, text: UNDERBOSS_STANDING_LINES[tier](boss.name, reports) };
+  return {
+    tier,
+    text: say(`underbossStanding:${boss.id}`, 0, UNDERBOSS_STANDING_LINES[tier](boss.name, reports)),
+  };
 }

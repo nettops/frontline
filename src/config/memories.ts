@@ -27,6 +27,7 @@ export type MemoryKind =
   | 'passed_over'
   | 'vouch_soured'
   | 'vouch_paid_off'
+  | 'handled_it_quietly'
   | 'promoted'
   | 'looked_after'
   | 'lost_a_friend'
@@ -145,6 +146,24 @@ export const MEMORIES: Record<MemoryKind, MemoryDef> = {
   vouch_paid_off: {
     kind: 'vouch_paid_off',
     text: 'put their name behind a man who proved them right',
+    tone: 'good',
+    weight: 55,
+    fadePerYear: 8,
+    floor: 10,
+  },
+  /*
+     The Underboss's own side of `events.ts`'s `underbossFields` — Phase 8
+     gave him a mechanism for fielding a capo's political tension quietly,
+     and it left no countable trace that he had done it. This is that trace,
+     checkpointed the day it happens rather than inferred after the fact.
+     Same order of magnitude as `vouch_paid_off` on purpose: both are "one
+     real thing this man did panned out", and `officers.ts`'s
+     `underbossStanding` counts these the identical derived-not-stored way
+     `capoVouches.ts` counts vouches.
+  */
+  handled_it_quietly: {
+    kind: 'handled_it_quietly',
+    text: 'talked a capo down before it ever reached you',
     tone: 'good',
     weight: 55,
     fadePerYear: 8,
