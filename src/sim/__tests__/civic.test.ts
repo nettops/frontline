@@ -410,6 +410,54 @@ describe('spending a favour', () => {
   });
 
   /*
+     The lawyer. Same shape as every other figure — reads a quantity the
+     simulation already keeps, grants a favour the machinery already knows how
+     to do — so nothing here should need a new case in either `scoreFor` or
+     `apply`. Watches the same thing the judge does (legal exposure) and
+     grants what the captain grants (bury a case), a combination no existing
+     figure uses.
+  */
+  it('is on the roster and reads the same quantity the judge does', () => {
+    const state = game();
+    expect(CIVIC_BY_ID['lawyer']).toBeDefined();
+    const lawyer = CIVIC_BY_ID['lawyer'];
+    const judge = CIVIC_BY_ID['judge'];
+    expect(lawyer.watches).toBe(judge.watches);
+    expect(scoreFor(state, lawyer)).toBe(scoreFor(state, judge));
+  });
+
+  it('buries a case when the lawyer is owed one, the same way the captain does', () => {
+    const state = game();
+    state.law.investigations['case_test'] = {
+      id: 'case_test',
+      agencyId: 'city_police',
+      stage: 'suspicion',
+      openedDay: 1,
+      stageSince: 1,
+      strength: 80,
+      suspectIds: [],
+      businessIds: [],
+      lastProgressDay: state.day,
+      status: 'open',
+      verdict: null,
+      verdictDay: null,
+      history: [],
+    };
+    state.player.attributes.influence = CIVIC_BY_ID['lawyer'].needsInfluence;
+    const lawyer = figure(state, 'lawyer');
+    lawyer.standing = 100;
+    lawyer.owed = 1;
+
+    const target = state.law.investigations['case_test'];
+    const was = target.strength;
+    const result = spendFavour(state, 'lawyer', target.id);
+
+    expect(result.ok).toBe(true);
+    expect(figure(state, 'lawyer').owed).toBe(0);
+    expect(was - target.strength).toBeGreaterThanOrEqual(FAVOUR_EFFECT.buryEvidence - 1);
+  });
+
+  /*
      The union favour exists to answer F10, F12 and F15 at once: a district
      below the bar sells you nothing, fronts are what makes a career compound,
      and 25 of 36 careers never get a second one.

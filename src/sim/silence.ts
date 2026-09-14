@@ -28,6 +28,7 @@ import { Rng, clamp } from './rng';
 import { addEvidence, addLog } from './util';
 import { addHeat } from './heat';
 import { addNote, crewList, traitEffect } from './npc';
+import { applyVoucherConsequence } from './capoVouches';
 import { remember } from './memory';
 import { gainFear } from './player';
 import { SILENCE } from '../config/silence';
@@ -151,6 +152,8 @@ export function silence(state: GameState, rng: Rng, npcId: Id): SilenceCheck {
     // Whatever he was doing for the other side, he has stopped.
     npc.informingSince = undefined;
     addNote(npc, state.day, 'You decided they were finished.', 'bad');
+    // Whoever put his name behind this man is the one who was wrong about him.
+    applyVoucherConsequence(state, npc, state.day, 'was silenced');
     addHeat(state, SILENCE.heat * act.heat, 'street', 'a man of yours found dead');
     /*
        The purchase. A violence trace and nothing from inside — this is the
@@ -178,6 +181,8 @@ export function silence(state: GameState, rng: Rng, npcId: Id): SilenceCheck {
     */
     npc.status = 'defected';
     addNote(npc, state.day, 'They know what you tried to do.', 'bad');
+    // Worse than a plain defection, but it is the same voucher gone bad.
+    applyVoucherConsequence(state, npc, state.day, 'got away, and is talking');
     addHeat(state, SILENCE.heatOnFailure * act.heat, 'street', 'somebody survived something');
     addEvidence(state, {
       day: state.day,
