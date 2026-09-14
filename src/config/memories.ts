@@ -37,7 +37,8 @@ export type MemoryKind =
   | 'word_kept'
   | 'word_broken'
   | 'carried_the_work'
-  | 'left_on_the_bench';
+  | 'left_on_the_bench'
+  | 'went_unheard';
 
 export interface MemoryDef {
   kind: MemoryKind;
@@ -241,6 +242,33 @@ export const MEMORIES: Record<MemoryKind, MemoryDef> = {
     weight: 45,
     fadePerYear: 12,
     floor: 6,
+  },
+  /*
+     `events.ts`'s `capo_political_tension` — 'let_it_sit' — Phase 12 of the
+     org-politics pass. The event is deliberately built so hearing a capo out
+     and doing nothing costs him no live stat (see the choice's own comment:
+     "an ignore that quietly costs the man who chose it is a worse option
+     wearing a free one's label"), which left "Boss ignored a capo's
+     complaint" (design brief §13) with no trace anywhere — not even one a
+     later decision could find. A memory has no immediate effect either (see
+     this file's own header), so it costs nothing the branch didn't already
+     promise while still making the fact real.
+
+     Deliberately not `left_on_the_bench` — that kind already means a specific
+     other thing (a run of pitches going to somebody else, `capoFavoritism.ts`)
+     and conflating "watched the work go elsewhere" with "was heard and
+     dropped" would repeat the exact mistake `vouch_soured`'s own comment
+     above records fixing. Lighter than `left_on_the_bench` on every axis:
+     nothing concrete was lost, he was only left to notice that raising it
+     changed nothing.
+  */
+  went_unheard: {
+    kind: 'went_unheard',
+    text: 'raised something with you and watched it go nowhere',
+    tone: 'bad',
+    weight: 30,
+    fadePerYear: 18,
+    floor: 4,
   },
 };
 

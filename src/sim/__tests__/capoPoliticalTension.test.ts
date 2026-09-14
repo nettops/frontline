@@ -137,6 +137,22 @@ describe('capo_political_tension: resolve', () => {
     expect(weaker.stats.loyalty).toBe(loyaltyBefore);
     expect(weaker.stats.respectForBoss).toBeLessThanOrEqual(respectBefore);
   });
+
+  it('letting it sit leaves no stat cost, but it is not forgotten: the complaining capo carries a real memory of it', () => {
+    // No live stat moves (the test above), and no memory either, was the actual
+    // gap this closes — "Boss ignored a capo's complaint" (design brief §13)
+    // had no trace anywhere the organization could recall later. Address, the
+    // other branch, is not this phase's question.
+    const state = game();
+    const { weaker, stronger } = withResentfulPair(state);
+
+    const e = put(state, weaker, stronger);
+    resolveEvent(state, new Rng(state.rng), e.id, 'let_it_sit');
+
+    const memory = weaker.memories.find((m) => m.kind === 'went_unheard');
+    expect(memory).toBeDefined();
+    expect(memory!.aboutId).toBe(stronger.id);
+  });
 });
 
 describe('capo_political_tension: a trusted, competent Underboss fields it quietly', () => {

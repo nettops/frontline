@@ -2206,7 +2206,10 @@ export function resolveEvent(
         // A real, non-punishing choice: nothing about him moves for having
         // been heard and left alone. See DIRECTOR notes on §17 — an "ignore"
         // that quietly costs the man who chose it is a worse option wearing
-        // a free one's label.
+        // a free one's label. A memory is not a stat cost (memory.ts's own
+        // header: recording one has no immediate effect) — it only lets a
+        // later decision find the fact that he was, design brief §13.
+        remember(npc, state.day, 'went_unheard', other.id);
         addNote(npc, state.day, 'Said his piece and got a nod.', 'neutral');
         addLog(state, `${npc.name} said his piece. You did nothing about it.`, 'crew');
       }
