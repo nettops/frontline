@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
-import { Application } from 'pixi.js';
+import { Application, type Container } from 'pixi.js';
 import type { MapDef, SelectedEntity } from '../map/types';
 import { buildWalkGrid, cellRoomIndex } from '../map/grid';
 import { buildMapLayers, mapPixelBounds, type MapLayers, type LayerVisibility, type SelectableGraphics } from './layers';
 import { fitTransform, clampZoom } from './camera';
 import { cellToScreen, screenToCell } from './iso';
+import { hash } from './isoSprites';
 
 export interface PixiStageHandle {
   resetCamera: () => void;
@@ -24,6 +25,7 @@ export default function PixiStage({ map, layerVisibility, onSelect, onPointerMov
   const appRef = useRef<Application | null>(null);
   const layersRef = useRef<MapLayers | null>(null);
   const selectedRef = useRef<SelectedEntity>(null);
+  const ambientRaf = useRef(0);
   const [, forceRender] = useState(0);
 
   useEffect(() => {
@@ -171,11 +173,51 @@ export default function PixiStage({ map, layerVisibility, onSelect, onPointerMov
         handleSelect(room);
       });
 
+      // Ambient motion: a slow candlelit flicker on the stove + a couple tables, and an
+      // idle sway on standing people — purely decorative, nothing here is read by a test
+      // or by gameplay code. Same reduced-motion contract as src/ui/StreetScene.tsx in
+      // the main game: under prefers-reduced-motion, skip starting the loop entirely
+      // rather than just shrinking the amplitude, so a reduced-motion viewer gets a
+      // fully static scene.
+      if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        let tableCount = 0;
+        const flicker: { target: SelectableGraphics; phase: number }[] = [];
+        for (const child of layers.objects.children as SelectableGraphics[]) {
+          const ent = child.mapEntity;
+          if (!ent || !('kind' in ent)) continue;
+          const isStove = ent.kind === 'stove';
+          const isCandlelitTable = ent.kind === 'table' && tableCount < 2;
+          if (!isStove && !isCandlelitTable) continue;
+          if (isCandlelitTable) tableCount++;
+          // Hashed off the object's own id (same idiom art/street.ts uses) so the two
+          // tables and the stove don't pulse in lockstep.
+          flicker.push({ target: child, phase: ((hash(ent.id) % 1000) / 1000) * Math.PI * 2 });
+        }
+
+        const sway: { target: Container; baseY: number; phase: number }[] = [];
+        for (const child of layers.spawns.children as SelectableGraphics[]) {
+          const ent = child.mapEntity;
+          const person = child.children[1];
+          if (!ent || !person) continue;
+          sway.push({ target: person, baseY: person.y, phase: ((hash(ent.id) % 1000) / 1000) * Math.PI * 2 });
+        }
+
+        const tick = (now: number) => {
+          const t = now / 1000;
+          for (const f of flicker) f.target.alpha = 0.82 + 0.18 * Math.sin(t * 0.6 + f.phase);
+          for (const s of sway) s.target.y = s.baseY + Math.sin(t * 0.5 + s.phase) * 1.5;
+          ambientRaf.current = requestAnimationFrame(tick);
+        };
+        ambientRaf.current = requestAnimationFrame(tick);
+      }
+
       forceRender((n) => n + 1); // now that layersRef is populated, re-run the visibility effect
     })();
 
     return () => {
       disposed = true;
+      if (ambientRaf.current) cancelAnimationFrame(ambientRaf.current);
+      ambientRaf.current = 0;
       if (onWheel) host.removeEventListener('wheel', onWheel);
       // second arg `true` = full cleanup (children + their textures/geometries), not just
       // the renderer — otherwise every layer under `layers.world` (and their pointertap
