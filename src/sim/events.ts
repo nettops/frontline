@@ -26,6 +26,7 @@ import { endConditionEarly } from './world';
 import { addNote, creditOperation, crewList, generateNpc } from './npc';
 import { informFromMemory, remember } from './memory';
 import { recordTie } from './ties';
+import { activeCapos } from './capoTension';
 import { earnDirty, refund, spend, spendSplit, totalFunds } from './economy';
 import { addHeat, reduceHeat, startLayLow } from './heat';
 import { gainFear, gainRespect, trainAttribute } from './player';
@@ -427,6 +428,72 @@ const EVENT_DEFS: EventDef[] = [
         { id: 'side_a', label: `Back ${npc!.name}`, hint: 'One is satisfied, one is not' },
         { id: 'side_b', label: `Back ${other!.name}`, hint: 'One is satisfied, one is not' },
         { id: 'crush', label: 'Shut both of them down', hint: 'Both of them leave annoyed. Neither of them does anything about it' },
+      ],
+    }),
+  },
+
+  /*
+     Design brief §8's political sub-type — one capo resents another's
+     growing power — surfaced for the first time. `capoTension.ts` already
+     detects the fact and lands it on the weaker capo's own tie as
+     `lost_the_room`; nothing had ever shown it to the player. This does not
+     re-derive the detection — it reads the tie the weekly check already
+     wrote, the same way `crew_dispute` above reads two names off `rng.sample`
+     rather than deciding on its own who is feuding.
+  */
+  {
+    id: 'capo_political_tension',
+    weight: 12,
+    // Slower than crew_dispute (15) — this is a standing organizational fact,
+    // not a fresh spat, and `CAPO_TENSION.checkIntervalDays`/`cooldownDays`
+    // (7/45) already say how often the underlying tie itself can move.
+    cooldownDays: 30,
+    applies: (state, rng) => {
+      const capos = activeCapos(state);
+      const capoIds = new Set(capos.map((c) => c.id));
+      const pairs: { npc: Npc; other: Npc }[] = [];
+      for (const weaker of capos) {
+        const tie = weaker.ties.find((t) => t.cause === 'lost_the_room' && capoIds.has(t.id));
+        const stronger = tie ? state.npcs[tie.id] : undefined;
+        if (stronger) pairs.push({ npc: weaker, other: stronger });
+      }
+      return pairs.length ? rng.pick(pairs) : null;
+    },
+    build: (_state, rng, { npc, other }) => ({
+      defId: 'capo_political_tension',
+      title: oneOf(rng, [
+        `${npc!.name} has been talking about ${other!.name}`,
+        `Word about ${other!.name} is going around`,
+        `${npc!.name} wants you to know something`,
+      ]),
+      body: oneOf(rng, [
+        `${npc!.name} has been saying, to anybody who will listen, that ${other!.name} is ` +
+          `getting too big for his crew. Not to ${other!.name}'s face — to yours, by way of ` +
+          `everybody else's.\n\n` +
+          `It is not wrong, exactly. It is also not nothing, coming from a man who used to ` +
+          `run the bigger operation.`,
+        `It came to you sideways, the way these things do: ${npc!.name} thinks ${other!.name} ` +
+          `has been let grow past his own reach, and thinks somebody besides him has noticed ` +
+          `too.\n\n` +
+          `Nobody said it was a problem. Nobody said it wasn't, either.`,
+        `${npc!.name} put it to you plainly, for once: ${other!.name}'s crew has gotten bigger ` +
+          `than his, and he wants to know whether that is the arrangement now or an accident ` +
+          `somebody is going to fix.`,
+      ]),
+      severity: 'warning',
+      npcId: npc!.id,
+      data: { otherId: other!.id },
+      choices: [
+        {
+          id: 'address',
+          label: `Sit down with ${npc!.name}`,
+          hint: `It eases something in him. ${other!.name} will hear that you noticed.`,
+        },
+        {
+          id: 'let_it_sit',
+          label: 'Hear it and leave it there',
+          hint: 'Not every complaint needs the Boss to move.',
+        },
       ],
     }),
   },
@@ -2020,6 +2087,34 @@ export function resolveEvent(
         gainRespect(state, 2);
         trainAttribute(state, 'intimidation', 1);
         addLog(state, 'You put an end to it. Neither of them enjoyed that.', 'crew');
+      }
+      return;
+    }
+
+    case 'capo_political_tension': {
+      const other = state.npcs[event.data.otherId as string];
+      if (!npc || !other) return;
+      const tie = npc.ties.find((t) => t.id === other.id);
+      if (choiceId === 'address') {
+        // Half of what `lost_the_room` itself wrote (30) — enough to read as
+        // a real answer, not enough to erase a standing gap that is still
+        // true. Direct rather than through `recordTie`, which would also
+        // overwrite `cause`/`since` on a tie this event did not create.
+        if (tie) tie.resentment = clamp(tie.resentment - 15, 0, 100);
+        npc.stats.respectForBoss = clamp(npc.stats.respectForBoss + 5, 0, 100);
+        // Addressing it plays as taking the complaining man's side, and the
+        // one it was about hears it that way too.
+        other.stats.respectForBoss = clamp(other.stats.respectForBoss - 4, 0, 100);
+        addNote(npc, state.day, 'You sat him down about it.', 'good');
+        addNote(other, state.day, `You heard ${npc.name} out about him.`, 'bad');
+        addLog(state, `You sat down with ${npc.name} about ${other.name}. Word travels.`, 'crew');
+      } else {
+        // A real, non-punishing choice: nothing about him moves for having
+        // been heard and left alone. See DIRECTOR notes on §17 — an "ignore"
+        // that quietly costs the man who chose it is a worse option wearing
+        // a free one's label.
+        addNote(npc, state.day, 'Said his piece and got a nod.', 'neutral');
+        addLog(state, `${npc.name} said his piece. You did nothing about it.`, 'crew');
       }
       return;
     }
