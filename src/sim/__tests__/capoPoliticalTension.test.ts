@@ -12,6 +12,7 @@ import { recordTie } from '../ties';
 import { EVENT_DEF_BY_ID, resolveEvent } from '../events';
 import { pushEvent } from '../util';
 import { UNDERBOSS_FILTER } from '../../config/underboss';
+import { consiglierRead, underbossOpinion } from '../officers';
 import type { GameState, Npc, Tie } from '../types';
 
 function game(seed = 9001): GameState {
@@ -35,6 +36,13 @@ function withResentfulPair(state: GameState): { weaker: Npc; stronger: Npc } {
 
 function underboss(state: GameState, calls: number): Npc {
   const npc = generateNpc(state, new Rng({ seed: 44, calls }), 'underboss');
+  npc.status = 'active';
+  state.npcs[npc.id] = npc;
+  return npc;
+}
+
+function consigliere(state: GameState, calls: number): Npc {
+  const npc = generateNpc(state, new Rng({ seed: 44, calls }), 'consigliere');
   npc.status = 'active';
   state.npcs[npc.id] = npc;
   return npc;
@@ -255,5 +263,83 @@ describe('capo_political_tension: real distrust of the Underboss gets named', ()
     const { weaker, stronger } = withResentfulPair(state);
     const built = DEF.build(state, new Rng({ seed: 2, calls: 0 }), { npc: weaker, other: stronger });
     expect(built.body).not.toContain('hearing about it first');
+  });
+});
+
+describe('capo_political_tension: your other officers get their own read on the stronger capo', () => {
+  it('adds neither line when neither seat is filled', () => {
+    const state = game();
+    const { weaker, stronger } = withResentfulPair(state);
+    const built = DEF.build(state, new Rng({ seed: 2, calls: 0 }), { npc: weaker, other: stronger });
+    expect(built.body).not.toContain('Your Underboss');
+    expect(built.body).not.toContain('Your Consigliere');
+  });
+
+  it('adds only the Underboss line when only he is seated', () => {
+    const state = game();
+    const { weaker, stronger } = withResentfulPair(state);
+    const boss = underboss(state, 20);
+    tieTo(stronger, boss, 80, 0);
+
+    const built = DEF.build(state, new Rng({ seed: 2, calls: 0 }), { npc: weaker, other: stronger });
+    expect(built.body).toContain('Your Underboss:');
+    expect(built.body).not.toContain('Your Consigliere');
+  });
+
+  it('adds only the Consigliere line when only he is seated', () => {
+    const state = game();
+    const { weaker, stronger } = withResentfulPair(state);
+    const advisor = consigliere(state, 21);
+    tieTo(stronger, advisor, 80, 0);
+
+    const built = DEF.build(state, new Rng({ seed: 2, calls: 0 }), { npc: weaker, other: stronger });
+    expect(built.body).toContain('Your Consigliere:');
+    expect(built.body).not.toContain('Your Underboss');
+  });
+
+  it('lets the two reads diverge, since each is biased by its own officer\'s own tie and temperament', () => {
+    const state = game();
+    const { weaker, stronger } = withResentfulPair(state);
+    const boss = underboss(state, 20);
+    const advisor = consigliere(state, 21);
+    // Underboss trusts the stronger capo outright and is not an ambitious man.
+    tieTo(stronger, boss, 90, 0);
+    boss.stats.ambition = 10;
+    // Consigliere has real cause to doubt him and carries a grievance of his own.
+    tieTo(stronger, advisor, 0, 90);
+    advisor.stats.grievance = 90;
+
+    const built = DEF.build(state, new Rng({ seed: 2, calls: 0 }), { npc: weaker, other: stronger });
+    expect(built.body).toContain('Your Underboss:');
+    expect(built.body).toContain('Your Consigliere:');
+
+    const underbossLine = built.body.split('\n').find((l) => l.startsWith('Your Underboss:'))!;
+    const consigliereLine = built.body.split('\n').find((l) => l.startsWith('Your Consigliere:'))!;
+    // Real disagreement produced by two different biases on two different
+    // ties, not scripted contradiction — the Underboss's read comes out
+    // favourable, the Consigliere's suspicious, from `officers.ts`'s own
+    // maths, not from anything added here.
+    expect(underbossOpinion(state, stronger.id)!.tone).toBe('good');
+    expect(consiglierRead(state, stronger.id)!.tone).toBe('bad');
+    expect(underbossLine).toBe(`Your Underboss: ${underbossOpinion(state, stronger.id)!.text}`);
+    expect(consigliereLine).toBe(`Your Consigliere: ${consiglierRead(state, stronger.id)!.text}`);
+  });
+
+  it('draws no extra rng — the same seed/calls build the identical body with or without officers seated', () => {
+    const state = game();
+    const { weaker, stronger } = withResentfulPair(state);
+    const bare = DEF.build(state, new Rng({ seed: 2, calls: 0 }), { npc: weaker, other: stronger });
+
+    const state2 = game();
+    const pair2 = withResentfulPair(state2);
+    const boss = underboss(state2, 20);
+    tieTo(pair2.stronger, boss, 80, 0);
+    const withOfficer = DEF.build(state2, new Rng({ seed: 2, calls: 0 }), { npc: pair2.weaker, other: pair2.stronger });
+
+    // Strip the appended officer line and the two bodies must match exactly —
+    // proof the officer read did not perturb the causal draw that produced
+    // the rest of the memo.
+    const strippedBody = withOfficer.body.split('\n\nYour Underboss:')[0];
+    expect(strippedBody).toBe(bare.body);
   });
 });

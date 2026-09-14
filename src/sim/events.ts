@@ -27,7 +27,7 @@ import { addNote, creditOperation, crewList, generateNpc } from './npc';
 import { informFromMemory, remember } from './memory';
 import { recordTie } from './ties';
 import { activeCapos } from './capoTension';
-import { currentOfficer } from './officers';
+import { consiglierRead, currentOfficer, underbossOpinion, type OfficerRead } from './officers';
 import { UNDERBOSS_FILTER } from '../config/underboss';
 import { earnDirty, refund, spend, spendSplit, totalFunds } from './economy';
 import { addHeat, reduceHeat, startLayLow } from './heat';
@@ -235,6 +235,11 @@ function underbossFields(state: GameState, weaker: Npc, stronger: Npc): EventCon
   }
 
   return noRealGrudge ? { npc: weaker, other: stronger } : { npc: weaker, other: stronger, distrustedUnderboss: boss };
+}
+
+/** One attributed extra line for a memo, or nothing at all if that seat is empty. */
+function officerLines(read: OfficerRead | null, label: string): string {
+  return read ? `\n\n${label}: ${read.text}` : '';
 }
 
 const EVENT_DEFS: EventDef[] = [
@@ -534,7 +539,7 @@ const EVENT_DEFS: EventDef[] = [
       const { npc: weaker, other: stronger } = rng.pick(pairs);
       return underbossFields(state, weaker, stronger);
     },
-    build: (_state, rng, { npc, other, distrustedUnderboss }) => ({
+    build: (state, rng, { npc, other, distrustedUnderboss }) => ({
       defId: 'capo_political_tension',
       title: oneOf(rng, [
         `${npc!.name} has been talking about ${other!.name}`,
@@ -559,7 +564,16 @@ const EVENT_DEFS: EventDef[] = [
         (distrustedUnderboss
           ? `\n\n${npc!.name} came to you directly about it — he didn't want ` +
             `${distrustedUnderboss.name} hearing about it first.`
-          : ''),
+          : '') +
+        // Design brief §11: no one omniscient narrative. Whatever the
+        // Underboss and Consigliere separately make of the stronger capo —
+        // each already biased by his own tie and his own temperament,
+        // `officers.ts`'s whole point — rides along as its own attributed
+        // line. Neither is forced to agree with the capo's framing or with
+        // each other; a silent seat is just omitted rather than filled with
+        // a placeholder.
+        officerLines(underbossOpinion(state, other!.id), 'Your Underboss') +
+        officerLines(consiglierRead(state, other!.id), 'Your Consigliere'),
       severity: 'warning',
       npcId: npc!.id,
       data: { otherId: other!.id },
