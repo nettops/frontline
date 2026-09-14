@@ -10,6 +10,7 @@ import { GOAL_CERTAIN_ABOVE } from '../../config/goals';
 import { CAPO_TENSION } from '../../config/capoTension';
 import { capoStanding } from '../capoStanding';
 import { checkCapoPowerImbalance } from '../capoTension';
+import { advanceDay } from '../clock';
 import type { GameState, Npc } from '../types';
 
 function game(seed = 701): GameState {
@@ -127,5 +128,21 @@ describe('checkCapoPowerImbalance', () => {
 
     const tie = weak.ties.find((t) => t.id === strong.id)!;
     expect(tie.since).toBe(state.day);
+  });
+});
+
+describe('wired into the daily loop', () => {
+  it('records the gap on its own, with nobody calling checkCapoPowerImbalance directly', () => {
+    const state = game(706);
+    const weak = weakCapo(state, 1);
+    const strong = dangerousCapo(state, 10);
+
+    // newGame starts on day 1; six ticks lands on day 7, the weekly cadence.
+    while (state.day < CAPO_TENSION.checkIntervalDays) advanceDay(state);
+
+    expect(state.day).toBe(CAPO_TENSION.checkIntervalDays);
+    const tie = weak.ties.find((t) => t.id === strong.id);
+    expect(tie).toBeDefined();
+    expect(tie!.cause).toBe('lost_the_room');
   });
 });
