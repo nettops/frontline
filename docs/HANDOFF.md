@@ -50,6 +50,17 @@ still saying it long after both had stopped being true.
 14; round 21 has been run and scored. Read this section for the state and the
 rest for how it got here.
 
+**Update, 2026-09-13/14** (not yet folded into the numbers below): the NOT
+NEGOTITABLE.txt pass (Career History, event/case transparency, civic/
+diplomacy/succession depth) plus a boss-fantasy overhaul, an operations-loop
+redesign (live capo pitches replacing the static job board), an
+associate→made-guy pipeline, and a 19-phase organizational-politics layer
+(capo standing, power-gap tension, favoritism, vouch credibility, a real
+Underboss/Consigliere) all landed and merged into `soprano-ue5-prototype`.
+`tsc` clean, `npm test` green at **161 files, 1,840 passing**. None of it has
+had a blind round yet — see `docs/findings/director-log.md`'s newest entries
+for full detail per pass.
+
 `tsc` clean, `npm test` green (136 files, 1,581 passing), `npm run probe`
 last run clean at 96/96 non-skipped (unrun since the diplomacy/refusal/
 tip/report/sitdown/contract-charge/rail-grouping/operations-focus/

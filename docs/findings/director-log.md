@@ -3538,3 +3538,66 @@ a reusable `seedFollowup()` cascade helper, a lawyer favor figure in
 `faction.ts`'s blame mechanism. Full treatment per item (failing test
 first, fault put back and confirmed caught, probe run where balance moves)
 minus the interactive playtest step — director's call, not a rule change.
+
+---
+## Operations loop redesign + organizational politics pass — 2026-09-13/14
+
+Same session, three more director-approved runs on top of the above,
+same treatment throughout (autonomous, failing-test-first, fault put
+back, playtest step skipped by standing director call).
+
+**Operations redesign, 3 phases:** the player was still personally
+browsing a ~20-job board and hand-checking crew every launch, regardless
+of org size — the actual "feels like a soldier, not a boss" complaint.
+Phase 1 retires five street-tier jobs off the board once a district has a
+steward or the player reaches Crew Leader. Phase 2 replaces the static
+board above Tier 1 with 2-4 live "capo pitches" (Approve/Reject/Reassign,
+reassign costs the passed-over capo real loyalty) refreshed weekly,
+expiring in two. Phase 3 adds one-click squad dispatch via `reportsTo`
+for crews with a real hierarchy, additive to the old checkbox path.
+
+**Associate → made-guy pipeline, 4 phases + 2 follow-ups:** new associates
+now get attributed to a real capo instead of a flat pay-to-hire list;
+capos vouch for a ready associate (Make/Wait/Deny, reusing existing
+trust/loyalty, no new stats); capos have a real capacity cap on made guys;
+a bad vouch costs the vouching capo, tracked as a running net (bad minus
+good, recoverable, not a one-way ratchet) and wired into all 8 real
+defect/arrest/betrayal transitions this codebase has, sized against each
+transition's own existing penalty rather than one flat number. Item 6 of
+the original 6-item run (rival-blamable favor calls) stayed blocked — the
+named actions don't exist and building them is new rival-AI logic, out of
+scope — backlogged in `.ai/TASKS.md`.
+
+**Organizational Problems & Power Dynamics, 19 phases:** built a full
+politics layer on top of all of the above — capo power standing
+(headcount/leadership/ground/earnings → a plain-language tier), power
+gaps landing as real tie tension between capos, ambition biasing which
+pitches a capo brings, favoritism costing the ignored capo (and,
+extended later, costing him pitch quality too — a distinct consequence,
+not a bigger version of the same one), reassignment reactions scaled by
+who the passed-over man actually is and readable with familiarity, a real
+Underboss/Consigliere (opinions biased by their own ties, a standing read
+with a genuine "dangerous, the org runs through him now" top tier off a
+real handled-problem count), one real event (`capo_political_tension`)
+tying all of it together — officer opinions attached and allowed to
+disagree, escalation on repeated neglect, addressing it resets the clock,
+natural resolution via ordinary tie decay confirmed to already work, and
+a real stale-flag fairness bug caught and fixed along the way.
+
+Discipline held for 19 phases straight: several phases (3, 12, 14, 16,
+17, 18) were audit-first and some closed with **no code change**, evidenced
+rather than assumed — Phase 17 measured actual firing rate (40 careers ×
+600 days, throwaway, deleted after) rather than guessing at a weight.
+Two items were caught mid-run and fixed on the spot rather than shipped
+broken: a merge-conflict resolution in the base session, and a real
+rng-position regression in a pre-existing test (`scores.test.ts`, DIRECTOR
+§5 repair, disclosed with both numbers). Explicitly declined across
+phases, named as findings rather than built to check a box: other capos
+growing wary of a favored one, a favored capo's own entitlement, Boss
+shielding a capo from consequences, Boss denying territory, and four of
+the brief's own suggested tension-resolution levers (favor-one-side,
+compensate, promote/demote, move-territory) that would each need a new
+mechanism this pass didn't build.
+
+Test count across the whole session: 1650 → 1840 (161 files), `tsc -b`
+clean throughout. Merged into `soprano-ue5-prototype`.
