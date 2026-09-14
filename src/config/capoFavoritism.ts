@@ -40,4 +40,15 @@ export const CAPO_FAVORITISM = {
    * rather than inventing a second one for the same kind of fact.
    */
   cooldownDays: CAPO_TENSION.cooldownDays,
+
+  /**
+   * How many times a capo has to register as disfavored — each one already
+   * `cooldownDays` apart, so this can never fire off a single unlucky week —
+   * before `capoPitches.ts` starts reading him as bringing less. `seedFollowup`
+   * (util.ts) is the counter; both of its existing call sites (`events.ts`'s
+   * `tolerated_skimming`, `eventgen.ts`'s `let_take_go`) also use 2, and this
+   * is the same shape of question: not a first offense, but not requiring a
+   * whole pattern either.
+   */
+  pitchDisfavorAfter: 2,
 } as const;

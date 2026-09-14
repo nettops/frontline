@@ -29,15 +29,47 @@
  * not, and where two or more capos would qualify as disfavored in the same
  * week, they are all handled in `activeCapos`' own stable order — never a
  * pick among them.
+ *
+ * `isPitchDisfavored`, below, closes a third consequence the design brief
+ * names — "he stops bringing you his best" — once a capo has registered as
+ * disfavored `CAPO_FAVORITISM.pitchDisfavorAfter` times (`seedFollowup`,
+ * util.ts). `capoPitches.ts` reads it to skew his own attribution weight
+ * down for as long as it holds, distinct in kind from the grievance/respect
+ * tick `applyFavoritism` already charges: that is a stat cost on the man
+ * himself, this is a change in what the organization gets from him.
  */
 
 import type { GameState, Id, Npc } from './types';
 import { clamp } from './rng';
 import { addNote } from './npc';
 import { remember } from './memory';
+import { seedFollowup } from './util';
 import { activeCapos } from './capoTension';
 import { PROMOTION } from '../config/npcs';
 import { CAPO_FAVORITISM } from '../config/capoFavoritism';
+
+/** `state.flags` key `seedFollowup` counts a capo's own disfavor streak under. */
+function pitchDisfavorKey(capoId: Id): string {
+  return `capo_pitch_disfavor:${capoId}`;
+}
+
+/**
+ * Whether this capo has registered as disfavored often enough, recently
+ * enough, that `capoPitches.ts` should read him as bringing less.
+ *
+ * Combines two things that already exist rather than storing a third:
+ * `favoritismNoticedDay` for recency — the identical `cooldownDays` window
+ * `applyFavoritism` itself gates its own refiring on, so the read lapses on
+ * its own once the gap stops recurring — and `seedFollowup`'s own count on
+ * `state.flags`, incremented once per real notice below. The consequence
+ * fires later, in a different file; this is only the read.
+ */
+export function isPitchDisfavored(state: GameState, capoId: Id): boolean {
+  const npc = state.npcs[capoId];
+  if (!npc || npc.favoritismNoticedDay === undefined) return false;
+  if (state.day - npc.favoritismNoticedDay >= CAPO_FAVORITISM.cooldownDays) return false;
+  return (state.flags[pitchDisfavorKey(capoId)] ?? 0) >= CAPO_FAVORITISM.pitchDisfavorAfter;
+}
 
 interface CapoFavor {
   capoId: Id;
@@ -84,6 +116,13 @@ function applyFavoritism(state: GameState, disfavored: Npc, favored: Npc): void 
     100,
   );
   disfavored.favoritismNoticedDay = state.day;
+
+  // Counts this notice toward `isPitchDisfavored`, above — the same
+  // "tolerated twice" shape `events.ts`'s skimming ripple and `eventgen.ts`'s
+  // short-take ripple already use, applied here to a capo's own disfavor
+  // streak. Ignores the return: nothing acts on it here, since the
+  // consequence (capoPitches.ts skewing his weight) is read independently.
+  seedFollowup(state, pitchDisfavorKey(disfavored.id), CAPO_FAVORITISM.pitchDisfavorAfter);
 
   // Reuses `left_on_the_bench` rather than inventing a memory kind — it
   // already reads as "watched the work go to other people", which is exactly
