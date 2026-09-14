@@ -30,15 +30,18 @@
 import { Rng, clamp } from './rng';
 import type { GameState, Id, CapoPitch, Npc, OperationCategory, OperationDef } from './types';
 import type { Check } from './delegation';
-import { CAPO_PITCH } from '../config/capoPitches';
+import { CAPO_PITCH, PITCH_REACTION } from '../config/capoPitches';
+import { isPitchDisfavored } from './capoFavoritism';
 import { DELEGATION } from '../config/delegation';
 import { ROLE_ORDER } from '../config/economy';
+import { GOAL_CERTAIN_ABOVE, GOAL_VISIBLE_ABOVE } from '../config/goals';
 import { OPERATION_BY_ID, OPERATION_CATEGORIES } from '../config/operations';
 import { availableOperations, STREET_WORK_IDS } from './operations';
 import { operableTerritories, territoryDef } from './territory';
 import { addNote, crewList } from './npc';
 import { remember } from './memory';
-import { addLog, nextId } from './util';
+import { recordTie } from './ties';
+import { addLog, nextId, say, weightedPick } from './util';
 
 function list(state: GameState): CapoPitch[] {
   if (!state.capoPitches) state.capoPitches = [];
@@ -174,7 +177,25 @@ export function tickCapoPitches(state: GameState, rng: Rng): void {
   let pool = fresh.length > 0 ? fresh : ops;
 
   for (let i = 0; i < need && pool.length > 0; i++) {
-    const capo = rng.pick(capos);
+    // Weighted rather than even odds: a man reaching for more brings you more
+    // of his own pitches. Weight 1 at zero ambition keeps the old even split;
+    // `CAPO_PITCH.ambitionWeight` (1) doubles it at 100 — a bias, never a
+    // lock-out, so a low-ambition capo still gets his share.
+    //
+    // A capo who has registered as disfavored enough times (`capoFavoritism.
+    // ts`'s `isPitchDisfavored`) has that same weight cut by `disfavoredWeight`
+    // on top — he brings you less, for as long as the read holds. Biases this
+    // draw rather than adding one: `rng.next()` below is the only roll this
+    // loop spends per pitch, same as before either bias existed.
+    const capo = weightedPick(
+      capos.map((c) => ({
+        capo: c,
+        weight:
+          (1 + (c.stats.ambition / 100) * CAPO_PITCH.ambitionWeight) *
+          (isPitchDisfavored(state, c.id) ? CAPO_PITCH.disfavoredWeight : 1),
+      })),
+      rng.next(),
+    ).capo;
     let candidates: OperationDef[] = pool;
     if (isRealCapo(capo)) {
       const own = pool.filter((op) => op.category === capoSpecialty(capo));
@@ -212,10 +233,120 @@ export function rejectPitch(state: GameState, pitchId: Id): void {
 }
 
 /**
- * Hands the pitch to somebody else. Costs the man it was taken from the same
- * way taking a district back off a steward does — `delegation.ts`'s own
- * `recallLoyalty`/`recallGrievance`, not a new number, because a man watching
- * a job go to somebody else is the same snub the game already prices.
+ * How hard watching this go to somebody else lands on the man it was taken
+ * from — a multiplier on `DELEGATION.recallLoyalty`/`recallGrievance`, not a
+ * replacement for them. Wanting it (ambition) and not trusting the boss to
+ * make it right (loyalty) push it up; the reverse pulls it down. The job's
+ * own tier nudges the same number a little further. See `PITCH_REACTION`.
+ */
+function reassignSting(passedOver: Npc, defId: string): number {
+  const importance = ((OPERATION_BY_ID[defId]?.tier ?? 3) - 1) / 4; // tier 1..5 -> 0..1
+  return (
+    1 +
+    (passedOver.stats.ambition / 100) * PITCH_REACTION.ambitionWeight -
+    (passedOver.stats.loyalty / 100) * PITCH_REACTION.loyaltyWeight +
+    (importance - 0.5) * PITCH_REACTION.importanceWeight
+  );
+}
+
+/**
+ * Three tiers of the same reaction, `say()`-voiced — never the causal stream,
+ * this only picks which true sentence to show for a mood already computed.
+ * Matches the design brief's own examples: barely registers, quiet
+ * withdrawal, open resentment naming who got it instead.
+ *
+ * This is the close-up read — at or above `GOAL_CERTAIN_ABOVE` — and it is
+ * unchanged from before familiarity gating existed. See `reassignReactionLines`.
+ */
+const REASSIGN_REACTION_LINES: ((name: string, wonBy: string) => string[])[] = [
+  (name) => [
+    `${name} shrugged it off. He trusts you'll make it right.`,
+    `${name} didn't think twice about it.`,
+  ],
+  (name) => [
+    `${name} didn't say anything, but he hasn't been coming around as much.`,
+    `${name} took it quiet. Too quiet.`,
+  ],
+  (name, wonBy) => [
+    `${name} thinks you're giving ${wonBy} everything.`,
+    `${name} isn't hiding how he feels about this one.`,
+  ],
+];
+
+/**
+ * The same three tiers, read from too far away to name the mechanism at all
+ * — below `GOAL_VISIBLE_ABOVE` you do not know this is about being passed
+ * over, only that something is off. No ambition, no loyalty, no prediction:
+ * the same restraint `perceivedGoal`'s own low band holds, just applied to a
+ * different fact.
+ */
+const REASSIGN_REACTION_LINES_LOW: ((name: string) => string[])[] = [
+  (name) => [`No sign anything's wrong with ${name}.`, `${name} didn't seem to notice.`],
+  (name) => [
+    `Something's off with ${name} lately.`,
+    `${name}'s been scarce lately. Hard to say why.`,
+  ],
+  (name) => [`${name} seems unhappy about something.`, `${name} isn't himself lately.`],
+];
+
+/**
+ * The middle band — you know enough to name the fact (passed over) but not
+ * enough to say who it was for or what he'll do about it. The prediction
+ * itself is hedged rather than dropped, per the design brief's own two
+ * examples for this tier.
+ */
+const REASSIGN_REACTION_LINES_MODERATE: ((name: string) => string[])[] = [
+  (name) => [
+    `${name} noticed he got passed over. Didn't think much of it.`,
+    `${name} didn't love being passed over, but he let it go.`,
+  ],
+  (name) => [
+    `${name} doesn't like being passed over, but he'll probably let it go.`,
+    `${name} doesn't like being passed over. Says nothing about it, though.`,
+  ],
+  (name) => [
+    `${name} doesn't like being passed over, and it's sitting with him.`,
+    `${name} doesn't like being passed over. It's sitting with him.`,
+  ],
+];
+
+/** Which of the three sting tiers fits this multiplier. */
+function reassignReactionTier(sting: number): 0 | 1 | 2 {
+  if (sting < PITCH_REACTION.quietBelow) return 0;
+  if (sting > PITCH_REACTION.openAbove) return 2;
+  return 1;
+}
+
+/**
+ * Crosses the sting tier above with how well the player actually knows the
+ * passed-over man — design brief §12's "same fact, more or less specific"
+ * read, applied to a mechanic (`reassignSting`) that already had three
+ * intensities and no familiarity dimension at all.
+ *
+ * Reuses `GOAL_VISIBLE_ABOVE`/`GOAL_CERTAIN_ABOVE` rather than inventing a
+ * reassignment-specific pair: `capoStanding.ts` already reuses
+ * `GOAL_CERTAIN_ABOVE` for a read that has nothing to do with goals either,
+ * so these are this codebase's general visible/certain split, not something
+ * `goals.ts` owns exclusively. No other threshold in the game names this
+ * distinction more specifically.
+ */
+function reassignReactionLines(familiarity: number, tier: 0 | 1 | 2, name: string, wonBy: string): string[] {
+  if (familiarity < GOAL_VISIBLE_ABOVE) return REASSIGN_REACTION_LINES_LOW[tier](name);
+  if (familiarity < GOAL_CERTAIN_ABOVE) return REASSIGN_REACTION_LINES_MODERATE[tier](name);
+  return REASSIGN_REACTION_LINES[tier](name, wonBy);
+}
+
+/**
+ * Hands the pitch to somebody else.
+ *
+ * Costs the man it was taken from the same way taking a district back off a
+ * steward does — `delegation.ts`'s own `recallLoyalty`/`recallGrievance`, not
+ * a new number, because a man watching a job go to somebody else is the same
+ * snub the game already prices. `reassignSting` scales that charge by who he
+ * is rather than charging every capo identically, and the same figure scales
+ * the tie `recordTie` writes toward the man who got it — being passed over
+ * *for somebody in particular* is a fact about that relationship, not only
+ * about the boss.
  */
 export function reassignPitch(state: GameState, pitchId: Id, newCapoId: Id): Check {
   const p = list(state).find((x) => x.id === pitchId && x.status === 'open');
@@ -226,22 +357,30 @@ export function reassignPitch(state: GameState, pitchId: Id, newCapoId: Id): Che
 
   const passedOver = state.npcs[p.capoId];
   if (passedOver) {
+    const sting = reassignSting(passedOver, p.defId);
     passedOver.stats.loyalty = clamp(
-      passedOver.stats.loyalty + DELEGATION.recallLoyalty,
+      passedOver.stats.loyalty + DELEGATION.recallLoyalty * sting,
       0,
       100,
     );
     passedOver.stats.grievance = clamp(
-      passedOver.stats.grievance + DELEGATION.recallGrievance,
+      passedOver.stats.grievance + DELEGATION.recallGrievance * sting,
       0,
       100,
     );
     remember(passedOver, state.day, 'passed_over');
+    recordTie(state.day, passedOver, newCapo, 'passed_over', sting);
+
+    const tier = reassignReactionTier(sting);
     addNote(
       passedOver,
       state.day,
-      `Watched ${newCapo.name} get the ${OPERATION_BY_ID[p.defId]?.name ?? 'job'} instead.`,
-      'bad',
+      say(
+        `pitch_reassign:${p.id}`,
+        0,
+        reassignReactionLines(passedOver.familiarity, tier, passedOver.name, newCapo.name),
+      ),
+      tier === 0 ? 'neutral' : 'bad',
     );
   }
 

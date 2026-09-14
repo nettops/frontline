@@ -27,6 +27,8 @@ import { tickTerritory } from './territory';
 import { tickAnnouncements } from './announce';
 import { tickDelegation } from './delegation';
 import { tickCapoPitches } from './capoPitches';
+import { checkCapoPowerImbalance } from './capoTension';
+import { checkCapoFavoritism } from './capoFavoritism';
 import { tickPromises } from './promises';
 import { markStanding } from './standing';
 import { tickInformants } from './informants';
@@ -208,6 +210,15 @@ export function advanceDay(state: GameState): void {
   tickDelegation(state, rng);
   // 6b. What a capo is bringing the boss this week, above street work.
   tickCapoPitches(state, rng);
+  // 6c. Whether one capo has genuinely outgrown another this week — a real
+  //     standing gap lands as tension on the weaker man's own tie. Consumes
+  //     no rng: a standing gap is a deterministic fact, not a roll.
+  checkCapoPowerImbalance(state);
+  // 6d. Whether one capo's pitches have genuinely been getting the nod far
+  //     more than another's this week — the ignored man carries it against
+  //     the boss. Also consumes no rng: a share either clears the gap or it
+  //     does not.
+  checkCapoFavoritism(state);
   // 7. Influence bleeds where you stopped showing up; feeling drifts back.
   if (state.day % 7 === 0) tickTerritory(state);
   // 7a. Whatever reached you this week, and how sure whoever brought it was.

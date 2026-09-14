@@ -327,6 +327,22 @@ export function promote(state: GameState, npcId: string): ActionResult {
   somethingGood(state, npc);
   for (const other of watching) remember(other, state.day, 'passed_over', npc.id);
 
+  /*
+     A vouch that kept paying off, not just the one that landed him here.
+
+     The vouch itself already succeeded the moment `makeVouch` (capoVouches.ts)
+     promoted him to soldier — that is not this. This is the checkpoint the
+     design brief actually asks for: he kept earning it *after*, so this fires
+     only when the rung he lands on is lieutenant or higher, never on the
+     vouch's own promotion or the one soldier-to-enforcer step past it. See
+     `capoVouches.ts`'s `applyVoucherConsequence` for the reverse case and
+     `netVoucherCredibility` for how the two net out.
+  */
+  if (npc.vouchedBy && ROLE_ORDER.indexOf(next) >= ROLE_ORDER.indexOf('lieutenant')) {
+    const voucher = state.npcs[npc.vouchedBy];
+    if (voucher) remember(voucher, state.day, 'vouch_paid_off', npc.id);
+  }
+
   addNote(npc, state.day, `Made ${ROLE_LABEL[next]}.`, 'good');
   addLog(state, `${npc.name} is ${withArticle(ROLE_LABEL[next])} now.`, 'crew');
   return { ok: true, message: `${npc.name} promoted to ${ROLE_LABEL[next]}.` };

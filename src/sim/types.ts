@@ -492,6 +492,15 @@ export interface Npc {
    * loads with every made man's history blank, which for those saves is true.
    */
   vouchedBy?: Id;
+  /**
+   * The last day this capo registered as disfavored next to whichever peer
+   * the boss has been favoring — `capoFavoritism.ts`'s own cooldown, read the
+   * same way `vouchDeferredDay` above is: it does not gate whether the gap is
+   * real, only whether the game has already made him feel it recently.
+   * Optional with no initialiser, so a save written before this existed loads
+   * with nobody having noticed yet, which for those saves is true.
+   */
+  favoritismNoticedDay?: number;
 }
 
 export interface NpcNote {
