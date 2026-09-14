@@ -37,3 +37,30 @@ export const CAPO_PITCH = {
    */
   ambitionWeight: 1,
 } as const;
+
+/**
+ * How much a passed-over capo's own temperament changes what watching a
+ * pitch go to somebody else costs him.
+ *
+ * The base charge is still `DELEGATION.recallLoyalty`/`recallGrievance` — the
+ * same one `capoVouches.ts`'s `Deny` already reuses for the identical snub —
+ * this only says whether a *particular* man takes it hard or shrugs it off,
+ * the same idiom `sitdown.ts`'s `lands` reads a stat as help and an opposing
+ * one as resistance. A man who wants it (ambition) and does not trust you to
+ * make it right (loyalty) pays close to double the base charge; a content,
+ * loyal one pays a fraction of it. The job's own tier (1..5, tier 3 neutral)
+ * nudges the same number a little further — losing the corner store stings
+ * less than losing the job he was building his whole career toward.
+ */
+export const PITCH_REACTION = {
+  /** How much wanting it (ambition) adds to the multiplier, at 100 ambition. */
+  ambitionWeight: 0.7,
+  /** ...and how much trusting you (loyalty) takes back off, at 100 loyalty. */
+  loyaltyWeight: 0.7,
+  /** How far the job's own tier pushes the same multiplier, tier 3 neutral. */
+  importanceWeight: 0.3,
+  /** Below this multiplier the snub barely registers. */
+  quietBelow: 0.6,
+  /** Above this it reads as open resentment rather than a quiet withdrawal. */
+  openAbove: 1.2,
+} as const;
