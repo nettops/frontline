@@ -15,6 +15,7 @@ import { totalFunds } from '../economy';
 import { resolveEvent } from '../events';
 import { promote, recruit } from '../crew';
 import { loadGame, saveGame } from '../save';
+import { openSitdown } from '../sitdown';
 import { OPERATION_BY_ID } from '../../config/operations';
 import { HOME_TERRITORY } from '../../config/territories';
 import { operableTerritories } from '../territory';
@@ -382,6 +383,39 @@ describe('save/load', () => {
   it('refuses a corrupted save rather than loading half a game', () => {
     localStorage.setItem('mafia:save:1', '{not json');
     expect(loadGame('1').ok).toBe(false);
+  });
+
+  /*
+     Section 30 of the 2026-09-10 polish pass, named directly: "save/load
+     during events". `advanceDays(state, 60)` above already saves a state
+     that has *sometimes*, by seed luck, been mid-memo — this makes it
+     deliberate rather than incidental, and adds an open sit-down beside it.
+     The UI cannot actually reach both at once by playing normally (a memo's
+     backdrop blocks every click, including one that would open a room, and a
+     sit-down blocks the day from advancing at all, which is the only thing
+     that can push a new memo) — but a state written to disk with both
+     present, from an older build or a future bug, still has to load back
+     exactly rather than throw.
+  */
+  it('round-trips a state holding an open memo and an open sit-down together', () => {
+    const state = fresh(2026);
+
+    let guard = 0;
+    while (state.pendingEvents.length === 0 && guard++ < 120) advanceDay(state);
+    expect(state.pendingEvents.length, 'never raised a memo to save mid-answer').toBeGreaterThan(0);
+
+    const npc = crewList(state)[0];
+    openSitdown(state, 'crew', npc.id, 'settle');
+    expect(state.sitdown, 'the room never actually opened').toBeTruthy();
+
+    expect(saveGame(state, '1').ok).toBe(true);
+    const loaded = loadGame('1');
+    expect(loaded.ok).toBe(true);
+    if (!loaded.ok) return;
+
+    expect(JSON.stringify(loaded.state)).toEqual(JSON.stringify(state));
+    expect(loaded.state.pendingEvents.length).toBe(state.pendingEvents.length);
+    expect(loaded.state.sitdown).toBeTruthy();
   });
 });
 

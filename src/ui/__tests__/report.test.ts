@@ -97,6 +97,22 @@ describe('what it reports', () => {
     expect(buildReport(before, state)?.lines[0].text).toContain('picked up');
   });
 
+  /*
+     Round 28's blind report read "X got hurt and is out" as X leaving the
+     organization for good — reasonably, since this codebase uses that exact
+     phrase elsewhere ("is out. That is one less thread") to mean gone.
+     Injured is temporary; the digest just never said so.
+  */
+  it('says an injured man is recovering, not just "out" — the same word this game uses for gone', () => {
+    const state = fresh();
+    const npc = crewList(state)[0];
+    const before = snapshot(state);
+    npc.status = 'injured';
+    const line = buildReport(before, state)?.lines[0].text;
+    expect(line).toContain('recovering');
+    expect(line, 'reads the same as somebody leaving for good').not.toMatch(/\bis out\b/);
+  });
+
   it('reports an agency opening a file', () => {
     const state = fresh();
     const before = snapshot(state);

@@ -578,6 +578,45 @@ describe('counterplay', () => {
     expect(informed.stageName).not.toBeNull();
   });
 
+  /*
+     Section 15/16 of the 2026-09-10 polish pass: `tickInvestigations` already
+     computes three named causal terms every week and none of them ever
+     reached the player — a case's growth read as one fact with no way to
+     trace it to a decision (evidence left behind), neglect (being loud), or
+     the agency's own unavoidable work. `lastGrowth` is the itemized reading;
+     `readCase(...).growth` is the same gate `strength`'s exact percentage
+     already uses, so a breakdown of a number you cannot precisely see is
+     never handed over either.
+  */
+  describe('what last week actually grew the case', () => {
+    it('splits the number into what was found, what they did, and how loud you were', () => {
+      const state = fresh();
+      const investigation = openCaseFor(state, 'city_police');
+      heatAt(state, 40);
+      drop(state, 'operation', 30);
+      runLaw(state, 1);
+
+      expect(investigation.lastGrowth?.absorbed).toBeGreaterThan(0);
+      expect(investigation.lastGrowth?.visibility).toBeGreaterThan(0);
+    });
+
+    it('is hidden behind the same intel bar the exact percentage needs', () => {
+      const state = fresh();
+      const investigation = openCaseFor(state, 'city_police');
+      heatAt(state, 40);
+      drop(state, 'operation', 30);
+      runLaw(state, 1);
+
+      expect(readCase(state, investigation).growth, 'blind but shown a breakdown anyway').toBeNull();
+
+      state.org.cash = 500_000;
+      buyContact(state, 'city_police');
+      const seen = readCase(state, investigation).growth;
+      expect(seen, 'informed and still shown nothing').not.toBeNull();
+      expect(seen).toEqual(investigation.lastGrowth);
+    });
+  });
+
   it('makes a contact cheaper the more pull you have', () => {
     const state = fresh();
     const plain = contactCost(state, 'city_police');

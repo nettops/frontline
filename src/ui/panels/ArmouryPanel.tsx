@@ -23,7 +23,6 @@ import {
   buyCold,
   pieceReading,
   setCarry,
-  setCharge,
   setDump,
   shelf,
 } from '../../sim/pieces';
@@ -156,37 +155,6 @@ export default function ArmouryPanel() {
           {armoury.dump
             ? 'It goes in the river. Usually. Either way it is off the shelf, and the next one costs whatever the next one costs.'
             : 'Free, and the same piece keeps going out. Two bodies on one piece is one case, and somebody will put that together.'}
-        </p>
-      </Panel>
-
-      {/*
-         The third standing decision, and the only one that is not about a
-         piece at all. Kept in its own panel below the two that are, because it
-         does not read the shelf and nothing comes off it.
-      */}
-      <Panel title="On a contract">
-        <div className="carry-row">
-          <button
-            className={!armoury.charge ? 'btn primary' : 'btn'}
-            onClick={() => mutate((s) => setCharge(s, false))}
-          >
-            Send somebody
-          </button>
-          <button
-            className={armoury.charge ? 'btn danger' : 'btn'}
-            onClick={() => mutate((s) => setCharge(s, true))}
-          >
-            Use a charge
-          </button>
-        </div>
-        <p className="tiny">
-          {armoury.charge
-            ? 'It does not miss the way somebody with a gun misses. It also takes the street with it, and no local force handles a thing like that — it goes straight to the two people in this city who can finish you.'
-            : 'Somebody goes, carries what the shelf gave them, and comes back or does not.'}
-        </p>
-        <p className="tiny">
-          Never against one of your own. There is no version of this aimed at a
-          man sitting in a room.
         </p>
       </Panel>
 

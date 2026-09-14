@@ -18,17 +18,22 @@
  * measurement in this project has never had the budget for that.
  */
 
-import type { GameState, Id, Npc } from './types';
+import type { GameState, Id, Npc, RivalBusiness } from './types';
+import type { FactionId } from '../config/factions';
 import { clamp } from './rng';
-import { addLog } from './util';
+import { addLog, formatMoneyShort } from './util';
 import { crewList } from './npc';
 import { hasVerb } from './build';
 import { OPERATION_BY_ID } from '../config/operations';
 import { VERBS } from '../config/verbs';
 import { PAYDAY_INTERVAL } from '../config/economy';
+import { AI } from '../config/factions';
+import { BUSINESS_BY_ID } from '../config/businesses';
 import { controlledTerritories, territoryDef, adjustSentiment } from './territory';
 import { gainFear } from './player';
 import { addNote } from './npc';
+import { houseShort } from './houses';
+import { earnDirty } from './economy';
 
 export interface Check {
   ok: boolean;
@@ -435,13 +440,15 @@ export function spendCasing(state: GameState, defId: string, territoryId: string
 /**
  * Call a table.
  *
- * Sit down with anybody, whenever you decide to. Today a sit-down with a house
- * happens when the game offers it; this removes the invitation, which *is* the
- * verb — a boss whose word carries does not wait to be asked.
- *
- * The cooldown in `canSitDownWith` stays. This opens who you may approach, not
- * how often, and a verb that also deleted the cooldown would be two changes
- * wearing one name.
+ * This function is the stat gate alone, used by the allocation screen to say
+ * whether the *build* is there — it names no target and does not decide who
+ * you may actually approach. That decision was made real 2026-09-10 in
+ * `sim/sitdown.ts`'s `canSitDownWith`: a crew member and a house at peace with
+ * you are reachable regardless, and a house actively at war is the one room
+ * a boss whose word carries nothing yet does not get shown into. Read the
+ * comment there rather than here for the actual restriction — this stayed a
+ * plain gate so `verbs.test.ts`'s baseline ("every verb refuses with nothing
+ * built") keeps meaning what it says.
  */
 export function canCallATable(state: GameState): Check {
   const stop = gate(state, 'word', 'calls people to a table');
@@ -452,6 +459,40 @@ export function canCallATable(state: GameState): Check {
 // ---------------------------------------------------------------- ledger ---
 
 /**
+ * The rival fronts a player has ever had a name for.
+ *
+ * Lazily created, matching `career`/`home`/`civic` before it — a save from
+ * before this existed, or a career where no rival has invested yet, reads as
+ * nobody having anything to buy into.
+ */
+export function rivalBusinesses(state: GameState): Record<Id, RivalBusiness> {
+  if (!state.rivalBusinesses) state.rivalBusinesses = {};
+  return state.rivalBusinesses;
+}
+
+export interface RivalBusinessRead {
+  id: Id;
+  name: string;
+  factionId: FactionId;
+  /** The house's own short name, for a row that names no faction id. */
+  house: string;
+  where: string | null;
+  stake?: number;
+}
+
+/** Everything the Ledger screen needs to list what is out there to buy into. */
+export function rivalBusinessRead(state: GameState): RivalBusinessRead[] {
+  return Object.values(rivalBusinesses(state)).map((b) => ({
+    id: b.id,
+    name: BUSINESS_BY_ID[b.defId]?.name ?? 'A business',
+    factionId: b.factionId,
+    house: houseShort(state, b.factionId),
+    where: b.territoryId ? territoryDef(b.territoryId).name : null,
+    stake: b.stake,
+  }));
+}
+
+/**
  * Buy into somebody else's business.
  *
  * A share of a front that already exists and is already earning, instead of
@@ -459,11 +500,15 @@ export function canCallATable(state: GameState): Check {
  * and the thing you are really buying is that it is not in your name — a
  * business you own a piece of is not a business an investigator can walk into
  * and ask about you.
+ *
+ * Targets a rival's front specifically — see `RivalBusiness`'s own doc
+ * comment for why `state.businesses`, which only ever holds the player's
+ * own, could never be what this verb was for.
  */
 export function canBuyIn(state: GameState, businessId: Id): Check {
   const stop = gate(state, 'ledger', 'gets into other people’s books');
   if (stop) return stop;
-  const biz = state.businesses[businessId];
+  const biz = rivalBusinesses(state)[businessId];
   if (!biz) return no('No such business.');
   if (biz.stake) return no('You already have a piece of that.');
   return yes();
@@ -472,7 +517,7 @@ export function canBuyIn(state: GameState, businessId: Id): Check {
 export function buyIn(state: GameState, businessId: Id): Check {
   const guard = canBuyIn(state, businessId);
   if (!guard.ok) return guard;
-  const biz = state.businesses[businessId];
+  const biz = rivalBusinesses(state)[businessId];
   if (!biz) return no('No such business.');
   biz.stake = VERBS.stakeShare;
   addLog(state, 'You have a piece of it now. Your name is on nothing.', 'money');
@@ -482,4 +527,30 @@ export function buyIn(state: GameState, businessId: Id): Check {
 /** What a stake in somebody else's place is worth per week. */
 export function stakeIncome(weeklyRevenue: number, biz: { stake?: number }): number {
   return biz.stake ? Math.round(weeklyRevenue * biz.stake) : 0;
+}
+
+/**
+ * Weekly. Everything a stake actually pays.
+ *
+ * Not taken off the rival's own `wealth` — `AI.invest.incomePerBusiness` is
+ * tuned against measured populations (see `config/factions.ts`), and a cut
+ * skimmed quietly off the books of one front among a family's several is not
+ * the kind of dent that number was ever meant to absorb. What the player
+ * bought is a piece of what a business like that earns, not a lever on the
+ * rival's own economy.
+ */
+export function tickStakes(state: GameState): void {
+  // Weekly, gated in here rather than at the call site — see `tickCard`.
+  if (state.day % PAYDAY_INTERVAL !== 0) return;
+  let total = 0;
+  for (const biz of Object.values(rivalBusinesses(state))) {
+    total += stakeIncome(AI.invest.incomePerBusiness, biz);
+  }
+  if (total <= 0) return;
+  earnDirty(state, total);
+  addLog(
+    state,
+    `The pieces you hold in other people's businesses paid ${formatMoneyShort(total)}, quietly.`,
+    'money',
+  );
 }

@@ -84,7 +84,7 @@ describe('a contract that cannot be sent, and why', () => {
 
   it('says why on the shared ContractButton, not only in the hover', () => {
     expect(rivals).not.toMatch(/:\s*'Not possible'/);
-    expect(rivals).toMatch(/check\.ok \? `Send somebody.*?` : check\.message/);
+    expect(rivals).toMatch(/if \(!check\.ok\) \{[\s\S]*?\{check\.message\}[\s\S]*?\}/);
   });
 
   it('says why a poach offer cannot be made, not only in the hover', () => {

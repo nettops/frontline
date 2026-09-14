@@ -21,7 +21,7 @@ import type {
 import { addEvidence, addLog, pushEvent, seedFollowup, weightedPick, withArticle } from './util';
 import { askable, money, oneOf, payable, shortOf } from './memo';
 import { GEN_DEFS, isGenerated, resolveGenerated } from './eventgen';
-import { GEN_CHANCE_PER_DAY, GEN_WHEN } from '../config/eventgen';
+import { EVENT_WEIGHT_SHARPNESS, GEN_CHANCE_PER_DAY, GEN_WHEN } from '../config/eventgen';
 import { endConditionEarly } from './world';
 import { addNote, creditOperation, crewList, generateNpc } from './npc';
 import { informFromMemory, remember } from './memory';
@@ -129,7 +129,14 @@ export interface EventContext {
 
 export interface EventDef {
   id: string;
-  weight: number;
+  /**
+   * A plain number for almost every shape. A function for the handful whose
+   * odds should track how bad the live situation actually is rather than a
+   * flat constant — see `gen_front_trouble`/`gen_paper_moving` in
+   * eventgen.ts, and `EVENT_WEIGHT_SHARPNESS`, which is what makes a bigger
+   * number here actually dominate rather than only nudge the draw.
+   */
+  weight: number | ((state: GameState, ctx: EventContext) => number);
   cooldownDays: number;
   /** Null when the current state cannot produce this event. */
   applies(state: GameState, rng: Rng): EventContext | null;
@@ -1709,7 +1716,7 @@ function eligible(
     if (state.pendingEvents.some((e) => e.defId === def.id)) continue;
 
     const ctx = def.applies(state, rng);
-    if (ctx) out.push({ def, ctx, weight: def.weight });
+    if (ctx) out.push({ def, ctx, weight: typeof def.weight === 'function' ? def.weight(state, ctx) : def.weight });
   }
   return out;
 }
@@ -1720,7 +1727,7 @@ function raise(
   candidates: { def: EventDef; ctx: EventContext; weight: number }[],
 ): boolean {
   if (candidates.length === 0) return false;
-  const chosen = weightedPick(candidates, rng.next());
+  const chosen = weightedPick(candidates, rng.next(), EVENT_WEIGHT_SHARPNESS);
   state.flags[`evt_${chosen.def.id}`] = state.day;
   pushEvent(state, chosen.def.build(state, rng, chosen.ctx));
   return true;

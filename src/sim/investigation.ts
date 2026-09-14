@@ -832,6 +832,9 @@ export function tickInvestigations(state: GameState, rng: Rng): void {
       ledger.visibility += visibility;
     }
     investigation.strength = clamp(investigation.strength, 0, 100);
+    // The itemized reading of the line above — see `Investigation.lastGrowth`'s
+    // own comment for why this overwrites rather than joining `history`.
+    investigation.lastGrowth = { absorbed, work, visibility };
 
     /*
        A case stays warm on what they find, not on how loud you are.
@@ -955,6 +958,14 @@ export interface CaseRead {
   strength: string;
   suspects: string | null;
   known: { day: number; text: string }[];
+  /**
+   * What last week's number was actually made of — same intel gate as the
+   * exact `strength` percentage, since a breakdown of a figure you cannot
+   * see the precise value of would hand over more than the fog is for.
+   * Null before the case's first weekly tick under this feature, same as an
+   * absent `investigation.lastGrowth`.
+   */
+  growth: { absorbed: number; work: number; visibility: number } | null;
 }
 
 export function readCase(state: GameState, investigation: Investigation): CaseRead {
@@ -987,6 +998,7 @@ export function readCase(state: GameState, investigation: Investigation): CaseRe
     known: investigation.history
       .filter((h) => h.obvious || intel >= CASE_INTEL_STAGE_ABOVE)
       .slice(0, 12),
+    growth: intel >= CASE_INTEL_STRENGTH_ABOVE ? (investigation.lastGrowth ?? null) : null,
   };
 }
 

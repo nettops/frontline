@@ -89,6 +89,31 @@ export interface GenShapeDef {
   cooldownDays: number;
 }
 
+/**
+ * Sharpens the day's weighted draw between whichever shapes actually applied
+ * today — `e^(weight * sharpness)` in `weightedPick` rather than plain linear
+ * odds. Without this, `gen_front_trouble`/`gen_paper_moving`'s new live-
+ * severity weight (see their definitions in eventgen.ts) could only ever
+ * nudge the draw a little, because a flat multiplier on a small base weight
+ * stays small next to the authored table's own 15-25 range. This is the
+ * lever that lets real severity actually dominate selection instead of only
+ * the prose describing it, which is the gap HANDOFF names against the
+ * `oneOf` variety metric being gameable. New, conservative, not yet
+ * probe-measured — and applied only within one day's pool, since the
+ * authored and generated pools are never drawn against each other.
+ */
+export const EVENT_WEIGHT_SHARPNESS = 0.12;
+
+/**
+ * How far a live-weighted shape's odds can climb above its base weight, at
+ * maximum severity — see `gen_front_trouble`/`gen_paper_moving` in
+ * eventgen.ts. A front at exactly `GEN_WHEN.frontHealthUnder` or a case at
+ * exactly `GEN_WHEN.caseStrength` scores its plain base weight, same as
+ * before this pass; one further past the bar climbs toward this multiple.
+ * New, conservative, not yet probe-measured.
+ */
+export const GEN_SEVERITY_WEIGHT_MAX = 3;
+
 export const GEN_SHAPES: GenShapeDef[] = [
   { id: 'gen_wants_a_word', subject: 'crew', weight: 6, cooldownDays: 9 },
   { id: 'gen_bad_blood', subject: 'pair', weight: 5, cooldownDays: 11 },
@@ -135,6 +160,20 @@ export const GEN_SHAPES: GenShapeDef[] = [
      month's cooldown it is 3.3.
   */
   { id: 'gen_asked_for_you', subject: 'home', weight: 2, cooldownDays: 30 },
+  /*
+     The same gate, and a real choice instead of a free one.
+
+     2026-09-10 polish pass: `gen_asked_for_you` costs nothing to answer
+     either way, which is a nag, not a stake — the doc it was built against
+     asked for family to "occasionally conflict with business... impose
+     opportunity costs," and a memo you can only ever agree with does
+     neither. This is the same subject, drawn against the same nights the
+     family has already noticed you missing, except this time something is
+     actually on the table both directions: a real night's take for staying,
+     a real ding to how the family reads you for going. Rarer than the
+     nag, because a stake this real every month would be a tax, not a memo.
+  */
+  { id: 'gen_home_or_business', subject: 'home', weight: 2, cooldownDays: 40 },
   /*
      Three shapes for the three systems built after this file was written.
 
@@ -426,4 +465,22 @@ export const GEN_EFFECT = {
   askedAboutGrievance: 10,
   askedAboutFear: 6,
   ignoredItRespect: 1,
+
+  /**
+   * The real choice, not the free one. See `gen_home_or_business`.
+   *
+   * Staying pays a night's take — a real number, not a token one, but well
+   * under a career's ordinary jobs at this point so the choice is felt
+   * without being the obviously correct one every time. It also refuses the
+   * family outright, which costs more than the passive drift it would
+   * otherwise be: a real snub, worth roughly two and a half weeks of
+   * `HOME.perWeekAway` in one hit, landing on top of whatever the house was
+   * already carrying. Going home still clears the account the normal way
+   * (`goHome`) — but this was the night business wanted you, and a small
+   * ding to respect says the street noticed you weren't where you told
+   * somebody you would be.
+   */
+  homeOrBusinessStayCash: 6_000,
+  homeOrBusinessGoRespect: -4,
+  homeOrBusinessRefusedNeglect: 9,
 } as const;

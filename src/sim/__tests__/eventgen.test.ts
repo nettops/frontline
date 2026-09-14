@@ -315,6 +315,54 @@ describe('the three late shapes', () => {
   });
 });
 
+/*
+   2026-09-10 polish pass, Section 17: family occasionally has to conflict
+   with business, with a real cost either way — not just a free nag. Checked
+   on the property the generic sweep above cannot see: the levers named in
+   the choice hints are the levers that actually move.
+*/
+describe('a real choice between business and family', () => {
+  function raise(state: GameState) {
+    const def = GEN_DEFS.find((d) => d.id === 'gen_home_or_business')!;
+    const rng = new Rng(state.rng);
+    const ctx = def.applies(state, rng);
+    if (!ctx) return null;
+    const built = def.build(state, rng, ctx);
+    state.pendingEvents.push({ ...built, id: 'evt_test', day: state.day });
+    return built;
+  }
+
+  it('pays a real night\'s take for staying, and refuses the house harder than silence would', () => {
+    const state = world();
+    home(state).neglect = 60;
+    expect(raise(state), 'the shape did not fire against a neglected house').not.toBeNull();
+
+    const beforeCash = state.org.dirtyCash;
+    const beforeNeglect = home(state).neglect;
+    resolveEvent(state, new Rng(state.rng), 'evt_test', 'stay');
+
+    expect(state.org.dirtyCash, 'staying paid nothing').toBeGreaterThan(beforeCash);
+    expect(home(state).neglect, 'refusing outright did not cost more than staying quiet').toBeGreaterThan(
+      beforeNeglect,
+    );
+  });
+
+  it('going home still clears the account, at a small cost to respect', () => {
+    const state = world();
+    home(state).neglect = 60;
+    home(state).lastVisitDay = state.day - 30;
+    state.org.respect = 20;
+    expect(raise(state), 'the shape did not fire').not.toBeNull();
+
+    const beforeRespect = state.org.respect;
+    const beforeNeglect = home(state).neglect;
+    resolveEvent(state, new Rng(state.rng), 'evt_test', 'go');
+
+    expect(home(state).neglect, 'going home did not clear anything').toBeLessThan(beforeNeglect);
+    expect(state.org.respect, 'going home cost nothing').toBeLessThan(beforeRespect);
+  });
+});
+
 describe('answering one', () => {
   it('resolves every choice of every shape without leaving the memo behind', () => {
     let checked = 0;
@@ -400,11 +448,26 @@ describe('answering one', () => {
 describe('answering somebody settles it', () => {
   function aggrieved(): { state: GameState; man: Npc } {
     const state = world();
-    const man = crewList(state).filter((n) => n.status !== 'dead')[0];
+    const crew = crewList(state).filter((n) => n.status !== 'dead');
+    const man = crew[0];
     man.stats.grievance = 90;
     // The state that made this a subscription: paying could not clear the
     // loyalty branch, so the same man came back every fortnight for ever.
     man.stats.loyalty = 15;
+    /*
+       Only `man` should be eligible for `gen_wants_a_word`. `world()`'s sixty
+       real days of warm-up drift every crew member's loyalty and grievance
+       for genuine, in-fiction reasons — before this pass, that never happened
+       to land a second person on the wrong side of GEN_WHEN's bar for this
+       fixed seed, but nothing here ever guaranteed it wouldn't, and it now
+       does. Normalized explicitly rather than left to the luck of one seed's
+       sixty-day drift, so this test is deterministic by construction.
+    */
+    for (const other of crew) {
+      if (other.id === man.id) continue;
+      other.stats.grievance = 0;
+      other.stats.loyalty = 70;
+    }
     return { state, man };
   }
 

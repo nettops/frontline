@@ -13,6 +13,7 @@ import { Panel, Empty, StatRead, StatusTag, KeyValue, Bar, payRead } from '../co
 import {
   crewList,
   goalBlurb,
+  loyaltyPressures,
   perceive,
   perceivedGoal,
   secretKnown,
@@ -324,7 +325,7 @@ export default function CrewPanel() {
               </thead>
               <tbody>
                 {crew.map((npc) => {
-                  const pay = payRead(npc);
+                  const pay = payRead(state, npc);
                   return (
                     <tr
                       key={npc.id}
@@ -599,6 +600,7 @@ function CrewDetail({ npc, onClose }: { npc: Npc; onClose: () => void }) {
   */
   const loyaltyRead = perceive(npc, 'loyalty');
   const beyondReach = loyaltyRead.known && loyaltyRead.bandIndex === 0;
+  const pressures = loyaltyPressures(state, npc);
   const sitCheck = canSitDownWith(state, npc.id);
   const raiseCheck = canRaise(state, npc.id);
   const silenceCheck = canSilence(state, npc.id);
@@ -745,6 +747,31 @@ function CrewDetail({ npc, onClose }: { npc: Npc; onClose: () => void }) {
                   If they walked, as many as {wouldGo} could go with them.
                 </p>
               )}
+            </div>
+          )}
+
+          {/*
+             2026-09-10 polish pass: `driftNpcs` computes five real, weekly
+             terms for loyalty and none of them had a UI surface at all,
+             not even qualitative. `loyaltyPressures` reads the same terms
+             this sheet's own loyalty band comes from, through the same
+             fog — a numeric breakdown would violate the rule two lines
+             above this one exists to protect.
+          */}
+          {pressures.length > 0 && (
+            <div style={{ marginTop: 10 }}>
+              <div className="tiny" style={{ marginBottom: 4 }}>
+                What is working on their loyalty
+              </div>
+              {pressures.map((p, i) => (
+                <p
+                  key={i}
+                  className={p.tone === 'bad' ? 'hot' : p.tone === 'good' ? 'good' : 'dim'}
+                  style={{ margin: '0 0 2px' }}
+                >
+                  {p.text}
+                </p>
+              ))}
             </div>
           )}
 

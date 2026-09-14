@@ -90,6 +90,12 @@ export interface TraitDef {
   obvious: boolean;
   /** What it does for the rest of their life. */
   effects: TraitEffects;
+  /**
+   * Traits that read as a clash rather than a mere difference — see
+   * `TIE_COMPAT.clashTraitMult` in config/ties.ts. Optional and sparse: most
+   * pairs of traits are simply different people, not opposed ones.
+   */
+  clashesWith?: string[];
 }
 
 export const TRAITS: TraitDef[] = [
@@ -100,6 +106,7 @@ export const TRAITS: TraitDef[] = [
     bias: { courage: 15, discipline: -20, fear: -10 },
     obvious: true,
     effects: { escalation: 1.8, heat: 1.25, loyaltyPerWeek: -0.3 },
+    clashesWith: ['disciplined', 'cowardly'],
   },
   {
     id: 'calculating',
@@ -116,6 +123,7 @@ export const TRAITS: TraitDef[] = [
     bias: { greed: 25, loyalty: -8 },
     obvious: false,
     effects: { wageExpectation: 1.2, poachable: 1.35 },
+    clashesWith: ['loyalist', 'old_school'],
   },
   {
     id: 'loyalist',
@@ -124,6 +132,7 @@ export const TRAITS: TraitDef[] = [
     bias: { loyalty: 22, respectForBoss: 15, greed: -10 },
     obvious: false,
     effects: { loyaltyPerWeek: 1.2, poachable: 0.4 },
+    clashesWith: ['greedy', 'ambitious'],
   },
   {
     id: 'ambitious',
@@ -132,6 +141,7 @@ export const TRAITS: TraitDef[] = [
     bias: { ambition: 25, leadership: 10 },
     obvious: false,
     effects: { loyaltyPerWeek: -0.5, poachable: 1.3 },
+    clashesWith: ['loyalist'],
   },
   {
     id: 'cowardly',
@@ -140,6 +150,7 @@ export const TRAITS: TraitDef[] = [
     bias: { fear: 25, courage: -22, loyalty: -5 },
     obvious: false,
     effects: { exposure: 1.3, escalation: 0.6, poachable: 1.15 },
+    clashesWith: ['fearless', 'hot_headed'],
   },
   {
     id: 'fearless',
@@ -148,6 +159,7 @@ export const TRAITS: TraitDef[] = [
     bias: { courage: 25, fear: -25 },
     obvious: true,
     effects: { escalation: 1.3, exposure: 0.85 },
+    clashesWith: ['cowardly'],
   },
   {
     id: 'disciplined',
@@ -156,6 +168,7 @@ export const TRAITS: TraitDef[] = [
     bias: { discipline: 25, skill: 8 },
     obvious: true,
     effects: { heat: 0.8, exposure: 0.7 },
+    clashesWith: ['hot_headed', 'sloppy'],
   },
   {
     id: 'sloppy',
@@ -164,6 +177,7 @@ export const TRAITS: TraitDef[] = [
     bias: { discipline: -25, skill: -8 },
     obvious: true,
     effects: { heat: 1.3, exposure: 1.5 },
+    clashesWith: ['disciplined'],
   },
   {
     id: 'charismatic',
@@ -196,6 +210,7 @@ export const TRAITS: TraitDef[] = [
     bias: { loyalty: 18, fear: -12, ambition: -10 },
     obvious: true,
     effects: { exposure: 0.5, poachable: 0.5, loyaltyPerWeek: 0.6 },
+    clashesWith: ['greedy', 'calculating'],
   },
   {
     id: 'silver_tongue',
@@ -503,6 +518,18 @@ export const DRIFT = {
    * Character should colour the drift, not decide it.
    */
   characterWeight: 0.45,
+
+  /**
+   * A new hire's grace period. Stagnation and every other negative term below
+   * judged a man hired yesterday by the same clock as a ten-year veteran —
+   * `daysSinceGood` falls back to `joinedDay`, so day one already reads as
+   * "nothing good has happened in zero days," not as "just arrived." This is
+   * a flat bonus that falls linearly to nothing over `honeymoonDays`, so early
+   * turnover reads as "still finding their feet" rather than "already sour."
+   * New, conservative, not yet probe-measured.
+   */
+  honeymoonDays: 45,
+  honeymoonLoyalty: 3,
 };
 
 /** Behaviour thresholds. Crossing these fires events. */
@@ -522,6 +549,24 @@ export const BEHAVIOUR = {
 
   defectLoyaltyBelow: 18,
   defectChancePerTick: 0.2,
+  /**
+   * Safety in numbers, the other way round. Each defection roll used to be
+   * fully independent, so a crew that had gone collectively sour still lost
+   * people one at a time, at the same rate as a crew with one unhappy man in
+   * it. This scales the chance up by the *share* of the live crew currently
+   * below `defectLoyaltyBelow` — a family that is falling apart produces a
+   * cascade rather than a drip. At share 0 this is a no-op. New, conservative,
+   * not yet probe-measured.
+   */
+  collectiveDefectFactor: 1.5,
+  /**
+   * Added on top of the collective-defection multiplier while
+   * `org.shakyHandoverUntilDay` is active — see `HANDOVER.shakyHandoverDays`
+   * in config/succession.ts. A weak-claim handover leaves the room genuinely
+   * more prone to losing people, not just more likely to have been contested
+   * on the day it happened. New, conservative, not yet probe-measured.
+   */
+  shakyHandoverDefectBoost: 0.5,
 };
 
 /** Promotion effects. */
@@ -543,3 +588,13 @@ export const DISMISSAL = {
 export const RECRUIT_POOL_SIZE = 4;
 /** Days before the available recruits refresh. */
 export const RECRUIT_REFRESH_DAYS = 10;
+/**
+ * Chance a fresh recruit's trait slot is drawn from an established, trusted
+ * hand's own traits instead of the open pool — new blood plausibly resembles
+ * who is already around it. Scoped down from "the same community pool" to
+ * "the most senior currently-loyal crew member": `Npc` carries no stored
+ * nationality to match on, and adding one for this alone was not worth a new
+ * state field. Replaces a slot rather than adding one, so a mentored recruit
+ * is not simply "more traited" than one without. New, conservative.
+ */
+export const MENTOR_TRAIT_CHANCE = 0.35;

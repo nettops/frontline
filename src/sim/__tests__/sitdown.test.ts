@@ -23,7 +23,9 @@ import {
   sitdownOptions,
 } from '../sitdown';
 import { bond } from '../diplomacy';
+import { spendPoint, statLevel } from '../build';
 import { SITDOWN } from '../../config/sitdown';
+import { VERB_AT } from '../../config/build';
 import type { GameState, Npc } from '../types';
 
 function game(seed = 4): GameState {
@@ -560,6 +562,55 @@ describe('the sit-down, continued', () => {
     const state = game();
     delete state.sitdown;
     expect(availableRegisters(state)).toHaveLength(0);
+    expect(canSitDownWith(state, first(state).id).ok).toBe(true);
+  });
+});
+
+/*
+   Word's one real restriction.
+
+   Everything else about a sit-down is open to everybody, crew and house
+   alike — that generosity is the point, and `PlayerPanel.tsx` used to have
+   to say so explicitly because Word gated nothing real. A house actively at
+   war is the one room a nobody does not get shown into.
+*/
+describe('a house you are at war with', () => {
+  function atWar(state: GameState): void {
+    state.factions['falcone'].bonds['player'] = {
+      grudge: 0,
+      respect: 0,
+      trust: 0,
+      warSince: state.day,
+    };
+  }
+
+  it('will not sit down with a boss whose word carries nothing yet', () => {
+    const state = game();
+    atWar(state);
+    expect(canSitDownWith(state, 'falcone').ok).toBe(false);
+  });
+
+  it('will sit down once Word is built', () => {
+    const state = game();
+    atWar(state);
+    state.player.points = 99;
+    while (statLevel(state, 'word') < VERB_AT.word) spendPoint(state, 'word');
+    expect(canSitDownWith(state, 'falcone').ok).toBe(true);
+  });
+
+  it('is still open to a house you are merely at odds with, not at war', () => {
+    const state = game();
+    state.factions['falcone'].bonds['player'] = {
+      grudge: 90,
+      respect: -80,
+      trust: -80,
+      warSince: null,
+    };
+    expect(canSitDownWith(state, 'falcone').ok).toBe(true);
+  });
+
+  it('never touches a crew sit-down — Word is about houses, not your own men', () => {
+    const state = game();
     expect(canSitDownWith(state, first(state).id).ok).toBe(true);
   });
 });

@@ -55,6 +55,18 @@ export function recruitCost(state: GameState): number {
   );
 }
 
+/**
+ * The most established, currently-loyal hand — a proxy for "whoever a new
+ * face would plausibly come in through." See `MENTOR_TRAIT_CHANCE`.
+ */
+function pickMentor(state: GameState): Npc | undefined {
+  const candidates = crewList(state).filter(
+    (n) => (n.status === 'active' || n.status === 'busy') && n.stats.loyalty >= 50,
+  );
+  if (!candidates.length) return undefined;
+  return candidates.reduce((a, b) => (b.daysInCrew > a.daysInCrew ? b : a));
+}
+
 export function refreshRecruits(state: GameState, rng: Rng, force = false): void {
   if (!force && state.day - state.recruitsRefreshedDay < RECRUIT_REFRESH_DAYS) return;
 
@@ -73,9 +85,10 @@ export function refreshRecruits(state: GameState, rng: Rng, force = false): void
   const capos = pitchCapoPool(state).filter(isRealCapo);
 
   const had = Object.keys(state.recruits).length;
+  const mentor = pickMentor(state);
   state.recruits = {};
   for (let i = 0; i < RECRUIT_POOL_SIZE; i++) {
-    const npc = generateNpc(state, rng, 'associate');
+    const npc = generateNpc(state, rng, 'associate', mentor);
     if (capos.length > 0) {
       const capo = rng.pick(capos);
       npc.reportsTo = capo.id;

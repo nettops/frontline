@@ -31,6 +31,7 @@ import SuccessionPanel from './panels/SuccessionPanel';
 import FinancesPanel from './panels/FinancesPanel';
 import PlayerPanel from './panels/PlayerPanel';
 import SavesPanel from './panels/SavesPanel';
+import CareerPanel from './panels/CareerPanel';
 import TipsPanel from './panels/TipsPanel';
 import DebugPanel from './panels/DebugPanel';
 import { RANK_BY_ID } from '../config/economy';
@@ -361,12 +362,27 @@ export default function App() {
           {shown === 'finances' && <FinancesPanel />}
           {shown === 'player' && <PlayerPanel />}
           {shown === 'saves' && <SavesPanel />}
+          {shown === 'career' && <CareerPanel />}
           {shown === 'tips' && <TipsPanel />}
           {shown === 'why' && <DebugPanel />}
         </div>
+        {/*
+           Moved inside `<main>` from being its sibling — round 28's blind
+           report named a modal-content blind spot ("modal/dialog content is
+           not exposed to standard page-text extraction") and, separately,
+           watched a repaired hint ("They do not think enough of you for it
+           to hold", `events.ts`'s `plea_offer`) fail to register a second
+           time, for the same reason: a text-extraction tool that reads
+           `<main>` first cannot see a modal rendered as its sibling. Both
+           are `position: fixed; inset: 0` overlays, so where they sit in the
+           DOM has never affected how they render — this only changes what a
+           tool that scopes to the main landmark can see. `role="dialog"`
+           and `aria-modal="true"` were already correct for a real screen
+           reader either way; this closes the gap for a text-first reader.
+        */}
+        <MemoModal />
+        <SitdownModal onDone={step} />
       </main>
-      <MemoModal />
-      <SitdownModal onDone={step} />
     </div>
   );
 }

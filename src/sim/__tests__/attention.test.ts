@@ -124,6 +124,15 @@ describe('what wants you today', () => {
     const line = attention(state).find((l) => l.id === 'trade');
     expect(line).toBeTruthy();
     expect(line!.panel).toBe('contraband');
+    /*
+       Round 28's blind report: unlocked at $2,800 mid solvency crisis, saw
+       this exact line, went looking, and hit a $40,000+ retainer with no
+       warning it was coming — filed under "wanted to, was blocked." The
+       line has to say a cost is coming, not just that the door is open.
+    */
+    expect(line!.text, 'says the door is open but not that it costs anything to walk through').toMatch(
+      /retainer/i,
+    );
 
     state.contraband.supplierId = 'some_supplier';
     expect(attention(state).some((l) => l.id === 'trade')).toBe(false);

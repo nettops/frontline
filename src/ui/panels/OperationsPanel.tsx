@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { canCase, caseJob } from '../../sim/verbs';
 import { hasVerb } from '../../sim/build';
 import { STAT_BY_ID } from '../../config/build';
@@ -103,6 +103,19 @@ export default function OperationsPanel() {
   const [approach, setApproach] = useState<ApproachId>(() =>
     isLayingLow(state) ? 'quiet' : DEFAULT_APPROACH,
   );
+  /*
+     The same defect `CrewPanel` and `RivalsPanel` were both fixed for
+     (round 24): the assemble panel opens below the job table rather than
+     in a modal, and on a board long enough to fill the viewport — this one
+     runs to nine open jobs, an eight-district picker, a full crew table,
+     and a fourteen-row locked table, before the assemble panel itself —
+     that open lands off-screen with no cue it happened. The click worked;
+     nothing said so. Same fix, same reason.
+  */
+  const detailRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (selected) detailRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }, [selected]);
 
   /*
      Tier 0 only. Tier 1 and above used to be a permanent row per open job def
@@ -626,6 +639,7 @@ export default function OperationsPanel() {
       </Panel>
 
       {def && (
+        <div ref={detailRef}>
         <Panel title={`Assemble — ${def.name}`}>
           <p className="dim" style={{ marginTop: 0 }}>
             {def.description}
@@ -888,21 +902,25 @@ export default function OperationsPanel() {
                       </tr>
                     </thead>
                     <tbody>
-                      {free.map((npc) => (
+                      {/*
+                         A row that looked exactly as clickable once the
+                         crew was full as it did with a seat open — same
+                         cursor, same class, no title — and clicking it did
+                         nothing. `toggleCrew` was always a correct no-op
+                         here; nothing on the row ever said so.
+                      */}
+                      {free.map((npc) => {
+                        const picked = crewPicked.includes(npc.id);
+                        const full = !picked && needed > 0 && crewPicked.length >= needed;
+                        return (
                         <tr
                           key={npc.id}
-                          className={
-                            crewPicked.includes(npc.id) ? 'clickable selected' : 'clickable'
-                          }
-                          onClick={() => toggleCrew(npc.id)}
+                          className={picked ? 'clickable selected' : full ? 'dim' : 'clickable'}
+                          title={full ? `${needed} is the most this job takes. Drop somebody first.` : undefined}
+                          onClick={full ? undefined : () => toggleCrew(npc.id)}
                         >
                           <td>
-                            <input
-                              type="checkbox"
-                              checked={crewPicked.includes(npc.id)}
-                              readOnly
-                              tabIndex={-1}
-                            />
+                            <input type="checkbox" checked={picked} readOnly tabIndex={-1} />
                           </td>
                           <td>
                             <div className="name-cell">
@@ -918,7 +936,8 @@ export default function OperationsPanel() {
                           </td>
                           <td className="num mono">{nightsWorked(state, npc.id)}</td>
                         </tr>
-                      ))}
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
@@ -1088,9 +1107,17 @@ export default function OperationsPanel() {
             </div>
           </div>
         </Panel>
+        </div>
       )}
 
-      {locked.length > 0 && (
+      {/*
+         Hidden while a job is being assembled — it decides nothing about
+         the job in front of you, and it is the single longest table on
+         this screen. Fourteen rows of work you cannot do yet, sitting
+         between the assemble panel and nothing, was the biggest single
+         contributor to how far this page runs once a job is open.
+      */}
+      {locked.length > 0 && !def && (
         <Panel title="Above your standing" flush>
           <div className="table-wrap">
             <table className="data">

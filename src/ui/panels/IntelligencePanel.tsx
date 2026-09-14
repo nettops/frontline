@@ -393,7 +393,16 @@ export default function IntelligencePanel() {
                              worked": a zero denominator on the one comparison
                              this screen exists for.
                           */}
-                          {row.gone && <span className="name-sub">no longer with you</span>}
+                          {/*
+                             2026-09-10: "no longer with you" covered dead
+                             and defected alike, which are not the same fact
+                             — a defector can surface again as a witness
+                             against you, a dead man cannot. `fate` is null
+                             only for a record too old to exist at all.
+                          */}
+                          {row.fate === 'dead' && <span className="name-sub">dead</span>}
+                          {row.fate === 'defected' && <span className="name-sub">defected</span>}
+                          {row.gone && !row.fate && <span className="name-sub">no longer with you</span>}
                         </div>
                       </td>
                       <td className={row.gone ? 'num mono dim' : 'num mono hot'}>{row.leaks}</td>

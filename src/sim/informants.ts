@@ -171,6 +171,18 @@ export interface Presence {
    * table.
    */
   gone: boolean;
+  /**
+   * Which — only ever set when `gone` is true.
+   *
+   * `gone` itself deliberately does not distinguish dead from defected; the
+   * sort above only needs "still actionable or not." But a 2026-09-10 polish
+   * pass named this table specifically: the UI's own label for `gone` was
+   * "no longer with you" regardless of which, and dead and defected are not
+   * the same fact — a defector can surface again as a witness against you,
+   * a dead man cannot. Null when the record itself is gone (`!npc`), the one
+   * case genuinely too old to say more about.
+   */
+  fate: 'dead' | 'defected' | null;
 }
 
 export function timesPresent(state: GameState): Presence[] {
@@ -190,13 +202,17 @@ export function timesPresent(state: GameState): Presence[] {
   };
 
   return [...new Set([...leaks.keys(), ...jobs.keys()])]
-    .map((id) => ({
-      id,
-      name: state.npcs[id]?.name ?? 'somebody since gone',
-      leaks: leaks.get(id) ?? 0,
-      jobs: jobs.get(id) ?? 0,
-      gone: isGone(id),
-    }))
+    .map((id) => {
+      const npc = state.npcs[id];
+      return {
+        id,
+        name: npc?.name ?? 'somebody since gone',
+        leaks: leaks.get(id) ?? 0,
+        jobs: jobs.get(id) ?? 0,
+        gone: isGone(id),
+        fate: npc?.status === 'dead' ? ('dead' as const) : npc?.status === 'defected' ? ('defected' as const) : null,
+      };
+    })
     .filter((row) => row.leaks > 0)
     // Men who are gone still belong on the page — a night they were on is a
     // night they were on — but never above the men you can still do something
