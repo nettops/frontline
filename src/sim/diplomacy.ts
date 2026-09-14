@@ -18,6 +18,7 @@ import { PARTNER } from '../config/partner';
 import { addEvidence, addLog, formatMoney } from './util';
 import { addHeat } from './heat';
 import { addNote, crewList } from './npc';
+import { applyVoucherConsequence } from './capoVouches';
 import { remember } from './memory';
 import { takeBack, spend } from './economy';
 import { playerInfluence, territoryDef, territoryList } from './territory';
@@ -806,6 +807,8 @@ export function defectToRival(
   npc.status = 'defected';
   npc.unavailableUntilDay = null;
   addNote(npc, state.day, `Left to work for the ${houseShort(state, factionId)}.`, 'bad');
+  // Whoever put his name behind this man answers for where he ended up.
+  applyVoucherConsequence(state, npc, state.day, 'went over to the other side');
 
   const faction = state.factions[factionId];
   if (faction) faction.strength = clamp(faction.strength + 1.5, 0, 100);

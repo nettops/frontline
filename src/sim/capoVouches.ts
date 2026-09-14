@@ -19,9 +19,11 @@ import { districtsHeldBy } from './delegation';
 import { recordTie } from './ties';
 import { remember } from './memory';
 import { addLog, say } from './util';
+import { clamp } from './rng';
 import { TIE_DEPARTURE } from '../config/ties';
 import { BEHAVIOUR, DRIFT } from '../config/npcs';
 import { CAPO_CAPACITY, CAPO_VOUCH } from '../config/capoVouches';
+import { DELEGATION } from '../config/delegation';
 
 /**
  * How many made men this capo can actually run — see `config/capoVouches.ts`
@@ -175,4 +177,37 @@ export function denyVouch(state: GameState, associateId: Id): ActionResult {
     'crew',
   );
   return { ok: true, message: `${associate.name} stays where they are.` };
+}
+
+// ------------------------------------------------------- consequences ---
+
+/**
+ * A made man who was somebody's word coming back on the man who gave it.
+ *
+ * `vouchedBy` (set once, by `makeVouch` above) is the only record of that —
+ * every site where a vouched man's run ends badly (dismissed, defected,
+ * arrested, dead, or worse) is the moment it was wrong, and all of them read
+ * it here rather than keeping their own copy. Prices it exactly the way
+ * `capoPitches.ts`'s `reassignPitch` already prices a capo watching a
+ * decision he was owed go against him: `DELEGATION`'s own
+ * `recallLoyalty`/`recallGrievance`, not a new number — nothing in this
+ * codebase sizes a third-party vouch charge more specifically than that, for
+ * any of the ways this can happen. Silent when the man was never vouched
+ * for, which is every one of these before `vouchedBy` existed.
+ *
+ * `reason` finishes "<name>, who they put up, <reason>." — each call site
+ * supplies the version of that sentence that is actually true of it.
+ */
+export function applyVoucherConsequence(
+  state: GameState,
+  npc: Npc,
+  day: number,
+  reason: string,
+): void {
+  const voucher = npc.vouchedBy ? state.npcs[npc.vouchedBy] : undefined;
+  if (!voucher) return;
+  voucher.stats.loyalty = clamp(voucher.stats.loyalty + DELEGATION.recallLoyalty, 0, 100);
+  voucher.stats.grievance = clamp(voucher.stats.grievance + DELEGATION.recallGrievance, 0, 100);
+  remember(voucher, day, 'passed_over', npc.id);
+  addNote(voucher, day, `${npc.name}, who they put up, ${reason}.`, 'bad');
 }

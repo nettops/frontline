@@ -17,6 +17,7 @@ import type {
 import { addEvidence, addLog, nextId, pushEvent, say } from './util';
 import { applyGoalDrift, goalBoard, goalEffect, reviewGoal } from './goals';
 import { decayTies, followDeparture, tieDrift } from './ties';
+import { applyVoucherConsequence } from './capoVouches';
 import {
   AGE_RANGE,
   BEHAVIOUR,
@@ -683,6 +684,8 @@ export function driftNpcs(state: GameState, rng: Rng): void {
       npc.status = 'defected';
       npc.unavailableUntilDay = null;
       addNote(npc, state.day, 'Left the organization.', 'bad');
+      // Loyalty this low is exactly what a vouch was supposed to rule out.
+      applyVoucherConsequence(state, npc, state.day, 'walked out');
       /*
          The same repair. Measured at 2.8% of everything read, and it is a
          sentence a player meets dozens of times in a career.
@@ -767,6 +770,8 @@ export function driftNpcs(state: GameState, rng: Rng): void {
       const followers = followDeparture(state, rng, npc, (other) => {
         other.status = 'defected';
         other.unavailableUntilDay = null;
+        // Whoever's man this was, this is the same walkout as npc's own.
+        applyVoucherConsequence(state, other, state.day, 'walked out');
       });
       if (followers.length > 0) {
         addLog(
