@@ -1,18 +1,4 @@
-export interface LayerVisibility {
-  floor: boolean;
-  walls: boolean;
-  objects: boolean;
-  grid: boolean;
-  collision: boolean;
-  nav: boolean;
-  roomBounds: boolean;
-  spawns: boolean;
-}
-
-export const DEFAULT_LAYER_VISIBILITY: LayerVisibility = {
-  floor: true, walls: true, objects: true, grid: false,
-  collision: false, nav: false, roomBounds: true, spawns: true,
-};
+import type { LayerVisibility } from '../render/layers';
 
 const LABELS: Record<keyof LayerVisibility, string> = {
   floor: 'Floor', walls: 'Walls', objects: 'Objects', grid: 'Grid',

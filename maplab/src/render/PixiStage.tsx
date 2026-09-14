@@ -1,12 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { Application } from 'pixi.js';
-import type { MapDef, MapObject, SpawnPoint } from '../map/types';
-import { buildWalkGrid } from '../map/grid';
-import { buildMapLayers, mapPixelBounds, type MapLayers, type SelectableGraphics } from './layers';
-import { fitTransform } from './camera';
-import type { LayerVisibility } from '../lab/LayerToggles';
-
-export type SelectedEntity = MapObject | SpawnPoint | null;
+import type { MapDef, SelectedEntity } from '../map/types';
+import { buildWalkGrid, cellRoomIndex } from '../map/grid';
+import { buildMapLayers, mapPixelBounds, type MapLayers, type LayerVisibility, type SelectableGraphics } from './layers';
+import { fitTransform, clampZoom } from './camera';
 
 export interface PixiStageHandle {
   resetCamera: () => void;
@@ -32,6 +29,7 @@ export default function PixiStage({ map, layerVisibility, onSelect, onPointerMov
     const host = hostRef.current;
     if (!host) return;
     let disposed = false;
+    let onWheel: ((e: WheelEvent) => void) | null = null;
     const app = new Application();
 
     (async () => {
@@ -42,6 +40,7 @@ export default function PixiStage({ map, layerVisibility, onSelect, onPointerMov
 
       const grid = buildWalkGrid(map);
       const layers = buildMapLayers(map, grid);
+      const roomIndex = cellRoomIndex(map);
       layersRef.current = layers;
       app.stage.addChild(layers.world);
       app.stage.eventMode = 'static';
@@ -69,14 +68,31 @@ export default function PixiStage({ map, layerVisibility, onSelect, onPointerMov
         frameSelected: () => {
           const sel = selectedRef.current;
           if (!sel) return;
-          const w = 'footprint' in sel ? sel.footprint.w : 2;
-          const h = 'footprint' in sel ? sel.footprint.h : 2;
-          const selBounds = {
-            x: sel.x * map.grid.cellSize,
-            y: sel.y * map.grid.cellSize,
-            width: w * map.grid.cellSize,
-            height: h * map.grid.cellSize,
-          };
+          let selBounds;
+          if ('cells' in sel) {
+            // RoomDef: frame its cell bounding box (same calc layers.ts uses for room outlines).
+            const cols = sel.cells.map(([c]) => c);
+            const rowsArr = sel.cells.map(([, r]) => r);
+            const minC = Math.min(...cols);
+            const minR = Math.min(...rowsArr);
+            const maxC = Math.max(...cols);
+            const maxR = Math.max(...rowsArr);
+            selBounds = {
+              x: minC * map.grid.cellSize,
+              y: minR * map.grid.cellSize,
+              width: (maxC - minC + 1) * map.grid.cellSize,
+              height: (maxR - minR + 1) * map.grid.cellSize,
+            };
+          } else {
+            const w = 'footprint' in sel ? sel.footprint.w : 2;
+            const h = 'footprint' in sel ? sel.footprint.h : 2;
+            selBounds = {
+              x: sel.x * map.grid.cellSize,
+              y: sel.y * map.grid.cellSize,
+              width: w * map.grid.cellSize,
+              height: h * map.grid.cellSize,
+            };
+          }
           applyTransform(fitTransform(selBounds, { width: host.clientWidth, height: host.clientHeight }, 80));
         },
       });
@@ -95,26 +111,44 @@ export default function PixiStage({ map, layerVisibility, onSelect, onPointerMov
         last = { x: e.global.x, y: e.global.y };
         layers.world.position.set(layers.world.position.x + dx, layers.world.position.y + dy);
       });
-      host.addEventListener(
-        'wheel',
-        (e) => {
-          e.preventDefault();
-          const factor = e.deltaY < 0 ? 1.1 : 0.9;
-          const nextScale = Math.min(4, Math.max(0.25, layers.world.scale.x * factor));
-          layers.world.scale.set(nextScale);
-        },
-        { passive: false },
-      );
+      onWheel = (e: WheelEvent) => {
+        e.preventDefault();
+        const rect = host.getBoundingClientRect();
+        const pointerScreen = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+        const before = {
+          x: (pointerScreen.x - layers.world.position.x) / layers.world.scale.x,
+          y: (pointerScreen.y - layers.world.position.y) / layers.world.scale.y,
+        };
+        const factor = e.deltaY < 0 ? 1.1 : 0.9;
+        const nextScale = clampZoom(layers.world.scale.x * factor);
+        layers.world.scale.set(nextScale);
+        layers.world.position.set(
+          pointerScreen.x - before.x * nextScale,
+          pointerScreen.y - before.y * nextScale,
+        );
+      };
+      host.addEventListener('wheel', onWheel, { passive: false });
 
       for (const child of [...layers.objects.children, ...layers.spawns.children] as SelectableGraphics[]) {
         child.on('pointertap', () => handleSelect(child.mapEntity ?? null));
       }
+
+      // Fires after any child's pointertap (Pixi bubbles child -> stage). If a child already
+      // handled the tap, e.target is that child, not the stage — skip the room fallback then.
+      app.stage.on('pointertap', (e) => {
+        if (e.target !== app.stage) return;
+        const local = layers.world.toLocal(e.global);
+        const cell: [number, number] = [Math.floor(local.x / map.grid.cellSize), Math.floor(local.y / map.grid.cellSize)];
+        const room = roomIndex.get(`${cell[0]},${cell[1]}`) ?? null;
+        handleSelect(room);
+      });
 
       forceRender((n) => n + 1); // now that layersRef is populated, re-run the visibility effect
     })();
 
     return () => {
       disposed = true;
+      if (onWheel) host.removeEventListener('wheel', onWheel);
       // second arg `true` = full cleanup (children + their textures/geometries), not just
       // the renderer — otherwise every layer under `layers.world` (and their pointertap
       // listeners) is detached but never disposed, leaking GPU resources on every remount.

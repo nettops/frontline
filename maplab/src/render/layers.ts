@@ -2,6 +2,7 @@ import { Container, Graphics, Text } from 'pixi.js';
 import type { Bounds } from './camera';
 import type { MapDef, MapObject, SpawnPoint } from '../map/types';
 import type { WalkGrid } from '../map/grid';
+import { cellRoomIndex } from '../map/grid';
 import {
   ROOM_COLORS, OBJECT_COLOR, WALL_COLOR, DOOR_COLOR, VOID_COLOR,
   GRID_LINE_COLOR, NAV_EDGE_COLOR, COLLISION_COLOR,
@@ -22,12 +23,25 @@ export interface MapLayers {
 
 export type SelectableGraphics = Graphics & { mapEntity?: MapObject | SpawnPoint };
 
-function roomKindAt(map: MapDef, c: number, r: number) {
-  return map.rooms.find((room) => room.cells.some(([rc, rr]) => rc === c && rr === r))?.kind;
+export interface LayerVisibility {
+  floor: boolean;
+  walls: boolean;
+  objects: boolean;
+  grid: boolean;
+  collision: boolean;
+  nav: boolean;
+  roomBounds: boolean;
+  spawns: boolean;
 }
+
+export const DEFAULT_LAYER_VISIBILITY: LayerVisibility = {
+  floor: true, walls: true, objects: true, grid: false,
+  collision: false, nav: false, roomBounds: true, spawns: true,
+};
 
 export function buildMapLayers(map: MapDef, grid: WalkGrid): MapLayers {
   const cs = map.grid.cellSize;
+  const roomIndex = cellRoomIndex(map);
   const world = new Container();
   const floor = new Container();
   const walls = new Container();
@@ -41,7 +55,7 @@ export function buildMapLayers(map: MapDef, grid: WalkGrid): MapLayers {
   for (let r = 0; r < map.grid.rows; r++) {
     for (let c = 0; c < map.grid.cols; c++) {
       if (map.cells[r][c] !== 'floor') continue;
-      const kind = roomKindAt(map, c, r);
+      const kind = roomIndex.get(`${c},${r}`)?.kind;
       const g = new Graphics();
       g.rect(c * cs, r * cs, cs, cs).fill(kind ? ROOM_COLORS[kind] : VOID_COLOR);
       floor.addChild(g);

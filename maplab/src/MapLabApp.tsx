@@ -1,8 +1,10 @@
 import { useRef, useState } from 'react';
 import { restaurantMap } from './map/restaurant';
-import PixiStage, { type PixiStageHandle, type SelectedEntity } from './render/PixiStage';
+import type { SelectedEntity } from './map/types';
+import PixiStage, { type PixiStageHandle } from './render/PixiStage';
+import { DEFAULT_LAYER_VISIBILITY, type LayerVisibility } from './render/layers';
 import Inspector from './lab/Inspector';
-import LayerToggles, { DEFAULT_LAYER_VISIBILITY, type LayerVisibility } from './lab/LayerToggles';
+import LayerToggles from './lab/LayerToggles';
 import StatusBar from './lab/StatusBar';
 
 export default function MapLabApp() {

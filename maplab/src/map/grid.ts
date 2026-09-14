@@ -1,6 +1,21 @@
-import type { MapDef, Side, WallEdge } from './types';
+import type { MapDef, RoomDef, Side, WallEdge } from './types';
 
+/** Integer cell coordinates — not fractional world units. */
 export type Point = [number, number];
+
+/** Floor a fractional world-unit position (e.g. a MapObject's or SpawnPoint's x/y) into the integer cell it occupies. */
+export function cellOf(x: number, y: number): Point {
+  return [Math.floor(x), Math.floor(y)];
+}
+
+/** Shared cell -> owning room lookup, keyed "col,row". */
+export function cellRoomIndex(map: MapDef): Map<string, RoomDef> {
+  const index = new Map<string, RoomDef>();
+  for (const room of map.rooms) {
+    for (const [c, r] of room.cells) index.set(`${c},${r}`, room);
+  }
+  return index;
+}
 
 const DIRS: Record<Side, Point> = { N: [0, -1], E: [1, 0], S: [0, 1], W: [-1, 0] };
 const OPPOSITE: Record<Side, Side> = { N: 'S', S: 'N', E: 'W', W: 'E' };
@@ -42,8 +57,7 @@ function blockedObjectCells(map: MapDef): Set<string> {
   const blocked = new Set<string>();
   for (const obj of map.objects) {
     if (obj.walkable) continue;
-    const c0 = Math.floor(obj.x);
-    const r0 = Math.floor(obj.y);
+    const [c0, r0] = cellOf(obj.x, obj.y);
     const c1 = Math.floor(obj.x + obj.footprint.w - 0.001);
     const r1 = Math.floor(obj.y + obj.footprint.h - 0.001);
     for (let r = r0; r <= r1; r++) {

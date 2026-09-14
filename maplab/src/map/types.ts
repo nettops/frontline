@@ -59,3 +59,5 @@ export interface MapDef {
   spawns: SpawnPoint[];
   exits: ExitDef[];
 }
+
+export type SelectedEntity = MapObject | SpawnPoint | RoomDef | null;

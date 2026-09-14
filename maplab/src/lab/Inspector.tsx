@@ -1,4 +1,4 @@
-import type { SelectedEntity } from '../render/PixiStage';
+import type { SelectedEntity } from '../map/types';
 
 export default function Inspector({ entity }: { entity: SelectedEntity }) {
   return (
