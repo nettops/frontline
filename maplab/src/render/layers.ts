@@ -104,8 +104,15 @@ export function buildMapLayers(map: MapDef, grid: WalkGrid): MapLayers {
   }
 
   const gLines = new Graphics();
-  for (let c = 0; c <= map.grid.cols; c++) gLines.moveTo(c * cs, 0).lineTo(c * cs, map.grid.rows * cs);
-  for (let r = 0; r <= map.grid.rows; r++) gLines.moveTo(0, r * cs).lineTo(map.grid.cols * cs, r * cs);
+  for (let r = 0; r < map.grid.rows; r++) {
+    for (let c = 0; c < map.grid.cols; c++) {
+      const p0 = cellToScreen(c, r);
+      const p1 = cellToScreen(c + 1, r);
+      const p2 = cellToScreen(c + 1, r + 1);
+      const p3 = cellToScreen(c, r + 1);
+      gLines.poly([p0.x, p0.y, p1.x, p1.y, p2.x, p2.y, p3.x, p3.y]);
+    }
+  }
   gLines.stroke({ width: 1, color: GRID_LINE_COLOR, alpha: 0.15 });
   gridLines.addChild(gLines);
 
@@ -113,7 +120,11 @@ export function buildMapLayers(map: MapDef, grid: WalkGrid): MapLayers {
   for (let r = 0; r < map.grid.rows; r++) {
     for (let c = 0; c < map.grid.cols; c++) {
       if (map.cells[r][c] === 'floor' && !grid.isWalkable([c, r])) {
-        collisionG.rect(c * cs, r * cs, cs, cs).fill({ color: COLLISION_COLOR, alpha: 0.4 });
+        const p0 = cellToScreen(c, r);
+        const p1 = cellToScreen(c + 1, r);
+        const p2 = cellToScreen(c + 1, r + 1);
+        const p3 = cellToScreen(c, r + 1);
+        collisionG.poly([p0.x, p0.y, p1.x, p1.y, p2.x, p2.y, p3.x, p3.y]).fill({ color: COLLISION_COLOR, alpha: 0.4 });
       }
     }
   }
@@ -123,10 +134,15 @@ export function buildMapLayers(map: MapDef, grid: WalkGrid): MapLayers {
   for (let r = 0; r < map.grid.rows; r++) {
     for (let c = 0; c < map.grid.cols; c++) {
       if (!grid.isWalkable([c, r])) continue;
-      const cx = c * cs + cs / 2;
-      const cy = r * cs + cs / 2;
-      if (grid.canMove([c, r], [c + 1, r])) navG.moveTo(cx, cy).lineTo(cx + cs, cy);
-      if (grid.canMove([c, r], [c, r + 1])) navG.moveTo(cx, cy).lineTo(cx, cy + cs);
+      const center = cellToScreen(c + 0.5, r + 0.5);
+      if (grid.canMove([c, r], [c + 1, r])) {
+        const next = cellToScreen(c + 1.5, r + 0.5);
+        navG.moveTo(center.x, center.y).lineTo(next.x, next.y);
+      }
+      if (grid.canMove([c, r], [c, r + 1])) {
+        const next = cellToScreen(c + 0.5, r + 1.5);
+        navG.moveTo(center.x, center.y).lineTo(next.x, next.y);
+      }
     }
   }
   navG.stroke({ width: 1, color: NAV_EDGE_COLOR, alpha: 0.5 });
@@ -139,13 +155,17 @@ export function buildMapLayers(map: MapDef, grid: WalkGrid): MapLayers {
     const minR = Math.min(...rowsArr);
     const maxC = Math.max(...cols);
     const maxR = Math.max(...rowsArr);
+    const p0 = cellToScreen(minC, minR);
+    const p1 = cellToScreen(maxC + 1, minR);
+    const p2 = cellToScreen(maxC + 1, maxR + 1);
+    const p3 = cellToScreen(minC, maxR + 1);
     const g = new Graphics();
-    g.rect(minC * cs, minR * cs, (maxC - minC + 1) * cs, (maxR - minR + 1) * cs)
+    g.poly([p0.x, p0.y, p1.x, p1.y, p2.x, p2.y, p3.x, p3.y])
       .stroke({ width: 2, color: ROOM_BOUNDS_COLOR, alpha: 0.6 });
     roomBounds.addChild(g);
     const label = new Text({ text: room.name, style: { fill: ROOM_BOUNDS_COLOR, fontSize: 10 } });
-    label.x = minC * cs + 4;
-    label.y = minR * cs + 4;
+    label.x = p0.x + 4;
+    label.y = p0.y + 4;
     roomBounds.addChild(label);
   }
 

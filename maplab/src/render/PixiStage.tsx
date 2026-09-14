@@ -4,6 +4,7 @@ import type { MapDef, SelectedEntity } from '../map/types';
 import { buildWalkGrid, cellRoomIndex } from '../map/grid';
 import { buildMapLayers, mapPixelBounds, type MapLayers, type LayerVisibility, type SelectableGraphics } from './layers';
 import { fitTransform, clampZoom } from './camera';
+import { cellToScreen, screenToCell } from './iso';
 
 export interface PixiStageHandle {
   resetCamera: () => void;
@@ -77,12 +78,19 @@ export default function PixiStage({ map, layerVisibility, onSelect, onPointerMov
             const minR = Math.min(...rowsArr);
             const maxC = Math.max(...cols);
             const maxR = Math.max(...rowsArr);
-            selBounds = {
-              x: minC * map.grid.cellSize,
-              y: minR * map.grid.cellSize,
-              width: (maxC - minC + 1) * map.grid.cellSize,
-              height: (maxR - minR + 1) * map.grid.cellSize,
-            };
+            const corners = [
+              cellToScreen(minC, minR),
+              cellToScreen(maxC + 1, minR),
+              cellToScreen(maxC + 1, maxR + 1),
+              cellToScreen(minC, maxR + 1),
+            ];
+            const xs = corners.map((p) => p.x);
+            const ys = corners.map((p) => p.y);
+            const minX = Math.min(...xs);
+            const maxX = Math.max(...xs);
+            const minY = Math.min(...ys);
+            const maxY = Math.max(...ys);
+            selBounds = { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
           } else {
             const w = 'footprint' in sel ? sel.footprint.w : 2;
             const h = 'footprint' in sel ? sel.footprint.h : 2;
@@ -109,7 +117,8 @@ export default function PixiStage({ map, layerVisibility, onSelect, onPointerMov
       app.stage.on('pointerupoutside', () => { dragging = false; });
       app.stage.on('pointermove', (e) => {
         const local = layers.world.toLocal(e.global);
-        onPointerMove({ x: Math.floor(local.x / map.grid.cellSize), y: Math.floor(local.y / map.grid.cellSize) });
+        const cellF = screenToCell(local.x, local.y);
+        onPointerMove({ x: Math.floor(cellF.x), y: Math.floor(cellF.y) });
         if (!dragging) return;
         const dx = e.global.x - last.x;
         const dy = e.global.y - last.y;
@@ -147,7 +156,8 @@ export default function PixiStage({ map, layerVisibility, onSelect, onPointerMov
         const moved = Math.hypot(e.global.x - downAt.x, e.global.y - downAt.y);
         if (moved > 4) return;
         const local = layers.world.toLocal(e.global);
-        const cell: [number, number] = [Math.floor(local.x / map.grid.cellSize), Math.floor(local.y / map.grid.cellSize)];
+        const cellF = screenToCell(local.x, local.y);
+        const cell: [number, number] = [Math.floor(cellF.x), Math.floor(cellF.y)];
         const room = roomIndex.get(`${cell[0]},${cell[1]}`) ?? null;
         handleSelect(room);
       });
