@@ -318,6 +318,8 @@ export interface Org {
    */
   rankSaid?: RankId;
   tradeSaid?: Partial<Record<TradeId, boolean>>;
+  /** Same idiom, for `outgrewStreetWork` — see `announce.ts`'s `announceStreetWorkRetired`. */
+  streetWorkRetiredSaid?: boolean;
 }
 
 // ------------------------------------------------------------------- npcs ---
