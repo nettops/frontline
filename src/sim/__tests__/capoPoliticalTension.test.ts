@@ -12,6 +12,7 @@ import { recordTie } from '../ties';
 import { EVENT_DEF_BY_ID, resolveEvent } from '../events';
 import { pushEvent } from '../util';
 import { UNDERBOSS_FILTER } from '../../config/underboss';
+import { CAPO_TENSION } from '../../config/capoTension';
 import { consiglierRead, underbossOpinion } from '../officers';
 import type { GameState, Npc, Tie } from '../types';
 
@@ -152,6 +153,74 @@ describe('capo_political_tension: resolve', () => {
     const memory = weaker.memories.find((m) => m.kind === 'went_unheard');
     expect(memory).toBeDefined();
     expect(memory!.aboutId).toBe(stronger.id);
+  });
+});
+
+describe('capo_political_tension: escalation after repeated let_it_sit (design brief §15)', () => {
+  function ignoreTimes(state: GameState, weaker: Npc, stronger: Npc, n: number) {
+    for (let i = 0; i < n; i++) {
+      const e = put(state, weaker, stronger);
+      resolveEvent(state, new Rng(state.rng), e.id, 'let_it_sit');
+    }
+  }
+
+  function put(state: GameState, weaker: Npc, stronger: Npc) {
+    const rng = new Rng({ seed: 2, calls: 0 });
+    return pushEvent(state, DEF.build(state, rng, { npc: weaker, other: stronger }));
+  }
+
+  it('does not escalate before the pair has been let sit escalateAfter times', () => {
+    const state = game();
+    const { weaker, stronger } = withResentfulPair(state);
+    ignoreTimes(state, weaker, stronger, CAPO_TENSION.escalateAfter - 1);
+
+    const built = DEF.build(state, new Rng({ seed: 2, calls: 0 }), { npc: weaker, other: stronger });
+    expect(built.severity).toBe('warning');
+  });
+
+  it('escalates once let sit escalateAfter times: harsher severity, and letting it sit again now has a real cost', () => {
+    const state = game();
+    const { weaker, stronger } = withResentfulPair(state);
+    ignoreTimes(state, weaker, stronger, CAPO_TENSION.escalateAfter);
+
+    const built = DEF.build(state, new Rng({ seed: 2, calls: 0 }), { npc: weaker, other: stronger });
+    expect(built.severity).toBe('danger');
+
+    const tieBefore = weaker.ties.find((t) => t.id === stronger.id)!.resentment;
+    const respectBefore = weaker.stats.respectForBoss;
+    const e = put(state, weaker, stronger);
+    resolveEvent(state, new Rng(state.rng), e.id, 'let_it_sit');
+
+    // The first occurrence costs nothing (see the non-punishing test above).
+    // This one, after the pattern is real, does.
+    expect(weaker.ties.find((t) => t.id === stronger.id)!.resentment).toBeGreaterThan(tieBefore);
+    expect(weaker.stats.respectForBoss).toBeLessThan(respectBefore);
+  });
+
+  it('addressing it once escalated eases the tie by more than the first-occurrence amount', () => {
+    const state = game();
+    const { weaker, stronger } = withResentfulPair(state);
+    ignoreTimes(state, weaker, stronger, CAPO_TENSION.escalateAfter);
+
+    const tieBefore = weaker.ties.find((t) => t.id === stronger.id)!.resentment;
+    const e = put(state, weaker, stronger);
+    resolveEvent(state, new Rng(state.rng), e.id, 'address');
+    const relief = tieBefore - weaker.ties.find((t) => t.id === stronger.id)!.resentment;
+
+    // The un-escalated `address` test above moves resentment by 15.
+    expect(relief).toBeGreaterThan(15);
+  });
+
+  it('addressing it resets the count — the next occurrence is not escalated', () => {
+    const state = game();
+    const { weaker, stronger } = withResentfulPair(state);
+    ignoreTimes(state, weaker, stronger, CAPO_TENSION.escalateAfter);
+
+    const e = put(state, weaker, stronger);
+    resolveEvent(state, new Rng(state.rng), e.id, 'address');
+
+    const built = DEF.build(state, new Rng({ seed: 2, calls: 0 }), { npc: weaker, other: stronger });
+    expect(built.severity).toBe('warning');
   });
 });
 

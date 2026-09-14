@@ -41,4 +41,18 @@ export const CAPO_TENSION = {
    * because a standing gap is a slower-moving fact than a narrative beat.
    */
   cooldownDays: 45,
+
+  /**
+   * How many times the Boss can let `capo_political_tension` sit — on this
+   * exact pair — before its own next legitimate re-fire (still gated by its
+   * own `cooldownDays`) stops treating the complaint as a first-time thing:
+   * open text instead of sideways, `danger` instead of `warning`, and a real
+   * cost to letting it go again where the first time cost nothing. Same
+   * count `CAPO_FAVORITISM.pitchDisfavorAfter` and `seedFollowup`'s other two
+   * call sites (`events.ts`'s `tolerated_skimming`, `eventgen.ts`'s
+   * `let_take_go`) already use for "not a first offense, but not a whole
+   * pattern either" — reused rather than picked fresh. Addressing it resets
+   * the count to zero; only `let_it_sit` grows it.
+   */
+  escalateAfter: 2,
 } as const;

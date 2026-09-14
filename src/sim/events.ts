@@ -27,6 +27,7 @@ import { addNote, creditOperation, crewList, generateNpc } from './npc';
 import { informFromMemory, remember } from './memory';
 import { recordTie } from './ties';
 import { activeCapos } from './capoTension';
+import { CAPO_TENSION } from '../config/capoTension';
 import { consiglierRead, currentOfficer, underbossOpinion, type OfficerRead } from './officers';
 import { UNDERBOSS_FILTER } from '../config/underboss';
 import { earnDirty, refund, spend, spendSplit, totalFunds } from './economy';
@@ -240,6 +241,28 @@ function underbossFields(state: GameState, weaker: Npc, stronger: Npc): EventCon
 /** One attributed extra line for a memo, or nothing at all if that seat is empty. */
 function officerLines(read: OfficerRead | null, label: string): string {
   return read ? `\n\n${label}: ${read.text}` : '';
+}
+
+/**
+ * `state.flags` key this pair's own `let_it_sit` streak is counted under —
+ * design brief §15's "not every problem needs to reach the final stage, but
+ * good management should let it resolve early". `capo_political_tension`'s
+ * own `cooldownDays` already governs *when* the pair can raise again; this
+ * governs *how it reads* once it does.
+ */
+function tensionIgnoredKey(weaker: Npc, stronger: Npc): string {
+  return `capo_tension_ignored:${weaker.id}:${stronger.id}`;
+}
+
+/**
+ * Whether this exact pair has been let sit `CAPO_TENSION.escalateAfter`
+ * times since it was last actually addressed — the same "tolerated enough
+ * times" gate `capoFavoritism.ts`'s `isPitchDisfavored` reads off its own
+ * counter, applied here to this event's own next re-fire instead of to a
+ * different file's consequence.
+ */
+function tensionEscalated(state: GameState, weaker: Npc, stronger: Npc): boolean {
+  return (state.flags[tensionIgnoredKey(weaker, stronger)] ?? 0) >= CAPO_TENSION.escalateAfter;
 }
 
 const EVENT_DEFS: EventDef[] = [
@@ -539,57 +562,89 @@ const EVENT_DEFS: EventDef[] = [
       const { npc: weaker, other: stronger } = rng.pick(pairs);
       return underbossFields(state, weaker, stronger);
     },
-    build: (state, rng, { npc, other, distrustedUnderboss }) => ({
-      defId: 'capo_political_tension',
-      title: oneOf(rng, [
-        `${npc!.name} has been talking about ${other!.name}`,
-        `Word about ${other!.name} is going around`,
-        `${npc!.name} wants you to know something`,
-      ]),
-      body:
-        oneOf(rng, [
-          `${npc!.name} has been saying, to anybody who will listen, that ${other!.name} is ` +
-            `getting too big for his crew. Not to ${other!.name}'s face — to yours, by way of ` +
-            `everybody else's.\n\n` +
-            `It is not wrong, exactly. It is also not nothing, coming from a man who used to ` +
-            `run the bigger operation.`,
-          `It came to you sideways, the way these things do: ${npc!.name} thinks ${other!.name} ` +
-            `has been let grow past his own reach, and thinks somebody besides him has noticed ` +
-            `too.\n\n` +
-            `Nobody said it was a problem. Nobody said it wasn't, either.`,
-          `${npc!.name} put it to you plainly, for once: ${other!.name}'s crew has gotten bigger ` +
-            `than his, and he wants to know whether that is the arrangement now or an accident ` +
-            `somebody is going to fix.`,
-        ]) +
-        (distrustedUnderboss
-          ? `\n\n${npc!.name} came to you directly about it — he didn't want ` +
-            `${distrustedUnderboss.name} hearing about it first.`
-          : '') +
-        // Design brief §11: no one omniscient narrative. Whatever the
-        // Underboss and Consigliere separately make of the stronger capo —
-        // each already biased by his own tie and his own temperament,
-        // `officers.ts`'s whole point — rides along as its own attributed
-        // line. Neither is forced to agree with the capo's framing or with
-        // each other; a silent seat is just omitted rather than filled with
-        // a placeholder.
-        officerLines(underbossOpinion(state, other!.id), 'Your Underboss') +
-        officerLines(consiglierRead(state, other!.id), 'Your Consigliere'),
-      severity: 'warning',
-      npcId: npc!.id,
-      data: { otherId: other!.id },
-      choices: [
-        {
-          id: 'address',
-          label: `Sit down with ${npc!.name}`,
-          hint: `It eases something in him. ${other!.name} will hear that you noticed.`,
-        },
-        {
-          id: 'let_it_sit',
-          label: 'Hear it and leave it there',
-          hint: 'Not every complaint needs the Boss to move.',
-        },
-      ],
-    }),
+    build: (state, rng, { npc, other, distrustedUnderboss }) => {
+      // Design brief §15: not every problem needs the final stage, but a
+      // problem the Boss keeps hearing and leaving alone should read as more
+      // than the first complaint did. `escalated` is read once, off the pair's
+      // own count, and used for every field below — never re-derived.
+      const escalated = tensionEscalated(state, npc!, other!);
+      return {
+        defId: 'capo_political_tension',
+        title: escalated
+          ? oneOf(rng, [
+              `${npc!.name} is done being quiet about ${other!.name}`,
+              `${npc!.name} said it to your face this time`,
+              `This is not sideways any more`,
+            ])
+          : oneOf(rng, [
+              `${npc!.name} has been talking about ${other!.name}`,
+              `Word about ${other!.name} is going around`,
+              `${npc!.name} wants you to know something`,
+            ]),
+        body:
+          (escalated
+            ? oneOf(rng, [
+                `${npc!.name} did not put it sideways this time. He has raised ${other!.name} ` +
+                  `with you before, nothing changed, and he wants to know whether that is the ` +
+                  `answer or just the delay.\n\n` +
+                  `He is not asking you to notice quietly any more. He is asking you to decide.`,
+                `${npc!.name} said it in front of two other men this time, which is not an ` +
+                  `accident. He has brought this to you already and nothing came of it, and now ` +
+                  `he wants it said where somebody besides you heard it.\n\n` +
+                  `That is not a complaint any more. That is a position.`,
+                `${npc!.name} did not soften it. ${other!.name} has grown past him, he has told ` +
+                  `you as much before, and the fact that you already knew is the part he keeps ` +
+                  `coming back to.\n\n` +
+                  `He is done waiting to see whether you were going to do something about it.`,
+              ])
+            : oneOf(rng, [
+                `${npc!.name} has been saying, to anybody who will listen, that ${other!.name} is ` +
+                  `getting too big for his crew. Not to ${other!.name}'s face — to yours, by way of ` +
+                  `everybody else's.\n\n` +
+                  `It is not wrong, exactly. It is also not nothing, coming from a man who used to ` +
+                  `run the bigger operation.`,
+                `It came to you sideways, the way these things do: ${npc!.name} thinks ${other!.name} ` +
+                  `has been let grow past his own reach, and thinks somebody besides him has noticed ` +
+                  `too.\n\n` +
+                  `Nobody said it was a problem. Nobody said it wasn't, either.`,
+                `${npc!.name} put it to you plainly, for once: ${other!.name}'s crew has gotten bigger ` +
+                  `than his, and he wants to know whether that is the arrangement now or an accident ` +
+                  `somebody is going to fix.`,
+              ])) +
+          (distrustedUnderboss
+            ? `\n\n${npc!.name} came to you directly about it — he didn't want ` +
+              `${distrustedUnderboss.name} hearing about it first.`
+            : '') +
+          // Design brief §11: no one omniscient narrative. Whatever the
+          // Underboss and Consigliere separately make of the stronger capo —
+          // each already biased by his own tie and his own temperament,
+          // `officers.ts`'s whole point — rides along as its own attributed
+          // line. Neither is forced to agree with the capo's framing or with
+          // each other; a silent seat is just omitted rather than filled with
+          // a placeholder.
+          officerLines(underbossOpinion(state, other!.id), 'Your Underboss') +
+          officerLines(consiglierRead(state, other!.id), 'Your Consigliere'),
+        severity: escalated ? 'danger' : 'warning',
+        npcId: npc!.id,
+        data: { otherId: other!.id },
+        choices: [
+          {
+            id: 'address',
+            label: `Sit down with ${npc!.name}`,
+            hint: escalated
+              ? `This has waited long enough. It eases him more than it would have the first time.`
+              : `It eases something in him. ${other!.name} will hear that you noticed.`,
+          },
+          {
+            id: 'let_it_sit',
+            label: 'Hear it and leave it there',
+            hint: escalated
+              ? 'He has said this before. Leaving it again will cost you something with him.'
+              : 'Not every complaint needs the Boss to move.',
+          },
+        ],
+      };
+    },
   },
 
   // -- law enforcement ----------------------------------------------------
@@ -2189,29 +2244,52 @@ export function resolveEvent(
       const other = state.npcs[event.data.otherId as string];
       if (!npc || !other) return;
       const tie = npc.ties.find((t) => t.id === other.id);
+      const tensionKey = tensionIgnoredKey(npc, other);
+      // Read before either branch touches the count, so the consequence
+      // below matches the stakes `build` actually showed for this memo.
+      const escalated = tensionEscalated(state, npc, other);
       if (choiceId === 'address') {
         // Half of what `lost_the_room` itself wrote (30) — enough to read as
         // a real answer, not enough to erase a standing gap that is still
         // true. Direct rather than through `recordTie`, which would also
         // overwrite `cause`/`since` on a tie this event did not create.
-        if (tie) tie.resentment = clamp(tie.resentment - 15, 0, 100);
-        npc.stats.respectForBoss = clamp(npc.stats.respectForBoss + 5, 0, 100);
+        // Once escalated, the same relief doubles — a Boss who finally sits
+        // down after a real pattern of ignoring it settles more than one who
+        // answers the first time it comes up.
+        const reliefMult = escalated ? 2 : 1;
+        if (tie) tie.resentment = clamp(tie.resentment - 15 * reliefMult, 0, 100);
+        npc.stats.respectForBoss = clamp(npc.stats.respectForBoss + 5 * reliefMult, 0, 100);
         // Addressing it plays as taking the complaining man's side, and the
         // one it was about hears it that way too.
-        other.stats.respectForBoss = clamp(other.stats.respectForBoss - 4, 0, 100);
+        other.stats.respectForBoss = clamp(other.stats.respectForBoss - 4 * reliefMult, 0, 100);
         addNote(npc, state.day, 'You sat him down about it.', 'good');
         addNote(other, state.day, `You heard ${npc.name} out about him.`, 'bad');
         addLog(state, `You sat down with ${npc.name} about ${other.name}. Word travels.`, 'crew');
+        // Design brief §15: good management lets it resolve early. Addressing
+        // it — escalated or not — clears the streak; it takes a fresh run of
+        // `let_it_sit` to earn the harsher variant again.
+        delete state.flags[tensionKey];
       } else {
-        // A real, non-punishing choice: nothing about him moves for having
-        // been heard and left alone. See DIRECTOR notes on §17 — an "ignore"
-        // that quietly costs the man who chose it is a worse option wearing
-        // a free one's label. A memory is not a stat cost (memory.ts's own
-        // header: recording one has no immediate effect) — it only lets a
-        // later decision find the fact that he was, design brief §13.
+        // A real, non-punishing choice on the *first* occurrence: nothing
+        // about him moves for having been heard and left alone. See DIRECTOR
+        // notes on §17 — an "ignore" that quietly costs the man who chose it
+        // is a worse option wearing a free one's label. A memory is not a
+        // stat cost (memory.ts's own header: recording one has no immediate
+        // effect) — it only lets a later decision find the fact that he was,
+        // design brief §13.
         remember(npc, state.day, 'went_unheard', other.id);
         addNote(npc, state.day, 'Said his piece and got a nod.', 'neutral');
         addLog(state, `${npc.name} said his piece. You did nothing about it.`, 'crew');
+        if (escalated) {
+          // Past the first free pass, leaving it alone is not free any more
+          // — the mirror of what `address` itself would have moved, the same
+          // "run the relief in reverse" idiom `capoFavoritism.ts` uses for
+          // `PROMOTION`. Only his own read of the Boss and the tie move; the
+          // stronger capo took no side here, so nothing of his does either.
+          if (tie) tie.resentment = clamp(tie.resentment + 15, 0, 100);
+          npc.stats.respectForBoss = clamp(npc.stats.respectForBoss - 5, 0, 100);
+        }
+        seedFollowup(state, tensionKey, CAPO_TENSION.escalateAfter);
       }
       return;
     }
