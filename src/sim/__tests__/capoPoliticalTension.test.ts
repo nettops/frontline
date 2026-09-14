@@ -351,6 +351,158 @@ describe('capo_political_tension: real distrust of the Underboss gets named', ()
   });
 });
 
+describe('capo_political_tension: hand it to your Underboss (design brief §16)', () => {
+  function put(state: GameState, weaker: Npc, stronger: Npc) {
+    const rng = new Rng({ seed: 2, calls: 0 });
+    return pushEvent(state, DEF.build(state, rng, { npc: weaker, other: stronger }));
+  }
+
+  it('is not offered when there is no Underboss', () => {
+    const state = game();
+    const { weaker, stronger } = withResentfulPair(state);
+    const built = DEF.build(state, new Rng({ seed: 2, calls: 0 }), { npc: weaker, other: stronger });
+    expect(built.choices.some((c) => c.id === 'delegate_to_underboss')).toBe(false);
+  });
+
+  it('is offered once a real Underboss exists, even one not trusted enough to field it automatically', () => {
+    const state = game();
+    const { weaker, stronger } = withResentfulPair(state);
+    const boss = underboss(state, 20);
+    // Deliberately below UNDERBOSS_FILTER's own bar — applies() would not
+    // have let him field this quietly, and the event raised anyway.
+    tieTo(weaker, boss, UNDERBOSS_FILTER.trustAbove - 20, 0);
+
+    const built = DEF.build(state, new Rng({ seed: 2, calls: 0 }), { npc: weaker, other: stronger });
+    expect(built.choices.some((c) => c.id === 'delegate_to_underboss')).toBe(true);
+  });
+
+  it('resolving it moves the tie and respect at exactly the flat rate underbossFields computes for automatic handling', () => {
+    const state = game();
+    const { weaker, stronger } = withResentfulPair(state);
+    const boss = underboss(state, 20);
+    tieTo(weaker, boss, 0, 0);
+    const tieBefore = weaker.ties.find((t) => t.id === stronger.id)!.resentment;
+    const weakerRespectBefore = weaker.stats.respectForBoss;
+    const strongerRespectBefore = stronger.stats.respectForBoss;
+
+    const e = put(state, weaker, stronger);
+    resolveEvent(state, new Rng(state.rng), e.id, 'delegate_to_underboss');
+
+    expect(tieBefore - weaker.ties.find((t) => t.id === stronger.id)!.resentment).toBe(7);
+    expect(weaker.stats.respectForBoss - weakerRespectBefore).toBe(2);
+    expect(strongerRespectBefore - stronger.stats.respectForBoss).toBe(2);
+  });
+
+  it('does not scale with escalation — the same flat numbers whether or not the pair has been let sit before', () => {
+    const state = game();
+    const { weaker, stronger } = withResentfulPair(state);
+    const boss = underboss(state, 20);
+    tieTo(weaker, boss, 0, 0);
+    for (let i = 0; i < CAPO_TENSION.escalateAfter; i++) {
+      const e = put(state, weaker, stronger);
+      resolveEvent(state, new Rng(state.rng), e.id, 'let_it_sit');
+    }
+    const tieBefore = weaker.ties.find((t) => t.id === stronger.id)!.resentment;
+
+    const e = put(state, weaker, stronger);
+    resolveEvent(state, new Rng(state.rng), e.id, 'delegate_to_underboss');
+
+    expect(tieBefore - weaker.ties.find((t) => t.id === stronger.id)!.resentment).toBe(7);
+  });
+
+  it('leaves the Underboss the same countable trace automatic handling leaves', () => {
+    const state = game();
+    const { weaker, stronger } = withResentfulPair(state);
+    const boss = underboss(state, 20);
+    tieTo(weaker, boss, 0, 0);
+
+    const e = put(state, weaker, stronger);
+    resolveEvent(state, new Rng(state.rng), e.id, 'delegate_to_underboss');
+
+    expect(boss.memories.some((m) => m.kind === 'handled_it_quietly')).toBe(true);
+  });
+
+  it('resets the escalation streak, the same way address does', () => {
+    const state = game();
+    const { weaker, stronger } = withResentfulPair(state);
+    const boss = underboss(state, 20);
+    tieTo(weaker, boss, 0, 0);
+    for (let i = 0; i < CAPO_TENSION.escalateAfter; i++) {
+      const e = put(state, weaker, stronger);
+      resolveEvent(state, new Rng(state.rng), e.id, 'let_it_sit');
+    }
+
+    const e = put(state, weaker, stronger);
+    resolveEvent(state, new Rng(state.rng), e.id, 'delegate_to_underboss');
+
+    const built = DEF.build(state, new Rng({ seed: 2, calls: 0 }), { npc: weaker, other: stronger });
+    expect(built.severity).toBe('warning');
+  });
+});
+
+describe('capo_political_tension: privately warn the stronger capo (design brief §16)', () => {
+  function put(state: GameState, weaker: Npc, stronger: Npc) {
+    const rng = new Rng({ seed: 2, calls: 0 });
+    return pushEvent(state, DEF.build(state, rng, { npc: weaker, other: stronger }));
+  }
+
+  it('is always offered, no Underboss required', () => {
+    const state = game();
+    const { weaker, stronger } = withResentfulPair(state);
+    const built = DEF.build(state, new Rng({ seed: 2, calls: 0 }), { npc: weaker, other: stronger });
+    expect(built.choices.some((c) => c.id === 'warn_stronger')).toBe(true);
+  });
+
+  it('costs the stronger capo respect directly; nothing moves for the weaker one', () => {
+    const state = game();
+    const { weaker, stronger } = withResentfulPair(state);
+    const tieBefore = weaker.ties.find((t) => t.id === stronger.id)!.resentment;
+    const weakerRespectBefore = weaker.stats.respectForBoss;
+    const strongerRespectBefore = stronger.stats.respectForBoss;
+    const weakerGrievanceBefore = weaker.stats.grievance;
+    const weakerLoyaltyBefore = weaker.stats.loyalty;
+
+    const e = put(state, weaker, stronger);
+    resolveEvent(state, new Rng(state.rng), e.id, 'warn_stronger');
+
+    expect(strongerRespectBefore - stronger.stats.respectForBoss).toBe(7);
+    expect(weaker.ties.find((t) => t.id === stronger.id)!.resentment).toBe(tieBefore);
+    expect(weaker.stats.respectForBoss).toBe(weakerRespectBefore);
+    expect(weaker.stats.grievance).toBe(weakerGrievanceBefore);
+    expect(weaker.stats.loyalty).toBe(weakerLoyaltyBefore);
+  });
+
+  it('costs the stronger capo more once the complaint has escalated, the same reliefMult address itself uses', () => {
+    const state = game();
+    const { weaker, stronger } = withResentfulPair(state);
+    for (let i = 0; i < CAPO_TENSION.escalateAfter; i++) {
+      const e = put(state, weaker, stronger);
+      resolveEvent(state, new Rng(state.rng), e.id, 'let_it_sit');
+    }
+    const strongerRespectBefore = stronger.stats.respectForBoss;
+
+    const e = put(state, weaker, stronger);
+    resolveEvent(state, new Rng(state.rng), e.id, 'warn_stronger');
+
+    expect(strongerRespectBefore - stronger.stats.respectForBoss).toBe(14);
+  });
+
+  it('resets the escalation streak, the same way address does', () => {
+    const state = game();
+    const { weaker, stronger } = withResentfulPair(state);
+    for (let i = 0; i < CAPO_TENSION.escalateAfter; i++) {
+      const e = put(state, weaker, stronger);
+      resolveEvent(state, new Rng(state.rng), e.id, 'let_it_sit');
+    }
+
+    const e = put(state, weaker, stronger);
+    resolveEvent(state, new Rng(state.rng), e.id, 'warn_stronger');
+
+    const built = DEF.build(state, new Rng({ seed: 2, calls: 0 }), { npc: weaker, other: stronger });
+    expect(built.severity).toBe('warning');
+  });
+});
+
 describe('capo_political_tension: your other officers get their own read on the stronger capo', () => {
   it('adds neither line when neither seat is filled', () => {
     const state = game();
