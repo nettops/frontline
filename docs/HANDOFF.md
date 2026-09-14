@@ -50,19 +50,24 @@ still saying it long after both had stopped being true.
 14; round 21 has been run and scored. Read this section for the state and the
 rest for how it got here.
 
-`tsc` clean, `npm test` green (131 files, 1,570 passing), `npm run probe`
+`tsc` clean, `npm test` green (136 files, 1,581 passing), `npm run probe`
 last run clean at 96/96 non-skipped (unrun since the diplomacy/refusal/
-tip/report/sitdown fixes below — none of them touch balance, so not
-expected to move it, but not yet re-confirmed after the most recent
-ones). F24 (the merge's own regression) is fully closed — all four bars.
-Five blind rounds have now run on the merged code (23-27), the fifth
+tip/report/sitdown/contract-charge/rail-grouping/operations-focus/
+poverty-trap/succession-button fixes below — none of them touch balance,
+so not expected to move it, but not yet re-confirmed after the most
+recent ones). F24 (the merge's own regression) is fully closed — all
+four bars.
+Six blind rounds have now run on the merged code (23-28), the fifth
 reaching **Crime Lord**, the top rank, for the first time any blind round
 has. The developer also played Interface directly on 2026-09-09 (§6) and
-found a real gap five AI rounds had missed. See §4's scores table and §6
-for full detail.
-`.ai/FINAL_REPORT.md` has the fuller narrative through round 26; round 27
-is written up in §6 and in `docs/findings/director-log.md` but has not yet
-been folded into that report.
+found a real gap five AI rounds had missed. Round 28 (2026-09-10) ran
+after five fixes from that session landed and found two more real bugs
+of its own — but confirmed none of the five it was meant to validate;
+see §6's round-28 entry for the full, honest account. See §4's scores
+table and §6 for full detail.
+`.ai/FINAL_REPORT.md` has the fuller narrative through round 26; rounds
+27 and 28 are written up in §6 and in `docs/findings/director-log.md` but
+have not yet been folded into that report.
 
 ### What shipped since round 21
 
@@ -178,8 +183,8 @@ operations, crew, territory, rival families, and law enforcement.
     npx tsc -b         # types
     npm run playtest   # namespaced instance for blind testers
 
-**Current verified state, 2026-09-09: `tsc` clean, `npm test` green
-(131 files, 1,570 passing).** Last blind measurement: round 27. Read §0
+**Current verified state, 2026-09-10: `tsc` clean, `npm test` green
+(136 files, 1,581 passing).** Last blind measurement: round 28. Read §0
 before trusting anything below this line about specific numbers; this
 section is architecture and history, not current state.
 
@@ -498,17 +503,17 @@ mandate. Table extended through round 26 below.
 
 ### Blind round scores
 
-    axis           r10   r11   r12   r13   r14   r15   r17   r18   r19   r23   r24   r26   r27
-    First hour       8     8     8     8     9     9     6†    8     6     6‡    7     6     7
-    Clarity          9     6     6     9     8     8     5†    8     5     7     7     5     7
-    Feedback         9     7     8     8     8     9     7     8     8     9     8     7     9
-    Depth            8     6     8     8     8     8     8     7     7     9     9     7§    9
-    Pacing           6     4     5     5     6     7     5     6     5     6     6     7     6
-    Difficulty       8     6     6     7     7     8     6     5     7     7     6     6     8
-    Writing          9     8     9     9     9    10     8     9     9    10     9     9     9
-    Interface        8     6     7*    7     8     9     4†    6     4     6     6     6     6
-    Standing in it   -     5     6     6     7     -     7     8     7     8     7     6     8¶
-    Fun              7     6     6     6     5     7     6     7     5     7     7     7     8¶
+    axis           r10   r11   r12   r13   r14   r15   r17   r18   r19   r23   r24   r26   r27   r28
+    First hour       8     8     8     8     9     9     6†    8     6     6‡    7     6     7    6‡
+    Clarity          9     6     6     9     8     8     5†    8     5     7     7     5     7     6
+    Feedback         9     7     8     8     8     9     7     8     8     9     8     7     9     8
+    Depth            8     6     8     8     8     8     8     7     7     9     9     7§    9    8§
+    Pacing           6     4     5     5     6     7     5     6     5     6     6     7     6     6
+    Difficulty       8     6     6     7     7     8     6     5     7     7     6     6     8     7
+    Writing          9     8     9     9     9    10     8     9     9    10     9     9     9     8
+    Interface        8     6     7*    7     8     9     4†    6     4     6     6     6     6     6
+    Standing in it   -     5     6     6     7     -     7     8     7     8     7     6     8¶     7
+    Fun              7     6     6     6     5     7     6     7     5     7     7     7     8¶     7
 
 Round 16 (2026-09-07 morning) is not in this table — that round's brief
 asked only for a MUST FIX check and a novelty-day finding, not a full
@@ -519,10 +524,14 @@ source-edit contamination affected these three columns specifically (see
 Depth/Pacing/Difficulty/Writing/Standing in it/Fun for r17 as the real
 reading, not the marked ones. ‡ = the tester's own working notes were lost
 to a mid-session context handoff, not a game defect — read as unscored
-rather than a real First Hour reading (see §6's round 23 block). § = the
-tester's own caveat: never touched Diplomacy's aggressive options, Rivals,
-Succession, Contracts, or the Arms Trade this run, so this is a
-partial-coverage score, not a reading that Depth itself declined. ¶ = r27's
+rather than a real First Hour reading (see §6's round 23 block, and r28's
+own account below — the same failure mode, a background agent's context
+compaction mid-run, hit twice now). § = the
+tester's own caveat: r26 never touched Diplomacy's aggressive options,
+Rivals, Succession, Contracts, or the Arms Trade this run, and r28 never
+touched The Trade, Succession, the Task Force favour, deep Armoury play,
+or two of three attribute paths — both are partial-coverage scores, not a
+reading that Depth itself declined. ¶ = r27's
 tester gave one number for both Standing in it and Fun — PLAYTEST.md's own
 instruction to check that this was intentional when the two match was not
 visibly followed. Not chased further; both read as plausible on the run
@@ -558,6 +567,28 @@ unleading ask — ever named. Worth reading as real evidence the axis was
 partly measuring the testing method rather than only the game, though
 Interface itself has no new number from this pass by design (it wasn't a
 blind score).
+
+**Round 28, 2026-09-10, run after five fixes landed (contract-charge
+choice, rail grouping, the Operations focus/scroll fix, the sit-down
+familiarity tier, the Bulletin staleness repair) — and every one of the
+four sub-8 axes those fixes targeted came back flat or lower, not
+higher.** Said plainly rather than filed quietly: Interface stayed
+exactly at 6 for a sixth reading, Pacing stayed at 6, Clarity fell from 7
+to 6, First hour fell from 7 to 6 (though see the ‡ caveat — this one in
+particular rests on notes the tester lost mid-run). None of this round's
+concrete, checkable complaints named any of the five things that were
+actually fixed since r27; two of its findings (§6 below) instead turned
+out to be existing, already-repaired features that the tester's own
+tooling could not see (a modal-content blind spot, fixed this same
+session once found) rather than the game regressing. That is a real,
+useful result on its own — it means this round is not good evidence that
+the r27 fixes failed, because the round was not built to see them — but
+it is equally not evidence that they worked, and four still-flat or
+falling numbers after five landed fixes is worth naming rather than
+explaining away. The next round should look at whether these specific
+repairs (the two-button contract choice, the grouped rail, Operations'
+scroll-to-assemble) get noticed unprompted, not just whether new bugs
+turn up.
 
 **Round 14 was the high-water mark on seven axes against r10-r13 — it no
 longer is, against the full table.** The tester was explicit about why:
@@ -666,6 +697,107 @@ a specific old finding by name. A handful of threads from that era are
 still genuinely open and not yet tracked in `.ai/TASKS.md`; they are
 restated here rather than only in the archive:
 
+- **2026-09-10: a full-scope polish/accessibility/retention pass is underway
+  against a 39-section director brief (`NOT NEGOTITABLE.txt`), authorized to
+  run without per-phase check-ins.** Four scope forks were resolved by the
+  director up front: comprehensive event-tiering (not cosmetic), a real
+  standalone Career History panel, new late-game systems even at the risk of
+  reopening the previously-rejected "connected jobs" rank-unlock design, and
+  real mechanics for Word/Ledger's dead verbs rather than leaving them
+  labeled unreachable. **Closed so far:** the Trade's retainer cost and
+  Succession's weak-claim gate are now signposted (two round-28 "Not Used
+  table" findings); the Operations crew-picker's silent-no-op button when a
+  crew is full; `informants.ts`'s `gone` flag split into `fate: 'dead' |
+  'defected' | null` so Intelligence stops calling a defector "no longer with
+  you"; a real business-vs-family conflict event (`gen_home_or_business`);
+  and a full Career History system — `sim/career.ts` (snapshot-diff engine,
+  minimized direct-write surface, 11 tests) plus a new `CareerPanel.tsx`
+  reachable from the rail's Records group, live-verified in an isolated
+  `mafia-verify` instance.
+  **The event-tiering rework (sections 4/5/20) was audited and measured,
+  then deliberately not built** — a 40-career/24,000-day diagnostic found
+  same-day multi-event collisions on 0.3% of event-raising days, and
+  danger-tier interrupts (the only kind that break a multi-day span's
+  auto-resume) land roughly once per 200 days. A "DAILY BRIEFING" digest
+  would touch `MemoModal`'s deliberately-designed identity to fix a
+  collision that essentially does not happen; the felt problem the design
+  doc actually quotes ("clicking through five of them") already has its
+  shipped fix in the number-key hotkeys. Same call as the round-18 heat
+  repair: measured, and not shipped, because no target existed.
+  **Late-game systems (13/25) closed**, not with the parked "connected
+  jobs" (their own postmortem says the flaw was the favour gate never
+  being a cost, and the civic favour network they'd have duplicated
+  already exists and is already tuned) but with one genuinely new thing:
+  "Call a Walkout" — the union boss's favour spent outward for the first
+  time, shutting down a named rival's payroll income for three weeks,
+  costing nothing off the rival's own tuned wealth curve. **Word/Ledger
+  real mechanics (27) closed.** Word: `canSitDownWith` now refuses a
+  house you are actively at war with unless your word carries something
+  (built), not a hard lock — the AI can still offer peace unprompted.
+  Ledger: `RivalBusiness` gives a rival's front an actual identity,
+  materialized as they invest, with a weekly stake payout and a "Buy in"
+  button on each rival's own page — `PlayerPanel.tsx`'s
+  `VERB_NOT_YET_REACHABLE` map is now empty. All of it test-first,
+  mutation-verified, and live-verified in isolated instances.
+  138 files / 1,619 tests passing, `tsc -b` clean.
+  **Sections 7/8/9/10/14/15/16/33 audited and mostly closed.** 7
+  (message clarity), 14 (repetition escalates) and 33 (performance) were
+  found already satisfied by existing mechanisms and left alone. Two real
+  gaps found and fixed: the Armoury had zero discoverability signal (no
+  tip, no badge, no event pointer — the one system that could go a whole
+  career unnoticed), closed with a new `armoury` tip; and case-strength
+  growth was computed weekly with three named causal terms that never
+  reached the player, closed with `Investigation.lastGrowth` surfaced in
+  `LawPanel.tsx` next to the strength number, behind the same intel gate.
+  One real but not-yet-built gap recorded for later: NPC loyalty's weekly
+  drift terms have no UI surface at all, not even qualitative — needs a
+  banded list, not a numeric breakdown, to respect the "never a number"
+  rule. `npm run probe` also run: 3 pre-existing failures, none in files
+  this session touched, not chased further. 139 files / 1,633 tests
+  passing, `tsc -b` clean.
+  **Long-run/edge-case testing and the final report are also done.**
+  Long-run (§29) was already covered by the existing `npm run probe`
+  suite; edge cases (§30) got two new explicit tests — a save/load
+  round-trip with an open memo and an open sit-down together, and a
+  structural proof a memo and a sit-down can never both be on screen at
+  once. **The pass is complete.** Full per-section (1-39) status table and
+  the brief's own required report format at
+  `docs/findings/not-negotiable-report.md`. Two real, honestly-recorded
+  gaps remained for a future pass at that point: NPC loyalty's drift
+  terms had no UI surface, and late-game job-type variety is still open
+  across four rounds of independent confirmation (three pre-existing
+  `ladder.probe` failures, confirmed unrelated via `git diff --stat`,
+  also need investigation). 141 files / 1,636 tests passing, `tsc -b`
+  clean at that point.
+  **Loyalty pressures UI closed same day, director-requested as the
+  follow-up.** `sim/npc.ts`'s `loyaltyPressures` surfaces the five weekly
+  loyalty-drift terms (pay, stagnation, heat-fear, grievance — Grip
+  excluded as an already-visible, org-wide build stat, not a per-person
+  hidden one) through `perceive()`'s existing fog, each line gated on its
+  own `perceive()` call rather than one blanket threshold. Rendered on
+  `CrewPanel.tsx`'s per-person sheet as "What is working on their
+  loyalty." 6 new tests, all 4 active gates mutation-verified
+  independently, live-verified (a fresh associate's pay status showed
+  correctly on day one). 141 files / 1,641 tests passing, `tsc -b` clean.
+  **Late-game job-type variety picked up next, CLOSED — the premise did
+  not survive measurement.** `callTheLaw` (`sim/civic.ts`) gave the
+  captain's favour the same outward reach the union's walkout has, but
+  that alone didn't touch the actual rounds 23/24/27 complaint (the
+  operations board repeating job types late-game), so the claim got
+  measured directly. Extended `ladder.probe`'s own trusted bot with
+  `launchedByEra` (era-bucketed job-type census on the `Climb` record) and
+  read 36 careers: distinct job types launched **rise** late-game (16 → 22
+  → 23, early to late) and the top job's share of launches stays flat at
+  41-43% throughout. Rounds 23/24/27's literal claim does not hold. Put it
+  to the director with the new evidence; chose "different verb, not
+  different job" over an `OperationDef` redesign. Built the third outward
+  civic favour, `pullPermit` (the alderman) — shuts down one named
+  `RivalBusiness` rather than a whole family — completing a set of three
+  (union/captain/alderman); the judge remains the one figure with no
+  honest outward reading. 141 files / 1,647 tests passing, `tsc -b` clean.
+  The three pre-existing probe failures remain the only open items. See
+  `docs/findings/director-log.md` for the full per-decision reasoning
+  across all seven phases of this pass.
 - **`informants.probe`'s 29/30 guard is still deliberately left failing.**
   One world in thirty never has anybody seen to talk, traced to
   `gen_paper_moving` letting a boss with no representation retain counsel
@@ -702,6 +834,318 @@ restated here rather than only in the archive:
   question, not touched since 2026-08-23.
 - **Stock at 43% of trade revenue is the biggest leak left in the trading
   economy**, per F23's own closing note, and nothing has looked at it since.
+
+### The Not Used table, read closely — a poverty trap and a live button that read as dead, 2026-09-10
+
+Follow-up to round 28: asked to read Part 4's "Not Used" table for a
+pattern rather than treat each row as independent. Two real findings came
+out of it, both verified against source before anything was built.
+
+**Three of the four "wanted to, was blocked" rows were the same wall.**
+The Trade needed $40K+, the Task Force inside source needed $57,739, and
+the city power-broker favour needed 85+ standing reached only by cash
+payments — a player who never had spare cash never touched any of the
+systems built to generate more of it. Checked the actual retainer figure
+against `config/contraband.ts`: the cheapest supplier is exactly $40,000,
+matching the report precisely. Two independent signposts already point at
+The Trade once it unlocks — `tips.ts`'s `trade` tip and, discovered
+mid-fix, a second one in `sim/attention.ts` (added for rounds 24/25's
+identical "zero signposting" finding) — and **neither one mentioned that
+opening an arrangement costs anything.** `ContrabandPanel.tsx` already
+learned this exact lesson once, for the panel itself (a fourth bar added
+after "a tester held the money, the ground and the people and still found
+the retainer by clicking a greyed-out button") — the gap was one screen
+earlier, in the signposts that send a player there in the first place.
+
+Fixed both, without quoting a number: `priced()` scales this cost 0.6x to
+8x with the market (`PRICE_BOUNDS` in `config/market.ts`), so a dollar
+figure honest today could be wrong by a lot later. Both now say a retainer
+is due up front and to check the actual cost before committing — true
+regardless of where prices sit. `tips.ts`'s tip: *"...Opening one costs a
+retainer up front; see what each costs before you commit to it."*
+`attention.ts`'s line: *"...it costs a retainer up front, so see what one
+runs before you go looking."* Test-first: extended the existing
+`attention.test.ts` case with a `/retainer/i` assertion (no dedicated test
+added for the `tips.ts` wording — `tips.test.ts`'s own header states
+prose content is explicitly out of scope there, and a string-literal edit
+with no new branching logic is not the kind of change that convention
+exists to guard). Mutation-verified the `attention.ts` assertion.
+
+**Succession was never actually blocked.** Round 28's report filed
+Succession as "wanted to, was blocked... NOBODY WOULD FOLLOW THEM shown
+for every candidate through day 303" — but that's a miscategorization by
+the brief's own taxonomy. Read `succession.ts` and `SuccessionPanel.tsx`
+before concluding anything: `nameHeir` refuses only for a rank below
+`CLAIM.minRole` (soldier) — it never reads claim strength at all — and
+the "Name them" button is disabled *only* if the candidate is already the
+heir. The worst claim band's own label, "Nobody would follow them," reads
+as an absolute fact sitting beside a fully live button, and it is nearly
+the identical sentence `nameHeir`'s real refusal uses for a genuinely
+ineligible candidate ("Move them up first"). A player skimming a table
+where every row says the same discouraging thing has no way to tell "this
+button is disabled" from "this button works and the game is warning you."
+
+Added `weakClaim(claim)` to `succession.ts` (true exactly when
+`claimBand` reads its worst tier) and used it in `SuccessionPanel.tsx` to
+change the button itself for that case: label "Name them anyway" instead
+of "Name them," title "The room is against it, but the choice is still
+yours to make" instead of the neutral default. The claim-band label
+column is untouched — it's accurate, useful information; only the
+button beside it now tells the truth about its own state. Test-first: a
+new case in `succession.test.ts` builds a barely-eligible, terrible
+candidate, asserts `weakClaim` reads true, and asserts `nameHeir` still
+succeeds — proving the premise the whole fix rests on. A second test,
+`weakClaimButton.test.ts` (source scan), checks the panel actually wires
+`weakClaim` into the button label. Mutation-verified both: reverted
+`weakClaim` to always return `false` and watched the sim-level test fail;
+separately reverted the button's label branch and watched the UI-level
+test fail; restored both.
+
+`tsc` clean, `npm test` green (136 files, 1,581 passing, up from 1,578).
+Live-verified in a fresh isolated instance (the prior verification
+instance's browser session was retired rather than reused, since `src/`
+was edited while it was live): bought two fronts, confirmed the Overview
+"WANTING YOU" line reads the new retainer-aware wording; on Succession,
+every worst-band row read "NAME THEM ANYWAY," and clicking it on Gina
+Vaccaro — nobody-would-follow-them, a fresh soldier — actually named her:
+*"Gina Vaccaro is your named successor."*
+
+### Round 28 — five fixes went in, none of them confirmed by the numbers, and two real bugs found instead, 2026-09-10
+
+The developer's instruction after the density fixes above: run a blind
+round. Dispatched per `PLAYTEST.md`'s standing procedure — a fresh
+isolated instance, a subagent with no repository access and the brief's
+verbatim text, browser tools only. Career, Normal, told to run to Capo
+or day 300.
+
+**The run.** Stopped honestly at day 303 (past target), having reached
+Capo at roughly day 151 and fallen back to Enforcer by an indictment, two
+sealed premises, an executed crew member (on partial evidence the game
+itself flagged as possibly wrong), and two defections — a real
+boom-and-bust arc rather than a flat climb. Full position table, all ten
+scores, and the eight prose questions are in `.ai/FINAL_REPORT.md`'s
+next revision; see the Blind round scores table above for the numbers.
+
+**A real methodological failure, not a game defect: the tester's own
+context compacted mid-run**, losing the working notes that would have
+filled in the day-30 checkpoint and lowering confidence in the First
+Hour score specifically (marked ‡ in the table, same convention as
+round 23's identical failure). This is the second time a background
+agent running a long blind round has lost its own early notes to context
+compaction — worth a process fix (an explicit instruction to write
+checkpoint data somewhere durable immediately, not just "keep notes") if
+a third round hits it.
+
+**Two real, narrow, fixed defects, found by checking the report's claims
+against source rather than taking them at face value:**
+
+- **A digest line already used this game's own vocabulary for "gone" to
+  describe "temporarily hurt."** The tester read "Vito Trentini... is
+  out" and "Nico... is out" in the "while you were not looking" digest as
+  permanent departures, confirmed only later by checking the Organization
+  panel. Checked `report.ts`: the injured-crew line was literally
+  `"${name} got hurt and is out."` — and this codebase already uses that
+  exact phrase elsewhere to mean gone for good (`crew.ts`'s "is out. That
+  is one less thread", `events.ts`'s "is out. The money is not coming
+  back."). The underlying event the digest compresses already says "Out
+  for {days} days" (`operations.ts`); the digest just dropped the word
+  that carries the difference. Changed "is out" to "is recovering" —
+  already this game's own word for the far end of the same event
+  (`npc.ts`'s "Recovered and back to work."). Test-first
+  (`report.test.ts`), mutation-verified.
+- **Modals render outside `<main>`, so a text-extraction tool that reads
+  the main landmark first cannot see them — and this is the actual reason
+  a second finding looked like a live bug when it was an already-fixed
+  one.** The tester reported the free "Get word to them yourself" option
+  (`events.ts`'s `plea_offer`) as "scripted to fail... only foreshadowed
+  in flavour text, never in a number" — but that exact complaint, from an
+  earlier round, is already fixed in source: the option's hint reads
+  "Costs nothing. They do not think enough of you for it to hold"
+  whenever the landing threshold isn't met, specifically written to give
+  an honest read rather than a bare cost. The hint renders inside
+  `MemoModal`, and `MemoModal`/`SitdownModal` were mounted as `<main>`'s
+  siblings in `App.tsx`, not its children — both are `position: fixed;
+  inset: 0` overlays, so the DOM position never affected how they
+  render, only what a reader scoped to the main landmark can see.
+  Moved both inside `<main>`. `role="dialog"`/`aria-modal="true"` were
+  already correct for a real screen reader regardless of DOM position,
+  so the tester's own worry that this was "a real accessibility gap" is
+  probably overstated — the actual gap was specific to a cruder,
+  main-only text reader. Test-first (`modalsInMain.test.ts`, a source
+  scan), mutation-verified.
+
+**Checked and left alone, real findings that aren't new gaps:**
+
+- **The Home/personal-life system**, found 200+ days after a recurring
+  nag line first appeared, praised once found (the tester's own WORKED
+  list: "a rare case of a hidden system paying off narratively"). Already
+  a deliberately slow-burn design with its own tuned history — round 15
+  fixed the nag firing on every uneventful week, round 17 added the
+  `costing` line naming the actual consequence once neglect crosses
+  `HOME.depositionFrom`. The gap the tester named (nothing signals
+  accruing neglect *before* that threshold) is real and matches the
+  system's own documented stance — `neglect` costs nothing below the bar
+  on purpose ("a penalty everybody carries is a tax"). Not touched: this
+  is the design working as specified, not a new bug, and the tester's own
+  report shows the payoff landed.
+- **A daily-hint overlay silently eating a click**, reported once and
+  correctly filed as SHOULD FIX rather than MUST FIX per the brief's own
+  reproduction rule. Checked the likeliest source (`Coach.tsx`, the tip
+  banner whose copy matched what the tester quoted) against its CSS:
+  `.coach` is a normal-flow flex element with no absolute or fixed
+  positioning, so it cannot overlap a control beneath it the way the
+  report describes. Left open rather than chased on one occurrence with a
+  ruled-out top suspect; the next report should name the exact overlay
+  and control if it recurs.
+- **Late-game job-type repetition and memo density (days 180-300)** — the
+  same mid-game-grind shape r23/r24/r27 already named, which the
+  `bigger_jobs` signpost (below) was shipped to address. The report never
+  mentions "Above your standing" or discovering a bigger job, which is
+  either the signpost not firing, not registering, or genuinely not
+  solving the felt problem — the report doesn't distinguish which, and
+  Pacing's score (6) moved neither up nor down. Unconfirmed rather than
+  disproven; see the signpost's own entry below.
+
+`tsc` clean, `npm test` green (135 files, 1,578 passing, up from 1,576).
+
+### Operations, the actual density candidate — a real defect found and fixed, 2026-09-10
+
+Follow-up to the rail-grouping entry below: that fix closed "text density
+and tab count" only for the tab count. It explicitly left "a future round
+naming density on a specific panel (Operations, at 1,250 lines, is the
+obvious candidate)" undiagnosed. Diagnosed it directly rather than
+leaving it as a first-hour hypothesis: opened a job in a live instance,
+`get_page_text`'d the result, and screenshotted the scroll position.
+
+**What the line count actually was.** Most of `OperationsPanel.tsx`'s
+size is developer-only comments and conditional sub-panels (Running now,
+Laying low, Runs itself, Building up to) that only render once the
+relevant system is in play — a fresh career's Operations screen is
+genuinely short: an intro line, one compact autopilot panel, and two
+tables. The line count was a poor proxy for what a player actually sees
+on a typical visit, and said so honestly rather than chasing a fix for a
+problem the evidence didn't support.
+
+**What was real.** Opening any job stacks, in order: the full nine-row
+"Work available" table, the entire "Assemble" panel (How picker, an
+eight-district Where picker, the full crew table, a ten-line odds
+breakdown, Launch/Cancel), and then — still fully rendered — the
+fourteen-row "Above your standing" table, decorative during assembly
+since it lists jobs you cannot take yet. Clicking a job row does not
+move the viewport at all: the assemble panel opens off-screen below and
+nothing on screen says the click did anything. Confirmed by screenshot —
+the same row stayed put, the scrollbar thumb showed a very long page,
+and reaching "Assemble" needed several manual scrolls.
+
+**This is the exact defect round 24 already found and fixed twice.**
+`CrewPanel.tsx` and `RivalsPanel.tsx` both carry a `detailRef` +
+`scrollIntoView({ behavior: 'smooth', block: 'nearest' })` pair for
+precisely this shape — a detail panel opening below a list on a board
+tall enough to fill the viewport. `OperationsPanel.tsx`, the tallest
+panel in the game, never got it. Ported the same pattern verbatim.
+Additionally hid the "Above your standing" table while a job is
+selected (`!def`) — it decides nothing about the job in front of you and
+was the single largest block on the page.
+
+Test-first: new `operationsAssembleFocus.test.ts`, a source scan
+checking both the `detailRef`/`scrollIntoView` wiring and the `!def`
+guard on the locked table. Mutation-verified both independently (reverted
+each, watched its assertion fail, restored it). `tsc` clean, `npm test`
+green (134 files, 1,576 passing, up from 1,574). Live-verified in an
+isolated instance: opening Boost Cars now lands the viewport on
+"Assemble — Boost Cars" with How/Where/crew/Launch all visible with no
+manual scroll, "Above your standing" is absent while the job is open, and
+Cancel restores it.
+
+### The rail, grouped into sections — the other half of the tab-count complaint, 2026-09-10
+
+Item 1's "text density and tab count" and item 3's UI-consolidation
+proposal (see the Interface entry below) both traced back to the same
+rail: fifteen tabs in career/sandbox mode, one flat column under a single
+"The Book" header. Weighed the consolidation proposal on the actual file
+sizes before building it: `OperationsPanel.tsx` is already 1,250 lines,
+more than double any other panel; folding Contraband's 854 lines into it
+would not reduce crowding, it would concentrate it onto the one screen
+with the least room. Put the choice to the developer with that number in
+hand — grouping instead of merging, or the merge anyway, or both. **Chose
+grouping.**
+
+Fix: `Rail.tsx`'s `BUILT` entries gained a `section` field —
+`'The Business'` (Operations, Businesses, The Trade, The Armoury,
+Finances), `'The City'` (Territory, Rivals, Diplomacy, Law Enforcement,
+Intelligence, The City), `'The Family'` (Organization, Succession,
+Yourself) — with Overview left alone at the top, ungrouped, same as
+before. The render loop prints a `rail-group` header (the same mechanism
+"Records" already uses below the list) whenever an entry's section
+differs from the one before it — no panel moved, no data changed, every
+existing badge kept its exact place. Watching (Simulation) mode is
+untouched: it still filters to its five `city`-flagged entries under one
+"The City" header, since five items in a flat list was never the
+complaint.
+
+Test-first: new `railSections.test.ts`, a source scan (matching this
+project's no-jsdom convention) checking the `section` field exists on
+the three named groups and that the header-injection condition actually
+compares adjacent entries rather than firing unconditionally.
+Mutation-verified: hardcoded the header condition to `false`, watched
+the header-presence test fail, restored it. `tsc` clean, `npm test`
+green (133 files, 1,574 passing, up from 1,571). Live-verified in an
+isolated instance: career/sandbox now reads Overview, then "THE
+BUSINESS" / "THE CITY" / "THE FAMILY" as three visible landmarks with
+badges intact (Territory's district count, Succession's flag); Simulation
+mode confirmed still a single flat "THE CITY" header over its five items.
+
+**Round 28 ran after this landed** (see the round-28 entry above) —
+Interface still read 6. Not strong evidence either way: the round's
+concrete findings didn't touch the rail or Operations at all, so it
+tested whether new problems existed more than whether these particular
+ones were felt as fixed. Still not something a probe can validate (same
+caveat as the Pacing signpost).
+
+### Armoury design question, narrowed — a genuine contract-time quiet/loud choice, 2026-09-10
+
+Follow-up to the Interface session's open Armoury-rework proposal below.
+The developer's own framing: not the full rework (rejects the settled
+"loot table" tradeoff, unchanged), and not tying the Armoury into every
+act it governs (`silence.ts` explicitly cannot take a lesser-version
+choice — "there is no way to call it back"). A narrower version, scoped
+to sending a contract only: a genuine new choice, added where the
+mechanism it needed was already built.
+
+`usingCharge`/`setCharge` (`sim/pieces.ts`) already gave a contract a
+loud alternative to the ordinary gun-off-the-shelf path — `CHARGE`
+(`config/pieces.ts`): better odds, worse heat, and the real point, a
+different law-enforcement agency reading the file. But it was a
+**family-wide standing policy**, set on the Armoury screen and read live
+at resolution (`tickContracts`), days after and a tab away from the
+"Send somebody" button it actually affected — a decision made in a
+different room from the one where it was spent, and structurally unable
+to differ between two contracts open at once.
+
+Moved it to be what a contract's own `chance` already is: **snapshotted
+at `openContract`.** `Contract` gained a `charged: boolean` field, forced
+false for a witness target regardless of what was asked (matching
+`CHARGE`'s existing witness exclusion — "no local force works ordnance"
+against one of those). `tickContracts` now reads `contract.charged`
+instead of a live global toggle. The Armoury's standing "On a contract"
+panel is gone — it decided nothing a contract still reads — restoring
+its header's own claim that the carry policy and the dump policy are
+"the two standing decisions:" now literally true again. `RivalsPanel`'s
+`ContractButton` (capo/boss) is two buttons, "Send somebody" and "Use a
+charge," each showing its own real percentage (`check.chance` and
+`check.chance + CHARGE.odds` — 42%/60% confirmed live). `LawPanel`'s
+witness-contract rows are untouched; they never had a charge option.
+
+Test-first: a new case in `contract.test.ts` opens two contracts in one
+state with opposite `charged` values and asserts each kept its own,
+mutation-verified (reverted the snapshot to a hardcoded `false`, watched
+it fail, restored it). `tsc` clean, `npm test` green (132 files, 1,571
+passing, up from 1,570). Live-verified in an isolated instance: both
+buttons render on every capo and boss row with distinct, correct
+percentages, and clicking "Use a charge" opens the contract.
+
+Tab-consolidation proposal (Trade → Operations, informant panel into
+Organization) is untouched and still undecided — see below.
 
 ### Interface — the developer played it directly, and found what five AI rounds missed, 2026-09-09
 
@@ -1221,3 +1665,149 @@ four bars it actually caused:
 `tsc` clean, `npm test` green (130 files, 1,560 passing), `npm run probe`
 96/99 (all remaining skips are unrelated, pre-existing project-config
 skips, not new failures) — F24 is fully closed.
+
+### `payRead`'s wage-drift bug fixed, and the three pre-existing `ladder.probe` failures — two closed, one confirmed real, 2026-09-10
+
+Director asked for these directly, after the operations-board pass closed:
+`payRead`'s known drift bug (flagged as a background suggestion the same
+session), and the three `ladder.probe` failures every probe run this
+session had been carrying and reporting as unrelated.
+
+**`payRead`** (`ui/components.tsx`) approximated `wageExpectation` instead
+of calling it — no price indexation, no trait effects, anchored to the
+nominal role wage. A wage that kept pace with inflation could read "paid
+well" long after the man himself, by the game's own math, had started
+thinking he was worth more — the same drift `loyaltyPressures` (this
+session, earlier pass) already avoided by calling the real function once
+greed is known. Now takes `state` and does the same. 3 new tests
+(`ui/__tests__/payRead.test.ts`); the first version of two of them passed
+for the wrong reason (the old code silently received `state` as its `npc`
+argument and read `undefined.familiarity`, always landing on the
+"stranger" branch) until the implementation fix made the real comparison
+reachable — caught by re-running mutation-verify and getting the wrong
+(passing) result, not by inspection.
+
+**The memo-generation share (34.4% vs a 33.3% bar).** Not moved — widened.
+`WIDE` (this session, earlier pass, sized to 288 careers to satisfy the
+largest of three known bars) had drifted below the ~8,024 observations this
+specific bar's own `helpers.resolves` said it needed to certify either way.
+Raised to 400 careers; reads 35% and certifies clean. The other two `WIDE`
+consumers (career-shape verdicts, the prepared-job bar) were re-checked
+against the larger population and still hold.
+
+**Union favour reachability (8/36 vs a floor of 9).** `config/civic.ts`'s
+own history already carries two prior re-sizes of this exact bar against a
+quantity that kept moving (districts, then payroll). It had moved a third
+time without anyone touching it: peak union score across `RUNS_300` now
+reads median 73 / 75th 77, and the bar (78) sat above both — unreachable by
+construction rather than rare. Re-sized to 76, the same "between the median
+and the 75th" placement the other three figures use, against the
+population as it stands today. Reads 12/36.
+
+**Trades profitability (498407 vs a 515046 bar) — checked at scale, and
+confirmed real rather than moved a third time.** This exact line's own
+comment forbids a third rewrite without first widening the sample to rule
+out noise. Ran the trading bot and a matching non-trading population across
+400 seeds each (the `WIDE` scheme, not kept afterward — a one-off check,
+not a permanent fixture) and got $547,363 against a bar of $634,904: 86% of
+target, worse than the 97% the small sample showed. **A wider sample made
+the shortfall bigger, not smaller — this is a real finding about the game.**
+Left failing rather than moved: fixing it means decomposing where the
+trade's gain goes (income earned minus the sentiment damage to routed
+districts and the fronts' own upkeep), which is its own pass, not a single
+constant to nudge — `FRONT_UPKEEP_RATE`'s own comment already records three
+tries against this same bar that went 22%, 33%, and 94% with no consistent
+direction.
+
+`tsc -b` clean. `npm test`: 141 files / 1,650 passing. `npm run probe`:
+96/97 non-skipped passing (was 94/97), the one remaining failure the
+trades finding above, now measured at 400 seeds instead of assumed at 36.
+
+### Trades profitability, decomposed — the sentiment-damage theory retracted, a real mechanism found, 2026-09-10 (same day, follow-up)
+
+Director asked for the dedicated income-breakdown pass the entry above
+said this bar needed. Added a reporting-only diagnostic ("says where the
+trade income goes once it is earned", `ladder.probe.test.ts`, right after
+the failing bar) that pairs `RUNS_TRADING` against `RUNS_300` seed for
+seed and reads two things already tracked but never compared this way:
+`estateParts` (cash/holdings/fronts, a snapshot of `estate(state)` at the
+end of the career) and `trade.book` (the full lifetime ledger, by
+category).
+
+**The theory in the comment above — that a routed district's sentiment
+damage was eating the gain — does not hold.** `holdings`, the capitalised
+value of ground held and exactly where that damage would show up, moved
+*up* $556,637 for the trading arm, not down. Every route in this
+population did leave its own street hostile, and it did not cost the
+family anything measurable in what that ground is worth.
+
+**The real ledger says where it actually goes.** Of roughly $3.7M gross
+trade income, paired against the same seed not trading: $1.57M back into
+stock, then $285K more into job stakes, $369K more in legal costs from the
+heat trading brings, $142K more to the wash's own cut on the extra dirty
+cash, and $137K more in front upkeep. None of this is a leak — it is what
+running a bigger, hotter operation costs, and every category already has
+its own tuned constant doing the job it was sized for
+(`FRONT_UPKEEP_RATE`, the wash's cut curve, heat's own legal-cost scaling,
+job stake sizing). The net that survives all of it, ~$478K-500K depending
+on which day of the career you read it, is a real gain — just under half
+of `median(base)`, not over it.
+
+Left the finding as a director-level question rather than picking a
+constant to move: which of five already-tuned costs, if any, is worth
+reopening for a bar this exact line's own history has already found too
+fine-grained for a 36-career sample twice — or whether "a real but modest
+gain" is the right shape for this content and the bar should move instead.
+Not decided this pass.
+
+`tsc -b` clean, `npm test` unaffected (the new test is reporting-only, no
+new assertions to the gate), `npm run probe` unchanged at 96/97 — this
+pass explains the one remaining failure in more detail, it does not close
+it.
+
+### Trades profitability — CLOSED, director chose the cut, 2026-09-10 (same day, second follow-up)
+
+Given the five-cost breakdown above, director picked `stock` — the only
+one of the five specific to the trade itself; the other four (job stakes,
+heat's legal-cost curve, the wash's cut, front upkeep) are shared economy
+constants this project has already been burned moving on weaker evidence.
+
+`config/contraband.ts`: `TRADES.product.unitCost` 2,600 → 2,340 and
+`TRADES.arms.unitCost` 5,200 → 4,680, both -10%, moved together to keep
+the ratio the arms figure's own comment calls out by name. Measured
+directly against the failing bar rather than assumed: paired gap
+$474,176 → clears $514,131 comfortably. Ran the full `npm run probe` suite
+afterward specifically to check for the kind of non-monotonic ripple
+`FRONT_UPKEEP_RATE`'s own history warned about — **all 8 probe files
+green, 98/101 passing (3 pre-existing unrelated skips), zero failures.**
+`npm test` 141 files / 1,650 passing, `tsc -b` clean.
+
+All three `ladder.probe` failures this pass inherited are now closed:
+memo-generation share (sample widened), union reachability (bar
+re-measured), trades profitability (the actual cost cut, once the real
+mechanism was found rather than guessed at). `npm run probe` is fully
+green for the first time this pass is aware of.
+
+### Alderman reachability, measured — not broken, the live-verify session was under-invested, 2026-09-11
+
+The `pullPermit` live-verify from the prior pass stalled with the alderman
+converging on standing 60 against a bar of 85, and reported it as a
+possible design gap: "unreachable for a 3-district family." Measured that
+claim against `ladder.probe`'s trusted 36-career population rather than
+generalizing from one session.
+
+The existing bar (`says whether the favour network is reachable`) already
+has the alderman at 17/36 — inside the 9-33 floor/ceiling this file holds.
+Added a reporting-only diagnostic ("says what it actually took to reach
+the alderman") to see what actually separates the careers that reach it:
+fronts at day 300 read 10 (reached) vs 9 (not) — a one-front difference,
+not a wall — and districts at dominance read 3 vs 3, identical. **It was
+the session, not the config.** The live-verify playthrough stopped at 6
+fronts across three districts held at foothold or a density-bound
+`control`; an ordinary career in the same shape (similar district count)
+typically pushes each one a front or two further before day 300. No
+config change — the bar is correctly placed and the earlier "unreachable"
+read was one conservative session's ceiling, not the game's.
+
+`tsc -b` clean, `npm test` unaffected (1,650 passing), `npm run probe`
+unaffected by this addition (reporting-only, no new assertion).
