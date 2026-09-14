@@ -33,6 +33,7 @@ import type { Check } from './delegation';
 import { CAPO_PITCH, PITCH_REACTION } from '../config/capoPitches';
 import { DELEGATION } from '../config/delegation';
 import { ROLE_ORDER } from '../config/economy';
+import { GOAL_CERTAIN_ABOVE, GOAL_VISIBLE_ABOVE } from '../config/goals';
 import { OPERATION_BY_ID, OPERATION_CATEGORIES } from '../config/operations';
 import { availableOperations, STREET_WORK_IDS } from './operations';
 import { operableTerritories, territoryDef } from './territory';
@@ -241,6 +242,9 @@ function reassignSting(passedOver: Npc, defId: string): number {
  * this only picks which true sentence to show for a mood already computed.
  * Matches the design brief's own examples: barely registers, quiet
  * withdrawal, open resentment naming who got it instead.
+ *
+ * This is the close-up read — at or above `GOAL_CERTAIN_ABOVE` — and it is
+ * unchanged from before familiarity gating existed. See `reassignReactionLines`.
  */
 const REASSIGN_REACTION_LINES: ((name: string, wonBy: string) => string[])[] = [
   (name) => [
@@ -257,11 +261,67 @@ const REASSIGN_REACTION_LINES: ((name: string, wonBy: string) => string[])[] = [
   ],
 ];
 
-/** Which of the three lines above fits this multiplier. */
+/**
+ * The same three tiers, read from too far away to name the mechanism at all
+ * — below `GOAL_VISIBLE_ABOVE` you do not know this is about being passed
+ * over, only that something is off. No ambition, no loyalty, no prediction:
+ * the same restraint `perceivedGoal`'s own low band holds, just applied to a
+ * different fact.
+ */
+const REASSIGN_REACTION_LINES_LOW: ((name: string) => string[])[] = [
+  (name) => [`No sign anything's wrong with ${name}.`, `${name} didn't seem to notice.`],
+  (name) => [
+    `Something's off with ${name} lately.`,
+    `${name}'s been scarce lately. Hard to say why.`,
+  ],
+  (name) => [`${name} seems unhappy about something.`, `${name} isn't himself lately.`],
+];
+
+/**
+ * The middle band — you know enough to name the fact (passed over) but not
+ * enough to say who it was for or what he'll do about it. The prediction
+ * itself is hedged rather than dropped, per the design brief's own two
+ * examples for this tier.
+ */
+const REASSIGN_REACTION_LINES_MODERATE: ((name: string) => string[])[] = [
+  (name) => [
+    `${name} noticed he got passed over. Didn't think much of it.`,
+    `${name} didn't love being passed over, but he let it go.`,
+  ],
+  (name) => [
+    `${name} doesn't like being passed over, but he'll probably let it go.`,
+    `${name} doesn't like being passed over. Says nothing about it, though.`,
+  ],
+  (name) => [
+    `${name} doesn't like being passed over, and it's sitting with him.`,
+    `${name} doesn't like being passed over. It's sitting with him.`,
+  ],
+];
+
+/** Which of the three sting tiers fits this multiplier. */
 function reassignReactionTier(sting: number): 0 | 1 | 2 {
   if (sting < PITCH_REACTION.quietBelow) return 0;
   if (sting > PITCH_REACTION.openAbove) return 2;
   return 1;
+}
+
+/**
+ * Crosses the sting tier above with how well the player actually knows the
+ * passed-over man — design brief §12's "same fact, more or less specific"
+ * read, applied to a mechanic (`reassignSting`) that already had three
+ * intensities and no familiarity dimension at all.
+ *
+ * Reuses `GOAL_VISIBLE_ABOVE`/`GOAL_CERTAIN_ABOVE` rather than inventing a
+ * reassignment-specific pair: `capoStanding.ts` already reuses
+ * `GOAL_CERTAIN_ABOVE` for a read that has nothing to do with goals either,
+ * so these are this codebase's general visible/certain split, not something
+ * `goals.ts` owns exclusively. No other threshold in the game names this
+ * distinction more specifically.
+ */
+function reassignReactionLines(familiarity: number, tier: 0 | 1 | 2, name: string, wonBy: string): string[] {
+  if (familiarity < GOAL_VISIBLE_ABOVE) return REASSIGN_REACTION_LINES_LOW[tier](name);
+  if (familiarity < GOAL_CERTAIN_ABOVE) return REASSIGN_REACTION_LINES_MODERATE[tier](name);
+  return REASSIGN_REACTION_LINES[tier](name, wonBy);
 }
 
 /**
@@ -303,7 +363,11 @@ export function reassignPitch(state: GameState, pitchId: Id, newCapoId: Id): Che
     addNote(
       passedOver,
       state.day,
-      say(`pitch_reassign:${p.id}`, 0, REASSIGN_REACTION_LINES[tier](passedOver.name, newCapo.name)),
+      say(
+        `pitch_reassign:${p.id}`,
+        0,
+        reassignReactionLines(passedOver.familiarity, tier, passedOver.name, newCapo.name),
+      ),
       tier === 0 ? 'neutral' : 'bad',
     );
   }
