@@ -32,7 +32,9 @@ import { estate } from '../../sim/estate';
 import { legitimacy, perceivedLeadership } from '../../sim/legacy';
 import { maxCrew } from '../../sim/player';
 import { authorityRead } from '../../sim/authority';
-import { canGoHome, goHome, homeRead } from '../../sim/personal';
+import { canGoHome, familyHorizon, goHome, homeRead } from '../../sim/personal';
+import { HOME } from '../../config/personal';
+import { ATTENTION } from '../../config/attention';
 import {
   possessionRows,
   sellPossession,
@@ -220,6 +222,7 @@ export default function PlayerPanel() {
   const authorityNow = authorityRead(state);
   const houseNow = homeRead(state);
   const goingHome = canGoHome(state);
+  const horizon = familyHorizon(state);
   const named = nicknameRead(state);
   const rows = buildRead(state);
   const left = pointsLeft(state);
@@ -318,8 +321,21 @@ export default function PlayerPanel() {
           <KeyValue
             label="Last evening at home"
             value={houseNow.since === 0 ? 'Today' : `${houseNow.since} days ago`}
-            tone={houseNow.neglect >= 50 ? 'hot' : undefined}
+            tone={houseNow.tier.tone}
           />
+          {/*
+             What doing nothing costs, ahead of the counter actually crossing
+             the line — the same figure `costing` below states once it has.
+             Silent once it has, since `costing` is already saying it live.
+          */}
+          {houseNow.neglect < HOME.depositionFrom && (
+            <KeyValue
+              label="At this rate"
+              value={`${houseNow.daysUntilDepositionRisk} ${
+                houseNow.daysUntilDepositionRisk === 1 ? 'day' : 'days'
+              } until your own people start counting it against you, if nothing changes`}
+            />
+          )}
           {/*
              And what it is costing, which the counter never said.
 
@@ -338,6 +354,21 @@ export default function PlayerPanel() {
           {houseNow.costing && (
             <p className="hot tiny" style={{ margin: '2px 14px 0' }}>
               {houseNow.costing}
+            </p>
+          )}
+          {/*
+             A heads-up, not a schedule.
+
+             Names a day, never an occasion or a face — `familyHorizon`'s own
+             comment says why forecasting which one would be a guess dressed
+             as a fact. `daysUntil` is a floor the cooldown has cleared, not a
+             promise anything fires then, so the copy says "could" throughout.
+          */}
+          {horizon.everFired && horizon.daysUntil <= ATTENTION.familyHorizonWithin && (
+            <p className="faint tiny" style={{ margin: '2px 14px 0' }}>
+              A family occasion could come up{' '}
+              {horizon.daysUntil === 0 ? 'any day now' : `as soon as day ${horizon.eligibleFromDay}`} —
+              not a promise, just the earliest it can happen again.
             </p>
           )}
           {/*

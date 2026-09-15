@@ -303,9 +303,24 @@ describe('deposition, played into rather than built', () => {
      "write the failing test first, then put the fault back" rule. Restoring
      `backersNeeded: 1` is what makes it pass; nothing else about the seed or
      the bot changes.
+
+     Reseeded from 4000 to 4011 for Milestone 2's cold-reception change
+     (`goHome` halving what a visit clears at `neglect >= 75`, `sim/personal.ts`):
+     that is an intentional change to the neglect trajectory, and this bot
+     attends every family-dilemma memo it meets, so the exact day neglect
+     crosses each `GEN_WHEN.neglect` gate elsewhere in the generated table
+     shifted — which shifts how many rng calls those `applies()` checks
+     consume, which reshuffles the causal stream for the rest of the run.
+     Seed 4000 happened to land on "nobody deposed" on the other side of that
+     reshuffle; it was never the substance of the test, which is that ordinary
+     play can reach a deposition at all. A scan of 100 seeds after the change
+     found roughly 30 that still do (4011, 4013, 4016, 4023, ... all generation
+     2, all "nobody was killed and nobody was arrested"), so reachability
+     itself did not regress — re-confirmed the same way the original seed was:
+     reverting `backersNeeded` to 2 and watching this fail before restoring it.
   */
   it('fires from an ordinary career under the current gate', () => {
-    const state = playOrdinaryCareer(4000, 1460);
+    const state = playOrdinaryCareer(4011, 1460);
     expect(
       state.succession.generation,
       'nobody was deposed — this is the reachability the config change exists to fix',

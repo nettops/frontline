@@ -24,7 +24,16 @@
 import { describe, expect, it } from 'vitest';
 import { newGame } from '../state';
 import { advanceDay } from '../clock';
-import { canGoHome, goHome, home, homeRead, neglectRisk, tickHome } from '../personal';
+import {
+  canGoHome,
+  familyHorizon,
+  goHome,
+  home,
+  homeRead,
+  homeTier,
+  neglectRisk,
+  tickHome,
+} from '../personal';
 import { canLaunch, launchOperation } from '../operations';
 import { OPERATION_BY_ID } from '../../config/operations';
 import { HOME_TERRITORY } from '../../config/territories';
@@ -287,5 +296,122 @@ describe('the one body', () => {
       canLaunch(state, def, [], HOME_TERRITORY).ok,
       'a career that never went home was refused work_it_yourself as though it had',
     ).toBe(true);
+  });
+});
+
+/*
+   Milestone 2: a family occasion is not knowable in advance (which one, or
+   who), but the day the cooldown floor lifts is, and it is the only thing
+   `familyHorizon` claims. See its own comment in `sim/personal.ts` for why
+   the occasion itself stays unnamed.
+*/
+describe('the family horizon', () => {
+  it('is the same for the same state, called twice', () => {
+    const state = game();
+    state.flags['evt_gen_family_dilemma'] = 40;
+    state.day = 55;
+    expect(familyHorizon(state)).toEqual(familyHorizon(state));
+  });
+
+  it('reads as never fired, and eligible now, before it ever has', () => {
+    const state = game();
+    const horizon = familyHorizon(state);
+    expect(horizon.everFired).toBe(false);
+    expect(horizon.daysUntil).toBe(0);
+  });
+
+  it('counts down as the day advances, and floors at zero once eligible', () => {
+    const state = game();
+    state.flags['evt_gen_family_dilemma'] = 40;
+    state.day = 41;
+    const first = familyHorizon(state);
+    expect(first.everFired).toBe(true);
+    expect(first.daysUntil).toBeGreaterThan(0);
+
+    state.day += 1;
+    const second = familyHorizon(state);
+    expect(second.eligibleFromDay, 'the floor itself moved, which nothing should do between fires').toBe(
+      first.eligibleFromDay,
+    );
+    expect(second.daysUntil, 'a day passing did not move the count down by a day').toBe(
+      first.daysUntil - 1,
+    );
+
+    state.day = first.eligibleFromDay;
+    expect(familyHorizon(state).daysUntil).toBe(0);
+    state.day = first.eligibleFromDay + 30;
+    expect(familyHorizon(state).daysUntil, 'eligible does not mean overdue').toBe(0);
+  });
+});
+
+describe('the four tiers, read as one table', () => {
+  it('picks the tier whose own bar the reading has actually crossed', () => {
+    expect(homeTier(0).id).toBe('present');
+    expect(homeTier(24).id).toBe('present');
+    expect(homeTier(25).id).toBe('missed');
+    expect(homeTier(49).id).toBe('missed');
+    expect(homeTier(50).id).toBe('distant');
+    expect(homeTier(74).id).toBe('distant');
+    expect(homeTier(75).id).toBe('estranged');
+    expect(homeTier(100).id).toBe('estranged');
+  });
+});
+
+/*
+   Milestone 2: the projection that says what doing nothing costs, ahead of
+   `costing` actually going live.
+*/
+describe('daysUntilDepositionRisk', () => {
+  it('counts down while under the bar', () => {
+    const state = game();
+    home(state).neglect = 0;
+    const untouched = homeRead(state).daysUntilDepositionRisk;
+    expect(untouched).toBeGreaterThan(0);
+
+    home(state).neglect = HOME.depositionFrom - 1;
+    expect(
+      homeRead(state).daysUntilDepositionRisk,
+      'closer to the bar should mean fewer days, not more',
+    ).toBeLessThan(untouched);
+  });
+
+  it('is zero once already at or past the bar', () => {
+    const state = game();
+    home(state).neglect = HOME.depositionFrom;
+    expect(homeRead(state).daysUntilDepositionRisk).toBe(0);
+
+    home(state).neglect = 100;
+    expect(homeRead(state).daysUntilDepositionRisk).toBe(0);
+  });
+});
+
+/*
+   Milestone 2: a cold reception. Watched to fail — reverting the `* 0.5` in
+   `goHome` to a flat `baseline` made this pass at neglect 80 too, exactly as
+   it does at 40; restoring the halving is what tells the two apart. Run by
+   hand for this session's report rather than left in the suite as a second
+   copy of the same guard.
+*/
+describe('a cold reception', () => {
+  it('halves what a visit clears once neglect has reached the worst tier', () => {
+    const state = game();
+    weeks(state, 10);
+    home(state).neglect = 80;
+    expect(canGoHome(state).ok, 'the setup should otherwise allow a visit').toBe(true);
+    const baseline = HOME.clearedByVisit;
+    goHome(state);
+    expect(
+      80 - home(state).neglect,
+      'a visit at the worst tier cleared the same as an ordinary one',
+    ).toBeCloseTo(baseline * 0.5, 5);
+  });
+
+  it('clears the full amount below that tier', () => {
+    const state = game();
+    weeks(state, 10);
+    home(state).neglect = 40;
+    const baseline = HOME.clearedByVisit;
+    goHome(state);
+    expect(40 - home(state).neglect).toBeCloseTo(baseline, 5);
   });
 });
