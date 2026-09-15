@@ -184,12 +184,12 @@ export default function PixiStage({ map, layerVisibility, mode, onSelect, onPoin
           const currentCell = cellOf(mover.pos.x, mover.pos.y);
           const target = pickWanderTarget(map, mover.spawn.roomId, currentCell, Math.random);
           if (target) {
+            // pickWanderTarget only ever returns a findPath-verified cell, so `path`
+            // here is never null — no retry-later branch needed for this call to fail.
             const path = findPath(map, currentCell, target);
             if (path) {
               mover.path = path;
               mover.pathStartMs = now;
-            } else {
-              mover.nextWanderAtMs = now + 1000 + Math.random() * 2000; // retry later
             }
           } else {
             mover.nextWanderAtMs = now + 2000 + Math.random() * 2000; // nothing reachable, wait longer
