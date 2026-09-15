@@ -1877,3 +1877,72 @@ comment on `backersNeeded`.
 succession/handover outcomes) — see the numbers quoted in this pass's own
 report; not reproduced here to avoid a second, aging copy of the same
 figures.
+
+
+### Family dilemmas -- the neglect-gate hole closed, and a real cost on every branch, 2026-09-15
+
+Milestone 1 of the family-conflict brief. `gen_asked_for_you` and
+`gen_home_or_business` (`src/sim/eventgen.ts`) were both gated on
+`house.neglect >= GEN_WHEN.neglect` (45) -- correct for "the house has
+noticed", and the actual reason a boss who visits home regularly could go
+230+ days without a single family beat: keeping neglect low on purpose made
+him ineligible for the only two memos that subject had. A school play does
+not wait for a stat to cross a bar.
+
+New generated shape, `gen_family_dilemma` (`config/eventgen.ts`,
+`sim/eventgen.ts`), weight 2 / cooldown 32 days, same weight as the other two
+`home` shapes and a cooldown picked to land inside the brief's "every 25-40
+days" without landing on the same day as `gen_asked_for_you` (30) or
+`gen_home_or_business` (40) for the life of one seed. Its `applies` does not
+read neglect at all -- only `canGoHome` (the same body `goHome` spends) and
+whether the household has a member matching one of four occasions.
+
+Four occasions in `FAMILY_DILEMMAS` (`config/personal.ts`): school event
+(eldest/youngest), quiet evening (spouse), sick relative (parent/elder),
+celebration (tagged to all six `RELATIONS` ids, so a household missing a
+sibling does not lose a quarter of the pool). Each carries its own body
+variants, an attend cost (0 for school/evening, $600/$300 for the
+medical/gift-flavored two), a send cost ($200-450) and what gets sent.
+
+Three choices, every time: **Attend** calls `goHome` and clears an extra
+`HOME.clearedByVisit * 0.5` on top of it (33 total vs 22 for an ordinary
+visit -- the brief's "roughly 1.5x"), guarded twice -- `canGoHome` and, when
+priced, `spend` -- so a memo that sat pending for days cannot spend money on
+a visit `goHome` is about to refuse. **Send** always costs cash and moves
+neglect up by 2. **Stay** is free and moves neglect up by
+`HOME.perWeekAway * 2.5` (~8.75) -- the same multiple `gen_home_or_business`
+already uses for refusing a generic night -- and logs a career event. Nothing
+new reads the spike: `neglectRisk` already reads `house.neglect` directly, so
+the deposition multiplier moves with no second hook to keep in sync.
+
+Six new tests in `eventgen.test.ts` (`'the milestone family dilemmas'`):
+three choices offered, fires at zero neglect (the actual regression guard),
+attend blocks a zero-crew op and clears neglect, send costs money and moves
+neglect modestly, stay spikes neglect harder than send, `neglectRisk` rises
+after stay with no new plumbing, and same-seed determinism. All six watched
+failing with their effect reverted and passing again restored: the
+neglect-gate check re-added (fails), `goHome`/extra-clear commented out of
+`attend` (fails), `familyDilemmaStayNeglect` dropped to match
+`familyDilemmaSendNeglect` (both dependent tests fail), and
+`familyDilemmaSendNeglect` zeroed (fails).
+
+Measured (throwaway seeded script, 12 seeds x 300 days, deleted after):
+avg 6.4 firings per 300-day career, mean interval 44.7 days, min 32 (the
+cooldown floor), max 105. Above the brief's 25-40-day target on average --
+the shape shares one daily generated-pool slot with fifteen others, so the
+realized interval is wider than the cooldown alone implies. Not retuned
+this pass; flagged as an open question rather than pushed until a number
+came out green.
+
+No `SAVE_VERSION` move -- `FAMILY_DILEMMAS` is config, and the shape reads
+existing lazily-initialised `Home` state. `config/succession.ts` untouched.
+
+`tsc -b` clean. `npm test` 162 files / 1,859 passing, 0 failures (was 162 /
+1,852 before this pass).
+
+**Milestone 2** (not built): the brief's second half -- whatever surface
+lets the player see the family-conflict pattern building (a recurring
+neglect trend on the Yourself screen, or a briefing line naming which
+occasion is coming) rather than each dilemma arriving as a one-off memo.
+Needs the director's brief for what Milestone 2 actually asks for; not
+reproduced here since it was not given to this session in full.

@@ -131,6 +131,14 @@ export interface EventContext {
   /** Set when the memo is about the house rather than the business. */
   atHome?: true;
   /**
+   * Which `FAMILY_DILEMMAS` entry `gen_family_dilemma` drew.
+   *
+   * An id, not the household member -- the roster is state and the pool is
+   * config, same reason `civicId` above is carried as an id rather than an
+   * object. `build` and the resolver both look it up.
+   */
+  familyDilemmaId?: string;
+  /**
    * Set only by `capo_political_tension`, only when a real Underboss exists
    * and the weaker capo's own tie to him carries real resentment — the case
    * where the capo went around him on purpose rather than there being nobody

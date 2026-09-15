@@ -22,6 +22,7 @@
 import { describe, expect, it } from 'vitest';
 import { newGame } from '../state';
 import { Rng } from '../rng';
+import { advanceDay } from '../clock';
 import { EVENT_DEF_BY_ID, resolveEvent } from '../events';
 import { GEN_DEFS, isGenerated } from '../eventgen';
 import { GEN_SHAPES, GEN_WHEN } from '../../config/eventgen';
@@ -30,8 +31,12 @@ import { crewList, generateNpc } from '../npc';
 import { HOME_TERRITORY } from '../../config/territories';
 import { territoryList } from '../territory';
 import { figure } from '../civic';
-import { home } from '../personal';
-import { runDays } from './helpers';
+import { canLaunch } from '../operations';
+import { OPERATION_BY_ID } from '../../config/operations';
+import { home, neglectRisk } from '../personal';
+import { HOME } from '../../config/personal';
+import { totalFunds } from '../economy';
+import { answerFirst, runDays } from './helpers';
 import type { GameState, Npc } from '../types';
 
 /**
@@ -360,6 +365,146 @@ describe('a real choice between business and family', () => {
 
     expect(home(state).neglect, 'going home did not clear anything').toBeLessThan(beforeNeglect);
     expect(state.org.respect, 'going home cost nothing').toBeLessThan(beforeRespect);
+  });
+});
+
+/*
+   The milestone occasions: school event, quiet evening, sick relative,
+   celebration. Built to close a gap `gen_home_or_business` and
+   `gen_asked_for_you` leave: both wait for `house.neglect` to cross
+   `GEN_WHEN.neglect`, so a boss who visits home regularly and keeps the
+   number down on purpose never meets either one. These four do not read
+   neglect at all.
+*/
+describe('the milestone family dilemmas', () => {
+  function raise(state: GameState) {
+    const def = GEN_DEFS.find((d) => d.id === 'gen_family_dilemma')!;
+    const rng = new Rng(state.rng);
+    const ctx = def.applies(state, rng);
+    if (!ctx) return null;
+    const built = def.build(state, rng, ctx);
+    state.pendingEvents.push({ ...built, id: 'evt_test', day: state.day });
+    return built;
+  }
+
+  it('offers three choices: attend, send, or stay away', () => {
+    const state = world();
+    const built = raise(state);
+    expect(built, 'the shape did not fire').not.toBeNull();
+    expect(built!.choices.map((c) => c.id).sort()).toEqual(['attend', 'send', 'stay']);
+  });
+
+  /*
+     The property that makes this shape worth having over the two it sits
+     beside: it must be reachable by a boss who has been keeping neglect
+     down on purpose, not just one the house has already noticed is gone.
+     Proven by reverting `applies` to also require
+     `house.neglect >= GEN_WHEN.neglect` and watching this go red before
+     restoring it — see the session's own report for that run.
+  */
+  it('fires even though the house is not neglected at all', () => {
+    const state = world();
+    home(state).neglect = 0;
+    const def = GEN_DEFS.find((d) => d.id === 'gen_family_dilemma')!;
+    expect(
+      def.applies(state, new Rng(state.rng)),
+      'a boss who keeps neglect at zero should still meet this shape',
+    ).not.toBeNull();
+  });
+
+  /*
+     Attend spends the same body `goHome` itself spends, and the guard was
+     watched failing first: with `goHome(state)` and the extra-clear line
+     both commented out of the resolver, this test reported the op still
+     launching and neglect unchanged. Restored afterwards.
+  */
+  it('attending blocks a zero-crew op that same evening, and clears neglect substantially', () => {
+    const state = world();
+    home(state).neglect = 60;
+    const before = home(state).neglect;
+    expect(raise(state), 'the shape did not fire').not.toBeNull();
+
+    resolveEvent(state, new Rng(state.rng), 'evt_test', 'attend');
+
+    expect(home(state).neglect, 'attending did not clear anything').toBeLessThan(before);
+
+    const def = OPERATION_BY_ID['work_it_yourself'];
+    expect(
+      canLaunch(state, def, [], HOME_TERRITORY).ok,
+      "the boss's own body was not spent on the visit",
+    ).toBe(false);
+  });
+
+  it('sending costs money and nudges neglect up, only modestly', () => {
+    const state = world();
+    home(state).neglect = 20;
+    const beforeFunds = totalFunds(state);
+    const beforeNeglect = home(state).neglect;
+    expect(raise(state), 'the shape did not fire').not.toBeNull();
+
+    resolveEvent(state, new Rng(state.rng), 'evt_test', 'send');
+
+    expect(totalFunds(state), 'sending something instead cost nothing').toBeLessThan(beforeFunds);
+    expect(home(state).neglect, 'sending did not move neglect at all').toBeGreaterThan(beforeNeglect);
+  });
+
+  it('staying away spikes neglect far harder than sending does', () => {
+    const sendState = world();
+    home(sendState).neglect = 20;
+    raise(sendState);
+    resolveEvent(sendState, new Rng(sendState.rng), 'evt_test', 'send');
+    const sendRise = home(sendState).neglect - 20;
+
+    const stayState = world();
+    home(stayState).neglect = 20;
+    raise(stayState);
+    resolveEvent(stayState, new Rng(stayState.rng), 'evt_test', 'stay');
+    const stayRise = home(stayState).neglect - 20;
+
+    expect(stayRise, 'staying away did not cost more than sending something').toBeGreaterThan(sendRise);
+  });
+
+  /*
+     `neglectRisk` already reads `home(state).neglect` directly (see
+     `personal.ts`), so staying away has to move the deposition multiplier
+     with no further plumbing — proving that is proving there is no second,
+     separate risk hook to keep in sync with this one.
+  */
+  it('raises neglectRisk automatically after staying away, with no separate plumbing', () => {
+    const state = world();
+    home(state).neglect = HOME.depositionFrom - 2;
+    const before = neglectRisk(state);
+    expect(raise(state), 'the shape did not fire').not.toBeNull();
+
+    resolveEvent(state, new Rng(state.rng), 'evt_test', 'stay');
+
+    expect(neglectRisk(state), 'the spike did not touch the multiplier it is supposed to feed').toBeGreaterThan(
+      before,
+    );
+  });
+
+  it('fires on the same day, with the same content, for the same seed', () => {
+    /*
+       Everything else has to be drained too, or the first three unrelated
+       memos this career raises fill `MAX_PENDING` and `tickEvents` stops
+       drawing at all for the rest of the run -- which would make this test
+       measure the pending-event cap, not this shape.
+    */
+    function firstFire(seed: number): { day: number; title: string; body: string } | null {
+      const state = newGame({ name: 'Determinism', difficulty: 'normal', seed });
+      for (let i = 0; i < 500; i++) {
+        advanceDay(state);
+        const evt = state.pendingEvents.find((e) => e.defId === 'gen_family_dilemma');
+        if (evt) return { day: state.day, title: evt.title, body: evt.body };
+        answerFirst(state, new Rng(state.rng));
+      }
+      return null;
+    }
+
+    const a = firstFire(4242);
+    const b = firstFire(4242);
+    expect(a, 'never fired across 500 days on this seed').not.toBeNull();
+    expect(b).toEqual(a);
   });
 });
 
