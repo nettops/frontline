@@ -1946,3 +1946,101 @@ neglect trend on the Yourself screen, or a briefing line naming which
 occasion is coming) rather than each dilemma arriving as a one-off memo.
 Needs the director's brief for what Milestone 2 actually asks for; not
 reproduced here since it was not given to this session in full.
+
+### Family Horizon & Domestic Friction -- Milestone 2 built, one occasion-naming decision made against the brief, 2026-09-15
+
+The brief as written assumed three mechanics this codebase does not have:
+`state.cooldowns` (the real mechanism is `state.flags['evt_<defId>']`, see
+`events.ts`'s `eligible`/`raise`), a `dueDay` the game could promise (cooldown
+is a floor a shared daily lottery still has to clear, not a schedule), and a
+knowable-in-advance occasion/member (`gen_family_dilemma`'s `applies` draws
+that off the *causal* `rng` at scan time). All three are corrected below
+rather than built as specified, per DIRECTOR's "no button lies" and "shown
+odds are real odds."
+
+**Occasion-naming: took the fallback, not the preferred option.** The brief's
+preferred path was switching `gen_family_dilemma`'s selection from
+`rng.pick(matches)` to a deterministic `Rng.stableNoise` pick keyed off the
+day the cooldown clears, so the forecast and the actual firing would
+provably agree and the horizon could name who and what. Traced the actual
+blast radius first: that `rng.pick` call fires on every day the shape is
+eligible and the generated pool gets rolled, not only the day it wins the
+slot, so removing it does not just change which occasion fires -- it shifts
+the causal stream's call count for the rest of any save that reaches the
+code, reshuffling every later roll in the game. Confirmed this is not
+theoretical: implementing the halved cold-reception clear below (a change
+that touches no rng call at all, only the neglect *value*) was enough on its
+own to move which generated shapes' `applies()` ran on which days, which
+shifted `deposition.test.ts`'s hand-tuned seed 4000 from "deposed" to
+"never deposed" over 1,460 days -- see that test's own updated comment for
+the full chain and the reseed to 4011 (with evidence: a 100-seed scan found
+~30 that still reach deposition under the current gate, unchanged from
+before this pass, and seed 4011 was independently confirmed to still fail
+under the old `backersNeeded: 2`, same guard the original seed proved).
+Deliberately choosing to *also* remove an `rng.pick` call -- consumed far
+more often than the cold-reception change's incidental value shifts -- for a
+UI preview feature was not a trade worth making. Built the fallback instead:
+`familyHorizon` names a day, never an occasion or a face.
+
+**`familyHorizon(state)`, `sim/personal.ts`.** Derived on read, no stored
+state. Reads `state.flags['evt_gen_family_dilemma']` (the real flag, not the
+brief's imagined `cooldowns`) and `GEN_SHAPES`'s own `cooldownDays` (32,
+config/eventgen.ts -- not retyped). Returns `eligibleFromDay`, `daysUntil`
+(floored at 0), and `everFired` (false only before the shape's first-ever
+fire, when `daysUntil` reads permanently 0 and would otherwise be wallpaper
+from day one of every career). Worded everywhere as "could come up as soon
+as," never "arrives" or "is in" -- the cooldown clearing is real, the timing
+is not a promise.
+
+**`HOME_LABEL` extended in place, not duplicated.** The brief asked for a
+separate `HOME_CLIMATE` table on the same 75/50/25/0 bars `HOME_LABEL`
+already uses for the "At home" label -- a second, separately-worded table on
+identical breakpoints that would drift the first time either got edited
+alone. Grew `HOME_LABEL` into `HomeTier[]` instead (`config/personal.ts`):
+each entry now carries `id`, `label`, a longer `blurb`, and an optional
+`tone` (`'hot' | 'brass'`, reusing `KeyValue`'s own vocabulary). New
+`homeTier(neglect)` in `sim/personal.ts` is the one place that reads the
+table; `homeRead().label` and the "Last evening at home" `KeyValue`'s tone
+(previously a hardcoded `neglect >= 50` check) both read it now instead of
+re-deriving the bar.
+
+**Cold reception.** `goHome` (`sim/personal.ts`) halves what a visit clears
+once neglect is at the worst tier (`>= 75`, read off `HOME_LABEL`'s own max
+bar as `COLD_RECEPTION_AT` rather than a second `75`) -- 11 instead of 22 at
+baseline, 33 instead of 22 with `familyDilemmaAttendExtraClear`, half of
+`POSSESSION.clearedByVisitAtHome` for a boss who owns the house. A bittersweet
+log line on that branch rather than the ordinary one. Guard watched failing
+with the halving reverted to a flat `baseline` (both new `personal.test.ts`
+cases collapse to the same clear at neglect 40 and 80), then restored.
+
+**Two new `attention()` entries** (`sim/attention.ts`), panel `'player'` (not
+the brief's `'yourself'` -- checked `Rail.tsx`'s `PanelId` union, no such
+panel exists). `family_neglect_crisis` fires once `neglect >=
+HOME.depositionFrom` (45, reused, not retyped). `family_horizon` fires only
+once the shape has fired at least once before (`everFired`, else permanent
+wallpaper from day one -- caught by `'is quiet when there is nothing to do
+about anything'` going red on first pass, which is exactly what that guard
+is for), within `ATTENTION.familyHorizonWithin` (7) days, and not while a
+`gen_family_dilemma` memo is already pending. The two are mutually
+exclusive by design -- crisis is strictly the worse situation and both would
+say "go home," so a boss already told the multiplier is live does not also
+get the softer heads-up. Guard for the dedupe (drop the `else`, both fire)
+and for the `everFired` gate both watched failing, then restored.
+
+**`PlayerPanel.tsx`**: "Last evening at home" now tones off `homeTier`; a new
+"At this rate" line (shown only below `HOME.depositionFrom`) gives
+`daysUntilDepositionRisk` -- `Math.ceil` of the gap to 45 over
+`HOME.perWeekAway / HOME.intervalDays`, i.e. the same weekly-accrual rate
+`tickHome` itself uses, projected forward, worded "if nothing changes"; and
+a generic horizon line, gated the same way the attention entry is.
+
+Fourteen new tests across `personal.test.ts` (the horizon: determinism,
+never-fired/eligible-now, day-by-day countdown, floor-at-zero-once-overdue;
+the four tiers by id at every bar; `daysUntilDepositionRisk` above and at
+the bar; cold reception at 40 and 80) and `attention.test.ts` (horizon shown
+in-window/fired, hidden out-of-window, hidden before first fire; crisis
+shown at the bar, hidden below it; the two never both showing). `tsc -b`
+clean. `npm test` 163 files / 1,873 passing, 0 failures (was 162 / 1,859
+before this pass). `deposition.test.ts` reseeded 4000 -> 4011 with the
+reasoning and the scan evidence in its own comment; `config/succession.ts`
+itself untouched.

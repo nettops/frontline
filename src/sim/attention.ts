@@ -38,8 +38,10 @@ import { ownedBusinesses, businessDef } from './business';
 import { tradeUnlocked } from './contraband';
 import { promisesTo, daysLeft } from './promises';
 import { crewList } from './npc';
+import { familyHorizon, homeRead } from './personal';
 import { PROMISE, PROMISES } from '../config/promises';
 import { ATTENTION } from '../config/attention';
+import { HOME } from '../config/personal';
 import { OPERATION_BY_ID } from '../config/operations';
 import { PATTERN } from '../config/standingOrders';
 
@@ -354,6 +356,47 @@ export function attention(state: GameState): Wanting[] {
       text: 'You have enough fronts to run product through them — it costs a retainer up front, so see what one runs before you go looking.',
       panel: 'contraband',
     });
+  }
+
+  /*
+     The family, from the outside.
+
+     Two ids, and only one shows on a given day. `family_neglect_crisis` is
+     strictly the worse situation — the multiplier from `neglectRisk` is
+     already live — so a boss already being told that does not also need the
+     softer heads-up that an occasion could be coming; both would say "go
+     home" and the crisis is the more urgent reason to.
+
+     `family_horizon` only names a day, never an occasion or a face — see
+     `familyHorizon`'s own comment in `sim/personal.ts` for why naming which
+     one would be a guess dressed as a fact. Skipped while a memo from this
+     shape is already sitting in the inbox; the player has already been
+     asked, and the badge would be pointing at something already answered.
+     Also skipped before the shape has ever fired once: with nothing fired
+     yet, `familyHorizon` reads as permanently eligible-now — true, but a
+     line that is always present from day one is the wallpaper this file's
+     own header rules out, not a heads-up about a pattern.
+  */
+  const house = homeRead(state);
+  if (house.neglect >= HOME.depositionFrom) {
+    out.push({
+      id: 'family_neglect_crisis',
+      text: 'Your own people are more likely to move against you the longer you stay away — go home and it starts coming back down.',
+      panel: 'player',
+    });
+  } else {
+    const horizon = familyHorizon(state);
+    const alreadyPending = state.pendingEvents.some((e) => e.defId === 'gen_family_dilemma');
+    if (horizon.everFired && !alreadyPending && horizon.daysUntil <= ATTENTION.familyHorizonWithin) {
+      out.push({
+        id: 'family_horizon',
+        text:
+          horizon.daysUntil === 0
+            ? 'A family occasion could come up any day now — going home before it does costs nothing and clears what is owed.'
+            : `A family occasion could come up as soon as day ${horizon.eligibleFromDay} — going home before then costs nothing and clears what is owed.`,
+        panel: 'player',
+      });
+    }
   }
 
   /*

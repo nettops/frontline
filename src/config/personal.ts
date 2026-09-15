@@ -126,12 +126,60 @@ export const HOME = {
   depositionAtWorst: 1.9,
 } as const;
 
-/** What the number is called on the screen. */
-export const HOME_LABEL: [number, string][] = [
-  [75, 'They have stopped expecting you'],
-  [50, 'You are not around much'],
-  [25, 'You are missed'],
-  [0, 'You have been home'],
+/**
+ * The four bars neglect is read against, and the one thing each is worth
+ * saying about it.
+ *
+ * One table rather than two: this used to be a `[number, string][]` of bar
+ * and label alone, and Milestone 2 needed a longer blurb and a tone for the
+ * same four breakpoints. A second, separately-worded `HOME_CLIMATE` table on
+ * the same 75/50/25/0 bars would drift from this one the first time either
+ * got edited alone, which is the exact mistake `CLAUDE.md` calls out under
+ * "reach for a derived read... no second copy to drift" — so the existing
+ * table grew the fields instead of getting a sibling.
+ */
+export interface HomeTier {
+  /** Neglect at or above this bar is in this tier. Checked highest-first. */
+  bar: number;
+  /** Stable id, for anything that needs to gate on a tier by name. */
+  id: string;
+  /** What the number is called on the screen. */
+  label: string;
+  /** The longer read, for a screen with room to say more than the label. */
+  blurb: string;
+  /** Reuses `KeyValue`'s own tone vocabulary rather than inventing a new one. */
+  tone?: 'hot' | 'brass';
+}
+
+export const HOME_LABEL: HomeTier[] = [
+  {
+    bar: 75,
+    id: 'estranged',
+    label: 'They have stopped expecting you',
+    blurb:
+      'The house has stopped waiting on you. An evening here does not land the way it used to.',
+    tone: 'hot',
+  },
+  {
+    bar: 50,
+    id: 'distant',
+    label: 'You are not around much',
+    blurb: 'You are noticeably gone, and it is starting to be counted.',
+    tone: 'hot',
+  },
+  {
+    bar: 25,
+    id: 'missed',
+    label: 'You are missed',
+    blurb: 'An ordinary stretch away. Nothing is wrong yet.',
+    tone: 'brass',
+  },
+  {
+    bar: 0,
+    id: 'present',
+    label: 'You have been home',
+    blurb: 'The house has no complaint.',
+  },
 ];
 
 /**

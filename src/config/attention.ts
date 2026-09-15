@@ -30,4 +30,13 @@ export const ATTENTION = {
    * rather than a reading.
    */
   frontFailingAt: 25,
+
+  /**
+   * Days out at which the family-dilemma horizon is worth a line.
+   *
+   * A week: long enough to plan an evening around, short enough that the
+   * badge is not the wallpaper this file's own header warns against — most
+   * of a 32-day cooldown is silent on purpose.
+   */
+  familyHorizonWithin: 7,
 } as const;
