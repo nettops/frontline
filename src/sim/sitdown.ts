@@ -46,6 +46,7 @@ import { trainAttribute } from './player';
 import { adjustBond, atWar } from './diplomacy';
 import { houseName } from './houses';
 import { hasVerb } from './build';
+import { stressLeadershipMultiplier } from './personal';
 
 // ----------------------------------------------------------------- guards --
 
@@ -367,8 +368,16 @@ function lands(state: GameState, sit: Sitdown, reg: RegisterDef): boolean {
   const stats = statsOf(state, sit);
   if (!stats) return false;
 
+  /*
+     A boss carrying real stress reads worse, not just feels worse.
+
+     `stressLeadershipMultiplier` (`sim/personal.ts`) is 1 outside the worst
+     stress tier and outside a sedatives comedown — a real man in an ordinary
+     week is not penalised for having a bad week. See `STRESS.criticalLeadershipPenalty`.
+  */
+  const effectiveLeadership = state.player.attributes.leadership * stressLeadershipMultiplier(state);
   let help =
-    (state.player.attributes.leadership / 100) * SITDOWN.leadershipHelp +
+    (effectiveLeadership / 100) * SITDOWN.leadershipHelp +
     (stats.respectForBoss / 100) * SITDOWN.regardHelp;
 
   // A man with a real grudge answers almost nothing until it is named. The

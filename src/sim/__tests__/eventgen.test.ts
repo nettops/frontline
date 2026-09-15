@@ -25,7 +25,7 @@ import { Rng } from '../rng';
 import { advanceDay } from '../clock';
 import { EVENT_DEF_BY_ID, resolveEvent } from '../events';
 import { GEN_DEFS, isGenerated } from '../eventgen';
-import { GEN_SHAPES, GEN_WHEN } from '../../config/eventgen';
+import { GEN_EFFECT, GEN_SHAPES, GEN_WHEN } from '../../config/eventgen';
 import { acquireBusiness, ownedBusinesses } from '../business';
 import { crewList, generateNpc } from '../npc';
 import { HOME_TERRITORY } from '../../config/territories';
@@ -33,8 +33,9 @@ import { territoryList } from '../territory';
 import { figure } from '../civic';
 import { canLaunch } from '../operations';
 import { OPERATION_BY_ID } from '../../config/operations';
-import { home, neglectRisk } from '../personal';
-import { HOME } from '../../config/personal';
+import { bodySpentTonight, home, neglectRisk, playerStress } from '../personal';
+import { HOME, STRESS } from '../../config/personal';
+import { launchOperation } from '../operations';
 import { totalFunds } from '../economy';
 import { answerFirst, runDays } from './helpers';
 import type { GameState, Npc } from '../types';
@@ -158,6 +159,9 @@ function world(seed = 88): GameState {
 
   // And a house that has noticed you are never in it.
   home(state).neglect = 60;
+
+  // And a boss carrying real stress — the subject `gen_panic_episode` reads.
+  state.player.stress = STRESS.panicThreshold;
 
   /*
      And the three subjects the systems built after this file was written need.
@@ -505,6 +509,107 @@ describe('the milestone family dilemmas', () => {
     const b = firstFire(4242);
     expect(a, 'never fired across 500 days on this seed').not.toBeNull();
     expect(b).toEqual(a);
+  });
+});
+
+/*
+   Milestone 3: the panic episode. The only shape whose subject is the boss
+   himself — gated on `playerStress` alone, per `STRESS.panicThreshold` in
+   `config/personal.ts`.
+*/
+describe('the panic episode', () => {
+  function raise(state: GameState) {
+    const def = GEN_DEFS.find((d) => d.id === 'gen_panic_episode')!;
+    const rng = new Rng(state.rng);
+    const ctx = def.applies(state, rng);
+    if (!ctx) return null;
+    const built = def.build(state, rng, ctx);
+    state.pendingEvents.push({ ...built, id: 'evt_test', day: state.day });
+    return built;
+  }
+
+  /*
+     Item 6 of the brief's own list: refuses below the threshold, fires at
+     and above it.
+
+     Watched to fail: with the `playerStress(state) < STRESS.panicThreshold`
+     guard in `applies` commented out, this shape fired against the untouched
+     `world()` fixture (stress 0) and the first assertion below went red.
+     Restored afterwards.
+  */
+  it('refuses below the threshold and fires at or above it', () => {
+    const low = world();
+    low.player.stress = STRESS.panicThreshold - 1;
+    const defLow = GEN_DEFS.find((d) => d.id === 'gen_panic_episode')!;
+    expect(defLow.applies(low, new Rng(low.rng)), 'fired below its own threshold').toBeNull();
+
+    const high = world();
+    high.player.stress = STRESS.panicThreshold;
+    expect(raise(high), 'did not fire at the threshold').not.toBeNull();
+  });
+
+  it('does not fire while the boss is already spoken for tonight', () => {
+    const state = world();
+    launchOperation(state, 'work_it_yourself', [], HOME_TERRITORY);
+    expect(bodySpentTonight(state), 'the fixture should have the body spent').toBe(true);
+    const def = GEN_DEFS.find((d) => d.id === 'gen_panic_episode')!;
+    expect(def.applies(state, new Rng(state.rng))).toBeNull();
+  });
+
+  it('offers three choices: a house call, pushing through, or sedatives', () => {
+    const state = world();
+    const built = raise(state);
+    expect(built, 'the shape did not fire').not.toBeNull();
+    expect(built!.choices.map((c) => c.id).sort()).toEqual(['house_call', 'push_through', 'sedatives']);
+  });
+
+  it('the house call clears stress at cost and spends the evening', () => {
+    const state = world();
+    expect(raise(state)).not.toBeNull();
+    const before = totalFunds(state);
+    resolveEvent(state, new Rng(state.rng), 'evt_test', 'house_call');
+
+    expect(totalFunds(state)).toBeLessThan(before);
+    expect(playerStress(state)).toBeCloseTo(STRESS.panicThreshold - GEN_EFFECT.panicHouseCallClear, 5);
+    expect(state.flags['went_home_day']).toBe(state.day);
+  });
+
+  it('pushing through is free, spikes stress, and costs a little respect', () => {
+    const state = world();
+    state.org.respect = 50; // room for the penalty to show against the floor at 0
+    expect(raise(state)).not.toBeNull();
+    const cashBefore = totalFunds(state);
+    const respectBefore = state.org.respect;
+    const wentHomeBefore = state.flags['went_home_day'];
+    resolveEvent(state, new Rng(state.rng), 'evt_test', 'push_through');
+
+    expect(totalFunds(state), 'push through is supposed to be free').toBe(cashBefore);
+    expect(playerStress(state)).toBeCloseTo(STRESS.panicThreshold + GEN_EFFECT.panicPushThroughStressSpike, 5);
+    expect(state.org.respect).toBeLessThan(respectBefore);
+    expect(state.flags['went_home_day'], 'pushing through should not spend the evening').toBe(wentHomeBefore);
+  });
+
+  /*
+     Item 7: the sedatives debuff, proven at the exact boundary.
+
+     Watched to fail: with the `sedated_until_day` stamp commented out of the
+     `sedatives` branch in `resolveGenerated`, `stressLeadershipMultiplier`
+     read 1 on both days below and this test's second half went red.
+     Restored afterwards.
+  */
+  it('sedatives clear less, do not spend the evening, and dull for a fixed week', () => {
+    const state = world();
+    expect(raise(state)).not.toBeNull();
+    const wentHomeBefore = state.flags['went_home_day'];
+    resolveEvent(state, new Rng(state.rng), 'evt_test', 'sedatives');
+
+    expect(playerStress(state)).toBeCloseTo(STRESS.panicThreshold - GEN_EFFECT.panicSedativeClear, 5);
+    expect(
+      GEN_EFFECT.panicSedativeClear,
+      'the pills are supposed to clear less than the house call',
+    ).toBeLessThan(GEN_EFFECT.panicHouseCallClear);
+    expect(state.flags['went_home_day'], 'sedatives should not spend the evening').toBe(wentHomeBefore);
+    expect(state.flags['sedated_until_day']).toBe(state.day + STRESS.sedatedDays);
   });
 });
 

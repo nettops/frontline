@@ -24,7 +24,7 @@ import { setStanding } from '../standingOrders';
 import { declareWar, playerWars } from '../diplomacy';
 import { eligibleHeirs, nameHeir, wouldTakeIt } from '../succession';
 import { home } from '../personal';
-import { HOME } from '../../config/personal';
+import { HOME, STRESS } from '../../config/personal';
 import { HOME_TERRITORY } from '../../config/territories';
 import { PATTERN } from '../../config/standingOrders';
 import { territoryDef, territoryList } from '../territory';
@@ -317,5 +317,24 @@ describe('what wants you today', () => {
     const lines = attention(state);
     expect(lines.some((l) => l.id === 'family_neglect_crisis')).toBe(true);
     expect(lines.some((l) => l.id === 'family_horizon')).toBe(false);
+  });
+
+  /*
+     Milestone 3: the same bar `gen_panic_episode` reads to fire at all — see
+     `STRESS.panicThreshold` in `config/personal.ts`.
+  */
+  it('names the stress crisis once stress reaches STRESS.panicThreshold', () => {
+    const state = game();
+    state.player.stress = STRESS.panicThreshold;
+    const line = attention(state).find((l) => l.id === 'stress_critical');
+    expect(line).toBeTruthy();
+    expect(line!.panel).toBe('player');
+    expect(line!.text).toContain(`${Math.round(STRESS.panicThreshold)}%`);
+  });
+
+  it('stays quiet about stress below the threshold', () => {
+    const state = game();
+    state.player.stress = STRESS.panicThreshold - 1;
+    expect(attention(state).some((l) => l.id === 'stress_critical')).toBe(false);
   });
 });

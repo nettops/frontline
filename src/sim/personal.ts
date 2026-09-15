@@ -16,7 +16,7 @@
  */
 
 import { Rng, clamp } from './rng';
-import { HOME, HOME_LABEL, RELATIONS, type HomeTier } from '../config/personal';
+import { HOME, HOME_LABEL, RELATIONS, STRESS, STRESS_TIERS, type HomeTier, type StressTierDef } from '../config/personal';
 import { FIRST_NAMES } from '../config/npcs';
 import { HOME_TERRITORY } from '../config/territories';
 import { GEN_SHAPES } from '../config/eventgen';
@@ -25,6 +25,11 @@ import { addLog } from './util';
 import { ownsHome } from './possessions';
 import { POSSESSION } from '../config/possessions';
 import { OPERATION_BY_ID } from '../config/operations';
+import { playerWars } from './diplomacy';
+import { canAfford, spend } from './economy';
+import { priced } from './market';
+import { activeCases } from './investigation';
+import { recordCareerEvent } from './career';
 import type { GameState, Home, HouseholdMember } from './types';
 
 /** The worst tier's own bar — read rather than retyped, so a cold-reception
@@ -82,6 +87,24 @@ export function tickHome(state: GameState): void {
 }
 
 /**
+ * The one body, spent already.
+ *
+ * `operations.ts`'s own `canLaunch` refuses a zero-crew job with "there is
+ * only one of you" — the boss's own body is the resource, not a crew slot.
+ * An evening at home, a consultation with a doctor, and `gen_panic_episode`'s
+ * own house-call choice (`sim/eventgen.ts`) all spend that same body over
+ * the same one day, so all three read this one definition table rather than
+ * each copying a name out of it, which would be a second place for "which
+ * job is this" to drift from the first the day another zero-crew job joins
+ * the roster. Exported for that third call site.
+ */
+export function bodySpentTonight(state: GameState): boolean {
+  return Object.values(state.activeOperations).some(
+    (op) => (OPERATION_BY_ID[op.defId]?.crewRequired ?? 1) === 0,
+  );
+}
+
+/**
  * Whether there is any point going home tonight.
  *
  * Refuses by naming its own bar, like every other refusal in this project.
@@ -97,20 +120,7 @@ export function canGoHome(state: GameState): { ok: boolean; reason?: string } {
         `Going again inside ${HOME.visitAgainAfterDays} days is not worth anything to anybody.`,
     };
   }
-  /*
-     The one body, spent already.
-
-     `operations.ts`'s own `canLaunch` refuses a zero-crew job with "there is
-     only one of you" — the boss's own body is the resource, not a crew slot.
-     An evening at home spends the same body over the same one day, so it
-     reads the same definition table rather than a name copied out of it,
-     which would be a second place for "which job is this" to drift from the
-     first the day another zero-crew job joins the roster.
-  */
-  const outOnItYourself = Object.values(state.activeOperations).some(
-    (op) => (OPERATION_BY_ID[op.defId]?.crewRequired ?? 1) === 0,
-  );
-  if (outOnItYourself) {
+  if (bodySpentTonight(state)) {
     return {
       ok: false,
       reason: 'You are out on a job that needs you personally tonight. That is where you are.',
@@ -320,4 +330,158 @@ export function familyHorizon(state: GameState): FamilyHorizon {
     daysUntil: Math.max(0, eligibleFromDay - state.day),
     everFired: flagged !== undefined,
   };
+}
+
+// -------------------------------------------------------------- stress ---
+
+/**
+ * The condition itself, 0..100.
+ *
+ * Optional on `state.player`, lazily read exactly as the rest of this file's
+ * state is — a save from before this existed loads as a boss who has been
+ * carrying nothing, which is correct: it only ever moves once `tickStress`
+ * has had a week to run.
+ */
+export function playerStress(state: GameState): number {
+  return clamp(state.player.stress ?? 0, 0, STRESS.max);
+}
+
+/** Which of the four bars a given stress reading falls in. */
+export function stressTier(value: number): StressTierDef {
+  return STRESS_TIERS.find((t) => value >= t.bar) ?? STRESS_TIERS[STRESS_TIERS.length - 1];
+}
+
+export interface StressPressure {
+  /** Weekly stress from every war currently running. */
+  wars: number;
+  /** Weekly stress from real federal attention. */
+  heat: number;
+  /** Weekly stress from a house that has gone from missed to distant. */
+  domestic: number;
+  /** Weekly stress from wages carried unpaid. */
+  payroll: number;
+  /** The sum of the above, less natural recovery when nothing above is firing. */
+  netWeekly: number;
+}
+
+/**
+ * What is bearing down this week, itemised.
+ *
+ * Every term reads a fact another system already owns — `playerWars`,
+ * `org.heat`, `home().neglect`, `org.wagesOwed` — so nothing here can drift
+ * from what actually happened, the same discipline `homeRead`'s `costing`
+ * line follows.
+ */
+export function stressPressure(state: GameState): StressPressure {
+  const wars = playerWars(state).length * STRESS.perWar;
+  const heat = state.org.heat >= 50 ? STRESS.highHeat : 0;
+  const domestic = home(state).neglect >= 50 ? STRESS.domesticStrain : 0;
+  const payroll = (state.org.wagesOwed ?? 0) > 0 ? STRESS.wageArrears : 0;
+  const quiet =
+    playerWars(state).length === 0 && state.org.heat < 30 && home(state).neglect < 25;
+  return {
+    wars,
+    heat,
+    domestic,
+    payroll,
+    netWeekly: wars + heat + domestic + payroll - (quiet ? STRESS.naturalRecovery : 0),
+  };
+}
+
+/**
+ * A week of carrying it, or a week of quiet.
+ *
+ * Same weekly gate `tickHome` uses (`HOME.intervalDays`) rather than a second
+ * constant of its own — both are "everybody forms an opinion once a week",
+ * `tickHome`'s own words, and a household's and a body's are the same week.
+ * Kept as its own call in `clock.ts` alongside `tickHome` rather than nested
+ * inside it, because two of this function's four drivers (wars, heat) are
+ * not household facts at all — `tickHome`'s header scopes that function to
+ * the household specifically.
+ */
+export function tickStress(state: GameState): void {
+  if (state.day % HOME.intervalDays !== 0) return;
+  state.player.stress = clamp(playerStress(state) + stressPressure(state).netWeekly, 0, STRESS.max);
+}
+
+/**
+ * The extra dulling stress itself leaves on a sit-down.
+ *
+ * Read against the true `leadership` stat in `sitdown.ts`'s own `lands()` —
+ * not a cosmetic meter, a real term in a real check. Only `critical` bites,
+ * for the reason `HOME.depositionFrom` only starts penalising neglect once
+ * it is real: a penalty that starts at the first tier is a tax on every
+ * career that ever fights a war, which is most of them. The sedatives half
+ * is independent and stacks — see `STRESS.sedatedLeadershipPenalty`.
+ */
+export function stressLeadershipMultiplier(state: GameState): number {
+  let m = 1;
+  if (stressTier(playerStress(state)).id === 'critical') m *= STRESS.criticalLeadershipPenalty;
+  if (state.day < (state.flags['sedated_until_day'] ?? -Infinity)) {
+    m *= STRESS.sedatedLeadershipPenalty;
+  }
+  return m;
+}
+
+/**
+ * Whether a discreet consultation is worth anything tonight.
+ *
+ * Reuses `bodySpentTonight` rather than `canGoHome` wholesale — `canGoHome`
+ * also refuses inside `HOME.visitAgainAfterDays`, a rule about a *visit*
+ * being worth less so soon after the last one, which has nothing to say
+ * about a doctor's office.
+ */
+export function canConsult(state: GameState): { ok: boolean; reason?: string } {
+  const cost = priced(state, STRESS.consultCost);
+  if (!canAfford(state, cost)) {
+    return { ok: false, reason: `A discreet doctor runs ${Math.round(cost).toLocaleString('en-US')}, and you do not have it.` };
+  }
+  if (bodySpentTonight(state)) {
+    return {
+      ok: false,
+      reason: 'You are out on a job that needs you personally tonight. That is where you are.',
+    };
+  }
+  const since = state.day - (state.flags['last_consult_day'] ?? -9999);
+  if (since < STRESS.consultCooldownDays) {
+    return {
+      ok: false,
+      reason: `You saw him ${since === 0 ? 'today' : `${since} ${since === 1 ? 'day' : 'days'} ago`}. Going back inside ${STRESS.consultCooldownDays} days is not worth anything to anybody.`,
+    };
+  }
+  return { ok: true };
+}
+
+/**
+ * An hour nobody in the crew knows about.
+ *
+ * Spends the same evening `goHome` does (`went_home_day`) — the body is the
+ * resource, and it is only ever spent once a night.
+ */
+export function consultDoctor(state: GameState): void {
+  if (!canConsult(state).ok) return;
+  if (!spend(state, priced(state, STRESS.consultCost), 'world')) return;
+  state.player.stress = clamp(playerStress(state) - STRESS.consultRecovery, 0, STRESS.max);
+  state.flags['went_home_day'] = state.day;
+  state.flags['last_consult_day'] = state.day;
+  addLog(
+    state,
+    'An hour in an unmarked office on 72nd Street. Nobody in the crew knows you were there. The air came back into your chest.',
+    'crew',
+  );
+  /*
+     The secrecy risk: real federal attention, or an open case, means an
+     unexplained hour is the kind of thing that gets noticed and written
+     down. `recordCareerEvent` rather than a whisper — `whispers.ts`'s own
+     supply is generated from real subjects (a man, a district, a figure)
+     through `compose()`, and there is no "write this exact sentence" door
+     into it. A lasting mark on the record is what this actually is.
+  */
+  if (state.org.heat >= STRESS.secrecyRiskHeat || activeCases(state).length > 0) {
+    recordCareerEvent(
+      state,
+      'A sedan with federal plates was seen parked down the block from your physician\'s office.',
+      'bad',
+    );
+  }
 }

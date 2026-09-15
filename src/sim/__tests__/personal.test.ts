@@ -25,19 +25,30 @@ import { describe, expect, it } from 'vitest';
 import { newGame } from '../state';
 import { advanceDay } from '../clock';
 import {
+  bodySpentTonight,
+  canConsult,
   canGoHome,
+  consultDoctor,
   familyHorizon,
   goHome,
   home,
   homeRead,
   homeTier,
   neglectRisk,
+  playerStress,
+  stressLeadershipMultiplier,
+  stressPressure,
+  stressTier,
   tickHome,
+  tickStress,
 } from '../personal';
 import { canLaunch, launchOperation } from '../operations';
 import { OPERATION_BY_ID } from '../../config/operations';
+import { career } from '../career';
+import { declareWar } from '../diplomacy';
+import { totalFunds } from '../economy';
 import { HOME_TERRITORY } from '../../config/territories';
-import { HOME, RELATIONS } from '../../config/personal';
+import { HOME, RELATIONS, STRESS } from '../../config/personal';
 import type { GameState } from '../types';
 
 function game(seed = 6): GameState {
@@ -413,5 +424,211 @@ describe('a cold reception', () => {
     const baseline = HOME.clearedByVisit;
     goHome(state);
     expect(40 - home(state).neglect).toBeCloseTo(baseline, 5);
+  });
+});
+
+/*
+   Milestone 3: stress. `config/personal.ts`'s own `STRESS` block argues the
+   double life bears down through facts the sim already tracks — wars, real
+   heat, a house gone distant, wages owed — rather than a second ledger.
+*/
+describe('stress', () => {
+  it('defaults cleanly to 0 on a legacy state that has never carried any', () => {
+    const state = game();
+    expect(state.player.stress).toBeUndefined();
+    expect(playerStress(state)).toBe(0);
+  });
+
+  it('clamps a value already out of range, same as every other reading here', () => {
+    const state = game();
+    state.player.stress = 140;
+    expect(playerStress(state)).toBe(STRESS.max);
+    state.player.stress = -5;
+    expect(playerStress(state)).toBe(0);
+  });
+
+  it('itemizes every active driver, and nothing that is not', () => {
+    const state = game();
+    // Quiet: no wars, low heat, low neglect, nothing owed.
+    const quiet = stressPressure(state);
+    expect(quiet.wars).toBe(0);
+    expect(quiet.heat).toBe(0);
+    expect(quiet.domestic).toBe(0);
+    expect(quiet.payroll).toBe(0);
+    expect(quiet.netWeekly, 'a quiet world should be recovering').toBe(-STRESS.naturalRecovery);
+
+    declareWar(state, 'player', 'kestler');
+    state.org.heat = 60;
+    home(state).neglect = 60;
+    state.org.wagesOwed = 500;
+
+    const loaded = stressPressure(state);
+    expect(loaded.wars).toBeCloseTo(STRESS.perWar, 5);
+    expect(loaded.heat).toBe(STRESS.highHeat);
+    expect(loaded.domestic).toBe(STRESS.domesticStrain);
+    expect(loaded.payroll).toBe(STRESS.wageArrears);
+    expect(loaded.netWeekly).toBeCloseTo(
+      STRESS.perWar + STRESS.highHeat + STRESS.domesticStrain + STRESS.wageArrears,
+      5,
+    );
+  });
+
+  it('accumulates net pressure only on the weekly interval, and clamps', () => {
+    const state = game();
+    declareWar(state, 'player', 'kestler');
+    const before = playerStress(state);
+    state.day += 1; // not a boundary
+    tickStress(state);
+    expect(playerStress(state), 'moved off the weekly gate').toBe(before);
+
+    state.day = (Math.floor(state.day / HOME.intervalDays) + 1) * HOME.intervalDays;
+    tickStress(state);
+    expect(playerStress(state)).toBeCloseTo(before + STRESS.perWar, 5);
+
+    // And it cannot be driven past the ceiling.
+    state.player.stress = STRESS.max;
+    state.day += HOME.intervalDays;
+    tickStress(state);
+    expect(playerStress(state)).toBe(STRESS.max);
+  });
+
+  it('reads a stress tier from each of the four bars', () => {
+    expect(stressTier(0).id).toBe('calm');
+    expect(stressTier(24).id).toBe('calm');
+    expect(stressTier(25).id).toBe('strained');
+    expect(stressTier(55).id).toBe('overloaded');
+    expect(stressTier(80).id).toBe('critical');
+    expect(stressTier(100).id).toBe('critical');
+  });
+
+  describe('a discreet consultation', () => {
+    it('refuses without the money, naming what it costs', () => {
+      const state = game();
+      state.org.cash = 0;
+      state.org.dirtyCash = 0;
+      const check = canConsult(state);
+      expect(check.ok).toBe(false);
+      expect(check.reason).toMatch(/do not have it/);
+    });
+
+    it('reuses the same zero-crew-op check `canGoHome` does, not `canGoHome` itself', () => {
+      const state = game();
+      state.org.cash = 100_000;
+      launchOperation(state, 'work_it_yourself', [], HOME_TERRITORY);
+      expect(bodySpentTonight(state), 'the fixture should have the body spent').toBe(true);
+      expect(canConsult(state).ok).toBe(false);
+    });
+
+    /*
+       The point of extracting `bodySpentTonight` rather than calling
+       `canGoHome` wholesale: `canGoHome` also refuses inside
+       `HOME.visitAgainAfterDays`, a rule about a *visit* being worth less so
+       soon after the last one — which has nothing to say about a doctor's
+       office. A consultation the day after going home must not be blocked
+       by that unrelated refusal.
+    */
+    it('is not blocked by having gone home earlier today, unlike canGoHome', () => {
+      const state = game();
+      state.org.cash = 100_000;
+      weeks(state, 10);
+      goHome(state);
+      expect(canGoHome(state).ok, 'the fixture should show the visit-cooldown refusal').toBe(false);
+      expect(canConsult(state).ok, 'a consultation should not read the home-visit cooldown').toBe(true);
+    });
+
+    it('refuses inside its own cooldown, naming it', () => {
+      const state = game();
+      state.org.cash = 100_000;
+      state.flags['last_consult_day'] = state.day;
+      const check = canConsult(state);
+      expect(check.ok).toBe(false);
+      expect(check.reason).toMatch(new RegExp(`inside ${STRESS.consultCooldownDays} days`));
+    });
+
+    it('spends cash, clears stress, spends the evening, and logs it', () => {
+      const state = game();
+      state.org.cash = 100_000;
+      state.player.stress = 50;
+      const before = totalFunds(state);
+      consultDoctor(state);
+      expect(totalFunds(state)).toBeLessThan(before);
+      expect(playerStress(state)).toBeCloseTo(50 - STRESS.consultRecovery, 5);
+      expect(state.flags['went_home_day']).toBe(state.day);
+      expect(state.flags['last_consult_day']).toBe(state.day);
+      expect(state.log.some((l) => l.text.includes('72nd Street'))).toBe(true);
+    });
+
+    it('does nothing when it should have refused', () => {
+      const state = game();
+      state.org.cash = 0;
+      state.org.dirtyCash = 0;
+      const before = playerStress(state);
+      consultDoctor(state);
+      expect(playerStress(state), 'a refused consultation still moved stress').toBe(before);
+      expect(state.flags['went_home_day']).toBeUndefined();
+    });
+
+    /*
+       Watched to fail: with the `state.org.heat >= STRESS.secrecyRiskHeat ||
+       activeCases(state).length > 0` condition in `consultDoctor` disabled,
+       the "hot" half of this test went red — no career entry was recorded at
+       all. Restored afterwards. Run by hand for this session's report rather
+       than left in the suite as a second copy of the same guard.
+    */
+    it('records a career whisper when the secrecy risk is real, not when it is quiet', () => {
+      const quiet = game();
+      quiet.org.cash = 100_000;
+      quiet.org.heat = 10;
+      consultDoctor(quiet);
+      expect(career(quiet).some((e) => e.text.includes('federal plates'))).toBe(false);
+
+      const hot = game(7);
+      hot.org.cash = 100_000;
+      hot.org.heat = STRESS.secrecyRiskHeat;
+      consultDoctor(hot);
+      expect(career(hot).some((e) => e.text.includes('federal plates'))).toBe(true);
+    });
+  });
+
+  /*
+     Point 6: a real, testable hook into `sim/sitdown.ts`'s `lands()` — not a
+     decorative meter. Watched to fail: with `stressLeadershipMultiplier`
+     hard-coded to return 1, the borderline case in `sitdown.test.ts`
+     ("a read a critical boss can no longer make") landed regardless of
+     stress; restoring the real function is what makes it depend on stress
+     again. Run by hand for this session's report.
+  */
+  describe('the leadership penalty stress leaves on a sit-down', () => {
+    it('is 1 outside the worst tier and outside a sedatives comedown', () => {
+      const state = game();
+      state.player.stress = 79; // just under `critical`
+      expect(stressLeadershipMultiplier(state)).toBe(1);
+    });
+
+    it('applies only at the critical tier', () => {
+      const state = game();
+      state.player.stress = 80;
+      expect(stressLeadershipMultiplier(state)).toBeCloseTo(STRESS.criticalLeadershipPenalty, 5);
+    });
+
+    it('the sedatives comedown stacks with the tier penalty rather than replacing it', () => {
+      const state = game();
+      state.player.stress = 80;
+      state.flags['sedated_until_day'] = state.day + 1;
+      expect(stressLeadershipMultiplier(state)).toBeCloseTo(
+        STRESS.criticalLeadershipPenalty * STRESS.sedatedLeadershipPenalty,
+        5,
+      );
+    });
+
+    it('the sedatives flag is still active the day before it expires, gone the day it does', () => {
+      const state = game();
+      state.flags['sedated_until_day'] = state.day + STRESS.sedatedDays; // consultDoctor's own stamp
+      state.day += STRESS.sedatedDays - 1;
+      expect(stressLeadershipMultiplier(state)).toBeCloseTo(STRESS.sedatedLeadershipPenalty, 5);
+
+      state.day += 1; // now exactly at the stamped day
+      expect(stressLeadershipMultiplier(state)).toBe(1);
+    });
   });
 });
