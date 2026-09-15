@@ -9,7 +9,7 @@ import {
   GRID_LINE_COLOR, NAV_EDGE_COLOR, COLLISION_COLOR,
   SPAWN_PLAYER_COLOR, SPAWN_NPC_COLOR, ROOM_BOUNDS_COLOR,
 } from './palette';
-import { SPRITES, PERSON_PALETTES, blitIsoSprite, hash } from './isoSprites';
+import { SPRITES, PERSON_PALETTES, PERSON_BACK, blitIsoSprite, hash } from './isoSprites';
 
 /** Sprite pixels per iso-sprite row/column unit; sprites are authored at
  * roughly 5 columns per footprint cell, so this keeps a footprint's drawn
@@ -27,6 +27,7 @@ export interface MapLayers {
   nav: Container;
   roomBounds: Container;
   spawns: Container;
+  getPersonTexture: (paletteIndex: number, variant: 'front' | 'back') => Texture;
 }
 
 export type SelectableNode = Container & { mapEntity?: MapObject | SpawnPoint };
@@ -97,13 +98,15 @@ export function buildMapLayers(map: MapDef, grid: WalkGrid): MapLayers {
     return tex;
   }
 
-  const personTextures = new Map<number, Texture>();
-  function personTexture(paletteIndex: number): Texture {
-    let tex = personTextures.get(paletteIndex);
+  const personTextures = new Map<string, Texture>();
+  function personTexture(paletteIndex: number, facingVariant: 'front' | 'back' = 'front'): Texture {
+    const key = `${paletteIndex}:${facingVariant}`;
+    let tex = personTextures.get(key);
     if (!tex) {
-      const variant = { ...SPRITES.person, palette: PERSON_PALETTES[paletteIndex] };
-      tex = Texture.from(blitIsoSprite(variant, SPRITE_SCALE));
-      personTextures.set(paletteIndex, tex);
+      const base = facingVariant === 'back' ? PERSON_BACK : SPRITES.person;
+      const sprite = { ...base, palette: PERSON_PALETTES[paletteIndex] };
+      tex = Texture.from(blitIsoSprite(sprite, SPRITE_SCALE));
+      personTextures.set(key, tex);
     }
     return tex;
   }
@@ -245,18 +248,20 @@ export function buildMapLayers(map: MapDef, grid: WalkGrid): MapLayers {
   for (const spawn of orderedSpawns) {
     const base = cellToScreen(spawn.x, spawn.y);
     const container: SelectableNode = new Container();
+    container.x = base.x;
+    container.y = base.y;
     // A small ground ring keeps the player/npc colour distinction the flat
     // marker used to carry; the person sprite stands on top of it, anchored
-    // at its feet so it reads as standing on the spawn cell.
+    // at its feet so it reads as standing on the spawn cell. Both are drawn
+    // at the container's local origin — the container itself carries world
+    // position, so moving an entity later is one `container.x/y` update.
     const ring = new Graphics();
     const ringColor = spawn.kind === 'player' ? SPAWN_PLAYER_COLOR : SPAWN_NPC_COLOR;
-    ring.ellipse(base.x, base.y, TILE_W * 0.28, TILE_H * 0.28).fill({ color: ringColor, alpha: 0.6 });
+    ring.ellipse(0, 0, TILE_W * 0.28, TILE_H * 0.28).fill({ color: ringColor, alpha: 0.6 });
     const paletteIndex = hash(spawn.id) % PERSON_PALETTES.length;
-    const person = new Sprite(personTexture(paletteIndex));
+    const person = new Sprite(personTexture(paletteIndex, 'front'));
     person.label = 'person';
     person.anchor.set(0.5, 1);
-    person.x = base.x;
-    person.y = base.y;
     container.addChild(ring, person);
     container.zIndex = Math.floor(spawn.x) + Math.floor(spawn.y);
     container.eventMode = 'static';
@@ -272,7 +277,10 @@ export function buildMapLayers(map: MapDef, grid: WalkGrid): MapLayers {
   // child list too since MapLayers fields and PixiStage's .visible toggling/child
   // lookups still resolve against those containers.
   world.addChild(floor, walls, objects, spawns, entities, roomBounds, gridLines, collision, nav);
-  return { world, floor, walls, objects, grid: gridLines, collision, nav, roomBounds, spawns };
+  return {
+    world, floor, walls, objects, grid: gridLines, collision, nav, roomBounds, spawns,
+    getPersonTexture: personTexture,
+  };
 }
 
 export function mapPixelBounds(map: MapDef): Bounds {
