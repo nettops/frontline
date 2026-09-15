@@ -56,6 +56,8 @@
  * novelty, so the rate is set where it stops paying rather than pushed until a
  * number goes green.
  */
+import { HOME } from './personal';
+
 export const GEN_CHANCE_PER_DAY = 0.11;
 
 /** Which part of the world a shape needs before it can be raised. */
@@ -174,6 +176,26 @@ export const GEN_SHAPES: GenShapeDef[] = [
      nag, because a stake this real every month would be a tax, not a memo.
   */
   { id: 'gen_home_or_business', subject: 'home', weight: 2, cooldownDays: 40 },
+  /*
+     The occasions themselves, not the house merely having noticed.
+
+     `gen_asked_for_you` and `gen_home_or_business` above both wait for
+     `house.neglect` to cross `GEN_WHEN.neglect` (45) -- which means a boss
+     who visits home regularly, keeping the number down on purpose, never
+     meets either of them. A school play, a sick parent, an anniversary: none
+     of those wait for a stat, so this shape's `applies` does not read
+     neglect at all. See `FAMILY_DILEMMAS` in `config/personal.ts`.
+
+     Weight 2, matching the other two `home` shapes, for the reason
+     `gen_asked_for_you`'s own comment gives: the house is the one subject
+     that is always there, and at the same weight as shapes that come and go
+     it would make the generated draw never come up empty. Cooldown 32
+     rather than a round 30 or 40 so this shape does not always become
+     eligible on the same day as the other two for the life of a save on one
+     seed. At 32 days it recurs 8-9 times across a 300-day career, inside the
+     brief's "roughly every 25-40 days".
+  */
+  { id: 'gen_family_dilemma', subject: 'home', weight: 2, cooldownDays: 32 },
   /*
      Three shapes for the three systems built after this file was written.
 
@@ -483,4 +505,34 @@ export const GEN_EFFECT = {
   homeOrBusinessStayCash: 6_000,
   homeOrBusinessGoRespect: -4,
   homeOrBusinessRefusedNeglect: 9,
+
+  /*
+     The milestone family dilemmas -- school event, quiet evening, sick
+     relative, celebration. What each occasion costs to attend or send
+     something instead lives on `FAMILY_DILEMMAS` itself in
+     `config/personal.ts`, since that varies by occasion; these three are
+     what all four of them move on neglect, since the mechanic underneath
+     the occasion does not vary.
+  */
+  /**
+   * What attending clears, on top of `goHome`'s own `HOME.clearedByVisit`.
+   *
+   * The brief calls for attending to clear neglect "substantially" -- roughly
+   * one and a half times an ordinary visit. Half of `HOME.clearedByVisit` on
+   * top of the visit `goHome` already gives reaches that multiple exactly
+   * (22 base + 11 extra = 33, which is 1.5x 22) without a second formula for
+   * what an evening at home is worth.
+   */
+  familyDilemmaAttendExtraClear: Math.round(HOME.clearedByVisit * 0.5),
+  /** Sending something instead still tells the house you noticed, but not in person. */
+  familyDilemmaSendNeglect: 2,
+  /**
+   * Staying away entirely, on an occasion the house asked for by name.
+   *
+   * The brief's own figure: two and a half weeks of `HOME.perWeekAway` in one
+   * hit -- the same multiple `homeOrBusinessRefusedNeglect` already uses for
+   * refusing a generic night, because refusing a named occasion should sting
+   * at least as much as refusing an ordinary one, not less.
+   */
+  familyDilemmaStayNeglect: HOME.perWeekAway * 2.5,
 } as const;
