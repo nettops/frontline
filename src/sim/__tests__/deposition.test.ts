@@ -318,9 +318,24 @@ describe('deposition, played into rather than built', () => {
      2, all "nobody was killed and nobody was arrested"), so reachability
      itself did not regress — re-confirmed the same way the original seed was:
      reverting `backersNeeded` to 2 and watching this fail before restoring it.
+
+     Reseeded again from 4011 to 4022 for Milestone 3's `gen_panic_episode`
+     (`sim/eventgen.ts`, `config/eventgen.ts`): a new generated shape that can
+     become eligible on some days is exactly the same class of change —
+     `tickEvents`'s daily scan now calls one more `applies()` on every day of
+     a 1460-day run, and on the days this bot's stress has actually crossed
+     `STRESS.panicThreshold` and the memo is answered, `resolveGenerated`
+     consumes rng calls the old stream never did, reshuffling everything
+     downstream. A scan of seeds 4011-4110 after the change found 18 that
+     still reach generation > 1 (4022, 4031, 4033, 4042, 4043, 4045, 4046,
+     4053, 4056, 4061, ...), so reachability again did not regress. Seed 4022
+     confirmed to produce the same "nobody was killed and nobody was
+     arrested" fate, and the guard re-confirmed the same way both times
+     before it: reverting `backersNeeded` to 2 and watching this fail before
+     restoring it.
   */
   it('fires from an ordinary career under the current gate', () => {
-    const state = playOrdinaryCareer(4011, 1460);
+    const state = playOrdinaryCareer(4022, 1460);
     expect(
       state.succession.generation,
       'nobody was deposed — this is the reachability the config change exists to fix',

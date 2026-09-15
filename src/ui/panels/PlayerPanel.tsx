@@ -32,8 +32,19 @@ import { estate } from '../../sim/estate';
 import { legitimacy, perceivedLeadership } from '../../sim/legacy';
 import { maxCrew } from '../../sim/player';
 import { authorityRead } from '../../sim/authority';
-import { canGoHome, familyHorizon, goHome, homeRead } from '../../sim/personal';
-import { HOME } from '../../config/personal';
+import {
+  canConsult,
+  canGoHome,
+  consultDoctor,
+  familyHorizon,
+  goHome,
+  homeRead,
+  playerStress,
+  stressPressure,
+  stressTier,
+} from '../../sim/personal';
+import { HOME, STRESS } from '../../config/personal';
+import { priced } from '../../sim/market';
 import { ATTENTION } from '../../config/attention';
 import {
   possessionRows,
@@ -227,6 +238,17 @@ export default function PlayerPanel() {
   const rows = buildRead(state);
   const left = pointsLeft(state);
   const shape = perceivedLeadership(state);
+  const stressNow = playerStress(state);
+  const stressNowTier = stressTier(stressNow);
+  const pressure = stressPressure(state);
+  const consulting = canConsult(state);
+  const consultCash = priced(state, STRESS.consultCost);
+  const pressureParts = [
+    pressure.wars > 0 && `Wars: +${pressure.wars.toFixed(1)}`,
+    pressure.heat > 0 && `Heat: +${pressure.heat.toFixed(1)}`,
+    pressure.domestic > 0 && `Home: +${pressure.domestic.toFixed(1)}`,
+    pressure.payroll > 0 && `Payroll: +${pressure.payroll.toFixed(1)}`,
+  ].filter((x): x is string => Boolean(x));
 
   return (
     <>
@@ -394,6 +416,42 @@ export default function PlayerPanel() {
           {!goingHome.ok && (
             <p className="faint tiny" style={{ marginTop: 6, marginBottom: 0 }}>
               {goingHome.reason}
+            </p>
+          )}
+          {/*
+             The half of the man that is not the household either.
+
+             Beside Household on purpose, same panel — `STRESS` in
+             `config/personal.ts` argues the double life bears down through
+             facts this screen already shows elsewhere (wars, heat, wages,
+             neglect); this is where the boss sees what it adds up to. The
+             breakdown is itemised for the same reason the odds on a job are:
+             a number nobody can trace to a cause is not a cost the player
+             can decide to do anything about.
+          */}
+          <KeyValue
+            label="Condition"
+            value={`${stressNowTier.label} (${Math.round(stressNow)})`}
+            tone={stressNowTier.tone}
+          />
+          <p className="faint tiny" style={{ margin: '2px 14px 4px' }}>{stressNowTier.blurb}</p>
+          <p className="faint tiny" style={{ margin: '0 14px 6px' }}>
+            Net: {pressure.netWeekly >= 0 ? '+' : ''}
+            {pressure.netWeekly.toFixed(1)}/wk
+            {pressureParts.length > 0 ? ` (${pressureParts.join(', ')})` : ' — quiet'}
+          </p>
+          <button
+            className="btn small"
+            style={{ marginTop: 2, marginBottom: 10 }}
+            disabled={!consulting.ok}
+            title={consulting.reason ?? 'An hour nobody in the crew knows about'}
+            onClick={() => mutate((g) => consultDoctor(g), true)}
+          >
+            See Dr. Vance ({formatMoney(consultCash)})
+          </button>
+          {!consulting.ok && (
+            <p className="faint tiny" style={{ marginTop: -6, marginBottom: 10 }}>
+              {consulting.reason}
             </p>
           )}
           {/*

@@ -47,8 +47,8 @@ import { stewardOf } from './delegation';
 import { nicknameOf } from './nicknames';
 import { priced } from './market';
 import { readWhispers } from './whispers';
-import { canGoHome, goHome, home } from './personal';
-import { FAMILY_DILEMMAS, HOME, RELATIONS } from '../config/personal';
+import { bodySpentTonight, canGoHome, goHome, home, playerStress } from './personal';
+import { FAMILY_DILEMMAS, HOME, RELATIONS, STRESS } from '../config/personal';
 import { CIVIC_FIGURES } from '../config/civic';
 import { GEN_EFFECT, GEN_SEVERITY_WEIGHT_MAX, GEN_SHAPES, GEN_WHEN } from '../config/eventgen';
 import { recordCareerEvent } from './career';
@@ -677,6 +677,59 @@ const familyDilemma: EventDef = {
 };
 
 /**
+ * The body, finally saying something.
+ *
+ * The only shape whose subject is the boss himself rather than something he
+ * owns or somebody he knows. Gated on `playerStress` alone — see `STRESS` in
+ * `config/personal.ts` for the drivers that get a career there — and on the
+ * same "not already spoken for tonight" check `canGoHome` uses, since the
+ * house-call choice below spends the identical evening.
+ */
+const panicEpisode: EventDef = {
+  id: 'gen_panic_episode',
+  ...shape('gen_panic_episode'),
+  applies(state) {
+    if (playerStress(state) < STRESS.panicThreshold) return null;
+    if (bodySpentTonight(state)) return null;
+    return { panicEpisode: true };
+  },
+  build(state, rng) {
+    const houseCallCash = priced(state, GEN_EFFECT.panicHouseCallCost);
+    const sedativeCash = priced(state, GEN_EFFECT.panicSedativeCost);
+    return {
+      defId: 'gen_panic_episode',
+      title: oneOf(rng, ['Chest Pains on the Avenue', 'Down on One Knee']),
+      body: oneOf(rng, [
+        `It came on in the middle of the day, standing still: the chest tight, the ` +
+          `room tilting, no air where there should be air.`,
+        `You went down on one knee on a public sidewalk, certain for a full minute ` +
+          `that this was the day it ended, and it was not a bullet.`,
+      ]),
+      severity: 'danger',
+      npcId: null,
+      data: {},
+      choices: [
+        {
+          id: 'house_call',
+          label: 'Discreet House Call',
+          ...payable(state, houseCallCash, 'a trusted private doctor, to a backroom, tonight'),
+        },
+        {
+          id: 'push_through',
+          label: 'Push Through',
+          hint: 'Free. Keeps the night open. The crew was watching, and some of them saw the sweat.',
+        },
+        {
+          id: 'sedatives',
+          label: 'Prescription Sedatives',
+          ...payable(state, sedativeCash, `clears less, dulls you for ${STRESS.sedatedDays} days, does not spend the night`),
+        },
+      ],
+    };
+  },
+};
+
+/**
  * One of yours is in a cell.
  *
  * The state comes and goes, which is what makes it a memo rather than a
@@ -1126,6 +1179,7 @@ export const GEN_DEFS: EventDef[] = [
   askedForYou,
   homeOrBusiness,
   familyDilemma,
+  panicEpisode,
   stewardAsks,
   theNameStuck,
   oldOwner,
@@ -1466,6 +1520,44 @@ export function resolveGenerated(
       house.neglect = clamp(house.neglect + GEN_EFFECT.familyDilemmaStayNeglect, 0, 100);
       recordCareerEvent(state, `Was not there for ${name}'s ${dilemma.occasion}.`, 'bad');
       addLog(state, `You did not go. Nobody said anything about it, which was worse.`, 'crew');
+      return;
+    }
+
+    case 'gen_panic_episode': {
+      if (choiceId === 'house_call') {
+        /*
+           Checked again rather than trusted from `applies`, same discipline
+           `gen_family_dilemma`'s own `attend` branch uses: the memo can sit
+           pending, and the one body it spends may already be out on a job
+           by the time it is answered.
+        */
+        if (bodySpentTonight(state)) {
+          addLog(state, `Something else already had tonight. Nobody came.`, 'failure');
+          return;
+        }
+        if (!spend(state, priced(state, GEN_EFFECT.panicHouseCallCost), 'world')) {
+          addLog(state, `The money was not there, so nobody came either.`, 'failure');
+          return;
+        }
+        state.player.stress = clamp(playerStress(state) - GEN_EFFECT.panicHouseCallClear, 0, STRESS.max);
+        state.flags['went_home_day'] = state.day;
+        addLog(state, `A man came to a backroom and left inside the hour. Nobody in the crew asked why.`, 'crew');
+        return;
+      }
+      if (choiceId === 'sedatives') {
+        if (!spend(state, priced(state, GEN_EFFECT.panicSedativeCost), 'world')) {
+          addLog(state, `You had nothing for the pills either, and rode it out.`, 'failure');
+          return;
+        }
+        state.player.stress = clamp(playerStress(state) - GEN_EFFECT.panicSedativeClear, 0, STRESS.max);
+        state.flags['sedated_until_day'] = state.day + STRESS.sedatedDays;
+        addLog(state, `A bottle from a pharmacist who does not ask questions. It took the edge off, not the source.`, 'crew');
+        return;
+      }
+      // 'push_through': free, and the crew noticed.
+      state.player.stress = clamp(playerStress(state) + GEN_EFFECT.panicPushThroughStressSpike, 0, STRESS.max);
+      gainRespect(state, GEN_EFFECT.panicPushThroughRespect);
+      addLog(state, `You gripped the edge of the desk until the gray cleared. The crew noticed the sweat on your collar.`, 'crew');
       return;
     }
 
