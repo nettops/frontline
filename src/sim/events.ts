@@ -152,6 +152,8 @@ export interface EventContext {
    * the right story instead of always narrating a power gap.
    */
   tensionCause?: TieCause;
+  /** Set only by `gen_panic_episode` — a marker, since it has no other subject to carry. */
+  panicEpisode?: true;
 }
 
 export interface EventDef {

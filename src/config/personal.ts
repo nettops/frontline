@@ -269,3 +269,106 @@ export const FAMILY_DILEMMAS: FamilyDilemmaDef[] = [
     sendGesture: 'a gift, sent round with your name on the card',
   },
 ];
+
+/**
+ * The body the rest of this file's argument keeps calling "the resource."
+ *
+ * Neglect above is the one consequence of not going home. Stress is the same
+ * idea turned outward: what running two wars, carrying real heat, owing your
+ * own men and being estranged from your own house does to the man doing it,
+ * all at once. Every driver below reads a fact another system already tracks
+ * — `playerWars`, `org.heat`, `home().neglect`, `org.wagesOwed` — rather than
+ * inventing a second ledger of its own, for the same reason `neglect` reads
+ * real visits instead of a mood somebody rolled.
+ *
+ * One number, not ten. The brief that asked for this named panic attacks,
+ * sleep, collapse and the need for private counsel as symptoms of a single
+ * condition, not four separate meters, and `config/personal.ts`'s own header
+ * already argues against a second roster's worth of stats for a layer no
+ * measurement has ever asked for twice.
+ */
+export const STRESS = {
+  max: 100,
+  /** Stress gained weekly per active war. Wars are the loudest, most sustained pressure the game already tracks. */
+  perWar: 3.5,
+  /** Stress gained weekly once federal attention is real rather than background. */
+  highHeat: 3.0,
+  /** Stress gained weekly once the house has crossed from "missed" into "distant" — the same bar `HOME_LABEL`'s 50 tier reads. */
+  domesticStrain: 2.5,
+  /** Stress gained weekly with any payroll shortfall carried — the men are not the only ones aggrieved by it. */
+  wageArrears: 3.0,
+  /**
+   * Stress lost weekly with nothing above firing — no war, heat under 30,
+   * neglect under 25. A boss who is not actually under pressure recovers;
+   * one who is stays where he is rather than sliding further on a system he
+   * cannot see, the same "no tax that applies whatever you do" rule `HOME`
+   * follows for `depositionFrom`.
+   */
+  naturalRecovery: 2.0,
+  /** What a discreet consultation costs before `priced()` — see `personal.ts`'s `canConsult`/`consultDoctor`. */
+  consultCost: 350,
+  /** What one consultation clears. Roughly two months of quiet accrual at the worst single driver above, so it is worth doing and not worth doing weekly. */
+  consultRecovery: 28,
+  /** Days before another consultation is worth anything — same idiom as `HOME.visitAgainAfterDays`. */
+  consultCooldownDays: 7,
+  /**
+   * Where a register read against the true `leadership` stat starts paying
+   * for it — see `sim/sitdown.ts`'s `lands()`. Only the worst tier bites, for
+   * the reason `HOME.depositionFrom` only starts penalising neglect once it
+   * is real: a penalty that starts at the first bar is a tax on every career
+   * that ever fights a war, which is most of them.
+   */
+  criticalLeadershipPenalty: 0.75,
+  /**
+   * The extra dulling `gen_panic_episode`'s sedatives choice leaves behind
+   * for a week — see the `sedated_until_day` flag. Independent of the tier
+   * penalty above and stacks with it, because taking the pills is supposed
+   * to cost something even once they have done their job and stress itself
+   * has dropped clear of `critical`.
+   */
+  sedatedLeadershipPenalty: 0.85,
+  /** Sedatives dull perception for this many days — see `gen_panic_episode`. */
+  sedatedDays: 7,
+  /** Heat at or above which a consultation risks being noticed and recorded — see `consultDoctor`. */
+  secrecyRiskHeat: 60,
+  /** Threshold where panic attacks become possible. See `gen_panic_episode` in `sim/eventgen.ts`. */
+  panicThreshold: 75,
+} as const;
+
+export interface StressTierDef {
+  bar: number;
+  id: 'calm' | 'strained' | 'overloaded' | 'critical';
+  label: string;
+  blurb: string;
+  tone?: 'hot' | 'brass';
+}
+
+/** The same four-bar shape `HOME_LABEL` uses, checked highest-first. */
+export const STRESS_TIERS: StressTierDef[] = [
+  {
+    bar: 80,
+    id: 'critical',
+    label: 'Critical',
+    blurb: 'Chest tightens without warning. Breath will not come all the way down.',
+    tone: 'hot',
+  },
+  {
+    bar: 55,
+    id: 'overloaded',
+    label: 'Overloaded',
+    blurb: 'Constant tension. Sleep is broken and short.',
+    tone: 'brass',
+  },
+  {
+    bar: 25,
+    id: 'strained',
+    label: 'Strained',
+    blurb: 'Carrying the weight of the street and the house.',
+  },
+  {
+    bar: 0,
+    id: 'calm',
+    label: 'Measured',
+    blurb: 'Mind is clear. Decisions come without hesitation.',
+  },
+];

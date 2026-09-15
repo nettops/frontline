@@ -38,10 +38,10 @@ import { ownedBusinesses, businessDef } from './business';
 import { tradeUnlocked } from './contraband';
 import { promisesTo, daysLeft } from './promises';
 import { crewList } from './npc';
-import { familyHorizon, homeRead } from './personal';
+import { familyHorizon, homeRead, playerStress } from './personal';
 import { PROMISE, PROMISES } from '../config/promises';
 import { ATTENTION } from '../config/attention';
-import { HOME } from '../config/personal';
+import { HOME, STRESS } from '../config/personal';
 import { OPERATION_BY_ID } from '../config/operations';
 import { PATTERN } from '../config/standingOrders';
 
@@ -397,6 +397,23 @@ export function attention(state: GameState): Wanting[] {
         panel: 'player',
       });
     }
+  }
+
+  /*
+     The body, past the point of pretending it is fine.
+
+     Same bar `gen_panic_episode` (`sim/eventgen.ts`) reads to fire at all —
+     see `STRESS.panicThreshold` — so this line and that memo arrive on the
+     same condition, one on the morning briefing and one as the thing that
+     actually happens. Named `panel: 'player'`, not `'yourself'`; see
+     `ui/Rail.tsx`'s `PanelId` union.
+  */
+  if (playerStress(state) >= STRESS.panicThreshold) {
+    out.push({
+      id: 'stress_critical',
+      text: `You are near a physical breaking point (Stress: ${Math.round(playerStress(state))}%). The pressure is showing.`,
+      panel: 'player',
+    });
   }
 
   /*

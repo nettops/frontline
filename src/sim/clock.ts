@@ -44,7 +44,7 @@ import { tickAging, type AgingHooks } from './aging';
 import { ageCapos, tickCapos } from './capos';
 import { tickPerception } from './perception';
 import { tickCivic } from './civic';
-import { tickHome } from './personal';
+import { tickHome, tickStress } from './personal';
 import { tickCards } from './cards';
 import { tickWhispers } from './whispers';
 import { tickEvents } from './events';
@@ -240,6 +240,14 @@ export function advanceDay(state: GameState): void {
   //      so it can sit anywhere in the week. Here, beside the other opinions
   //      being formed about you.
   tickHome(state);
+  // 7a2a. What carrying all of it is doing to the man carrying it.
+  //
+  //       Own call rather than nested inside `tickHome` above: two of its
+  //       four drivers (wars, heat) are not household facts at all, and
+  //       `tickHome`'s own header scopes that function to the household
+  //       specifically. Placed right after it so a week's fresh neglect
+  //       reading feeds this week's stress rather than last week's.
+  tickStress(state);
   // 7a3. And the room slowly stops watching your hands.
   //
   //      Decay only — sitting down is a player action, never a tick. Touches
