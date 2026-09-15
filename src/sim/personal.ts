@@ -16,15 +16,25 @@
  */
 
 import { Rng, clamp } from './rng';
-import { HOME, HOME_LABEL, RELATIONS } from '../config/personal';
+import { HOME, HOME_LABEL, RELATIONS, type HomeTier } from '../config/personal';
 import { FIRST_NAMES } from '../config/npcs';
 import { HOME_TERRITORY } from '../config/territories';
+import { GEN_SHAPES } from '../config/eventgen';
 import { territoryDef } from './territory';
 import { addLog } from './util';
 import { ownsHome } from './possessions';
 import { POSSESSION } from '../config/possessions';
 import { OPERATION_BY_ID } from '../config/operations';
 import type { GameState, Home, HouseholdMember } from './types';
+
+/** The worst tier's own bar — read rather than retyped, so a cold-reception
+ * check below and the label table above cannot drift to different numbers. */
+const COLD_RECEPTION_AT = Math.max(...HOME_LABEL.map((t) => t.bar));
+
+/** Which of the four bars a given neglect reading falls in. */
+export function homeTier(neglect: number): HomeTier {
+  return HOME_LABEL.find((t) => neglect >= t.bar) ?? HOME_LABEL[HOME_LABEL.length - 1];
+}
 
 /**
  * The house, made the first time anybody asks.
@@ -128,7 +138,19 @@ export function goHome(state: GameState): void {
      manage, just a better return on a thing they were already deciding whether
      to do. See `config/possessions.ts`.
   */
-  const cleared = ownsHome(state) ? POSSESSION.clearedByVisitAtHome : HOME.clearedByVisit;
+  const baseline = ownsHome(state) ? POSSESSION.clearedByVisitAtHome : HOME.clearedByVisit;
+  /*
+     A cold reception, at the worst of the four tiers.
+
+     A visit was worth the same fixed amount at any neglect at all, which made
+     the button read as a top-up meter rather than a relationship: a boss who
+     let it run to `COLD_RECEPTION_AT` (see `HOME_LABEL`, the same bar
+     `homeTier` reads) got exactly the welcome of one who dropped in every
+     week. Halved rather than zeroed — an evening still counts for something,
+     it is just not undone by showing up once.
+  */
+  const cold = house.neglect >= COLD_RECEPTION_AT;
+  const cleared = cold ? baseline * 0.5 : baseline;
   house.neglect = clamp(house.neglect - cleared, 0, 100);
   house.lastVisitDay = state.day;
   /*
@@ -142,7 +164,9 @@ export function goHome(state: GameState): void {
   state.flags['went_home_day'] = state.day;
   addLog(
     state,
-    `You went home. Nobody there wanted anything from you, which took some getting used to.`,
+    cold
+      ? `You went home. It was not the evening it would have been a year ago — half of it was spent being looked at like a guest.`
+      : `You went home. Nobody there wanted anything from you, which took some getting used to.`,
     'crew',
   );
 }
@@ -165,6 +189,9 @@ export interface HomeRead {
   where: string;
   neglect: number;
   label: string;
+  /** The full tier the label came from — blurb and tone included, so a
+   * screen with room for more than the one line does not re-derive it. */
+  tier: HomeTier;
   /** Who is there, said the way the boss would say it. */
   people: string[];
   /** Days since the last evening at home. */
@@ -178,15 +205,27 @@ export interface HomeRead {
    * until there is something to say.
    */
   costing: string | null;
+  /** What doing nothing costs per week, at the game's own configured rate. */
+  weeklyVelocity: number;
+  /**
+   * Days until neglect crosses `HOME.depositionFrom`, at that same rate, if
+   * nothing between now and then changes it. 0 once already there.
+   *
+   * A projection, not a promise — a visit any day before then moves the
+   * number this is computed from. Worded on screen as "if nothing changes"
+   * for the same reason.
+   */
+  daysUntilDepositionRisk: number;
 }
 
 export function homeRead(state: GameState): HomeRead {
   const house = home(state);
+  const tier = homeTier(house.neglect);
   return {
     where: territoryDef(house.districtId).name,
     neglect: Math.round(house.neglect),
-    label:
-      HOME_LABEL.find(([bar]) => house.neglect >= bar)?.[1] ?? 'You have been home',
+    label: tier.label,
+    tier,
     people: house.people.map((p) => {
       const def = RELATIONS.find((r) => r.id === p.relationId);
       return `${p.name}, ${def ? def.label : 'family'}`;
@@ -218,5 +257,67 @@ export function homeRead(state: GameState): HomeRead {
         : neglectRisk(state) >= 1 + (HOME.depositionAtWorst - 1) * 0.6
           ? 'Your own people have no reason to stand with you beyond the work, and it shows when a room turns.'
           : 'You are becoming somebody your own people only know as the work.',
+    weeklyVelocity: HOME.perWeekAway,
+    daysUntilDepositionRisk:
+      house.neglect >= HOME.depositionFrom
+        ? 0
+        : Math.ceil(
+            (HOME.depositionFrom - house.neglect) / (HOME.perWeekAway / HOME.intervalDays),
+          ),
+  };
+}
+
+/**
+ * How soon the family-dilemma shape (`gen_family_dilemma`, `sim/eventgen.ts`)
+ * could come up again — the honest half of a preview, not the whole one.
+ *
+ * What is *not* here is which occasion or which face. `applies()` draws that
+ * off the causal `rng` at the moment the day's eligibility scan actually
+ * runs, and that draw is not reproducible ahead of time without simulating
+ * the rest of a day that has not happened yet — the same failure mode
+ * CLAUDE.md's "no button lies" rule exists to catch. A deterministic
+ * `Rng.stableNoise` pick was the other option on the table: it would make the
+ * occasion itself knowable in advance, but only by removing the `rng.pick`
+ * call from `applies()`, and that call fires on every eligible day, not only
+ * the day the shape wins the slot — pulling it out shifts the causal stream's
+ * call count for the rest of any save that reaches this code, reshuffling
+ * every later roll in the game, silently, which is exactly the damage
+ * CLAUDE.md's determinism section warns a reporting system can do to the
+ * causal stream. Not worth it for a name. So this reports only the one
+ * number that is true regardless: the day the cooldown floor lifts.
+ *
+ * That day is a floor, not a schedule — `tickEvents` still has to win a
+ * shared daily lottery against the rest of the generated table on top of it,
+ * so most days after it clears, nothing happens, or something else does.
+ * Worded on screen as "could come up as soon as", never "arrives" or "is in".
+ */
+export interface FamilyHorizon {
+  /** Earliest day the shape is eligible to fire again. */
+  eligibleFromDay: number;
+  /** Days from today until then, floored at 0. 0 means eligible now. */
+  daysUntil: number;
+  /**
+   * Whether the shape has ever actually fired.
+   *
+   * Before the first time, `daysUntil` reads permanently 0 — honestly, the
+   * shape really has been eligible since day one — but a screen that says so
+   * from the opening day of a career is wallpaper, not a heads-up about a
+   * pattern. Callers gate the line on this rather than on `daysUntil` alone.
+   */
+  everFired: boolean;
+}
+
+export function familyHorizon(state: GameState): FamilyHorizon {
+  const cooldownDays =
+    GEN_SHAPES.find((s) => s.id === 'gen_family_dilemma')?.cooldownDays ?? 32;
+  const flagged = state.flags['evt_gen_family_dilemma'];
+  // Same sentinel `events.ts`'s own `eligible()` uses for "never fired" —
+  // guarantees the shape reads as eligible from the start of a career.
+  const lastFired = flagged ?? -9999;
+  const eligibleFromDay = lastFired + cooldownDays;
+  return {
+    eligibleFromDay,
+    daysUntil: Math.max(0, eligibleFromDay - state.day),
+    everFired: flagged !== undefined,
   };
 }

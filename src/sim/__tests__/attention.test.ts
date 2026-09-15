@@ -23,6 +23,8 @@ import { startTraining } from '../training';
 import { setStanding } from '../standingOrders';
 import { declareWar, playerWars } from '../diplomacy';
 import { eligibleHeirs, nameHeir, wouldTakeIt } from '../succession';
+import { home } from '../personal';
+import { HOME } from '../../config/personal';
 import { HOME_TERRITORY } from '../../config/territories';
 import { PATTERN } from '../../config/standingOrders';
 import { territoryDef, territoryList } from '../territory';
@@ -267,5 +269,53 @@ describe('what wants you today', () => {
       t.influence.player = DELEGATION.promptAboveInfluence + 10;
     }
     expect(attention(state).length).toBeLessThanOrEqual(6);
+  });
+
+  /*
+     Milestone 2: the family, from the outside. Two ids, gated so only one
+     shows on a given day — see `attention.ts`'s own comment for why.
+  */
+  it('names the family horizon once the shape has fired before and is due soon', () => {
+    const state = game();
+    state.flags['evt_gen_family_dilemma'] = state.day - 30; // fired once, cooldown almost up
+    const line = attention(state).find((l) => l.id === 'family_horizon');
+    expect(line).toBeTruthy();
+    expect(line!.panel).toBe('player');
+  });
+
+  it('stays quiet about the horizon while it is not due soon', () => {
+    const state = game();
+    state.flags['evt_gen_family_dilemma'] = state.day; // just fired, weeks from due
+    expect(attention(state).some((l) => l.id === 'family_horizon')).toBe(false);
+  });
+
+  it('stays quiet about the horizon before the shape has ever fired', () => {
+    const state = game();
+    // No `evt_gen_family_dilemma` flag at all — the shape reads as eligible
+    // from day one, which is true and not news; see `familyHorizon`.
+    expect(attention(state).some((l) => l.id === 'family_horizon')).toBe(false);
+  });
+
+  it('names the neglect crisis once neglect reaches HOME.depositionFrom', () => {
+    const state = game();
+    home(state).neglect = HOME.depositionFrom;
+    const line = attention(state).find((l) => l.id === 'family_neglect_crisis');
+    expect(line).toBeTruthy();
+    expect(line!.panel).toBe('player');
+  });
+
+  it('does not name the crisis below the bar', () => {
+    const state = game();
+    home(state).neglect = HOME.depositionFrom - 1;
+    expect(attention(state).some((l) => l.id === 'family_neglect_crisis')).toBe(false);
+  });
+
+  it('shows the crisis rather than the horizon when both would otherwise apply', () => {
+    const state = game();
+    state.flags['evt_gen_family_dilemma'] = state.day - 30;
+    home(state).neglect = HOME.depositionFrom;
+    const lines = attention(state);
+    expect(lines.some((l) => l.id === 'family_neglect_crisis')).toBe(true);
+    expect(lines.some((l) => l.id === 'family_horizon')).toBe(false);
   });
 });
