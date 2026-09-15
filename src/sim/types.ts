@@ -123,6 +123,18 @@ export interface Player {
    * render time — see ui/art/playerLook.ts.
    */
   look?: PlayerLook;
+  /**
+   * What the double life is doing to the man living it, 0..100.
+   *
+   * Optional and lazily read, like `build`, `points` and the rest above — a
+   * save written before this existed loads as a boss who has been carrying
+   * nothing, which is correct: `tickStress` in `sim/personal.ts` only moves
+   * it forward a week at a time, from real drivers (wars, heat, neglect,
+   * wages owed) the simulation already tracks. See `config/personal.ts`'s
+   * `STRESS` block for why. SAVE_VERSION does not move for this, same as it
+   * does not for the other optional fields here.
+   */
+  stress?: number;
 }
 
 // ---------------------------------------------------- organization state ---

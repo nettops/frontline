@@ -68,7 +68,8 @@ export type GenSubject =
   | 'district'
   | 'civic'
   | 'case'
-  | 'home';
+  | 'home'
+  | 'player';
 
 export interface GenShapeDef {
   id: string;
@@ -196,6 +197,20 @@ export const GEN_SHAPES: GenShapeDef[] = [
      brief's "roughly every 25-40 days".
   */
   { id: 'gen_family_dilemma', subject: 'home', weight: 2, cooldownDays: 32 },
+  /*
+     Not the household. The man.
+
+     Every shape above is instantiated against somebody or something else —
+     a man, a front, a street, the house. This one's subject is the boss
+     himself, gated on `playerStress` (`config/personal.ts`) rather than on
+     anything in the world. Weight 2, the same floor the `home` shapes use,
+     for the same reason: it is rare relative to the authored table and not
+     meant to be the loudest thing in the pool. Cooldown 35 — a week past
+     `gen_family_dilemma`'s 32, since this shape's gate (stress crossing 75)
+     is already the rarer condition; a shorter floor under it would be a
+     cooldown that never actually binds.
+  */
+  { id: 'gen_panic_episode', subject: 'player', weight: 2, cooldownDays: 35 },
   /*
      Three shapes for the three systems built after this file was written.
 
@@ -535,4 +550,28 @@ export const GEN_EFFECT = {
    * at least as much as refusing an ordinary one, not less.
    */
   familyDilemmaStayNeglect: HOME.perWeekAway * 2.5,
+
+  /*
+     The panic episode. See `gen_panic_episode` in `sim/eventgen.ts` and
+     `STRESS` in `config/personal.ts` for the gate and the tiers it reads.
+     Figures are the brief's own; the two that were left open (how much a
+     public spell costs in front of the men, and how much the sedatives
+     dull) are sized against numbers already in this file rather than
+     invented.
+  */
+  /** A trusted private doctor to a backroom, no crew the wiser. */
+  panicHouseCallCost: 500,
+  panicHouseCallClear: 35,
+  /** Denying it in front of the men. Free, and it spikes rather than clears. */
+  panicPushThroughStressSpike: 8,
+  /**
+   * What the crew noticing costs. Sized against `homeOrBusinessGoRespect`
+   * (-4) just above -- a visible bad moment in front of the men is a smaller
+   * dent than a boss who openly chose business over his own family, not a
+   * bigger one.
+   */
+  panicPushThroughRespect: -3,
+  /** Pills instead of a doctor. Clears less than the house call and does not spend the evening. */
+  panicSedativeCost: 150,
+  panicSedativeClear: 20,
 } as const;

@@ -2044,3 +2044,118 @@ clean. `npm test` 163 files / 1,873 passing, 0 failures (was 162 / 1,859
 before this pass). `deposition.test.ts` reseeded 4000 -> 4011 with the
 reasoning and the scan evidence in its own comment; `config/succession.ts`
 itself untouched.
+
+### Stress & Panic Episodes -- Milestone 3 built, one design gap the brief left open closed with a real mechanical hook, 2026-09-15
+
+Third and last of the family/inner-life brief. The brief's placeholder was
+missing on first dispatch and resent in full; the corrections in the resend
+(numbered 1-15) are treated as load-bearing here, same as the brief text
+itself -- several of them overrode what the brief said outright (`subject:
+'player'` needed adding to `GenSubject`, since no such value existed;
+`canConsult` reuses only the zero-crew-op half of `canGoHome`, not the whole
+function; the "career whisper" for the secrecy risk is `recordCareerEvent`,
+since `whispers.ts` has no "write this exact sentence" door into its
+generated feed).
+
+**`STRESS`/`STRESS_TIERS`, `config/personal.ts`.** One number, `state.player.
+stress?` (0..100, optional, lazy, no `SAVE_VERSION` move -- same idiom `build`
+and `points` already use on that interface, with the same reasoning in the
+field's own comment). Four drivers, all facts the sim already tracks rather
+than a second ledger: `playerWars(state).length * STRESS.perWar`, heat
+`>= 50`, household neglect `>= 50`, any wages owed -- plus natural recovery
+when none of those and neglect/heat are both clearly quiet. Tiers are the
+same four-bar shape `HOME_LABEL` uses (`stressTier`, checked highest-first).
+
+**The `lands()` hook -- point 6, the one genuine design decision in this
+milestone.** The brief's "worsens sit-down composure" named a stat that does
+not exist anywhere in the codebase. Rather than bolt one on, `sim/sitdown.
+ts`'s `lands()` -- which already reads `state.player.attributes.leadership`
+straight into the `help` term deciding whether a register lands -- now reads
+it through `stressLeadershipMultiplier(state)` (`sim/personal.ts`): 1 outside
+the `critical` tier and outside a sedatives comedown, `STRESS.
+criticalLeadershipPenalty` (0.75) at `critical`, stacking with a further
+`STRESS.sedatedLeadershipPenalty` (0.85) while `sedated_until_day` is live.
+Only the worst tier bites, same reasoning `HOME.depositionFrom` uses for
+neglect -- a penalty that starts at the first bar is a tax on every career
+that ever fights a war. Proven with a borderline sit-down case in
+`sitdown.test.ts` (grievance 21 against threshold 30, `respectForBoss` 0,
+leadership 100: lands at full `help` (31), misses at the critical multiple
+(28.5)) -- watched failing with `stressLeadershipMultiplier` hard-coded to
+return 1, restored.
+
+**The sedatives debuff -- point 7.** No new buff/debuff infrastructure for
+one caller. `state.flags['sedated_until_day'] = state.day + STRESS.
+sedatedDays` (7), same stamped-day idiom `went_home_day` already uses, read
+by the same `stressLeadershipMultiplier` hook above. Still active the day
+before it expires, gone the day it does (tested at that exact boundary).
+
+**`canConsult`/`consultDoctor`, `sim/personal.ts`.** `bodySpentTonight`
+extracted out of `canGoHome`'s zero-crew-op check (point 10 -- exported and
+reused by `canConsult` and by `gen_panic_episode`'s house-call choice,
+rather than three copies of `Object.values(state.activeOperations).some(...)`).
+Deliberately *not* calling `canGoHome` wholesale: it also refuses inside
+`HOME.visitAgainAfterDays`, a rule about a visit being worth less so soon
+after the last one, which has nothing to say about a doctor's office --
+tested directly (a consultation the same evening as a home visit is not
+blocked, even though `canGoHome` itself now refuses). `consultDoctor` spends
+`priced(state, STRESS.consultCost)` (350) via `spend`, clears
+`STRESS.consultRecovery` (28), stamps both `went_home_day` and
+`last_consult_day`, and -- the secrecy risk -- calls `recordCareerEvent`
+(not a whisper; see above) when `org.heat >= STRESS.secrecyRiskHeat` (60) or
+an investigation is open.
+
+**`gen_panic_episode`, `config/eventgen.ts` + `sim/eventgen.ts`.** Same two-
+file shape as `gen_family_dilemma`. `subject: 'player'` (new `GenSubject`
+member -- the field is metadata only, read by nothing, so adding one is a
+one-line, no-risk change). Weight 2, cooldown 35 (a week past
+`gen_family_dilemma`'s 32, since this shape's own gate -- stress crossing 75
+-- is already the rarer condition). `applies` reads `playerStress(state) >=
+STRESS.panicThreshold` and `bodySpentTonight`, nothing else. Three choices,
+the brief's own figures run through `priced()`: Discreet House Call ($500,
+clears 35, spends the evening), Push Through (free, +8 stress, -3 respect --
+sized against `homeOrBusinessGoRespect`'s -4 just above it in `GEN_EFFECT`,
+a visible bad moment being a smaller dent than openly choosing business over
+family), Prescription Sedatives ($150, clears 20, does not spend the
+evening, stamps the debuff above).
+
+**Attention & UI.** `stress_critical` (`sim/attention.ts`), panel `'player'`
+(not the brief's `'yourself'` -- same correction as Milestone 2's own entry,
+`Rail.tsx`'s `PanelId` union has no such panel), fires on the same
+`STRESS.panicThreshold` bar `gen_panic_episode` reads to fire at all.
+`PlayerPanel.tsx` gained a "Condition" block beside Household in the same
+Standing panel (a third `Panel` component would have broken the `grid-2`
+layout) -- tier label and blurb, an itemised `Net: +X/wk (Wars: ..., Heat:
+...)` line matching the brief's own example format, and a "See Dr. Vance
+($price)" button reading `canConsult`'s own refusal reason when disabled.
+
+**The RNG-reshuffle trap (point 15) hit, on `deposition.test.ts` again.**
+Adding a new generated shape that becomes eligible on some days changes how
+many rng calls the daily eligibility scan consumes on those days, exactly
+the failure mode Milestone 2's own entry above describes for the same test.
+Seed 4011 (Milestone 2's own reseed) went from "deposed" to "never deposed"
+over 1,460 days once `gen_panic_episode` joined the table. Scanned seeds
+4011-4110 after the change: 18 still reach `generation > 1` (was ~30/100
+after Milestone 2's reshuffle, so this is the same order of magnitude, not
+a regression in reachability) -- reseeded to 4022, confirmed to produce the
+same "nobody was killed and nobody was arrested" fate, and the guard
+re-confirmed the same way both prior times: reverting `backersNeeded` to 2
+and watching it fail before restoring it. `config/succession.ts` itself
+otherwise untouched.
+
+Thirty-eight new tests: `personal.test.ts` (defaults, clamping, the four
+pressure drivers itemised together and separately, the weekly gate and its
+own clamp, all four tiers, `canConsult`'s three refusals plus the
+visit-cooldown non-interaction, `consultDoctor`'s spend/clear/flags/log,
+the secrecy-risk career entry on and off, the leadership-multiplier's own
+four cases), `sitdown.test.ts` (the borderline `lands()` case), `eventgen.
+test.ts` (the panic episode: threshold gate, body-busy gate, three choices,
+each choice's full effect, the sedatives boundary), `attention.test.ts`
+(shown at the bar, quiet below it). Every new guard proven failing with its
+effect reverted or hard-coded and restored -- nine reversions run this
+session (the leadership multiplier itself; the panic-episode threshold and
+body-busy gates; the sedatives stamp; `canConsult`'s funds, cooldown and
+secrecy-risk checks; the `attention.ts` bar) -- see each test's own comment
+for which. `tsc -b` clean. `npm test` 163 files / 1,898 passing, 0 failures,
+run more than twice during the build per point 15. No `SAVE_VERSION` move;
+`config/succession.ts` touched only for the two guard-reversion checks
+above, both reverted.
