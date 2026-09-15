@@ -43,7 +43,7 @@ export function stepAlongPath(
   }
 
   const totalSegments = path.length - 1;
-  const distance = Math.min((elapsedMs / 1000) * speedCellsPerSec, totalSegments);
+  const distance = Math.min(Math.max(0, (elapsedMs / 1000) * speedCellsPerSec), totalSegments);
   const done = distance >= totalSegments;
   const segmentIndex = done ? totalSegments - 1 : Math.floor(distance);
   const fraction = done ? 1 : distance - segmentIndex;

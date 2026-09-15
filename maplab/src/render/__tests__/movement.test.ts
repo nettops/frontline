@@ -56,6 +56,19 @@ describe('stepAlongPath', () => {
     expect(stepAlongPath([[0, 0], [0, 1]], 0, 1).facing).toBe('S');
     expect(stepAlongPath([[0, 0], [0, -1]], 0, 1).facing).toBe('N');
   });
+
+  it('treats a negative elapsedMs as zero elapsed, never throwing', () => {
+    const path: Point[] = [[0, 0], [1, 0]];
+    const state = stepAlongPath(path, -1, DEFAULT_SPEED_CELLS_PER_SEC);
+    expect(state.x).toBeCloseTo(0);
+    expect(state.y).toBeCloseTo(0);
+    expect(state.facing).toBe('E');
+    expect(state.done).toBe(false);
+  });
+
+  it('throws on an empty path', () => {
+    expect(() => stepAlongPath([], 0, DEFAULT_SPEED_CELLS_PER_SEC)).toThrow();
+  });
 });
 
 describe('facingToSprite', () => {

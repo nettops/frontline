@@ -26,9 +26,14 @@ export function pickWanderTarget(
   );
   if (candidates.length === 0) return null;
 
-  const reachable = candidates.filter((cell) => findPath(map, currentCell, cell) !== null);
-  if (reachable.length === 0) return null;
-
-  const idx = Math.floor(rng() * reachable.length);
-  return reachable[idx];
+  // ponytail: was filter-all-then-pick-random (rebuilds the walk grid per
+  // candidate); measured 15.4ms on a 209-cell room, over frame budget with
+  // 4 NPCs eligible on frame 1. Random-start probe returns the first
+  // reachable cell instead of scoring every candidate.
+  const start = Math.floor(rng() * candidates.length);
+  for (let i = 0; i < candidates.length; i++) {
+    const cell = candidates[(start + i) % candidates.length];
+    if (findPath(map, currentCell, cell) !== null) return cell;
+  }
+  return null;
 }
