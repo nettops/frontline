@@ -1,11 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
-import { Application, type Container } from 'pixi.js';
-import type { MapDef, SelectedEntity } from '../map/types';
-import { buildWalkGrid, cellRoomIndex } from '../map/grid';
+import { Application, type Container, type Sprite } from 'pixi.js';
+import type { MapDef, SelectedEntity, SpawnPoint } from '../map/types';
+import { buildWalkGrid, cellRoomIndex, cellOf, findPath, type Point } from '../map/grid';
 import { buildMapLayers, mapPixelBounds, type MapLayers, type LayerVisibility, type SelectableNode } from './layers';
 import { fitTransform, clampZoom } from './camera';
 import { cellToScreen, screenToCell } from './iso';
-import { hash } from './isoSprites';
+import { hash, PERSON_PALETTES } from './isoSprites';
+import { stepAlongPath, facingToSprite, type Mode, type Facing } from './movement';
+import { pickWanderTarget } from './wander';
 
 export interface PixiStageHandle {
   resetCamera: () => void;
@@ -15,18 +17,36 @@ export interface PixiStageHandle {
 interface Props {
   map: MapDef;
   layerVisibility: LayerVisibility;
+  mode: Mode;
   onSelect: (entity: SelectedEntity) => void;
   onPointerMove: (cell: { x: number; y: number } | null) => void;
   registerHandle: (handle: PixiStageHandle) => void;
 }
 
-export default function PixiStage({ map, layerVisibility, onSelect, onPointerMove, registerHandle }: Props) {
+interface Mover {
+  spawn: SpawnPoint;
+  container: SelectableNode;
+  person: Sprite;
+  paletteIndex: number;
+  pos: { x: number; y: number };
+  facing: Facing;
+  path: Point[] | null;
+  pathStartMs: number;
+  nextWanderAtMs: number; // npc only
+}
+
+export default function PixiStage({ map, layerVisibility, mode, onSelect, onPointerMove, registerHandle }: Props) {
   const hostRef = useRef<HTMLDivElement>(null);
   const appRef = useRef<Application | null>(null);
   const layersRef = useRef<MapLayers | null>(null);
   const selectedRef = useRef<SelectedEntity>(null);
+  const modeRef = useRef<Mode>(mode);
   const ambientRaf = useRef(0);
   const [, forceRender] = useState(0);
+
+  useEffect(() => {
+    modeRef.current = mode;
+  }, [mode]);
 
   useEffect(() => {
     const host = hostRef.current;
@@ -116,6 +136,70 @@ export default function PixiStage({ map, layerVisibility, onSelect, onPointerMov
         },
       });
 
+      // Movement bookkeeping: one Mover per spawn (player + 4 npcs), built once from
+      // the containers buildMapLayers already created. Position is authoritative on
+      // `pos` (fractional cell coords); `container`/`person` are the Pixi objects a
+      // moved entity's transform gets written to each frame.
+      const movers: Mover[] = [];
+      for (const child of layers.spawns.children as SelectableNode[]) {
+        const spawn = child.mapEntity as SpawnPoint | undefined;
+        const person = child.getChildByLabel('person') as Sprite | undefined;
+        if (!spawn || !person) continue;
+        movers.push({
+          spawn,
+          container: child,
+          person,
+          paletteIndex: hash(spawn.id) % PERSON_PALETTES.length,
+          pos: { x: spawn.x, y: spawn.y },
+          facing: 'S',
+          path: null,
+          pathStartMs: 0,
+          nextWanderAtMs: 0, // eligible to wander from the very first frame
+        });
+      }
+      const playerMover = movers.find((m) => m.spawn.kind === 'player') ?? null;
+
+      function applyMoverTransform(mover: Mover) {
+        const base = cellToScreen(mover.pos.x, mover.pos.y);
+        mover.container.x = base.x;
+        mover.container.y = base.y;
+        mover.container.zIndex = Math.floor(mover.pos.x) + Math.floor(mover.pos.y);
+        const { variant, flipX } = facingToSprite(mover.facing);
+        mover.person.texture = layers.getPersonTexture(mover.paletteIndex, variant);
+        mover.person.scale.x = flipX ? -1 : 1;
+      }
+
+      function updateMover(mover: Mover, now: number) {
+        if (mover.path) {
+          const state = stepAlongPath(mover.path, now - mover.pathStartMs);
+          mover.pos = { x: state.x, y: state.y };
+          mover.facing = state.facing;
+          if (state.done) {
+            mover.path = null;
+            if (mover.spawn.kind === 'npc') {
+              mover.nextWanderAtMs = now + 1000 + Math.random() * 2000; // 1-3s pause
+            }
+          }
+        } else if (mover.spawn.kind === 'npc' && now >= mover.nextWanderAtMs) {
+          const currentCell = cellOf(mover.pos.x, mover.pos.y);
+          const target = pickWanderTarget(map, mover.spawn.roomId, currentCell, Math.random);
+          if (target) {
+            const path = findPath(map, currentCell, target);
+            if (path) {
+              mover.path = path;
+              mover.pathStartMs = now;
+            } else {
+              mover.nextWanderAtMs = now + 1000 + Math.random() * 2000; // retry later
+            }
+          } else {
+            mover.nextWanderAtMs = now + 2000 + Math.random() * 2000; // nothing reachable, wait longer
+          }
+        }
+        applyMoverTransform(mover);
+      }
+
+      for (const mover of movers) applyMoverTransform(mover); // initial paint before the first tick
+
       let dragging = false;
       let last = { x: 0, y: 0 };
       let downAt = { x: 0, y: 0 };
@@ -154,8 +238,14 @@ export default function PixiStage({ map, layerVisibility, onSelect, onPointerMov
       };
       host.addEventListener('wheel', onWheel, { passive: false });
 
+      // One click always means one thing: in Move mode, object/spawn taps are a no-op
+      // (can't walk into furniture or select while moving) — only the stage-level
+      // empty-floor fallback below acts on Move mode.
       for (const child of [...layers.objects.children, ...layers.spawns.children] as SelectableNode[]) {
-        child.on('pointertap', () => handleSelect(child.mapEntity ?? null));
+        child.on('pointertap', () => {
+          if (modeRef.current === 'move') return;
+          handleSelect(child.mapEntity ?? null);
+        });
       }
 
       // Fires after any child's pointertap (Pixi bubbles child -> stage). If a child already
@@ -168,7 +258,19 @@ export default function PixiStage({ map, layerVisibility, onSelect, onPointerMov
         if (moved > 4) return;
         const local = layers.world.toLocal(e.global);
         const cellF = screenToCell(local.x, local.y);
-        const cell: [number, number] = [Math.floor(cellF.x), Math.floor(cellF.y)];
+        const cell: Point = [Math.floor(cellF.x), Math.floor(cellF.y)];
+
+        if (modeRef.current === 'move') {
+          if (!playerMover) return;
+          const fromCell = cellOf(playerMover.pos.x, playerMover.pos.y);
+          const path = findPath(map, fromCell, cell);
+          if (path) {
+            playerMover.path = path;
+            playerMover.pathStartMs = performance.now();
+          }
+          return;
+        }
+
         const room = roomIndex.get(`${cell[0]},${cell[1]}`) ?? null;
         handleSelect(room);
       });
@@ -176,12 +278,15 @@ export default function PixiStage({ map, layerVisibility, onSelect, onPointerMov
       // Ambient motion: a slow candlelit flicker on the stove + a couple tables, and an
       // idle sway on standing people — purely decorative, nothing here is read by a test
       // or by gameplay code. Same reduced-motion contract as src/ui/StreetScene.tsx in
-      // the main game: under prefers-reduced-motion, skip starting the loop entirely
-      // rather than just shrinking the amplitude, so a reduced-motion viewer gets a
-      // fully static scene.
-      if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      // the main game: under prefers-reduced-motion, skip building it entirely rather
+      // than just shrinking the amplitude. Movement itself is NOT gated by this — a
+      // reduced-motion viewer must still be able to see the avatar/NPCs move, since that
+      // carries real information (position), unlike the purely cosmetic flicker/sway.
+      const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      const flicker: { target: SelectableNode; phase: number }[] = [];
+      const sway: { target: Container; baseY: number; phase: number }[] = [];
+      if (!reducedMotion) {
         let tableCount = 0;
-        const flicker: { target: SelectableNode; phase: number }[] = [];
         for (const child of layers.objects.children as SelectableNode[]) {
           const ent = child.mapEntity;
           if (!ent || !('kind' in ent)) continue;
@@ -194,22 +299,22 @@ export default function PixiStage({ map, layerVisibility, onSelect, onPointerMov
           flicker.push({ target: child, phase: ((hash(ent.id) % 1000) / 1000) * Math.PI * 2 });
         }
 
-        const sway: { target: Container; baseY: number; phase: number }[] = [];
         for (const child of layers.spawns.children as SelectableNode[]) {
           const ent = child.mapEntity;
           const person = child.getChildByLabel('person');
           if (!ent || !person) continue;
           sway.push({ target: person, baseY: person.y, phase: ((hash(ent.id) % 1000) / 1000) * Math.PI * 2 });
         }
-
-        const tick = (now: number) => {
-          const t = now / 1000;
-          for (const f of flicker) f.target.alpha = 0.82 + 0.18 * Math.sin(t * 0.6 + f.phase);
-          for (const s of sway) s.target.y = s.baseY + Math.sin(t * 0.5 + s.phase) * 1.5;
-          ambientRaf.current = requestAnimationFrame(tick);
-        };
-        ambientRaf.current = requestAnimationFrame(tick);
       }
+
+      const tick = (now: number) => {
+        const t = now / 1000;
+        for (const f of flicker) f.target.alpha = 0.82 + 0.18 * Math.sin(t * 0.6 + f.phase);
+        for (const s of sway) s.target.y = s.baseY + Math.sin(t * 0.5 + s.phase) * 1.5;
+        for (const mover of movers) updateMover(mover, now);
+        ambientRaf.current = requestAnimationFrame(tick);
+      };
+      ambientRaf.current = requestAnimationFrame(tick);
 
       forceRender((n) => n + 1); // now that layersRef is populated, re-run the visibility effect
     })();
