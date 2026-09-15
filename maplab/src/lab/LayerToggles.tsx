@@ -13,7 +13,7 @@ export default function LayerToggles({
   onChange: (next: LayerVisibility) => void;
 }) {
   return (
-    <aside style={{ padding: 12, borderRight: '1px solid #332a22' }}>
+    <aside style={{ padding: 12 }}>
       <h3 style={{ marginTop: 0 }}>Layers</h3>
       {(Object.keys(LABELS) as (keyof LayerVisibility)[]).map((key) => (
         <label key={key} style={{ display: 'block', marginBottom: 6 }}>

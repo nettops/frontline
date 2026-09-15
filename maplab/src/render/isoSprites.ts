@@ -45,6 +45,23 @@ export const PERSON: IsoSprite = {
   palette: { h: '#2e2a24', f: '#8a6a4f', c: '#3b3528', C: '#2a261f' },
 };
 
+// Back view of the standing person: same silhouette as PERSON, but the face
+// patch is covered by hair colour (nothing to see from behind) and a faint
+// centre seam replaces the flat torso fill, so it reads as a distinct pose
+// at a glance rather than a recoloured front sprite.
+export const PERSON_BACK: IsoSprite = {
+  rows: [
+    '.hh.',
+    '.hh.',
+    '.hh.',
+    'cccc',
+    'cCCc',
+    'c.C.',
+    'c.C.',
+  ],
+  palette: { h: '#2e2a24', f: '#8a6a4f', c: '#3b3528', C: '#2a261f' },
+};
+
 // Bar counter (footprint 4x1, height 1.1): long and shallow, so the top
 // face reads as a thin lens rather than a diamond, with a tall front face
 // and a brass rail along the base.
