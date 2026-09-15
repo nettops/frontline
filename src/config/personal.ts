@@ -133,3 +133,91 @@ export const HOME_LABEL: [number, string][] = [
   [25, 'You are missed'],
   [0, 'You have been home'],
 ];
+
+/**
+ * The calendar's own reasons to go home, as opposed to the house simply
+ * having noticed you are never in it.
+ *
+ * `gen_asked_for_you` and `gen_home_or_business` (see `config/eventgen.ts`)
+ * are both gated on neglect crossing a bar, which is right for "the house has
+ * noticed" and wrong for a school play -- nobody's kid waits for a stat to
+ * cross a bar before performing in one. These four are reachable regardless
+ * of neglect; see `gen_family_dilemma` in `sim/eventgen.ts` for the gate that
+ * replaces it (only that somebody in the house fits the occasion, and the
+ * boss is not already spoken for tonight).
+ *
+ * Each is tagged to whichever `RELATIONS` id it is naturally about.
+ * `celebration` is tagged to all of them on purpose -- a household that
+ * happens not to include a sibling should not lose a quarter of the pool,
+ * and "somebody had something to celebrate" is true of any of the six.
+ */
+export interface FamilyDilemmaDef {
+  id: string;
+  /** Which household relation(s) this occasion fits. */
+  relationIds: string[];
+  /** Names the occasion, for the title and the career record. */
+  occasion: string;
+  /** The memo's own words, third person implied -- for `oneOf()`. */
+  bodies: string[];
+  /** What showing up costs beyond the evening itself. 0 when presence is the whole ask. */
+  attendCost: number;
+  /** What sending something in your place costs. */
+  sendCost: number;
+  /** What gets sent, said the way the boss would put it. */
+  sendGesture: string;
+}
+
+export const FAMILY_DILEMMAS: FamilyDilemmaDef[] = [
+  {
+    id: 'school_event',
+    relationIds: ['eldest', 'youngest'],
+    occasion: 'the school thing',
+    bodies: [
+      'has a thing at the school this week, the kind with an empty chair if you do not fill it',
+      'already told somebody at the school that you would be there',
+      'has a school thing coming up, and has stopped asking whether you are coming',
+    ],
+    attendCost: 0,
+    sendCost: 200,
+    sendGesture: 'a note and something from the good store, delivered instead of you',
+  },
+  {
+    id: 'quiet_evening',
+    relationIds: ['spouse'],
+    occasion: 'one evening',
+    bodies: [
+      'wants one evening. Not a trip, not an occasion, just a night in the same room, awake',
+      'asked for tonight specifically. Not next week. Tonight',
+      'has stopped suggesting an evening and started just naming one',
+    ],
+    attendCost: 0,
+    sendCost: 250,
+    sendGesture: 'something from a jeweler, sent round with an excuse',
+  },
+  {
+    id: 'sick_relative',
+    relationIds: ['parent', 'elder'],
+    occasion: 'being there',
+    bodies: [
+      'is not well, the kind of not well where somebody should be in the room',
+      'took a turn, and the doctor is asking who is coming',
+      'is in bed and asking for you by name, which has not happened before',
+    ],
+    attendCost: 600,
+    sendCost: 450,
+    sendGesture: 'a doctor sent in your name, and the bill settled from a distance',
+  },
+  {
+    id: 'celebration',
+    relationIds: RELATIONS.map((r) => r.id),
+    occasion: 'the celebration',
+    bodies: [
+      'has something worth celebrating, and wants you at it rather than told about it after',
+      'is putting something together for a reason that will not come round again this year',
+      'wants you at the table for once, not just the envelope',
+    ],
+    attendCost: 300,
+    sendCost: 200,
+    sendGesture: 'a gift, sent round with your name on the card',
+  },
+];
