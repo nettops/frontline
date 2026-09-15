@@ -47,8 +47,8 @@ import { stewardOf } from './delegation';
 import { nicknameOf } from './nicknames';
 import { priced } from './market';
 import { readWhispers } from './whispers';
-import { goHome, home } from './personal';
-import { HOME, RELATIONS } from '../config/personal';
+import { canGoHome, goHome, home } from './personal';
+import { FAMILY_DILEMMAS, HOME, RELATIONS } from '../config/personal';
 import { CIVIC_FIGURES } from '../config/civic';
 import { GEN_EFFECT, GEN_SEVERITY_WEIGHT_MAX, GEN_SHAPES, GEN_WHEN } from '../config/eventgen';
 import { recordCareerEvent } from './career';
@@ -611,6 +611,72 @@ const homeOrBusiness: EventDef = {
 };
 
 /**
+ * The occasion itself, not just the calendar noticing you have been away.
+ *
+ * `askedForYou` and `homeOrBusiness` above both wait for `house.neglect` to
+ * cross `GEN_WHEN.neglect` -- correct for "the house has noticed", wrong for
+ * a school play. Nobody's kid waits for a stat to cross a bar before
+ * performing in one, so `applies` here does not read neglect at all: only
+ * that somebody in the house fits one of `FAMILY_DILEMMAS` and the boss is
+ * not already spoken for tonight (`canGoHome`, the same body `goHome` itself
+ * spends).
+ */
+const familyDilemma: EventDef = {
+  id: 'gen_family_dilemma',
+  ...shape('gen_family_dilemma'),
+  applies(state, rng) {
+    if (!canGoHome(state).ok) return null;
+    const house = home(state);
+    const matches = FAMILY_DILEMMAS.filter((d) =>
+      house.people.some((p) => d.relationIds.includes(p.relationId)),
+    );
+    if (!matches.length) return null;
+    return { atHome: true, familyDilemmaId: rng.pick(matches).id };
+  },
+  build(state, rng, ctx) {
+    const dilemma = FAMILY_DILEMMAS.find((d) => d.id === ctx.familyDilemmaId)!;
+    const house = home(state);
+    const who = house.people.find((p) => dilemma.relationIds.includes(p.relationId))!;
+    const def = RELATIONS.find((r) => r.id === who.relationId);
+    const relation = def ? def.label : 'somebody at home';
+    const attendCash = priced(state, dilemma.attendCost);
+    const sendCash = priced(state, dilemma.sendCost);
+
+    return {
+      defId: 'gen_family_dilemma',
+      title: `${who.name}, ${dilemma.occasion}`,
+      body: oneOf(rng, dilemma.bodies.map((b) => `${who.name}, ${relation}, ${b}.`)),
+      severity: 'warning',
+      npcId: null,
+      data: { dilemmaId: dilemma.id, relationId: who.relationId },
+      choices: [
+        {
+          id: 'attend',
+          label: 'Go',
+          ...(dilemma.attendCost > 0
+            ? payable(state, attendCash, `and you are the one who has to be there`)
+            : {
+                hint: 'The work is still there tomorrow. It is always still there tomorrow.',
+                disabledReason: undefined,
+                cost: 0,
+              }),
+        },
+        {
+          id: 'send',
+          label: 'Send something instead',
+          ...payable(state, sendCash, dilemma.sendGesture),
+        },
+        {
+          id: 'stay',
+          label: 'Not this time',
+          hint: `${who.name} will remember this one specifically.`,
+        },
+      ],
+    };
+  },
+};
+
+/**
  * One of yours is in a cell.
  *
  * The state comes and goes, which is what makes it a memo rather than a
@@ -1059,6 +1125,7 @@ export const GEN_DEFS: EventDef[] = [
   nameCameUp,
   askedForYou,
   homeOrBusiness,
+  familyDilemma,
   stewardAsks,
   theNameStuck,
   oldOwner,
@@ -1351,6 +1418,54 @@ export function resolveGenerated(
       if (house.neglect >= HOME.depositionFrom) {
         recordCareerEvent(state, 'Chose business over family, again.', 'bad');
       }
+      return;
+    }
+
+    case 'gen_family_dilemma': {
+      const dilemma = FAMILY_DILEMMAS.find((d) => d.id === String(event.data.dilemmaId ?? ''));
+      if (!dilemma) return;
+      const house = home(state);
+      const who = house.people.find((p) => p.relationId === event.data.relationId);
+      const name = who?.name ?? 'they';
+
+      if (choiceId === 'attend') {
+        /*
+           Checked again rather than trusted from `applies`: the memo can sit
+           pending for days, and by the time it is answered the boss may
+           already be out on the one job that needs him personally tonight.
+           Failing closed here, before any money moves, is what keeps this
+           from spending cash on a visit that `goHome` is about to refuse.
+        */
+        if (!canGoHome(state).ok) {
+          addLog(state, `Something else already had that evening. You did not go.`, 'failure');
+          return;
+        }
+        if (dilemma.attendCost > 0 && !spend(state, priced(state, dilemma.attendCost), 'world')) {
+          addLog(state, `The money was not there, so you did not go either.`, 'failure');
+          return;
+        }
+        goHome(state);
+        // The occasion clears more than an ordinary evening. See
+        // `GEN_EFFECT.familyDilemmaAttendExtraClear` for the 1.5x.
+        house.neglect = clamp(house.neglect - GEN_EFFECT.familyDilemmaAttendExtraClear, 0, 100);
+        addLog(state, `You went. It cost you the evening, and it was worth it.`, 'crew');
+        return;
+      }
+
+      if (choiceId === 'send') {
+        if (!spend(state, priced(state, dilemma.sendCost), 'world')) {
+          addLog(state, `You had nothing to send either, and ${name} noticed that too.`, 'failure');
+          return;
+        }
+        house.neglect = clamp(house.neglect + GEN_EFFECT.familyDilemmaSendNeglect, 0, 100);
+        addLog(state, `You sent ${dilemma.sendGesture}. ${name} noticed who was not holding it.`, 'crew');
+        return;
+      }
+
+      // 'stay': free, and the most expensive answer in the room.
+      house.neglect = clamp(house.neglect + GEN_EFFECT.familyDilemmaStayNeglect, 0, 100);
+      recordCareerEvent(state, `Was not there for ${name}'s ${dilemma.occasion}.`, 'bad');
+      addLog(state, `You did not go. Nobody said anything about it, which was worse.`, 'crew');
       return;
     }
 
