@@ -347,6 +347,14 @@ describe('deposition, played into rather than built', () => {
      was arrested" fate, and the guard re-confirmed the same way all three
      times before it: reverting `backersNeeded` to 2 and watching this fail
      before restoring it.
+
+     Briefly reseeded a fourth time, 4025 to 4011, while a further
+     weight-and-cooldown retune (2/38-45 -> 1/50-60) was tried against the
+     same orders-bar failure. That retune was measured to trade one failure
+     for two new ones elsewhere in `ladder.probe.test.ts` and was abandoned
+     — see `gen_family_dilemma`'s own comment in `config/eventgen.ts` for
+     the full account. Reverted to 4025 along with the config, since 4025 is
+     what this exact 38/45 setting was confirmed against the third time.
   */
   it('fires from an ordinary career under the current gate', () => {
     const state = playOrdinaryCareer(4025, 1460);
