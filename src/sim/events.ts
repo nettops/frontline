@@ -2112,6 +2112,39 @@ function raise(
  * which is precisely the hole round 14 fell into — by day 180 the authored
  * events are all on cooldown or already answered, and the game goes quiet.
  */
+/**
+ * The generated half's whole daily decision, on a stream of its own.
+ *
+ * Same reasoning as `offerStream` in `orders.ts`, and the same fix for the
+ * same symptom: `eligible()` runs `def.applies(state, rng)` for every
+ * currently-eligible shape in whichever pool it is handed, and several
+ * `applies`/`build` implementations spend real draws (`rng.pick`, a "who"
+ * index) doing it. Adding a shape to `GEN_SHAPES` changes how many of those
+ * draws happen, or whether `raise`'s `weightedPick` roll happens at all, on
+ * a given day — which reshuffles `state.rng.calls` for every system after it
+ * that day, and every day after that. `gen_family_dilemma`'s comment in
+ * `config/eventgen.ts` is the full investigation: two new shapes moved an
+ * unrelated `orders.ts` probe assertion, and no weight or cooldown number on
+ * either shape made it stop, because the fragility was never in either
+ * shape's tuning.
+ *
+ * The authored half keeps drawing from the real causal `rng` — its outcomes
+ * are meant to be part of the same story as everything else that happens
+ * that day. The generated half is the one explicitly designed for frequent
+ * addition (see this file's own header), so it is the half whose additions
+ * must stop being globally disruptive.
+ *
+ * Stride 32: instrumented across 600 seeded careers (4 difficulties x 150
+ * seeds x 1200 days) the whole decision — the day's chance roll, `eligible`
+ * scanning all of `GEN_DEFS`, and `raise`'s `weightedPick` plus whatever the
+ * chosen shape's `build` draws — never consumed more than 6 calls in a
+ * single day. 32 leaves five times that before one day's stream could reach
+ * into the next.
+ */
+function generatedStream(state: GameState): Rng {
+  return new Rng({ seed: (state.rng.seed ^ 0x2f7a9c11) >>> 0, calls: state.day * 32 });
+}
+
 export function tickEvents(state: GameState, rng: Rng): void {
   if (state.pendingEvents.length >= MAX_PENDING) return;
 
@@ -2120,8 +2153,9 @@ export function tickEvents(state: GameState, rng: Rng): void {
     if (raise(state, rng, eligible(state, rng, AUTHORED_DEFS))) return;
   }
 
-  if (!rng.chance(GEN_CHANCE_PER_DAY * diff.eventPressure)) return;
-  raise(state, rng, eligible(state, rng, GEN_DEFS));
+  const genRng = generatedStream(state);
+  if (!genRng.chance(GEN_CHANCE_PER_DAY * diff.eventPressure)) return;
+  raise(state, genRng, eligible(state, genRng, GEN_DEFS));
 }
 
 // ----------------------------------------------------------- resolution ----

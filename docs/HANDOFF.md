@@ -2159,3 +2159,71 @@ for which. `tsc -b` clean. `npm test` 163 files / 1,898 passing, 0 failures,
 run more than twice during the build per point 15. No `SAVE_VERSION` move;
 `config/succession.ts` touched only for the two guard-reversion checks
 above, both reverted.
+
+### Generated events, isolated off the causal stream -- the RNG-reshuffle trap closed structurally, not reseeded away again, 2026-09-16
+
+Milestone 3's own entry above names the trap by its fourth hit: adding
+`gen_family_dilemma`/`gen_panic_episode` to `GEN_SHAPES` moved an unrelated
+`ladder.probe` assertion ("an order is a decision rather than a payout"),
+and three tuning attempts (documented in full in `config/eventgen.ts`'s
+`gen_family_dilemma` comment) each moved a *different* set of otherwise-
+passing bars instead of fixing it -- proof the fault was never in either
+shape's weight or cooldown. `tickEvents` (`sim/events.ts`) was calling
+`eligible()`/`raise()` for the generated pool on the same causal `rng` as
+everything else; several `applies`/`build` implementations spend real draws
+doing it, so which shapes are in the pool changes `state.rng.calls`'
+position for the rest of that day and every day after -- a global reshuffle
+from a locally-scoped content addition, the same mechanism `orders.ts`'s
+`offerStream` was already built to dodge for exactly this reason.
+
+**The fix.** `generatedStream(state)` (`sim/events.ts`), a `(state.rng.seed,
+state.day)`-derived stream that never touches `state.rng.calls`, mirroring
+`offerStream`. The generated half's whole daily decision -- the fire/no-fire
+roll, `eligible()` scanning `GEN_DEFS`, `raise()`'s `weightedPick`, and
+whatever the chosen shape's `build` draws -- now runs on it instead of the
+real `rng`. The authored half is untouched; it is meant to share the day's
+story with everything else. Stride 32, sized by instrumenting the real
+decision (not guessed): across 600 seeded careers (4 difficulties x 150
+seeds x 1,200 days) the whole decision never consumed more than 6 calls in
+a single day. Salt `0x2f7a9c11`, checked against both existing salts
+(`orders.ts`'s `0x0d3e15`, `nicknames.ts`'s `0x5bf03635`) for collisions.
+Confirmed no `GenShapeDef` reaches `state.rng` directly outside the `rng`
+parameter it is handed (grepped).
+
+**This is a one-time, disclosed reshuffle of the whole generated-event
+history for every existing seeded result that touches it** -- the point of
+the fix is that it is the last one this reason forces. `deposition.test.ts`
+needed a fifth reseed (4025 -> 4046) for exactly the reason its own comment
+history names four times already; scanned seeds 4025-4125 after the fix,
+20 still reach `generation > 1` (was ~20-30/100 after each prior reshuffle,
+so reachability held), reconfirmed the same way as every prior reseed:
+`backersNeeded` reverted to 2, watched fail, restored. No other `npm test`
+file needed touching -- 163 files, 1,898 passing, 0 failures, run twice.
+`tsc -b` clean.
+
+**`npm run probe`, full suite, before (commit 7cec062) and after:**
+`ladder.probe.test.ts` went from 4 failures to 2. The three collateral bars
+this whole investigation was chasing are gone: "moving an order is worth"
+(was 18 vs a bar of 18, now clears), "an order is a decision rather than a
+payout" (was 16, needed 18, now clears), and "running them is worth doing
+at all" (was $886,020 against a $974,998 floor, now clears) -- gone because
+their cause, the reshuffle, is gone, not because orders or trades changed.
+"Keeps finding something to say in the back half of a career" was already
+failing before (33.8% over a 33.3% bar) and still fails after (33.1%, now
+under the same bar) -- the noise-band assertion this file's own header
+already names, unrelated to either mechanism. A new bar failed that had not
+before: "what a district gives is worth anything" (26/36 careers ahead
+before, 17/36 after, against a bar of >18) -- its own comment already calls
+this bar a "sign flip rather than a landslide" at only 36 paired seeds.
+Checked deterministic (two independent reruns, bit-identical: 17/36, same
+estate figures both times) rather than a flake, and checked that neither
+new shape's `build`/`resolveGenerated` touches territory, district, or
+ground state anywhere (grepped) -- so this is the reshuffle landing on a
+different marginal bar than before, not a mechanical side effect of either
+shape's content. Left failing and disclosed, same call this file's own
+prior entries make for a bar this close to its own noise floor, rather than
+chased with a probe-seed change that would only relocate it again.
+
+Branch `isolate-gen-events-a36` off `soprano-ue5-prototype`
+(`7cec062`) -- built in an agent worktree after the preferred
+`isolate-gen-events` worktree path refused writes; not merged.
