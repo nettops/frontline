@@ -224,6 +224,45 @@ export const GEN_SHAPES: GenShapeDef[] = [
      [four bars] moved the first time this was wired up"), not a new defect
      these two shapes introduced through any mechanism a weight or cooldown
      number can fix.
+
+     Resolved structurally, later the same night: `tickEvents`'s generated
+     half now runs on `generatedStream(state)`, a `(seed, day)`-derived stream
+     of its own (`sim/events.ts`, mirroring `offerStream` in `sim/orders.ts`)
+     that never touches `state.rng.calls`. No weight or cooldown number could
+     fix this because the fault was never in either shape's tuning — it was
+     `eligible()`/`raise()` spending real draws from the *shared* causal
+     stream to decide whether a generated memo fires at all, so adding any
+     shape to the pool reshuffled every system downstream of it, for every
+     day after. That is now true of neither shape, nor of any future
+     addition to `GEN_SHAPES`.
+
+     Re-measured after the fix, `npm run probe` full suite, before/after:
+     both orders bars named above passed clean — "moving an order is worth"
+     (was 18 vs a bar of 18, now clears it) and "an order is a decision
+     rather than a payout" (was 16/18, now clears it) — and so did the third
+     collateral bar this same investigation found, "running them is worth
+     doing at all" ($886,020 vs a floor of $974,998 before, clears it now).
+     All three are gone because their actual cause — the reshuffle — is
+     gone, not because anything about orders or trades changed.
+
+     Two ladder.probe bars still move. "Keeps finding something to say in
+     the back half of a career" was already failing before this fix (33.8%
+     over a 33.3% bar) and still fails after (33.1%, now under the same
+     bar) — the same noise-band assertion this file's own header already
+     names, unrelated to either mechanism, both readings within the probe's
+     own stated sampling error. And a new one appeared: "what a district
+     gives is worth anything" passed before (26/36 careers ahead) and now
+     fails (17/36, against a bar of >18) — a bar its own comment already
+     calls a "sign flip rather than a landslide" at 36 paired seeds. Checked
+     deterministic (two independent runs, bit-identical: 17/36, same estate
+     figures both times) rather than a flake. Neither `gen_family_dilemma`
+     nor `gen_panic_episode` touches territory, district, or ground state
+     anywhere in `build`/`resolveGenerated` — grepped to confirm — so this
+     is the one-time reshuffle moving a different marginal bar than before,
+     not a new economic effect of either shape's content. Disclosed rather
+     than chased: this fix trades a structural, permanent fragility for one
+     last, one-time reshuffle of every existing seeded result, which is
+     exactly what it was for.
   */
   { id: 'gen_family_dilemma', subject: 'home', weight: 2, cooldownDays: 38 },
   /*
