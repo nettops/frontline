@@ -355,9 +355,27 @@ describe('deposition, played into rather than built', () => {
      — see `gen_family_dilemma`'s own comment in `config/eventgen.ts` for
      the full account. Reverted to 4025 along with the config, since 4025 is
      what this exact 38/45 setting was confirmed against the third time.
+
+     Reseeded a fifth time, 4025 to 4046, for moving `tickEvents`'s generated
+     half onto `generatedStream(state)` — its own `(seed, day)`-derived
+     stream, never touching `state.rng.calls` (`sim/events.ts`, mirroring
+     `offerStream` in `sim/orders.ts`). This is the fix for the whole class of
+     reshuffle the last four reseeds of this test were absorbing one at a
+     time: every prior entry above changed how many causal-rng calls the
+     daily generated-event scan made, which reshuffled the stream for every
+     day after. After this fix the generated half consumes none of
+     `state.rng`'s calls at all, so this is meant to be the last reseed this
+     test needs for that reason. Seed 4025 itself landed on "nobody deposed"
+     on the far side of this particular reshuffle. A scan of seeds 4025-4125
+     after the fix found 20 that still reach generation > 1 (4046, 4048,
+     4051, 4057, 4061, ...), so reachability did not regress. Seed 4046
+     confirmed to produce the same "nobody was killed and nobody was
+     arrested" fate, and the guard re-confirmed the same way as every prior
+     reseed: reverting `backersNeeded` to 2 and watching this fail before
+     restoring it.
   */
   it('fires from an ordinary career under the current gate', () => {
-    const state = playOrdinaryCareer(4025, 1460);
+    const state = playOrdinaryCareer(4046, 1460);
     expect(
       state.succession.generation,
       'nobody was deposed — this is the reachability the config change exists to fix',
