@@ -190,13 +190,21 @@ export const GEN_SHAPES: GenShapeDef[] = [
      Weight 2, matching the other two `home` shapes, for the reason
      `gen_asked_for_you`'s own comment gives: the house is the one subject
      that is always there, and at the same weight as shapes that come and go
-     it would make the generated draw never come up empty. Cooldown 32
+     it would make the generated draw never come up empty. Cooldown 38
      rather than a round 30 or 40 so this shape does not always become
      eligible on the same day as the other two for the life of a save on one
-     seed. At 32 days it recurs 8-9 times across a 300-day career, inside the
-     brief's "roughly every 25-40 days".
+     seed. At 38 days it still recurs 7-8 times across a 300-day career,
+     inside the brief's "roughly every 25-40 days".
+
+     Was 32. `npm run probe` found this shape and `gen_panic_episode`
+     crowding a third, unrelated generated shape out of the shared daily
+     slot: "an order is a decision rather than a payout" fell from 18/36
+     careers ever offered one (its own bar) to 16/36 after both shapes
+     joined the pool. Lengthened alongside `gen_panic_episode`'s cooldown
+     below to give the rest of the generated table more of the slot back;
+     re-measure both bars after this change rather than assuming it worked.
   */
-  { id: 'gen_family_dilemma', subject: 'home', weight: 2, cooldownDays: 32 },
+  { id: 'gen_family_dilemma', subject: 'home', weight: 2, cooldownDays: 38 },
   /*
      Not the household. The man.
 
@@ -205,12 +213,16 @@ export const GEN_SHAPES: GenShapeDef[] = [
      himself, gated on `playerStress` (`config/personal.ts`) rather than on
      anything in the world. Weight 2, the same floor the `home` shapes use,
      for the same reason: it is rare relative to the authored table and not
-     meant to be the loudest thing in the pool. Cooldown 35 — a week past
-     `gen_family_dilemma`'s 32, since this shape's gate (stress crossing 75)
+     meant to be the loudest thing in the pool. Cooldown 45 — a week past
+     `gen_family_dilemma`'s 38, since this shape's gate (stress crossing 75)
      is already the rarer condition; a shorter floor under it would be a
      cooldown that never actually binds.
+
+     Was 35, lengthened alongside `gen_family_dilemma` above — see that
+     shape's comment for the measured reason (both were crowding a third
+     generated shape out of the shared daily slot).
   */
-  { id: 'gen_panic_episode', subject: 'player', weight: 2, cooldownDays: 35 },
+  { id: 'gen_panic_episode', subject: 'player', weight: 2, cooldownDays: 45 },
   /*
      Three shapes for the three systems built after this file was written.
 
