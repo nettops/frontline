@@ -6242,6 +6242,30 @@ const RUNS_GROUND_DEAD = (() => {
   return runs;
 })();
 /*
+   The same pair, widened, for the one bar 36 seeds cannot resolve.
+
+   `resolves()` on the 36-seed reading (17/36 ahead against a bar of half)
+   needed about 1,295 pairs before a margin this close to 50% separates from
+   noise — this project's own rule is to widen the sample rather than move
+   the bar (see `resolves`'s own doc comment, and `WIDE`/`WIDE_LATE_MEMOS`
+   above for the precedent). 1,500 leaves headroom over the number the
+   message named. Lazy, unlike the pair above: this is ~1,500 climbs beyond
+   what the file already pays, and only the one test below should ever have
+   to spend it.
+*/
+const RUNS_GROUND_WIDE = lazyRuns(() => Array.from({ length: 1500 }, (_, i) =>
+  climb(700 + i, HUMAN_DAYS, { chasesGround: true }),
+));
+const RUNS_GROUND_DEAD_WIDE = lazyRuns(() => {
+  const was = HOLDING.share;
+  (HOLDING as unknown as Record<string, number>).share = 0;
+  const runs = Array.from({ length: 1500 }, (_, i) =>
+    climb(700 + i, HUMAN_DAYS, { chasesGround: true }),
+  );
+  (HOLDING as unknown as Record<string, number>).share = was;
+  return runs;
+});
+/*
    The catalogue was a shop, and nobody ever went in.
 
    This block measured `RUNS_SHOPS` — an arm told to buy possessions — and it
@@ -9783,11 +9807,37 @@ describe('what the ground is for', () => {
        men, which is `quiet` and `labour` doing exactly what they say. The
        populations diverge in behaviour rather than only in money, which is the
        right shape: a yield that only moved the estate would be a rebate.
+
+       And a fourth reading, on 36 seeds, moved it again: 17/36. `resolves()`
+       on that share against a bar of half said the margin needed roughly
+       1,295 pairs to separate from noise, not 36 — the per-seed gap runs
+       into the millions on a bot whose median estate is under two, so a
+       sign-flip count this close to even was never going to hold still
+       under any change anywhere upstream, including ones with nothing to do
+       with ground. `RUNS_GROUND_WIDE`/`RUNS_GROUND_DEAD_WIDE` below are the
+       widened pair DIRECTOR section 5 calls for — 1,500 each, not 36 — and
+       the claim now rests on that population instead.
     */
+    const wideGaps = RUNS_GROUND_WIDE.map(
+      (r, i) => r.bestEstate - RUNS_GROUND_DEAD_WIDE[i].bestEstate,
+    ).sort((a, b) => a - b);
+    const wideAhead = wideGaps.filter((g) => g > 0).length;
+
+    // eslint-disable-next-line no-console
+    console.log(
+      `         across ${RUNS_GROUND_WIDE.length}, estate gap 25th / median / 75th: ` +
+        `$${Math.round(pct(wideGaps, 0.25)).toLocaleString('en-US')} / ` +
+        `$${Math.round(median(wideGaps)).toLocaleString('en-US')} / ` +
+        `$${Math.round(pct(wideGaps, 0.75)).toLocaleString('en-US')}, ` +
+        `careers ahead: ${wideAhead}/${wideGaps.length}`,
+    );
+
+    const worth = resolves(wideAhead, wideGaps.length, 0.5);
+    expect(worth.ok, worth.why).toBe(true);
     expect(
-      ahead,
+      wideAhead,
       'holding ground paid the same whether or not the ground gave anything',
-    ).toBeGreaterThan(gaps.length / 2);
+    ).toBeGreaterThan(wideGaps.length / 2);
   });
 
   /*
