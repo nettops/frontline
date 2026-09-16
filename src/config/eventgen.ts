@@ -187,22 +187,43 @@ export const GEN_SHAPES: GenShapeDef[] = [
      of those wait for a stat, so this shape's `applies` does not read
      neglect at all. See `FAMILY_DILEMMAS` in `config/personal.ts`.
 
-     Weight 2, matching the other two `home` shapes, for the reason
-     `gen_asked_for_you`'s own comment gives: the house is the one subject
-     that is always there, and at the same weight as shapes that come and go
-     it would make the generated draw never come up empty. Cooldown 38
-     rather than a round 30 or 40 so this shape does not always become
-     eligible on the same day as the other two for the life of a save on one
-     seed. At 38 days it still recurs 7-8 times across a 300-day career,
-     inside the brief's "roughly every 25-40 days".
+     Weight 2, matching the other two `home` shapes, cooldown 38 (was 32) —
+     read the rest of this comment before moving either number again; two
+     more attempts were tried and abandoned, not for lack of effort.
 
-     Was 32. `npm run probe` found this shape and `gen_panic_episode`
-     crowding a third, unrelated generated shape out of the shared daily
-     slot: "an order is a decision rather than a payout" fell from 18/36
-     careers ever offered one (its own bar) to 16/36 after both shapes
-     joined the pool. Lengthened alongside `gen_panic_episode`'s cooldown
-     below to give the rest of the generated table more of the slot back;
-     re-measure both bars after this change rather than assuming it worked.
+     `npm run probe` found this shape and `gen_panic_episode` moving "an
+     order is a decision rather than a payout" (`orders.ts`'s gang-supply
+     feature), an assertion neither shape touches on purpose: offered fell
+     from 18/36 careers (its own bar) to 16/36 once both joined the pool.
+     `orders.ts`'s own weekly roll runs on a stream deliberately independent
+     of `state.rng.calls` (see `offerStream`'s comment there) specifically
+     so unrelated changes cannot move it; what it does not protect is
+     `candidates()`, which reads real simulated territory influence — the
+     down-stream value any change to the causal rng stream can still shift.
+
+     Attempt 1: lengthen cooldown alone, 32 -> 38 (this value) and panic's
+     35 -> 45. Measured: no effect, still 16/36.
+
+     Attempt 2: weight 2 -> 1 alongside a further cooldown push to 50 (panic
+     to 60). This did clear the orders bar (20/36), but the same probe run
+     that confirmed it also turned up two *new* failures elsewhere in the
+     same file ("keeping one alongside playing is a free win" and "what a
+     district gives is worth anything") that pass cleanly at this file's
+     current 38/45 — checked directly, not inferred. Three data points now
+     (16/36 at 38-45, 17-20/36 at various weight-1 settings depending on the
+     exact cooldown, 2 fresh unrelated failures at the most aggressive one)
+     say the same thing DIRECTOR calls out by name: "a reading whose bars
+     flip non-monotonically as you turn the dial is an instrument that
+     cannot size your change." Pushing this dial does not converge on a fix;
+     it relocates which downstream probe assertion is currently unlucky.
+
+     Left at 38/45 — the one setting measured to add no *new* failures — and
+     the orders bar left failing, disclosed rather than chased further. It
+     is the same class of fragility `orders.ts`'s own header already names
+     as a known cost of touching the shared generated pool at all ("two of
+     [four bars] moved the first time this was wired up"), not a new defect
+     these two shapes introduced through any mechanism a weight or cooldown
+     number can fix.
   */
   { id: 'gen_family_dilemma', subject: 'home', weight: 2, cooldownDays: 38 },
   /*
@@ -211,16 +232,12 @@ export const GEN_SHAPES: GenShapeDef[] = [
      Every shape above is instantiated against somebody or something else —
      a man, a front, a street, the house. This one's subject is the boss
      himself, gated on `playerStress` (`config/personal.ts`) rather than on
-     anything in the world. Weight 2, the same floor the `home` shapes use,
-     for the same reason: it is rare relative to the authored table and not
-     meant to be the loudest thing in the pool. Cooldown 45 — a week past
-     `gen_family_dilemma`'s 38, since this shape's gate (stress crossing 75)
-     is already the rarer condition; a shorter floor under it would be a
-     cooldown that never actually binds.
-
-     Was 35, lengthened alongside `gen_family_dilemma` above — see that
-     shape's comment for the measured reason (both were crowding a third
-     generated shape out of the shared daily slot).
+     anything in the world. Weight 2, cooldown 45 (was 35) — a week past
+     `gen_family_dilemma`'s own, for the same reason as before: this shape's
+     gate (stress crossing 75) is already the rarer condition. See that
+     shape's comment above for the full, abandoned retuning history; both
+     numbers moved together throughout and neither is more settled than the
+     other.
   */
   { id: 'gen_panic_episode', subject: 'player', weight: 2, cooldownDays: 45 },
   /*
