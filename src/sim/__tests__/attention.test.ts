@@ -25,6 +25,7 @@ import { declareWar, playerWars } from '../diplomacy';
 import { eligibleHeirs, nameHeir, wouldTakeIt } from '../succession';
 import { home } from '../personal';
 import { HOME, STRESS } from '../../config/personal';
+import { GEN_SHAPES } from '../../config/eventgen';
 import { HOME_TERRITORY } from '../../config/territories';
 import { PATTERN } from '../../config/standingOrders';
 import { territoryDef, territoryList } from '../territory';
@@ -274,10 +275,17 @@ describe('what wants you today', () => {
   /*
      Milestone 2: the family, from the outside. Two ids, gated so only one
      shows on a given day — see `attention.ts`'s own comment for why.
+
+     `daysSinceFired` is read off `GEN_SHAPES`' own cooldown rather than a
+     bare number, so a later retune of `gen_family_dilemma`'s cooldown (as
+     happened once already, 32 -> 38, to relieve crowding in the shared
+     generated-event slot) does not silently push this fixture outside the
+     window it means to test.
   */
   it('names the family horizon once the shape has fired before and is due soon', () => {
     const state = game();
-    state.flags['evt_gen_family_dilemma'] = state.day - 30; // fired once, cooldown almost up
+    const cooldown = GEN_SHAPES.find((s) => s.id === 'gen_family_dilemma')!.cooldownDays;
+    state.flags['evt_gen_family_dilemma'] = state.day - (cooldown - 2); // 2 days from due
     const line = attention(state).find((l) => l.id === 'family_horizon');
     expect(line).toBeTruthy();
     expect(line!.panel).toBe('player');
@@ -312,7 +320,8 @@ describe('what wants you today', () => {
 
   it('shows the crisis rather than the horizon when both would otherwise apply', () => {
     const state = game();
-    state.flags['evt_gen_family_dilemma'] = state.day - 30;
+    const cooldown = GEN_SHAPES.find((s) => s.id === 'gen_family_dilemma')!.cooldownDays;
+    state.flags['evt_gen_family_dilemma'] = state.day - (cooldown - 2);
     home(state).neglect = HOME.depositionFrom;
     const lines = attention(state);
     expect(lines.some((l) => l.id === 'family_neglect_crisis')).toBe(true);

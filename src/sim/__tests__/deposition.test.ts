@@ -333,9 +333,23 @@ describe('deposition, played into rather than built', () => {
      arrested" fate, and the guard re-confirmed the same way both times
      before it: reverting `backersNeeded` to 2 and watching this fail before
      restoring it.
+
+     Reseeded a third time from 4022 to 4025 for lengthening
+     `gen_family_dilemma`/`gen_panic_episode`'s cooldowns (32/35 -> 38/45,
+     `config/eventgen.ts`) to relieve the two shapes crowding a third
+     generated shape ("an order is a decision rather than a payout") out of
+     the shared daily slot — `npm run probe` found. Same mechanism again:
+     fewer eligible days for these two shapes changes how many `applies()`
+     calls the daily scan makes on which days, reshuffling the stream. A scan
+     of seeds 4011-4110 after the cooldown change found 22 that still reach
+     generation > 1 (4025, 4033, ...), so reachability held a third time.
+     Seed 4025 confirmed to produce the same "nobody was killed and nobody
+     was arrested" fate, and the guard re-confirmed the same way all three
+     times before it: reverting `backersNeeded` to 2 and watching this fail
+     before restoring it.
   */
   it('fires from an ordinary career under the current gate', () => {
-    const state = playOrdinaryCareer(4022, 1460);
+    const state = playOrdinaryCareer(4025, 1460);
     expect(
       state.succession.generation,
       'nobody was deposed — this is the reachability the config change exists to fix',
