@@ -784,7 +784,6 @@ const familyCrossroads: EventDef = {
     const def = RELATIONS.find((r) => r.id === relationId);
     const relation = def ? def.label : 'your child';
     const tuitionCash = priced(state, GEN_EFFECT.crossroadsTuitionCost);
-    const hireCash = priced(state, GEN_EFFECT.crossroadsHireCost);
     return {
       defId: 'gen_family_crossroads',
       title: `${who.name} is grown`,
@@ -808,7 +807,7 @@ const familyCrossroads: EventDef = {
         {
           id: 'bring_in',
           label: 'Bring them into the organization',
-          ...payable(state, hireCash, `${who.name} is with you now, on the books like anybody else`),
+          hint: `Free. ${who.name} is with you now, on the books like anybody else — some of your men will not like it.`,
         },
         {
           id: 'let_go',
@@ -1681,11 +1680,11 @@ export function resolveGenerated(
       }
 
       if (choiceId === 'bring_in') {
-        if (!spend(state, priced(state, GEN_EFFECT.crossroadsHireCost), 'world')) {
-          addLog(state, `You could not cover bringing ${name} in properly, and let it drop.`, 'failure');
-          return;
-        }
-        // The one case allowed to create a real Npc — the household layer's
+        // Free -- the director's own figure. What this option actually
+        // costs is neglect and, when there is a capo to carry it, grievance;
+        // not cash.
+        //
+        // The one case allowed to create a real Npc -- the household layer's
         // own header bans a second roster everywhere else, and this is the
         // one true exception: the kid actually joins the organization.
         const hire = generateNpc(state, rng, 'soldier');
@@ -1703,6 +1702,12 @@ export function resolveGenerated(
             capo.stats.grievance + GEN_EFFECT.crossroadsHireCapoGrievance,
             0,
             100,
+          );
+          addNote(
+            capo,
+            state.day,
+            `Watched the boss put his own boy ahead of men who took bullets for this family.`,
+            'bad',
           );
         }
         recordCareerEvent(state, `Brought ${name} into the organization.`, 'neutral');

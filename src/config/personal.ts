@@ -96,29 +96,54 @@ export const RELATIONS: RelationDef[] = [
  * skip a household that has neither child in it (see `sim/personal.ts` and
  * `CLAUDE.md`'s point about a household holding only 3 of 6 relations).
  *
- * Figures are this milestone's own — sized so a career of ordinary length
- * (300-1460 days, i.e. roughly 1-4 game years at `Math.floor(day / 365)`)
- * has a real chance of watching a child cross from Teenager into Adult, not
- * merely inherit one who already has.
+ * The director's own figures for this milestone.
  */
-export const CHILD_START_AGES: Record<string, [number, number]> = {
-  eldest: [9, 17],
-  youngest: [2, 11],
+export const CHILD_START_AGES: Record<string, { min: number; max: number }> = {
+  eldest: { min: 14, max: 16 },
+  youngest: { min: 8, max: 11 },
 };
 
-export type LifeStageId = 'child' | 'teen' | 'adult';
+export type LifeStageId = 'child' | 'teen' | 'young_adult' | 'adult';
 
 export interface LifeStageDef {
   id: LifeStageId;
-  /** Age at or above which a member is in this stage. Checked highest-first, same idiom as `HOME_LABEL`. */
-  fromAge: number;
   label: string;
+  minAge: number;
+  maxAge: number;
+  /** The longer read, same role `HomeTier.blurb` plays for neglect. */
+  blurb: string;
 }
 
+/** The director's own bands and copy. */
 export const LIFE_STAGES: LifeStageDef[] = [
-  { id: 'adult', fromAge: 18, label: 'Adult' },
-  { id: 'teen', fromAge: 13, label: 'Teenager' },
-  { id: 'child', fromAge: 0, label: 'Child' },
+  {
+    id: 'child',
+    label: 'Child',
+    minAge: 0,
+    maxAge: 12,
+    blurb: 'Still young enough to believe whatever you tell them.',
+  },
+  {
+    id: 'teen',
+    label: 'Teenager',
+    minAge: 13,
+    maxAge: 17,
+    blurb: 'Has started noticing the men parked down the block.',
+  },
+  {
+    id: 'young_adult',
+    label: 'Young Adult',
+    minAge: 18,
+    maxAge: 22,
+    blurb: 'Standing at the doorway of their own life.',
+  },
+  {
+    id: 'adult',
+    label: 'Adult',
+    minAge: 23,
+    maxAge: 100,
+    blurb: 'Out in the world with your last name.',
+  },
 ];
 
 export const HOME = {
@@ -330,15 +355,15 @@ export const FAMILY_DILEMMAS: FamilyDilemmaDef[] = [
     id: 'teen_trouble',
     relationIds: ['eldest', 'youngest'],
     stages: ['teen'],
-    occasion: 'trouble',
+    occasion: 'trouble with the law',
     bodies: [
-      'got picked up two blocks from school with company you would not have chosen for them',
-      'was suspended, and the school wants somebody to come in and explain it, in person',
-      'did something that is one phone call away from becoming a real problem',
+      'was caught joyriding with friends in a precinct where the sergeant recognized your last name',
+      'spent the night in a holding cell, and the desk sergeant already knew exactly whose kid it was',
+      'got pulled in with friends who somehow found the one precinct where somebody still remembers you',
     ],
     attendCost: 0,
     sendCost: 800,
-    sendGesture: 'a lawyer, quietly, so the school never has to say your name',
+    sendGesture: 'a lawyer, quietly, so the paperwork disappears without you ever showing your face',
   },
 ];
 

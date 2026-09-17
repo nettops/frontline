@@ -676,12 +676,16 @@ export const GEN_EFFECT = {
      something real: a cash cost, a real neglect-clear, and a logged
      `recordCareerEvent` beat -- just not a fabricated number on a formula
      this milestone was not asked to redesign.
+
+     Cash figures are the director's own: $4,500 tuition on option A, and
+     option B (bringing them in) is free -- the "cost" of putting your own
+     kid ahead of the men is the grievance it lands, not a price tag.
   */
   /** Option A: pay for college, and keep them out of the life entirely. */
   crossroadsTuitionCost: 4_500,
   crossroadsTuitionNeglectClear: 20,
-  /** Option B: bring them into the organization, as a real hire. */
-  crossroadsHireCost: 1_500,
+  /** Option B: bring them into the organization, as a real hire. Free --
+   * the household pays for this one in neglect and capo grievance, not cash. */
   crossroadsHireNeglectClear: 10,
   /**
    * The grievance landed on one real active capo when there is one to land

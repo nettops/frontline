@@ -85,11 +85,11 @@ exactly once via `state.flags['crossroads_resolved_<relationId>']`, keyed
 on the relation rather than the cosmetic name) is a different shape than a
 recurring dilemma. Its three choices: pay tuition ($4,500, real cash +
 neglect clear + a `recordCareerEvent` beat — no direct grant to
-`legitimacy()`, see below), bring them into the organization (real cash +
-`generateNpc` hire under the household member's own name + neglect clear +
-a grievance landed on one real active capo via `activeCapos`, silently
-skipped when there is none), or let them go (free, neglect rises, a bad
-career beat).
+`legitimacy()`, see below), bring them into the organization (free — the
+director's own figure — a `generateNpc` hire under the household member's
+own name + neglect clear + a grievance landed on one real active capo via
+`activeCapos`, silently skipped when there is none), or let them go (free,
+neglect rises, a bad career beat).
 
 **`legacy.ts`/`config/legacy.ts` were not touched.** The original brief for
 this milestone asked for the tuition option to grant Family Legitimacy
@@ -100,6 +100,22 @@ to a fixed point swing. Redesigning that formula to add a fifth term is a
 bigger call than this milestone should make unilaterally, so the grant was
 dropped and replaced with what the outcome actually is — the cash cost, the
 neglect clear, and the logged narrative beat.
+
+**Addendum, same day: reconciled against the real brief text**, which had
+been dropped from the original prompt and replaced with a placeholder the
+first time round. Three real figures differed and were corrected: `LIFE_STAGES`
+is now four bands (`child` 0-12, `teen` 13-17, `young_adult` 18-22, `adult`
+23-100, each with the director's own blurb) rather than my invented
+three-band guess; `CHILD_START_AGES` is `{ eldest: 14-16, youngest: 8-11 }`
+rather than my invented `9-17`/`2-11`; and the crossroads' "bring them in"
+option is free rather than the $1,500 I had invented for it (removed
+`GEN_EFFECT.crossroadsHireCost` entirely). `teen_trouble`'s body/gesture
+text was rewritten to the director's own "joyriding, a precinct sergeant who
+recognizes the name" scenario. Neglect/heat deltas for `teen_trouble` and
+the crossroads were left as originally built — the director's own
+reconciliation request scoped this pass to life-stage figures, dilemma
+text, and cash figures only. Re-ran `npm test` after: still 163/1,917, 0
+failures, `tsc` clean.
 
 Gates: `npx tsc -b` 0 errors, `npm test` **163 files, 1,917 passing, 0
 failing** (up from this branch's own parent at 163/1,898 — 19 new tests).

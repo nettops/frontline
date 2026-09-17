@@ -111,8 +111,7 @@ function baseAgeAtDay1(state: GameState, relationId: string): number | null {
   if (!range) return null;
   const idx = home(state).people.findIndex((p) => p.relationId === relationId);
   const key = `child_age:${state.rng.seed}`;
-  const [lo, hi] = range;
-  return lo + Math.floor(Rng.stableNoise(key, 20 + idx) * (hi - lo + 1));
+  return range.min + Math.floor(Rng.stableNoise(key, 20 + idx) * (range.max - range.min + 1));
 }
 
 /**
@@ -130,9 +129,11 @@ export function memberAge(state: GameState, _memberName: string, relationId: str
   return base === null ? null : base + Math.floor(state.day / 365);
 }
 
-/** Which of the three stages a given age falls in. */
+/** Which of the four bands (`LIFE_STAGES`) a given age falls in. */
 export function memberLifeStage(age: number): LifeStageDef {
-  return LIFE_STAGES.find((s) => age >= s.fromAge) ?? LIFE_STAGES[LIFE_STAGES.length - 1];
+  return (
+    LIFE_STAGES.find((s) => age >= s.minAge && age <= s.maxAge) ?? LIFE_STAGES[LIFE_STAGES.length - 1]
+  );
 }
 
 /**
