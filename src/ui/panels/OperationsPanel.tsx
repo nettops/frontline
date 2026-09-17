@@ -19,12 +19,15 @@ import {
 } from '../../sim/operations';
 import {
   approvePitch,
+  delegatePitchAutonomous,
   livePitches,
   pitchCapoPool,
   reassignPitch,
   rejectPitch,
   specialtyLine,
 } from '../../sim/capoPitches';
+import { pendingEnvelopes, resolveLightEnvelope } from '../../sim/tribute';
+import { TRIBUTE } from '../../config/tribute';
 import {
   canOpenScore,
   kitOf,
@@ -125,6 +128,7 @@ export default function OperationsPanel() {
   */
   const open = manualBoard(state).filter((op) => op.tier === 0);
   const pitches = livePitches(state);
+  const envelopes = pendingEnvelopes(state);
   const locked = lockedOperations(state);
   const active = Object.values(state.activeOperations);
   const free = availableCrew(state);
@@ -296,6 +300,74 @@ export default function OperationsPanel() {
         Every job takes people off the street for its duration and adds to what the
         world knows about you. The odds you are shown are the odds you get.
       </p>
+
+      {/*
+         The one decision somebody else has already made for you.
+
+         Top of the page, above the running jobs, because it is the only thing
+         on this screen that is already waiting rather than available — a
+         capo handed the envelope over on payday and it was light, and until
+         the boss answers, the table is watching him not answer.
+
+         The excuse is printed rather than summarised. It is the only
+         information the player has, it is a lie about a third of the time,
+         and the whole of the decision is that the screen cannot tell which.
+      */}
+      {envelopes.length > 0 && (
+        <Panel title="The envelopes came up light">
+          {envelopes.map((d) => {
+            const auditable = totalFunds(state) >= TRIBUTE.auditCost;
+            return (
+              <div key={d.id} className="kv" style={{ alignItems: 'flex-start', marginBottom: 12 }}>
+                <span className="kv-key">
+                  <span className="name-main">{d.capoName}</span>{' '}
+                  <span className="faint tiny">
+                    {formatMoney(d.expected)} expected · {formatMoney(d.offered)} handed over ·{' '}
+                    <span className="hot">{formatMoney(d.shortage)} short</span>
+                  </span>
+                  <br />
+                  <span className="dim tiny">“{d.excuse}”</span>
+                </span>
+                <div className="btn-row">
+                  <button
+                    className="btn small"
+                    title="It costs you standing at the table and it buys you the man."
+                    onClick={() => mutate((s) => resolveLightEnvelope(s, d.capoId, 'let_it_slide'), true)}
+                  >
+                    Let it go
+                  </button>
+                  <button
+                    className="btn small danger"
+                    title="He finds the rest of it. He does not enjoy finding it."
+                    onClick={() => mutate((s) => resolveLightEnvelope(s, d.capoId, 'squeeze'), true)}
+                  >
+                    Have him find the rest
+                  </button>
+                  <button
+                    className="btn small"
+                    disabled={!auditable}
+                    title="Somebody goes through his books. If he was honest, he will know he was counted."
+                    onClick={() => mutate((s) => resolveLightEnvelope(s, d.capoId, 'audit'), true)}
+                  >
+                    Have him looked at ({formatMoney(TRIBUTE.auditCost)})
+                  </button>
+                  {!auditable && (
+                    <span className="tiny faint">
+                      Having a man looked at runs {formatMoney(TRIBUTE.auditCost)}, and you do not
+                      have it.
+                    </span>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+          <p className="faint tiny" style={{ margin: '8px 0 0' }}>
+            Money comes up. A capo who is short has either had a bad month or has been taking
+            it, and nothing on this page knows which. Letting it go costs you at the table,
+            squeezing costs you the man, and counting him costs you both if he was straight.
+          </p>
+        </Panel>
+      )}
 
       {active.length > 0 && (
         <Panel title="Running now" flush>
@@ -577,13 +649,17 @@ export default function OperationsPanel() {
               pitch={p}
               selected={p.defId === selected && p.territoryId === territoryId}
               onApprove={() => approve(p.id, p.defId, p.territoryId)}
+              onDelegate={() => mutate((s) => delegatePitchAutonomous(s, p.id), true)}
               onReject={() => mutate((s) => rejectPitch(s, p.id), true)}
               onReassign={(capoId) => mutate((s) => reassignPitch(s, p.id, capoId), true)}
             />
           ))}
           <p className="faint tiny" style={{ margin: '8px 0 0' }}>
             What a capo brings you this week. Turn one down and it costs nothing; hand it to
-            somebody else and the man it was taken from remembers it.
+            somebody else and the man it was taken from remembers it. Let the man who brought
+            it run it himself and {Math.round(TRIBUTE.bossAutonomousCut * 100)}% of the take
+            comes up to you — the rest is his, and so is everything a federal file could put
+            at the scene.
           </p>
         </Panel>
       )}
@@ -1224,12 +1300,14 @@ function PitchCard({
   pitch,
   selected,
   onApprove,
+  onDelegate,
   onReject,
   onReassign,
 }: {
   pitch: CapoPitch;
   selected: boolean;
   onApprove: () => void;
+  onDelegate: () => void;
   onReject: () => void;
   onReassign: (capoId: string) => void;
 }) {
@@ -1267,6 +1345,23 @@ function PitchCard({
           onClick={onApprove}
         >
           Approve
+        </button>
+        {/*
+           The other half of the same pitch, and the one the whole tribute
+           layer is for.
+
+           Approve opens the assemble screen and the boss picks the crew — his
+           hands on the job, his name on whatever the job leaves behind.
+           Delegating hands the whole thing to the capo, who takes his own
+           people and keeps the majority of it. What the boss buys with the
+           difference is not being in the room.
+        */}
+        <button
+          className="btn small"
+          title={`${capo.name} runs it with his own crew and keeps his end. You never touch it, and what it leaves behind does not point at you.`}
+          onClick={onDelegate}
+        >
+          Let {capo.name} run it ({Math.round(TRIBUTE.bossAutonomousCut * 100)}% to you)
         </button>
         <button className="btn small" onClick={onReject}>
           Reject

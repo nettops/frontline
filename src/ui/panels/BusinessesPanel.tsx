@@ -30,6 +30,10 @@ import { openDeal } from '../../sim/frontDeal';
 import { formatMoney, formatShortDay, formatPercent } from '../../sim/util';
 import { HEALTH, EXPOSURE_ALARMING_ABOVE, SHUTTER_REFUND_SHARE } from '../../config/businesses';
 import { priced } from '../../sim/market';
+import { Rng } from '../../sim/rng';
+import { SPECIAL_VENTURES } from '../../config/tribute';
+import { canRunBoilerRoom, runBoilerRoom } from '../../sim/corporate';
+import { BOILER_ROOM } from '../../config/corporate';
 
 /**
  * Why a front is dying, in the words of the thing that is killing it.
@@ -578,7 +582,127 @@ export default function BusinessesPanel() {
           </div>
         )}
       </Panel>
+
+      <div className="grid-2">
+        <SignatureFronts />
+        <BoilerRoom />
+      </div>
     </>
+  );
+}
+
+/**
+ * The two covers this world is actually known for, and what each one is worth.
+ *
+ * Read-only, and that is not an oversight. `SPECIAL_VENTURES` is deliberately
+ * kept out of `BUSINESSES` so the catalogue invariants `catalogue.test.ts` and
+ * `ladder.probe` hold, which means there is no acquisition route to either of
+ * them — so this panel names them, says what owning one does, and says plainly
+ * that nobody is selling. A buy button here would be the thing rule 4 forbids.
+ *
+ * The owned check is real rather than decorative: `hasHealthInsurance` already
+ * reads `waste_management` off the front list, so the day one of these becomes
+ * buyable this panel starts reporting it without being touched.
+ */
+function SignatureFronts() {
+  const state = useGame();
+  const owned = ownedBusinesses(state);
+
+  return (
+    <Panel title="The ones with a name">
+      <p className="dim" style={{ marginTop: 0 }}>
+        Two covers that do more than wash money, and neither of them is on the market.
+        Somebody holds each one already, and getting near either is not a matter of price.
+      </p>
+      {SPECIAL_VENTURES.map((venture) => {
+        const have = owned.some((b) => b.defId === venture.id);
+        return (
+          <div key={venture.id} style={{ marginBottom: 12 }}>
+            <KeyValue
+              label={venture.name}
+              value={have ? 'Yours' : `${formatMoney(venture.cost)} if it were`}
+              tone={have ? 'brass' : undefined}
+            />
+            <p className="faint tiny" style={{ margin: '2px 14px 4px' }}>
+              {venture.blurb}
+            </p>
+            <p className={have ? 'brass tiny' : 'dim tiny'} style={{ margin: '0 14px 0' }}>
+              {venture.perk}
+            </p>
+          </div>
+        );
+      })}
+    </Panel>
+  );
+}
+
+/**
+ * A room, forty telephones, and a stock nobody has heard of.
+ *
+ * On the businesses page rather than on operations because of what it pays:
+ * it is the only thing in the game that turns a week of soldiers' time into
+ * *clean* money, which is this page's whole subject. The take is quoted as
+ * the range it actually is, with the respect ramp shown separately, because
+ * a single expected figure on a roll this wide would be the panel guessing.
+ */
+function BoilerRoom() {
+  const state = useGame();
+  const can = canRunBoilerRoom(state);
+  const [message, setMessage] = useState<string | null>(null);
+
+  const ramp = Math.min(
+    state.org.respect * BOILER_ROOM.respectBonusPerPoint,
+    BOILER_ROOM.respectBonusCap,
+  );
+  const low = Math.round(BOILER_ROOM.setupCost * BOILER_ROOM.returnRange[0] * (1 + ramp));
+  const high = Math.round(BOILER_ROOM.setupCost * BOILER_ROOM.returnRange[1] * (1 + ramp));
+
+  return (
+    <Panel title={BOILER_ROOM.name}>
+      <p className="dim" style={{ marginTop: 0 }}>
+        A leased floor, a printed prospectus, and {BOILER_ROOM.crewRequired} of your people on
+        the telephones for a week selling a company that does not do anything. It is the only
+        work you have that pays clean.
+      </p>
+      <KeyValue label="The floor costs" value={formatMoney(BOILER_ROOM.setupCost)} tone="hot" />
+      <KeyValue
+        label="The dump returns"
+        value={`${formatMoney(low)}–${formatMoney(high)}`}
+        tone="brass"
+      />
+      <KeyValue
+        label="What your name adds"
+        value={`+${Math.round(ramp * 100)}% (capped at ${Math.round(BOILER_ROOM.respectBonusCap * 100)}%)`}
+      />
+      <KeyValue label="Paper it leaves" value={`${BOILER_ROOM.evidenceStrength} on the money side`} tone="hot" />
+      <KeyValue label="Attention" value={`+${BOILER_ROOM.heat}`} tone="hot" />
+      <p className="faint tiny" style={{ margin: '8px 0' }}>
+        Securities fraud is loud in a way a hijacking is not, and the transfer records are
+        exactly the kind of paper the agencies that work money already read. A burned stock
+        stays burned for {BOILER_ROOM.cooldownDays} days.
+      </p>
+      <button
+        className="btn"
+        disabled={!can.ok}
+        title="Pump it, then dump it."
+        onClick={() => {
+          const result = mutate((s) => runBoilerRoom(s, new Rng(s.rng)), true);
+          setMessage(result?.message ?? null);
+        }}
+      >
+        Open the floor ({formatMoney(BOILER_ROOM.setupCost)})
+      </button>
+      {!can.ok && (
+        <p className="faint tiny" style={{ margin: '6px 0 0' }}>
+          {can.reason}
+        </p>
+      )}
+      {message && (
+        <p className="dim tiny" style={{ margin: '6px 0 0' }}>
+          {message}
+        </p>
+      )}
+    </Panel>
   );
 }
 

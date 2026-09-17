@@ -59,9 +59,11 @@ import type { TieCause } from '../config/ties';
 import { CAPO_TENSION } from '../config/capoTension';
 import { districtsHeldBy } from './delegation';
 import { territoryDef } from './territory';
+import { ROLE_ORDER } from '../config/economy';
 
 const POWER_CAUSE: TieCause = 'lost_the_room';
 const TERRITORY_CAUSE: TieCause = 'crowded_ground';
+const GENERATION_CAUSE: TieCause = 'generational_clash';
 
 /**
  * Capos proper — not the underboss or consigliere above them, and not a
@@ -130,6 +132,115 @@ export function checkCapoPowerImbalance(state: GameState): void {
       if (districtsAdjacent(state, capos[i].id, capos[j].id)) {
         applyTension(state, capos[i], capos[j], TERRITORY_CAUSE);
       }
+    }
+  }
+}
+
+// ------------------------------------------------------------ generations ---
+
+/*
+   The third cause, and the first one that is about the men rather than about
+   what they have built.
+
+   Power and territory are both facts about position — who has more, whose
+   ground touches whose. This one is a fact about era: a man who learned this
+   business when it was done in person, and a man who learned it when it was
+   done with a laptop and a merchant account, disagree about the only thing
+   they both actually care about, which is what gets everybody arrested. Each
+   thinks the other is the liability and each is partly right.
+
+   Same weekly pass, same cooldown, same `recordTie` door. No dice: a man's
+   age, role and traits either put him on one side of this or they do not.
+*/
+
+/**
+ * A man from before. The trait is the explicit route in; age and rank are the
+ * implicit one, because an institution does not have to describe itself.
+ *
+ * Exported because `dementia.ts` reads the identical question of the
+ * identical roster when a hit on a failing capo goes round the room.
+ */
+export function isRelic(npc: Npc): boolean {
+  if (npc.traits.includes('old_school')) return true;
+  return (
+    npc.age >= CAPO_TENSION.relicAge &&
+    ROLE_ORDER.indexOf(npc.role) >= ROLE_ORDER.indexOf('capo')
+  );
+}
+
+/**
+ * A man from after. The trait, or the disposition that would have earned him
+ * the trait had the roll gone that way — young, hungry, and not careful.
+ */
+export function isTracksuit(npc: Npc): boolean {
+  if (npc.traits.includes('tracksuit')) return true;
+  return (
+    npc.age < CAPO_TENSION.tracksuitAge &&
+    npc.stats.greed >= CAPO_TENSION.tracksuitGreedAbove &&
+    npc.stats.discipline < CAPO_TENSION.tracksuitDisciplineBelow
+  );
+}
+
+/**
+ * Whether power or ground has already spoken for this edge and is still
+ * inside its cooldown. Checked in both directions: the power cause lands on
+ * the weaker man only, so a pair can be explained by a tie this loop happens
+ * to be holding the wrong end of.
+ */
+function alreadyExplained(state: GameState, a: Npc, b: Npc): boolean {
+  const live = (from: Npc, toId: string): boolean => {
+    const tie = from.ties.find((t) => t.id === toId);
+    if (!tie) return false;
+    if (tie.cause !== POWER_CAUSE && tie.cause !== TERRITORY_CAUSE) return false;
+    return state.day - tie.since < CAPO_TENSION.cooldownDays;
+  };
+  return live(a, b.id) || live(b, a.id);
+}
+
+/** Opposite sides of it, whichever way round the pair happens to come. */
+function acrossTheLine(a: Npc, b: Npc): boolean {
+  return (isRelic(a) && isTracksuit(b)) || (isTracksuit(a) && isRelic(b));
+}
+
+/**
+ * Weekly. Every capo against every other capo, and every capo against the men
+ * who actually answer to him.
+ *
+ * Subordinates are included because that is where this is felt: two capos who
+ * disagree about the era see each other at sit-downs, and a capo who has to
+ * work with a man he thinks is going to get them all indicted sees him every
+ * day. `reportsTo` is the chain the roster already keeps — no new state and
+ * no search, one pass over the crew per capo.
+ *
+ * `generational_clash` is mutual, so `recordTie` mirrors the write itself and
+ * this only ever has to record the one direction.
+ *
+ * Position outranks era on the same edge. `checkCapoPowerImbalance`'s own
+ * header states the rule this has to keep — one true cause landing on a tie,
+ * not two mechanisms racing to overwrite each other's `cause` — and a pair
+ * that a standing gap or a shared border has already claimed inside the
+ * cooldown is left exactly as it was found. It is the same relationship
+ * either way; what differs is only which fact the crew sheet names, and the
+ * one it names should be the concrete one.
+ */
+export function checkGenerationalFracture(state: GameState): void {
+  if (state.day % CAPO_TENSION.checkIntervalDays !== 0) return;
+
+  const capos = activeCapos(state);
+  for (let i = 0; i < capos.length; i++) {
+    for (let j = i + 1; j < capos.length; j++) {
+      if (!acrossTheLine(capos[i], capos[j])) continue;
+      if (alreadyExplained(state, capos[i], capos[j])) continue;
+      applyTension(state, capos[i], capos[j], GENERATION_CAUSE);
+    }
+  }
+
+  for (const capo of capos) {
+    for (const npc of crewList(state)) {
+      if (npc.reportsTo !== capo.id) continue;
+      if (npc.status !== 'active' && npc.status !== 'busy') continue;
+      if (!acrossTheLine(capo, npc)) continue;
+      applyTension(state, capo, npc, GENERATION_CAUSE);
     }
   }
 }

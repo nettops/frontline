@@ -48,6 +48,7 @@ import {
   REMOVAL,
 } from '../config/succession';
 import { RIVAL_IDS } from '../config/factions';
+import { FLORIDA } from '../config/florida';
 
 // -------------------------------------------------------------- the room ---
 
@@ -872,9 +873,30 @@ export function tickDeposition(state: GameState, rng: Rng): void {
      of the chair that is entirely the player's own work, and that is exactly
      what a life nobody kept is.
   */
+  /*
+     And whether the man in the chair is visibly on his way out of it.
+
+     Read straight off `state.florida` rather than through `sim/florida.ts`,
+     which imports `removePlayer` from this file — a read of two numbers does
+     not justify a cycle, and `FLORIDA` is config either way. An absent field
+     is a boss who never opened the account, which is every career written
+     before this existed.
+
+     The line the room is actually saying: the take has been coming in light
+     for months, the boss has nothing to say about why, and there is a RICO
+     case with everybody's name on it. Doubling rather than adding, because
+     this is not a new reason to move — it is every existing reason arriving
+     at once.
+  */
+  const packingBags =
+    (state.florida?.suspicion ?? 0) > FLORIDA.coupRiskSuspicionThreshold
+      ? FLORIDA.coupChanceMultiplier
+      : 1;
+
   const chance =
     DEPOSITION.chancePerWeek *
     (named && named.id === mover.id ? DEPOSITION.namedHeirMultiplier : 1) *
+    packingBags *
     neglectRisk(state);
   if (!rng.chance(chance)) return;
 

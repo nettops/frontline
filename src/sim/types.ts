@@ -19,6 +19,9 @@ import type { CyclePhaseId } from '../config/market';
 import type { ApproachId } from '../config/operations';
 import type { HeatChannel } from '../config/heat';
 import type { NationalityId } from '../config/nationalities';
+import type { LightEnvelopeDilemma } from '../config/tribute';
+import type { DementiaCareStatus } from '../config/dementia';
+import type { DoctrineId } from '../config/doctrine';
 
 export type Id = string;
 
@@ -515,6 +518,34 @@ export interface Npc {
    * with nobody having noticed yet, which for those saves is true.
    */
   favoritismNoticedDay?: number;
+  /**
+   * The day this man's mind started going, if it has.
+   *
+   * Set once by `checkDementiaOnset` and never cleared — there is no getting
+   * better from it, which is the whole weight of the decision it forces. The
+   * presence of the field is the condition; there is no separate boolean
+   * agreeing with it.
+   *
+   * Optional with no initialiser, the same idiom as `informingSince` and
+   * `vouchedBy` above: a save written before this existed loads with nobody
+   * failing, which for those saves is true.
+   */
+  dementiaSince?: number;
+  /**
+   * What is being done about it. Absent until `dementiaSince` is set, and
+   * `'active'` from that moment until the boss pays for something better —
+   * see `sim/dementia.ts`.
+   */
+  dementiaCare?: DementiaCareStatus;
+  /**
+   * The soldier sitting in his house, if the boss chose that answer.
+   *
+   * Stored rather than derived because the minder has to be released when the
+   * arrangement ends, and `status: 'busy'` with no timer is indistinguishable
+   * from any other open-ended job — there would be nothing to read back to
+   * find out who he was.
+   */
+  dementiaMinderId?: Id;
 }
 
 export interface NpcNote {
@@ -725,6 +756,18 @@ export interface ActiveOperation {
   successChance: number;
   projectedPayout: number;
   /**
+   * Run by a capo's own crew rather than assembled by the boss.
+   *
+   * Two consequences, both in `resolveOperation`: the family keeps only
+   * `TRIBUTE.bossAutonomousCut` of what it pays, and what it leaves behind
+   * stops at the capo instead of entering the family's evidence. Optional
+   * because every job launched before this existed was the boss's own, and
+   * `undefined` means exactly that.
+   */
+  autonomous?: boolean;
+  /** Whose crew is out on it. Only set alongside `autonomous`. */
+  capoId?: Id;
+  /**
    * How it is being done. Optional because saves written before approaches
    * existed do not have one; read it through `approachOf`, never directly.
    */
@@ -797,6 +840,118 @@ export interface CapoPitch {
    */
   status: 'open' | 'approved' | 'rejected' | 'expired';
   settledDay?: number;
+}
+
+/**
+ * One week's envelope from one capo, after the boss has finished with it.
+ *
+ * `paid` is what the family actually received, `shortage` what was missing
+ * when the envelope arrived — so a squeezed week reads "short $900, paid in
+ * full" rather than pretending the envelope was never light. See
+ * `tribute.ts`.
+ */
+export interface TributeRecord {
+  capoId: Id;
+  day: number;
+  expected: number;
+  paid: number;
+  shortage: number;
+  status: 'paid' | 'squeezed' | 'slid' | 'audited_clean' | 'audited_guilty';
+}
+
+export interface TributeState {
+  history: TributeRecord[];
+  /** Light envelopes waiting on an answer. One per capo at most. */
+  pendingDilemmas: LightEnvelopeDilemma[];
+}
+
+// ------------------------------------------------------------- the suburbs ---
+
+/**
+ * A civilian who lives near the boss, and how far in he is.
+ *
+ * `exposure` is the only number, and it does exactly one thing: it is the
+ * weekly odds this man folds when a federal agent asks him what he knows.
+ * `panicked` latches, because a witness only turns once — everything after
+ * that is the same statement being read back.
+ */
+export interface SuburbanNeighbour {
+  id: string;
+  name: string;
+  /** 0..100. Rises with every favour. Never falls. */
+  exposure: number;
+  /** Day of the last favour, for the per-neighbour cooldown. */
+  lastFavourDay: number;
+  panicked?: boolean;
+}
+
+export interface ResolvedFavour {
+  neighbourId: string;
+  favourId: string;
+  day: number;
+}
+
+export interface SuburbanState {
+  neighbours: SuburbanNeighbour[];
+  resolvedFavours: ResolvedFavour[];
+  /**
+   * Who is currently reachable by a subpoena — recomputed every weekly tick
+   * rather than accumulated, so it is a reading of right now and cannot go
+   * stale when a case closes.
+   */
+  activeInformantThreats: string[];
+}
+
+// -------------------------------------------------------------- the doctrine ---
+
+/**
+ * What the boss has said this organization is.
+ *
+ * Two fields and no cached modifiers: everything the doctrine does is looked
+ * up out of `DOCTRINES` at the call site, so changing a number in config
+ * changes the game rather than changing the game for new saves only.
+ */
+export interface MobDoctrineState {
+  current: DoctrineId;
+  /** The day it was last declared. Also the switch cooldown's clock. */
+  sinceDay: number;
+}
+
+// --------------------------------------------------------------- the exit ---
+
+/**
+ * The plan the organization is not supposed to know about.
+ *
+ * `nestEgg` is deliberately not part of `cleanWorth` — see `config/florida.ts`
+ * for why that is the whole design rather than an oversight.
+ */
+export interface FloridaExitState {
+  nestEgg: number;
+  /** 0..100. What the room has worked out. */
+  suspicion: number;
+  /** Day of the last siphon, for the weekly decay's "quiet week" test. */
+  lastSiphonDay: number;
+  /**
+   * Set when suspicion crosses `FLORIDA.mutinyThreshold` somewhere with no
+   * rng in hand. The next weekly pass fires it. Latched rather than rolled:
+   * past that bar the room has stopped waiting for a reason.
+   */
+  mutinyPending?: boolean;
+}
+
+// ---------------------------------------------------------- the pet project ---
+
+/** The place itself. `defId` indexes `PET_PROJECTS`. */
+export interface PetProject {
+  defId: string;
+  boughtDay: number;
+}
+
+export interface PetProjectState {
+  current: PetProject | null;
+  /** 0..100. How much of the life has followed the boss into it. */
+  contagion: number;
+  sanitizedDay?: number;
 }
 
 /**
@@ -2172,6 +2327,62 @@ export interface GameState {
    * anything, which for those saves is exactly true.
    */
   capoPitches?: CapoPitch[];
+  /**
+   * What the capos have been bringing up, and what is still owed.
+   *
+   * Optional with a lazy initialiser in `tribute.ts`'s `tributeState`, the
+   * same idiom as `home`, `civic` and `capoPitches` before it — so
+   * `SAVE_VERSION` does not move and a save written before the envelopes
+   * existed loads with an empty book rather than a crash.
+   */
+  tribute?: TributeState;
+  /**
+   * Whether the family has a payroll somebody else's plan will carry.
+   *
+   * Only the decision lives here. Whether the boss *qualifies* is derived
+   * every time by `corporate.ts`'s `hasHealthInsurance` from the union
+   * figure and the front count, so there is no second copy to drift — the
+   * same reasoning `rank.ts` and `chronicle.ts` follow. Optional with no
+   * initialiser at all: an absent field reads as "nothing taken up", which
+   * is right for every save written before this existed.
+   */
+  corporateMob?: { insured?: boolean };
+  /**
+   * The people on either side, and what they have done for you.
+   *
+   * Optional with a lazy initialiser in `suburbs.ts`'s `suburbanState`, the
+   * same idiom as `tribute`, `civic` and `home` before it — so
+   * `SAVE_VERSION` does not move and a save written before the cul-de-sac
+   * existed loads with neighbours who owe nothing and are owed nothing.
+   */
+  suburban?: SuburbanState;
+  /**
+   * The one thing he owns that is not a front.
+   *
+   * Optional with a lazy initialiser in `petProject.ts`, same idiom as
+   * `suburban` above. An absent field reads as "he never bought one", which
+   * for those saves is exactly true.
+   */
+  petProject?: PetProjectState;
+  /**
+   * What the boss has declared this thing is.
+   *
+   * Optional with **no** initialiser, the same idiom as `corporateMob` — and
+   * for a stronger reason than the others. A lazy default would have to pick
+   * one of the two doctrines, and either choice retroactively re-tunes federal
+   * heat and front yields for every career ever written. An absent field reads
+   * as "he has never said", which for those saves is exactly true and is also
+   * a real state a live career can sit in for years.
+   */
+  doctrine?: MobDoctrineState;
+  /**
+   * The offshore account, and what the room has worked out about it.
+   *
+   * Optional with a lazy initialiser in `florida.ts`'s `floridaState` — a save
+   * written before this existed loads with nothing put aside and nobody
+   * suspicious, which is right.
+   */
+  florida?: FloridaExitState;
   /**
    * The half of a boss that is not the business.
    *

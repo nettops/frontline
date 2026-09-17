@@ -40,6 +40,8 @@ import { BOSS_CONTRACT, CONTRACT, WITNESS_CONTRACT } from '../config/contract';
 import { CHARGE, PROVENANCE } from '../config/pieces';
 import { armFor, leftBehind, spent } from './pieces';
 import { recordCareerEvent } from './career';
+import { transmitOrder } from './tradecraft';
+import type { TransmissionMethod } from '../config/tradecraft';
 
 export type ContractTarget =
   | { kind: 'capo'; factionId: FactionId; capoId: string }
@@ -256,9 +258,35 @@ export function openContract(
   state: GameState,
   target: ContractTarget,
   charged = false,
+  /**
+   * How the order was actually given — see `sim/tradecraft.ts`.
+   *
+   * Optional with no default on purpose. Every caller that existed before
+   * tradecraft did passes nothing, and nothing is exactly what used to
+   * happen: the order simply arrived. So no existing career changes, nothing
+   * new is drawn from the causal stream, and no baseline moves until a
+   * player actually chooses a method.
+   */
+  method?: TransmissionMethod,
 ): ContractCheck {
   const guard = canContract(state, target);
   if (!guard.ok) return guard;
+
+  /*
+     Before the money moves. The one way a transmission can be declined is an
+     evening that is already spoken for, and `transmitOrder` checks that
+     first, before any draw or any write — so a refusal here costs nothing
+     and leaves nothing behind. `canContract` has already established the
+     funds are there, so `spend` below cannot fail after a phone call has
+     already gone onto somebody's reel.
+  */
+  if (method) {
+    const lead = available(state)[0];
+    if (lead) {
+      const said = transmitOrder(state, method, lead, nameOf(state, target) ?? 'it');
+      if (!said.ok) return { ...guard, ok: false, message: said.message };
+    }
+  }
 
   const cost = guard.cost!;
   if (!spend(state, cost, 'world')) {

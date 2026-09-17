@@ -28,7 +28,8 @@ export type TieCause =
   | 'owes_money'
   | 'lost_the_room'
   | 'saved_him'
-  | 'crowded_ground';
+  | 'crowded_ground'
+  | 'generational_clash';
 
 export const TIE_CAUSE_TEXT: Record<TieCause, string> = {
   worked_together: 'have worked together',
@@ -39,6 +40,7 @@ export const TIE_CAUSE_TEXT: Record<TieCause, string> = {
   lost_the_room: 'lost the room to them',
   saved_him: 'got them out of something',
   crowded_ground: 'has ground that runs up against theirs',
+  generational_clash: 'is from a different era of this business',
 };
 
 /** Most ties one person can hold. The oldest and weakest is dropped first. */
@@ -74,6 +76,18 @@ export const TIE_EVENTS: Record<
    * a shared border is a standing irritant, not a real defeat.
    */
   crowded_ground: { resentment: 20, trust: -6, mutual: true },
+  /**
+   * A relic and a tracksuit, in the same chain of command. Mutual like
+   * `crowded_ground` and for the same reason — neither man outranks the
+   * other in the thing they disagree about, and both of them think the other
+   * one is going to get everybody arrested.
+   *
+   * Smaller than `crowded_ground`'s 20, larger on trust than its -6: two
+   * capos sharing a border is an irritant about ground, and this is an
+   * irritant about judgement. A man who thinks you are reckless does not
+   * resent you more for it; he trusts you less.
+   */
+  generational_clash: { resentment: 16, trust: -10, mutual: true },
 };
 
 /**

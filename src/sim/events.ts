@@ -161,6 +161,13 @@ export interface EventContext {
    * `build`/the resolver both look it up fresh.
    */
   crossroadsRelationId?: string;
+  /**
+   * Which `ANCESTRAL_GHOSTS` entry `gen_ancestral_ghost` drew — an id, not the
+   * definition, same reason `familyDilemmaId` and `crossroadsRelationId` above
+   * are carried that way: the catalogue is config and both `build` and the
+   * resolver look it up fresh.
+   */
+  ancestralGhostId?: string;
 }
 
 export interface EventDef {

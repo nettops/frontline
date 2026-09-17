@@ -28,15 +28,23 @@
  */
 
 import { Rng, clamp } from './rng';
-import type { GameState, Id, CapoPitch, Npc, OperationCategory, OperationDef } from './types';
+import type {
+  ActiveOperation,
+  GameState,
+  Id,
+  CapoPitch,
+  Npc,
+  OperationCategory,
+  OperationDef,
+} from './types';
 import type { Check } from './delegation';
 import { CAPO_PITCH, PITCH_REACTION } from '../config/capoPitches';
 import { isPitchDisfavored } from './capoFavoritism';
 import { DELEGATION } from '../config/delegation';
 import { ROLE_ORDER } from '../config/economy';
 import { GOAL_CERTAIN_ABOVE, GOAL_VISIBLE_ABOVE } from '../config/goals';
-import { OPERATION_BY_ID, OPERATION_CATEGORIES } from '../config/operations';
-import { availableOperations, STREET_WORK_IDS } from './operations';
+import { OPERATION_BY_ID, OPERATION_CATEGORIES, type ApproachId } from '../config/operations';
+import { availableOperations, crewNeeded, launchOperation, STREET_WORK_IDS } from './operations';
 import { operableTerritories, territoryDef } from './territory';
 import { addNote, crewList } from './npc';
 import { remember } from './memory';
@@ -222,6 +230,49 @@ export function approvePitch(state: GameState, pitchId: Id): CapoPitch | null {
   p.status = 'approved';
   p.settledDay = state.day;
   return p;
+}
+
+/**
+ * Approve it and let him run it, without picking a single name.
+ *
+ * The other way of saying yes. `approvePitch` hands the job to the assemble
+ * screen and the boss chooses the crew himself; this hands the job to the man
+ * who brought it and he uses his own people. Same `launchOperation`, same
+ * `canLaunch` — the only difference is who is on it and the two flags left on
+ * the operation, which `resolveOperation` reads for the boss's cut and for
+ * command insulation.
+ *
+ * His own crew first: himself, then anybody whose `reportsTo` is him, then
+ * whoever else is standing around. `canLaunch` wants exactly `crewNeeded`
+ * bodies, so a capo short of people borrows rather than the pitch failing
+ * silently — a delegated job the boss has to staff is still a delegated job.
+ */
+export function delegatePitchAutonomous(
+  state: GameState,
+  pitchId: Id,
+  approach?: ApproachId,
+): ActiveOperation | null {
+  const pitch = list(state).find((x) => x.id === pitchId && x.status === 'open');
+  if (!pitch) return null;
+  const def = OPERATION_BY_ID[pitch.defId];
+  if (!def) return null;
+
+  const capo = state.npcs[pitch.capoId];
+  const free = (n: Npc | undefined): n is Npc => !!n && n.status === 'active';
+  const own = crewList(state).filter((n) => free(n) && n.reportsTo === pitch.capoId);
+  const rest = crewList(state).filter(
+    (n) => free(n) && n.id !== pitch.capoId && n.reportsTo !== pitch.capoId,
+  );
+  const ordered = [...(free(capo) ? [capo] : []), ...own, ...rest];
+  const crewIds = ordered.slice(0, crewNeeded(state, def)).map((n) => n.id);
+
+  const op = launchOperation(state, pitch.defId, crewIds, pitch.territoryId, approach);
+  if (!op) return null;
+
+  op.autonomous = true;
+  op.capoId = pitch.capoId;
+  approvePitch(state, pitchId);
+  return op;
 }
 
 /** Clears for nothing. No cost to reading a pitch and passing on it. */

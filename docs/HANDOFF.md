@@ -500,6 +500,41 @@ rounds up to a week boundary and says why.
 Gates: `npx tsc -b` 0 errors. `npm test` 166 files, 1,989 passing, 8 skipped,
 0 failures (from 164/1,971 before). `npm run probe` PROBE_LINE
 
+**Update, 2026-09-17: the Soprano phases got their screens.** Phases 1-4
+(tribute envelopes and autonomous delegation, the corporate mob, tradecraft
+and the failing capo, doctrine and the Florida exit) shipped four times in a
+row with the same finding in the log: *no UI reads any of it*. Two of those
+systems were accruing behind the player's back — `tickPetProject` and
+`tickSuburban` are live in the clock — and the Florida retirement was a win
+condition nobody could trigger. Phase 5 is five panels and a test file. It
+touches no sim and no config, so no causal draw moved and no baseline in the
+project changed.
+
+- `OperationsPanel` — the light-envelope dilemma with the capo's excuse
+  printed verbatim and three answers; "Let {capo} run it" on every pitch card.
+- `CrewPanel` — the earner leaderboard, and the failing capo with all three
+  answers, the slipped-tongue warning shown only when there is a file for a
+  slipped word to land on.
+- `PlayerPanel` — the doctrine, with all four dials side by side rather than
+  described; who is paying for the consultation; the cul-de-sac; the sanctuary.
+- `FinancesPanel` — the nest egg, the suspicion, both siphons, and Go.
+- `BusinessesPanel` — Webistics, and the two signature covers read-only.
+
+`ui/__tests__/sopranoControls.test.ts` (25) guards the *route* rather than the
+screen, in `discoverable.test.ts`'s idiom: a verb imported and never invoked is
+exactly what a half-finished panel leaves behind. Four faults injected and
+watched red. Gates: `tsc -b` 0 errors, `npm test` 171 files / 2,133 passing
+(from 170 / 2,108), `npm run build` clean.
+
+**One thing was left unbuilt and it needs the director.** `SPECIAL_VENTURES`
+(Barone Sanitation, Satriale's) has no acquisition route — `config/tribute.ts`
+keeps the two out of `BUSINESSES` deliberately, to hold `catalogue.test.ts` and
+`ladder.probe` — and both its perks are config prose with nothing behind them,
+which also makes `hasHealthInsurance`'s `waste_management` branch unreachable.
+The panel names them and says nobody is selling; a buy button there would be
+the control rule 4 forbids. Making them real is sim work and is a call about
+whether they join the catalogue or get their own path.
+
 ### What shipped since round 21
 
 **The card game was rebuilt.** The three rooms are gone. One table, every night,

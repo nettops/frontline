@@ -325,8 +325,19 @@ describe('the record you read him from', () => {
        What is being pinned is the shape of the read, not a number: a thief
        usually shows, rarely at once, and sometimes not at all within a season.
        The last of those is what makes the suspicion worth having.
+
+       Widened from 20 seeds to 60 in Phase 3, because 20 could not resolve
+       the middle assertion. The median is an integer over a handful of
+       worlds, and it sat one unit above the bar: reordering two entries in
+       `TRAITS` — a pure no-op on a set the game only ever samples from —
+       moved it from 2 to 1 and turned this red, which is an instrument
+       measuring its own dice rather than the game. Not a threshold move; the
+       three assertions below are untouched. Both sides measured on the
+       widened instrument: 60 seeds without the `tracksuit` trait read 55/60
+       caught at median week 3, and with it 51/60 at median week 4. Both
+       clear all three bars, which is what 20 seeds could not tell anybody.
     */
-    const seeds = Array.from({ length: 20 }, (_, i) => i + 1);
+    const seeds = Array.from({ length: 60 }, (_, i) => i + 1);
     const settledOn: number[] = [];
 
     for (const seed of seeds) {

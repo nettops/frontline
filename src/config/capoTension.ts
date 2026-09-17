@@ -55,4 +55,35 @@ export const CAPO_TENSION = {
    * the count to zero; only `let_it_sit` grows it.
    */
   escalateAfter: 2,
+
+  /**
+   * Age from which a capo reads as a relic whether or not he carries the
+   * `old_school` trait.
+   *
+   * `AGING.declineFrom` is where a man's hands start going and the yearly
+   * pass begins taking skill off him; this is deliberately the same
+   * neighbourhood. A capo who has been doing this long enough to be visibly
+   * declining is a man whose way of doing it predates the thing the young
+   * ones are doing, and the trait is then a description of him rather than
+   * the only route in. Below `capo` it does not apply at all — a fifty-
+   * year-old soldier is not anybody's institution.
+   */
+  relicAge: 50,
+
+  /**
+   * ...and the age below which a man reads as a tracksuit without the trait,
+   * given the disposition to go with it.
+   *
+   * Age alone is not enough and is not supposed to be. A disciplined young
+   * man is simply a young man; what makes him the other half of the fracture
+   * is wanting a great deal quickly and not much minding how it looks, which
+   * is the two stats below.
+   */
+  tracksuitAge: 35,
+
+  /** Greed at or above this, with the age, reads as a modern earner. */
+  tracksuitGreedAbove: 60,
+
+  /** ...and discipline below this. Same bar `TRADECRAFT` uses for the phone. */
+  tracksuitDisciplineBelow: 45,
 } as const;
