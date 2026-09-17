@@ -310,6 +310,20 @@ export const GEN_SHAPES: GenShapeDef[] = [
   { id: 'gen_the_name_stuck', subject: 'crew', weight: 4, cooldownDays: 45 },
   { id: 'gen_old_owner', subject: 'business', weight: 5, cooldownDays: 20 },
   { id: 'gen_they_are_frightened', subject: 'district', weight: 4, cooldownDays: 16 },
+  /*
+     Milestone 5. The boss's public and civic life, not the household and not
+     the street — a parish feast, a wedding, a wake, dressed only as flavour;
+     what matters is the three answers, and all three move numbers other
+     systems already own (cash, a district's sentiment, a civic figure's
+     standing or a rival's grudge, the house's neglect). Gated lightly rather
+     than on a single flag like most shapes above: any real public footprint
+     at all (a front, or standing above zero with a civic figure) is enough
+     — a brand-new boss with neither is not on anybody's invitation list yet
+     (`sim/eventgen.ts`'s `socialGathering.applies`). Weight and cooldown
+     match `gen_panic_episode`'s own (2, 45), the closest existing shape with
+     no single recurring subject to exhaust.
+  */
+  { id: 'gen_social_gathering', subject: 'civic', weight: 2, cooldownDays: 45 },
 ];
 
 /**
@@ -704,4 +718,39 @@ export const GEN_EFFECT = {
   /** Option C: let them go their own way. Costs nothing in cash -- a
    * permanent estrangement, not a decision that was handled. */
   crossroadsEstrangedNeglect: 25,
+
+  /*
+     Milestone 5: the boss's public and civic life. See `gen_social_gathering`
+     in `sim/eventgen.ts` and `publicStanding` in `sim/civic.ts` — the derived
+     meter these three answers feed without ever writing to it directly. The
+     brief's own figures throughout; the range on the donation (rather than a
+     single number) is this milestone's own call, priced the same way
+     `homeOrBusinessStayCash` above is.
+  */
+  /** Option 1: host and donate. A range — a gala this size is a real spend, not a fixed one. */
+  socialDonateCashMin: 1_500,
+  socialDonateCashMax: 2_500,
+  socialDonateSentiment: 12,
+  /**
+   * Standing gained with the alderman specifically, through `helpFigure` so
+   * it is rate-limited the same as every other paid civic credit. He is the
+   * figure whose own blurb is explicitly about being seen with the right
+   * people at the right occasion — see `CIVIC_FIGURES`.
+   */
+  socialDonateStanding: 8,
+  socialDonateNeglectClear: 12,
+  /** Option 2: work the room instead of attending as family. Free; the house notices the difference anyway. */
+  socialWorkRoomStanding: 10,
+  socialWorkRoomGrudgeSettled: 10,
+  socialWorkRoomNeglect: 5,
+  /** Option 3: send money and stay away. */
+  socialEnvelopeCash: 400,
+  /**
+   * What staying away docks. `publicStanding` has no stored field to ding
+   * directly — see its own header — so this docks the real input the
+   * brief's "outgrown his roots" line is actually about: home-district
+   * sentiment, by enough to read as roughly the brief's stated 5-point hit
+   * at the composite's own sentiment weight (14 * 0.35 ≈ 4.9).
+   */
+  socialEnvelopeSentimentHit: 14,
 } as const;

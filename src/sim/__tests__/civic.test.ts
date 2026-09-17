@@ -26,16 +26,26 @@ import {
   figure,
   helpFigure,
   pullPermit,
+  publicStanding,
+  publicStandingTier,
   scoreFor,
   spendFavour,
   tickCivic,
 } from '../civic';
 import { collectIncome } from '../faction';
+import { ownedBusinesses } from '../business';
 import { rivalBusinesses } from '../verbs';
 import { withFronts } from './helpers';
 import { Rng } from '../rng';
 import { crewList, generateNpc } from '../npc';
-import { CIVIC, CIVIC_BY_ID, CIVIC_FIGURES, FAVOUR_EFFECT } from '../../config/civic';
+import {
+  CIVIC,
+  CIVIC_BY_ID,
+  CIVIC_FIGURES,
+  FAVOUR_EFFECT,
+  PUBLIC_STANDING_FIGURES,
+  PUBLIC_STANDING_TIERS,
+} from '../../config/civic';
 import { SENTIMENT_HOSTILE_BELOW, HOME_TERRITORY } from '../../config/territories';
 import { AI, RIVAL_IDS, type FactionId } from '../../config/factions';
 import type { GameState, RivalBusiness } from '../types';
@@ -770,5 +780,118 @@ describe('helping somebody outside the family', () => {
       helpFigure(state, 'captain', 12);
     }
     expect(state.player.attributes.influence).toBe(before);
+  });
+});
+
+/*
+   Milestone 5: the boss's public and civic life. A dual reputation running
+   beside street Fear and Respect, synthesized from facts the sim already
+   keeps rather than a second roster — see `publicStanding`'s own header in
+   `sim/civic.ts`.
+*/
+describe('public standing', () => {
+  it('reflects district sentiment, front legitimacy and civic-figure standing, each on its own', () => {
+    const state = game();
+    const baseline = publicStanding(state);
+
+    // The sentiment term: a friendlier home street.
+    state.territories[HOME_TERRITORY].sentiment = 95;
+    const afterSentiment = publicStanding(state);
+    expect(afterSentiment, 'a friendlier street moved nothing').toBeGreaterThan(baseline);
+    state.territories[HOME_TERRITORY].sentiment = 50;
+    expect(publicStanding(state), 'the fixture is not isolating what it claims to').toBe(baseline);
+
+    // The legitimacy term: a clean front, owned outright.
+    expect(withFronts(state, 1), 'the fixture could not open a front to measure with').toHaveLength(1);
+    const afterFront = publicStanding(state);
+    expect(afterFront, 'a legitimate front moved nothing').toBeGreaterThan(baseline);
+
+    /*
+       The alliance term: real standing with the civic figures.
+
+       All four, not just one — `roster()`'s own lazy init materializes
+       every figure in `CIVIC_FIGURES` at once the moment any single one is
+       touched, so raising only the alderman would also reveal the other
+       three at a real, recorded zero and could move the composite *down*,
+       out from under a neutral-default alliance term that had been
+       covering for all four. See `publicStandingTerms`'s own comment.
+    */
+    for (const id of PUBLIC_STANDING_FIGURES) figure(state, id).standing = 90;
+    const afterAlliance = publicStanding(state);
+    expect(afterAlliance, 'civic standing moved nothing').toBeGreaterThan(afterFront);
+  });
+
+  it('docks the composite as federal heat rises', () => {
+    const state = game();
+    const quiet = publicStanding(state);
+    state.org.heat = 90;
+    expect(publicStanding(state), 'heat cost nothing').toBeLessThan(quiet);
+  });
+
+  it('reads the four civic figures the brief names, not the fifth (`lawyer`)', () => {
+    expect(PUBLIC_STANDING_FIGURES).toEqual(['captain', 'union', 'judge', 'alderman']);
+    const state = game();
+    /*
+       Touch all four watched figures first, so `state.civic` already
+       exists in a known state before `lawyer`'s own entry is added.
+       Otherwise merely creating the roster for the first time — which
+       `figure()`'s own lazy init does for every figure in `CIVIC_FIGURES`
+       at once, `lawyer` included — would itself move the alliance term out
+       from under this comparison, for a reason that has nothing to do with
+       whether `lawyer` is read.
+    */
+    for (const id of PUBLIC_STANDING_FIGURES) figure(state, id).standing = 40;
+    const before = publicStanding(state);
+    figure(state, 'lawyer').standing = 100;
+    expect(publicStanding(state), "the lawyer's own standing is not part of this meter").toBe(before);
+  });
+
+  it('reads a brand-new career as neutral rather than already a pariah', () => {
+    const state = game();
+    // Nothing built yet — no fronts, no civic standing above the starting
+    // zero — beyond the home foothold every career starts with.
+    expect(ownedBusinesses(state)).toHaveLength(0);
+    const score = publicStanding(state);
+    expect(score, 'day one already reads as a known criminal').toBeGreaterThan(0);
+    expect(score, 'day one already reads as a benefactor').toBeLessThan(70);
+  });
+});
+
+describe('public standing tiers', () => {
+  it('reads a quiet, unbuilt start as Respected Merchant (businessman)', () => {
+    // No fronts, no civic standing, no heat -- the state `game()` itself
+    // produces, with every one of the three composite terms reading its own
+    // neutral default (50): 50*.35 + 50*.3 + 50*.25 - 0 = 45, exactly the
+    // Respected Merchant bar. See the previous describe block for why an
+    // untouched career reads neutral rather than the floor.
+    const state = game();
+    expect(publicStandingTier(state).id).toBe('businessman');
+  });
+
+  it('reads a hated, hunted family as Street Parasite (pariah)', () => {
+    const state = game();
+    state.territories[HOME_TERRITORY].sentiment = 0;
+    state.org.heat = 100;
+    expect(publicStandingTier(state).id).toBe('pariah');
+    expect(publicStandingTier(state).caseGrowthMultiplier).toBeGreaterThan(1);
+  });
+
+  it('reads real civic pull as Respected Merchant (businessman)', () => {
+    const state = game();
+    for (const id of PUBLIC_STANDING_FIGURES) figure(state, id).standing = 80;
+    expect(publicStandingTier(state).id).toBe('businessman');
+    expect(publicStandingTier(state).caseGrowthMultiplier).toBe(1);
+  });
+
+  it('reads a beloved, well-connected boss as Community Pillar (pillar)', () => {
+    const state = game();
+    state.territories[HOME_TERRITORY].sentiment = 100;
+    for (const id of PUBLIC_STANDING_FIGURES) figure(state, id).standing = 100;
+    expect(publicStandingTier(state).id).toBe('pillar');
+    expect(publicStandingTier(state).caseGrowthMultiplier).toBeLessThan(1);
+  });
+
+  it('the four tiers are ordered highest bar first, covering 0..100 with no gap', () => {
+    expect(PUBLIC_STANDING_TIERS.map((t) => t.bar)).toEqual([70, 45, 20, 0]);
   });
 });
