@@ -102,10 +102,15 @@ dropped and replaced with what the outcome actually is — the cash cost, the
 neglect clear, and the logged narrative beat.
 
 Gates: `npx tsc -b` 0 errors, `npm test` **163 files, 1,917 passing, 0
-failing** (up from this branch's own parent at 163/1,898 — 19 new tests,
-no probe run since nothing here touches balance-relevant weights on the
-authored side and `GEN_SHAPES`' new entries ride `generatedStream`, per
-tonight's earlier isolation fix). One test-fixture reseed, disclosed per
+failing** (up from this branch's own parent at 163/1,898 — 19 new tests).
+**`npm run probe` was not run** — tonight's `generatedStream` isolation
+means the new shapes cannot reshuffle anything outside the generated pool
+itself, but two more weight-2 entries in that pool (now ~19 shapes instead
+of 17) do dilute every other generated shape's own share of the daily draw
+by a small amount, which is exactly the kind of change the probe, not this
+disclosure, is the instrument for. Flagged rather than asserted clean —
+run it before merge if the developer wants the number rather than the
+argument. One test-fixture reseed, disclosed per
 DIRECTOR §5: `eventgen.test.ts`'s shared `world()` builder now forces a
 household member into the `eldest` relation and advances `state.day` by 18
 years so `gen_family_crossroads` has a subject to fire against in the
