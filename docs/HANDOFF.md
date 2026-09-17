@@ -269,15 +269,49 @@ arrested" fate; seed 4062 was picked, and the guard was re-confirmed the
 standard way (`backersNeeded` reverted to 2, generation stayed at 1,
 restored to 1).
 
+**Addendum, same day: the day-1 alliance default corrected to match the other
+two terms.** The first cut let a never-engaged civic figure read as its raw
+`standing: 0`, which is also what a figure genuinely run down through real
+anger decays toward — so a brand-new boss who has not touched civic life at
+all read as already partly distrusted (alliance term 0, composite ~33,
+Known Operator/shadow), the same mistake the sentiment and legitimacy terms
+had already been built to avoid. Fixed the same way: `PUBLIC_STANDING`
+grew a third neutral default, `neutralAllianceDefault: 50`, and
+`publicStandingTerms` (`sim/civic.ts`) now peeks at `state.civic` directly —
+never through `figure()`/`roster()`, both of which auto-create the entry
+(and, via `roster()`'s own lazy init, every figure in `CIVIC_FIGURES` at
+once) the instant they are called — averaging only whichever of the four
+watched figures already exist in the roster, falling back to the neutral
+default only when none do. A figure that exists and has genuinely decayed
+to a real zero still counts as that zero; only "never in the roster at all"
+gets the substitute.
+
+One real wrinkle this exposed: because `roster()` materializes all four
+figures at once the moment any single one is touched, raising just one
+figure's standing from an untouched state can *lower* the composite — the
+other three get revealed at a real recorded zero instead of staying
+neutral. `civic.test.ts`'s "each on its own" test was rewritten to raise
+all four figures together for that reason, and its "not the fifth
+(`lawyer`)" test now sets the four watched figures before touching
+`lawyer`'s own entry, so incidentally creating the roster does not move the
+comparison out from under itself. Day one now reads **45, Respected
+Merchant (businessman)** — 50\*.35 + 50\*.3 + 50\*.25 − 0, the composite
+landing exactly on that tier's own bar — rather than Known Operator/shadow.
+The tier test was renamed and re-pointed to match; the new guard was fault
+injected (dropped back to averaging over all four regardless of whether
+they exist, reproducing the original bug) and watched red before
+restoring.
+
 Gates: `npx tsc -b` 0 errors. `npm test` **163 files, 1,938 passing, 0
-failing** (up from this branch's own parent at 163/1,920 — 18 new tests).
-**`npm run probe` was not run** — nothing in this milestone touches
-`src/sim/probes/` directly, but a fresh, unbuilt career now defaults to the
-Known Operator tier (composite ~33 with zero fronts and zero civic
-standing) and a x1.15 case-growth multiplier from day one, which is a real
-balance input the probe measures against; if the developer wants a sized
-number for how this moves case-close timing or any of the ladder's own
-bars, run it before merge.
+failing** (unchanged from the corrected count above — three existing tests
+edited in place, none added or removed). **`npm run probe` was not run** —
+nothing in this milestone touches `src/sim/probes/` directly, but a fresh,
+unbuilt career now defaults to the Respected Merchant tier (composite 45)
+and a x1.0 case-growth multiplier from day one — neutral rather than the
+x1.15 the first cut shipped with — which is still a real balance input the
+probe measures against; if the developer wants a sized number for how this
+moves case-close timing or any of the ladder's own bars, run it before
+merge.
 
 last run clean at 96/96 non-skipped (unrun since the diplomacy/refusal/
 tip/report/sitdown/contract-charge/rail-grouping/operations-focus/
