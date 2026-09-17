@@ -266,6 +266,20 @@ export const GEN_SHAPES: GenShapeDef[] = [
   */
   { id: 'gen_family_dilemma', subject: 'home', weight: 2, cooldownDays: 38 },
   /*
+     Milestone 4. Not a recurring occasion like the four above -- a household
+     member's 18th birthday happens once, and the shape's own resolved-flag
+     (keyed on `relationId`, see `sim/eventgen.ts`) makes sure it fires at
+     most once per person regardless of how many times the cooldown clears
+     afterward. Kept out of `FAMILY_DILEMMAS`/`gen_family_dilemma`'s own pool
+     on purpose -- a one-time, three-way, higher-stakes choice is a different
+     shape than a recurring dilemma, and forcing it into that table's
+     attend/send/stay structure would have meant three choices that do not
+     actually map to going, sending, or staying away. Cooldown matches
+     `gen_asked_for_you`'s -- the flag, not this number, is what actually
+     bounds how often it can fire.
+  */
+  { id: 'gen_family_crossroads', subject: 'home', weight: 2, cooldownDays: 30 },
+  /*
      Not the household. The man.
 
      Every shape above is instantiated against somebody or something else —
@@ -642,4 +656,42 @@ export const GEN_EFFECT = {
   /** Pills instead of a doctor. Clears less than the house call and does not spend the evening. */
   panicSedativeCost: 150,
   panicSedativeClear: 20,
+
+  /*
+     The crossroads: one household member's 18th birthday, and the choice
+     the household system had never modeled before -- what a boss with a
+     family actually does about a child who is suddenly grown. See
+     `gen_family_crossroads` in `sim/eventgen.ts`.
+
+     Figures are this milestone's own, sized well above `FAMILY_DILEMMAS`'s
+     recurring costs (200-600) and `STRESS.consultCost` (350) on purpose: a
+     decision that fires at most once per household member, ever, is allowed
+     to cost more than one that can recur.
+
+     There is no fourth term here granting `legitimacy()` points directly --
+     that formula (`sim/legacy.ts`) is a pure derived read with no stored,
+     writable field anywhere, and none of its four existing weights
+     (visible/quiet/unnamed/explainable) has an honest causal path from
+     "paid for college" to a fixed point swing. The option still does
+     something real: a cash cost, a real neglect-clear, and a logged
+     `recordCareerEvent` beat -- just not a fabricated number on a formula
+     this milestone was not asked to redesign.
+  */
+  /** Option A: pay for college, and keep them out of the life entirely. */
+  crossroadsTuitionCost: 4_500,
+  crossroadsTuitionNeglectClear: 20,
+  /** Option B: bring them into the organization, as a real hire. */
+  crossroadsHireCost: 1_500,
+  crossroadsHireNeglectClear: 10,
+  /**
+   * The grievance landed on one real active capo when there is one to land
+   * it on (`activeCapos`, `sim/capoTension.ts`) -- an outsider handed a
+   * place at the table without going through the ranks is every capo's
+   * business, not only the boss's. Silently skipped where there is no capo
+   * to carry it, same as `gen_bad_blood`'s own pair check finding nobody.
+   */
+  crossroadsHireCapoGrievance: 10,
+  /** Option C: let them go their own way. Costs nothing, clears nothing --
+   * an estrangement, not a decision that was handled. */
+  crossroadsEstrangedNeglect: HOME.perWeekAway * 3,
 } as const;

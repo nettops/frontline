@@ -16,7 +16,18 @@
  */
 
 import { Rng, clamp } from './rng';
-import { HOME, HOME_LABEL, RELATIONS, STRESS, STRESS_TIERS, type HomeTier, type StressTierDef } from '../config/personal';
+import {
+  CHILD_START_AGES,
+  HOME,
+  HOME_LABEL,
+  LIFE_STAGES,
+  RELATIONS,
+  STRESS,
+  STRESS_TIERS,
+  type HomeTier,
+  type LifeStageDef,
+  type StressTierDef,
+} from '../config/personal';
 import { FIRST_NAMES } from '../config/npcs';
 import { HOME_TERRITORY } from '../config/territories';
 import { GEN_SHAPES } from '../config/eventgen';
@@ -77,6 +88,69 @@ export function home(state: GameState): Home {
     neglect: 0,
   };
   return state.home;
+}
+
+/**
+ * The one draw an age needs, made once and shared by every reader of it.
+ *
+ * `Rng.stableNoise`, not the causal stream — a descriptive fact about the
+ * world established once at household creation, same as `home()`'s own
+ * picks, and the same reasoning: a lazy initialiser that spent real rolls
+ * would reshuffle every later draw in a career that loaded an old save.
+ * A fresh key (`child_age:...`), distinct from `home()`'s own `home:...`,
+ * salted by the person's slot in the household so two children in the same
+ * house cannot draw the same age off the same number.
+ *
+ * `null` for a relation `CHILD_START_AGES` has no entry for — `spouse`,
+ * `parent`, `sibling` and `elder` are already adults, and giving them a
+ * fabricated birth year would be a number nobody asked for attached to a
+ * mechanic that never reads it.
+ */
+function baseAgeAtDay1(state: GameState, relationId: string): number | null {
+  const range = CHILD_START_AGES[relationId];
+  if (!range) return null;
+  const idx = home(state).people.findIndex((p) => p.relationId === relationId);
+  const key = `child_age:${state.rng.seed}`;
+  const [lo, hi] = range;
+  return lo + Math.floor(Rng.stableNoise(key, 20 + idx) * (hi - lo + 1));
+}
+
+/**
+ * How old a household member is today — `baseAgeAtDay1` plus a year for
+ * every 365 days that have passed, per `CLAUDE.md`'s "reach for a derived
+ * read before stored state": nothing about age is ever written to `Home`
+ * or `HouseholdMember`, so there is no second copy to drift and no
+ * `SAVE_VERSION` bump for this milestone. `memberName` is not read by the
+ * lookup itself (`home()` never gives two people the same `relationId`) but
+ * is kept in the signature because every other caller already has both in
+ * hand from a `HouseholdMember`.
+ */
+export function memberAge(state: GameState, _memberName: string, relationId: string): number | null {
+  const base = baseAgeAtDay1(state, relationId);
+  return base === null ? null : base + Math.floor(state.day / 365);
+}
+
+/** Which of the three stages a given age falls in. */
+export function memberLifeStage(age: number): LifeStageDef {
+  return LIFE_STAGES.find((s) => age >= s.fromAge) ?? LIFE_STAGES[LIFE_STAGES.length - 1];
+}
+
+/**
+ * Days until a household member turns 18, for the PlayerPanel's near-
+ * birthday prompt. `null` for a relation with no tracked age, or one
+ * already grown — the same "say nothing until there is something to say"
+ * rule `homeRead`'s `costing` field follows.
+ *
+ * Checked against the *current* day crossing the birthday, not merely
+ * whether the base age started below 18 — a base age always does, for
+ * every relation this tracks, so that alone would have kept reporting a
+ * countdown of 0 forever after the day it actually passed.
+ */
+export function daysUntilAdult(state: GameState, relationId: string): number | null {
+  const base = baseAgeAtDay1(state, relationId);
+  if (base === null) return null;
+  const turnsAdultOnDay = (18 - base) * 365;
+  return state.day >= turnsAdultOnDay ? null : turnsAdultOnDay - state.day;
 }
 
 /** A week of not being there, or of having been. */
@@ -226,6 +300,12 @@ export interface HomeRead {
    * for the same reason.
    */
   daysUntilDepositionRisk: number;
+  /**
+   * Household members within `HOME.comingOfAgeWithinDays` of their 18th
+   * birthday — empty for a household with no child in it, or none close
+   * enough to be worth a line on the panel. See `daysUntilAdult`.
+   */
+  comingOfAge: { name: string; relationId: string; daysUntil: number }[];
 }
 
 export function homeRead(state: GameState): HomeRead {
@@ -238,7 +318,13 @@ export function homeRead(state: GameState): HomeRead {
     tier,
     people: house.people.map((p) => {
       const def = RELATIONS.find((r) => r.id === p.relationId);
-      return `${p.name}, ${def ? def.label : 'family'}`;
+      const label = `${p.name}, ${def ? def.label : 'family'}`;
+      const age = memberAge(state, p.name, p.relationId);
+      return age === null ? label : `${label} (${age}, ${memberLifeStage(age).label})`;
+    }),
+    comingOfAge: house.people.flatMap((p) => {
+      const daysUntil = daysUntilAdult(state, p.relationId);
+      return daysUntil === null ? [] : [{ name: p.name, relationId: p.relationId, daysUntil }];
     }),
     since: state.day - house.lastVisitDay,
     /*

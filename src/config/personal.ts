@@ -87,11 +87,53 @@ export const RELATIONS: RelationDef[] = [
   { id: 'elder', label: 'the oldest of them', asks: 'is old, and is asking after you' },
 ];
 
+/**
+ * Only `eldest` and `youngest` can start the game below adulthood — the
+ * other four relations (`spouse`, `parent`, `sibling`, `elder`) are already
+ * grown, and giving them a base age would be flavour with no mechanic
+ * behind it. `memberAge` returns `null` for a relation with no entry here,
+ * which is how `gen_family_crossroads`/`teen_trouble`'s gating knows to
+ * skip a household that has neither child in it (see `sim/personal.ts` and
+ * `CLAUDE.md`'s point about a household holding only 3 of 6 relations).
+ *
+ * Figures are this milestone's own — sized so a career of ordinary length
+ * (300-1460 days, i.e. roughly 1-4 game years at `Math.floor(day / 365)`)
+ * has a real chance of watching a child cross from Teenager into Adult, not
+ * merely inherit one who already has.
+ */
+export const CHILD_START_AGES: Record<string, [number, number]> = {
+  eldest: [9, 17],
+  youngest: [2, 11],
+};
+
+export type LifeStageId = 'child' | 'teen' | 'adult';
+
+export interface LifeStageDef {
+  id: LifeStageId;
+  /** Age at or above which a member is in this stage. Checked highest-first, same idiom as `HOME_LABEL`. */
+  fromAge: number;
+  label: string;
+}
+
+export const LIFE_STAGES: LifeStageDef[] = [
+  { id: 'adult', fromAge: 18, label: 'Adult' },
+  { id: 'teen', fromAge: 13, label: 'Teenager' },
+  { id: 'child', fromAge: 0, label: 'Child' },
+];
+
 export const HOME = {
   /** Everybody forms an opinion once a week, like the rest of the game. */
   intervalDays: 7,
   /** How many people are in the house. Small on purpose. */
   household: 3,
+  /**
+   * How close a household member's 18th birthday has to be before the
+   * PlayerPanel says anything about it. See `memberAge`/`daysUntilAdult` in
+   * `sim/personal.ts` — the same "a heads-up, not a schedule" register
+   * `familyHorizon` already uses, just for a date that is actually knowable
+   * in advance rather than one that depends on a later day's draw.
+   */
+  comingOfAgeWithinDays: 30,
 
   /**
    * Neglect gained each week you are not seen at home, 0..100.
@@ -203,6 +245,13 @@ export interface FamilyDilemmaDef {
   id: string;
   /** Which household relation(s) this occasion fits. */
   relationIds: string[];
+  /**
+   * Which life stage(s) (`LifeStageId`, above) the matching member has to be
+   * in, for an occasion that only makes sense at one age. Undefined for the
+   * four original entries — they fit a relation regardless of age, and
+   * giving them all `'any'` would be a call site nobody asked to touch.
+   */
+  stages?: LifeStageId[];
   /** Names the occasion, for the title and the career record. */
   occasion: string;
   /** The memo's own words, third person implied -- for `oneOf()`. */
@@ -267,6 +316,29 @@ export const FAMILY_DILEMMAS: FamilyDilemmaDef[] = [
     attendCost: 300,
     sendCost: 200,
     sendGesture: 'a gift, sent round with your name on the card',
+  },
+  /*
+     Milestone 4. The only entry in this table gated on age rather than only
+     on relation — a teenager is a different occasion than a child at the
+     same school, and `gen_family_dilemma`'s own `applies`/`build` now check
+     `stages` alongside `relationIds` for exactly that reason. `attendCost`
+     is 0, the same as `quiet_evening` -- intervening personally costs the
+     evening and nothing else; `sendCost` (800) is a lawyer, handled without
+     you, matching this milestone's own figure.
+  */
+  {
+    id: 'teen_trouble',
+    relationIds: ['eldest', 'youngest'],
+    stages: ['teen'],
+    occasion: 'trouble',
+    bodies: [
+      'got picked up two blocks from school with company you would not have chosen for them',
+      'was suspended, and the school wants somebody to come in and explain it, in person',
+      'did something that is one phone call away from becoming a real problem',
+    ],
+    attendCost: 0,
+    sendCost: 800,
+    sendGesture: 'a lawyer, quietly, so the school never has to say your name',
   },
 ];
 
