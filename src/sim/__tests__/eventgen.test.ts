@@ -33,8 +33,15 @@ import { territoryList } from '../territory';
 import { figure } from '../civic';
 import { canLaunch } from '../operations';
 import { OPERATION_BY_ID } from '../../config/operations';
-import { bodySpentTonight, home, memberAge, neglectRisk, playerStress } from '../personal';
-import { FAMILY_DILEMMAS, HOME, STRESS } from '../../config/personal';
+import {
+  bodySpentTonight,
+  confidant,
+  home,
+  memberAge,
+  neglectRisk,
+  playerStress,
+} from '../personal';
+import { CONFIDANT, FAMILY_DILEMMAS, HOME, STRESS } from '../../config/personal';
 import { launchOperation } from '../operations';
 import { totalFunds } from '../economy';
 import { money } from '../memo';
@@ -188,6 +195,15 @@ function world(seed = 88): GameState {
 
   // And a boss carrying real stress — the subject `gen_panic_episode` reads.
   state.player.stress = STRESS.panicThreshold;
+
+  /*
+     Milestone 6: `gen_affair_fallout` needs a private life that has stopped
+     being private. Set on the meter rather than on neglect, because neglect
+     is 60 above and this fixture should not have to keep the two doors into
+     that shape in agreement — either one raises it, and the one the panel
+     actually lets the player act on is this one.
+  */
+  confidant(state).discretion = CONFIDANT.discoveryDiscretionThreshold - 1;
 
   /*
      And the three subjects the systems built after this file was written need.

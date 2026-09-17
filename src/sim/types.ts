@@ -973,6 +973,28 @@ export interface Home {
   neglect: number;
 }
 
+/**
+ * The apartment nobody in the house has the address of.
+ *
+ * One record, not a roster — the same argument `config/personal.ts`'s header
+ * makes about the household: this person is never assigned a job, never paid
+ * a wage and never appears on the crew sheet, so making them an `Npc` would
+ * put a lounge singer on the payroll. See `CONFIDANT` for what the one number
+ * on here actually drives.
+ */
+export interface ConfidantState {
+  name: string;
+  /** One of `CONFIDANT.roles`. Flavour, and the only thing the panel calls them. */
+  role: string;
+  /** 0..100. How well this is being kept quiet. The whole mechanic. */
+  discretion: number;
+  lastVisitDay: number;
+  /** False once it has been ended — by the boss, in `gen_affair_fallout`. */
+  active: boolean;
+  /** True once the house has found out, whatever was decided afterwards. */
+  discovered: boolean;
+}
+
 export type CareerTone = 'good' | 'bad' | 'neutral';
 
 /** One chapter. See `sim/career.ts` for what gets curated into these. */
@@ -2160,6 +2182,15 @@ export interface GameState {
    * are.
    */
   home?: Home;
+  /**
+   * The half of a boss that is not the household either.
+   *
+   * Optional with a lazy initialiser in `personal.ts`, exactly as `home`
+   * above — so `SAVE_VERSION` does not move and a save written before this
+   * existed loads with a private life it turns out it always had. Not in
+   * `validate()`, for the same reason none of the others are.
+   */
+  confidant?: ConfidantState;
   /**
    * The story of the run, curated. See `sim/career.ts`'s own header for why
    * this is a second list where `chronicle.ts` gets by on derivation alone —

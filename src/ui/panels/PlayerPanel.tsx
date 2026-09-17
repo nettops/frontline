@@ -35,15 +35,20 @@ import { authorityRead } from '../../sim/authority';
 import {
   canConsult,
   canGoHome,
+  canPayAllowance,
+  canVisitConfidant,
+  confidant,
   consultDoctor,
   familyHorizon,
   goHome,
   homeRead,
+  payConfidantAllowance,
   playerStress,
   stressPressure,
   stressTier,
+  visitConfidant,
 } from '../../sim/personal';
-import { HOME, STRESS } from '../../config/personal';
+import { CONFIDANT, HOME, STRESS } from '../../config/personal';
 import { priced } from '../../sim/market';
 import { ATTENTION } from '../../config/attention';
 import {
@@ -244,6 +249,11 @@ export default function PlayerPanel() {
   const pressure = stressPressure(state);
   const consulting = canConsult(state);
   const consultCash = priced(state, STRESS.consultCost);
+  const her = confidant(state);
+  const visiting = canVisitConfidant(state);
+  const allowance = canPayAllowance(state);
+  const visitCash = priced(state, CONFIDANT.visitCost);
+  const allowanceCash = priced(state, CONFIDANT.allowanceCost);
   const standing = publicStandingRead(state);
   const pressureParts = [
     pressure.wars > 0 && `Wars: +${pressure.wars.toFixed(1)}`,
@@ -469,6 +479,83 @@ export default function PlayerPanel() {
           {!consulting.ok && (
             <p className="faint tiny" style={{ marginTop: -6, marginBottom: 10 }}>
               {consulting.reason}
+            </p>
+          )}
+          {/*
+             And the other relief, which is the one that carries a risk.
+
+             Directly under the doctor on purpose: both of them take the
+             weight off the same meter, and the whole decision this layer
+             exists to pose is which one a boss reaches for. The doctor costs
+             money and an hour. This one costs money, and the address is
+             somewhere a federal wire can reach.
+
+             Discretion is shown as a bare number beside its own two bars,
+             the same way Household shows neglect beside what it is costing —
+             "shown odds are real odds" applies to a meter that quietly feeds
+             a case as much as it does to a job's percentage. Both lines say
+             the bar, not a feeling about the bar.
+          */}
+          <KeyValue
+            label={her.active ? `${her.name}, ${her.role}` : 'Across the river'}
+            value={her.active ? `Discretion ${Math.round(her.discretion)}` : 'Over'}
+            tone={
+              her.active && her.discretion < CONFIDANT.wiretapDiscretionThreshold
+                ? 'hot'
+                : undefined
+            }
+          />
+          {her.active && (
+            <>
+              <p className="faint tiny" style={{ margin: '2px 14px 4px' }}>
+                {her.discretion < CONFIDANT.discoveryDiscretionThreshold
+                  ? 'Too many people know where you go. This is one conversation away from your own kitchen.'
+                  : her.discretion < CONFIDANT.wiretapDiscretionThreshold
+                    ? `Below ${CONFIDANT.wiretapDiscretionThreshold} a federal case already watching you starts hearing things it did not have to work for.`
+                    : 'Nobody who matters knows the address. It stays that way by being paid for.'}
+              </p>
+              <div style={{ display: 'flex', gap: 6, margin: '0 0 4px' }}>
+                <button
+                  className="btn small"
+                  disabled={!visiting.ok}
+                  title={visiting.reason ?? 'An evening nobody is owed'}
+                  onClick={() => mutate((g) => visitConfidant(g), true)}
+                >
+                  An evening there ({formatMoney(visitCash)})
+                </button>
+                <button
+                  className="btn small"
+                  disabled={!allowance.ok}
+                  title={allowance.reason ?? 'Rent, and somebody who does not ask'}
+                  onClick={() => mutate((g) => payConfidantAllowance(g), true)}
+                >
+                  Send an envelope ({formatMoney(allowanceCash)})
+                </button>
+              </div>
+              {/*
+                 Both refusals, not just the first — and deduplicated, since
+                 an empty wallet refuses both buttons in nearly the same
+                 words. "No button lies" is specifically about a disabled
+                 control whose reason is not on the screen, and a tooltip is
+                 not on the screen.
+              */}
+              {[
+                ...new Set(
+                  [visiting, allowance]
+                    .filter((r) => !r.ok)
+                    .map((r) => r.reason)
+                    .filter((r): r is string => Boolean(r)),
+                ),
+              ].map((reason) => (
+                <p key={reason} className="faint tiny" style={{ margin: '0 14px 10px' }}>
+                  {reason}
+                </p>
+              ))}
+            </>
+          )}
+          {!her.active && (
+            <p className="faint tiny" style={{ margin: '2px 14px 10px' }}>
+              You ended it. There is nowhere to go on a night the house does not want you.
             </p>
           )}
           {/*

@@ -280,6 +280,21 @@ export const GEN_SHAPES: GenShapeDef[] = [
   */
   { id: 'gen_family_crossroads', subject: 'home', weight: 2, cooldownDays: 30 },
   /*
+     Milestone 6, and bounded the same way the shape above it is: by its own
+     state rather than by this cooldown. `ConfidantState.discovered` is set by
+     every branch of the resolver, and `applies` refuses once it is set, so
+     this fires at most once in a career no matter how many times 30 days
+     clear. The number is here because the table requires one, not because it
+     is what governs the rate.
+
+     Weight and cooldown copied from the crossroads entry deliberately — the
+     two have the same shape from the pool's point of view (a one-time
+     household event with a hard gate of its own), and giving this one a
+     different figure would be a number nobody measured pretending to be a
+     decision.
+  */
+  { id: 'gen_affair_fallout', subject: 'home', weight: 2, cooldownDays: 30 },
+  /*
      Not the household. The man.
 
      Every shape above is instantiated against somebody or something else —
