@@ -91,6 +91,8 @@ import { ARREST_DAYS } from '../config/operations';
 import { DIFFICULTY_BY_ID } from '../config/difficulty';
 import { FEAR, PAYDAY_INTERVAL } from '../config/economy';
 import { HOME_TERRITORY } from '../config/territories';
+import { CONFIDANT } from '../config/personal';
+import { confidantIsExposed } from './personal';
 
 export function newLawEnforcement(): LawEnforcement {
   return {
@@ -785,6 +787,14 @@ export function tickInvestigations(state: GameState, rng: Rng): void {
   const civicMult = civicTier.caseGrowthMultiplier;
   let civicDampened = false;
 
+  /*
+     Read once for the week rather than per case. The bar itself lives in
+     `sim/personal.ts` beside the meter it reads, so it cannot drift from
+     what the panel tells the player about the same two facts.
+  */
+  const wired = confidantIsExposed(state);
+  let wiretapHeard = false;
+
   for (const investigation of activeCases(state)) {
     const agency = agencyOf(investigation);
     const before = investigation.strength;
@@ -815,6 +825,30 @@ export function tickInvestigations(state: GameState, rng: Rng): void {
         if (!investigation.suspectIds.includes(npcId)) investigation.suspectIds.push(npcId);
       }
     }
+    /*
+       1a. And whatever a wire picks up at an address the boss thinks is his
+           own business.
+
+       Counted as `absorbed` rather than as agency `work`, on purpose and for
+       a mechanical reason as much as a fictional one: `absorbed > 0` is what
+       keeps a file warm (see the `lastProgressDay` comment below), and the
+       whole bite of this layer is that a private life nobody is minding
+       feeds a case through a month when the family has otherwise gone
+       completely still. Folded into the same term so `lastGrowth` and the
+       ledger stay a complete account of the week without a fourth line
+       nobody else writes to.
+
+       Per-case, not organization-wide: a wire is this agency's wire, and a
+       second file still at `rumor` has nobody sitting in a van. Unscaled by
+       `keptOut` and `civicMult` — a neighbourhood that will not talk to a
+       subpoena is not what is producing this, and there is nothing here for
+       a lawyer to have excluded.
+    */
+    if (wired && stageIndex(investigation.stage) >= stageIndex('surveillance')) {
+      absorbed += CONFIDANT.wiretapEvidenceWeekly;
+      wiretapHeard = true;
+    }
+
     investigation.strength += absorbed;
     if (ledger) ledger.absorbed += absorbed;
 
@@ -912,6 +946,31 @@ export function tickInvestigations(state: GameState, rng: Rng): void {
     }
 
     advanceStage(state, rng, investigation);
+  }
+
+  /*
+     Told, eventually, and never in full.
+
+     "Everything the player sees is true" cuts both ways: a case growing from
+     an address the boss has not thought about in two months has to be
+     something he can find out, or the meter on the panel is the only warning
+     and the memo never comes. Said on its own long clock
+     (`wiretapBeatEveryDays`) rather than weekly — a line every seven days
+     about the same wire is a subscription, and this is supposed to be the
+     cold moment you realize what you have been leaving open.
+
+     `Rng.stableNoise` is not needed: there is one sentence and no variant to
+     pick, so nothing here touches the causal stream at all.
+  */
+  const lastBeat = state.flags['confidant_wire_beat_day'] ?? -Infinity;
+  if (wiretapHeard && state.day - lastBeat >= CONFIDANT.wiretapBeatEveryDays) {
+    state.flags['confidant_wire_beat_day'] = state.day;
+    addLog(
+      state,
+      `Word came back through the courthouse that the government has been asking about an ` +
+        `address across the river. Nobody asked whose it is.`,
+      'failure',
+    );
   }
 
   // Named once a week, not once per case — it is a fact about the

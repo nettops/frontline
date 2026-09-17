@@ -18,6 +18,7 @@
 import { Rng, clamp } from './rng';
 import {
   CHILD_START_AGES,
+  CONFIDANT,
   HOME,
   HOME_LABEL,
   LIFE_STAGES,
@@ -28,7 +29,7 @@ import {
   type LifeStageDef,
   type StressTierDef,
 } from '../config/personal';
-import { FIRST_NAMES } from '../config/npcs';
+import { FIRST_NAMES, GIVEN_NAMES } from '../config/npcs';
 import { HOME_TERRITORY } from '../config/territories';
 import { GEN_SHAPES } from '../config/eventgen';
 import { territoryDef } from './territory';
@@ -41,7 +42,7 @@ import { canAfford, spend } from './economy';
 import { priced } from './market';
 import { activeCases } from './investigation';
 import { recordCareerEvent } from './career';
-import type { GameState, Home, HouseholdMember } from './types';
+import type { ConfidantState, GameState, Home, HouseholdMember } from './types';
 
 /** The worst tier's own bar — read rather than retyped, so a cold-reception
  * check below and the label table above cannot drift to different numbers. */
@@ -200,6 +201,21 @@ export function canGoHome(state: GameState): { ok: boolean; reason?: string } {
       ok: false,
       reason: 'You are out on a job that needs you personally tonight. That is where you are.',
     };
+  }
+  /*
+     And the other half of "you cannot be in two places", which was missing.
+
+     `went_home_day` is stamped by an evening at home, by
+     `gen_panic_episode`'s house call, and now by an evening across the river
+     (`visitConfidant`). Only the first of those three also moves
+     `lastVisitDay`, so the `since` check above caught one case in three: a
+     boss could spend the night at an address nobody in the house knows about
+     and then go home the same evening as well. Checked here rather than in
+     each caller, so a fourth thing that spends the night is covered the day
+     it is written.
+  */
+  if (state.flags['went_home_day'] === state.day) {
+    return { ok: false, reason: 'Tonight is already spoken for. You cannot be in two places.' };
   }
   return { ok: true };
 }
@@ -571,4 +587,170 @@ export function consultDoctor(state: GameState): void {
       'bad',
     );
   }
+}
+
+// ------------------------------------------------------------ confidant ---
+
+/**
+ * The apartment, made the first time anybody asks.
+ *
+ * Same lazy `Rng.stableNoise` idiom as `home()` above, and for the same
+ * reason: a save written before this existed has to be able to grow one on
+ * load without every later roll in that career moving. A fresh key
+ * (`confidant:...`) so the name draw cannot collide with the household's own.
+ *
+ * Drawn from the women of `GIVEN_NAMES` rather than the flat `FIRST_NAMES`
+ * pool, which is thirty-two men followed by sixteen women — see that pool's
+ * own comment in `config/npcs.ts`. Nothing in this game's state records a
+ * gender and the four roles do not require one, but a household whose spouse
+ * is deliberately unnamed as to sex sits beside a panel that would otherwise
+ * read "Sal, Lounge Singer" three times in four.
+ */
+const CONFIDANT_NAMES = GIVEN_NAMES.filter((n) => n.sex === 'f').map((n) => n.name);
+
+export function confidant(state: GameState): ConfidantState {
+  if (state.confidant) return state.confidant;
+
+  const key = `confidant:${state.rng.seed}`;
+  const pick = <T>(items: readonly T[], salt: number): T =>
+    items[Math.min(items.length - 1, Math.floor(Rng.stableNoise(key, salt) * items.length))];
+
+  state.confidant = {
+    name: pick(CONFIDANT_NAMES, 1),
+    role: pick(CONFIDANT.roles, 2),
+    discretion: CONFIDANT.initialDiscretion,
+    lastVisitDay: state.day,
+    active: true,
+    discovered: false,
+  };
+  return state.confidant;
+}
+
+/**
+ * Moves discretion and keeps it inside its own bar. One place, so no branch
+ * clamps differently — exported for `gen_affair_fallout`'s three answers
+ * (`sim/eventgen.ts`), which are the only writers outside this file.
+ */
+export function setDiscretion(state: GameState, value: number): void {
+  confidant(state).discretion = clamp(value, 0, 100);
+}
+
+/**
+ * Whether there is anywhere to go tonight.
+ *
+ * Refuses by naming its own bar, like `canGoHome` and `canConsult` above.
+ * Spends the same one body all three do — see `bodySpentTonight` — and also
+ * refuses a night already given to the house, since a boss cannot be at
+ * dinner and across town at the same time.
+ */
+export function canVisitConfidant(state: GameState): { ok: boolean; reason?: string } {
+  const her = confidant(state);
+  if (!her.active) {
+    return { ok: false, reason: 'That is over. There is nowhere to go.' };
+  }
+  const cost = priced(state, CONFIDANT.visitCost);
+  if (!canAfford(state, cost)) {
+    return {
+      ok: false,
+      reason: `An evening across town runs ${Math.round(cost).toLocaleString('en-US')}, and you do not have it.`,
+    };
+  }
+  if (bodySpentTonight(state)) {
+    return {
+      ok: false,
+      reason: 'You are out on a job that needs you personally tonight. That is where you are.',
+    };
+  }
+  if (state.flags['went_home_day'] === state.day) {
+    return { ok: false, reason: 'Tonight is already spoken for. You cannot be in two places.' };
+  }
+  return { ok: true };
+}
+
+/**
+ * An evening that is not about anybody else.
+ *
+ * Spends the same `went_home_day` an evening at home does, and deliberately
+ * does *not* clear any neglect: the whole point is that this is the night the
+ * house thought it was getting. A boss who answers every pull toward home
+ * with this one is a boss whose neglect climbs at the full `HOME.perWeekAway`
+ * while his stress does not — which is the trade the layer is for.
+ */
+export function visitConfidant(state: GameState): void {
+  if (!canVisitConfidant(state).ok) return;
+  if (!spend(state, priced(state, CONFIDANT.visitCost), 'world')) return;
+  const her = confidant(state);
+  state.player.stress = clamp(playerStress(state) - CONFIDANT.visitStressRelief, 0, STRESS.max);
+  setDiscretion(state, her.discretion + CONFIDANT.visitDiscretionGain);
+  her.lastVisitDay = state.day;
+  state.flags['went_home_day'] = state.day;
+  addLog(
+    state,
+    `An evening on the other side of the river, at an address that is not in anybody's book. Nobody called and nobody asked.`,
+    'crew',
+  );
+}
+
+/**
+ * Money instead of time.
+ *
+ * Buys back more discretion than an evening does and costs no evening at all,
+ * which is the point: rent paid on time, a dressmaker settled up, a doorman
+ * who has a reason not to remember faces. What it does not buy is the stress
+ * relief — that only comes from actually being there.
+ */
+export function canPayAllowance(state: GameState): { ok: boolean; reason?: string } {
+  const her = confidant(state);
+  if (!her.active) return { ok: false, reason: 'That is over. There is nobody to send it to.' };
+  const cost = priced(state, CONFIDANT.allowanceCost);
+  if (!canAfford(state, cost)) {
+    return {
+      ok: false,
+      reason: `The envelope is ${Math.round(cost).toLocaleString('en-US')}, and you do not have it.`,
+    };
+  }
+  return { ok: true };
+}
+
+export function payConfidantAllowance(state: GameState): void {
+  if (!canPayAllowance(state).ok) return;
+  if (!spend(state, priced(state, CONFIDANT.allowanceCost), 'world')) return;
+  setDiscretion(state, confidant(state).discretion + CONFIDANT.allowanceDiscretionGain);
+  addLog(
+    state,
+    `An envelope, hand to hand, nothing written down. The rent is current and the doorman has a reason not to remember faces.`,
+    'crew',
+  );
+}
+
+/**
+ * A week of it going quiet, or a week of it not.
+ *
+ * Same weekly gate `tickHome` and `tickStress` use, and kept as its own call
+ * in `clock.ts` beside them for the same reason `tickStress` is: this is not
+ * a household fact, and `tickHome`'s own header scopes that function to the
+ * household specifically.
+ *
+ * The one coupling to the household is `neglectDecayMultiplier` — a house
+ * that is already cold notices faster. Nothing here runs once it is over.
+ */
+export function tickConfidant(state: GameState): void {
+  if (state.day % HOME.intervalDays !== 0) return;
+  const her = confidant(state);
+  if (!her.active) return;
+  const cold = home(state).neglect >= CONFIDANT.neglectDecayFrom;
+  const decay = CONFIDANT.weeklyDiscretionDecay * (cold ? CONFIDANT.neglectDecayMultiplier : 1);
+  setDiscretion(state, her.discretion - decay);
+}
+
+/**
+ * Whether a case that is already listening would hear anything.
+ *
+ * The one read `investigation.ts` takes on this layer, kept here rather than
+ * inlined there so the bar and the "is it still going on" check cannot drift
+ * from the panel's own reading of the same two facts.
+ */
+export function confidantIsExposed(state: GameState): boolean {
+  const her = confidant(state);
+  return her.active && her.discretion < CONFIDANT.wiretapDiscretionThreshold;
 }

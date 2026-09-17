@@ -313,6 +313,101 @@ probe measures against; if the developer wants a sized number for how this
 moves case-close timing or any of the ladder's own bars, run it before
 merge.
 
+**Update, 2026-09-17: Milestone 6, the half of a boss that is not the
+household either — the Confidant.** Built directly on
+`soprano-ue5-prototype` @ d780489, in the working tree rather than a
+worksheet worktree. No `SAVE_VERSION` move.
+
+`ConfidantState` (`sim/types.ts`) is one optional record with a lazy
+initialiser — `confidant(state)` in `sim/personal.ts`, the same idiom
+`home()` uses and drawn the same way, `Rng.stableNoise` on a fresh
+`confidant:<seed>` key so a save written before this grows one on load
+without moving a single later roll. One record, not a roster: this person is
+never assigned a job, never paid a wage and never appears on the crew sheet,
+so making her an `Npc` would put a lounge singer on the payroll. The name is
+drawn from `GIVEN_NAMES`'s women rather than the flat `FIRST_NAMES` pool,
+which is thirty-two men followed by sixteen women.
+
+**Discretion (0..100) is the whole mechanic, and it does three things.** It
+decays 3 a week (`tickConfidant`, its own call in `clock.ts` beside
+`tickHome`/`tickStress`, placed ahead of `tickInvestigations` so a week's
+fresh decay feeds the same week's wire), 1.5x as fast once `home().neglect`
+is at or past 50 — the one coupling to the household, running the direction
+the fiction does. Two spends buy it back: an evening ($250, +15 discretion,
+-12 stress, spends `went_home_day`) and an envelope ($500, +25 discretion,
+no stress relief, no evening). **The evening deliberately clears no
+neglect** — it is the night the house thought it was getting, which is the
+trade the whole layer exists to pose, and there is a guard on it.
+
+**Below 45 a federal case that is already at `surveillance` starts
+absorbing evidence it did not have to work for** — 1.5 a week, per case,
+added to `absorbed` rather than to agency `work` in `tickInvestigations`.
+That is deliberate on a mechanical ground as much as a fictional one:
+`absorbed > 0` is what holds `lastProgressDay`, so a private life nobody is
+minding keeps a file warm through a month when the family has otherwise
+gone completely still — which is precisely the counterplay
+`COLD_CASE_AFTER_DAYS` exists to offer and this layer exists to threaten.
+Unscaled by `evidenceMultiplier` and by Milestone 5's `civicMult`: a
+neighbourhood that will not talk to a subpoena is not what produces a wire,
+and there is nothing here for a lawyer to have excluded. A single beat
+("your lawyer mentioned the government has been asking about an address
+across the river") fires at most every 28 days, not weekly — a line every
+seven days about the same wire is a subscription.
+
+**Below 30, or at neglect 75 whatever the discretion says, the kitchen finds
+out.** `gen_affair_fallout` (`config/eventgen.ts`/`sim/eventgen.ts`, weight
+2, cooldown 30, matching `gen_family_crossroads` — and bounded the same way
+that shape is, by its own `discovered` flag rather than by the cooldown, so
+it fires at most once a career). Two doors in, and they are not the same
+failure: the meter run down, or a house cold enough long enough to work it
+out unassisted. Three answers — end it (free; +10 neglect, +20 stress, and
+the only relief in `config/personal.ts` that was not a purchase is gone),
+deny it (free; +35 neglect, discretion floored at 40, a bad career beat),
+or make it right at home ($5,000; -15 neglect, discretion floored at 60,
+and it ends nothing). Both floors are `Math.max`, not a set: either door can
+raise this memo, so a boss who arrived here on neglect alone may be
+perfectly discreet, and paying him discretion for having been found out
+would make the second door a reward.
+
+**One real hole found and closed on the way through, and it predates this
+milestone.** `went_home_day` is stamped by three things — an evening at
+home, `gen_panic_episode`'s house call, and now an evening across the river
+— and only the first also moves `lastVisitDay`, which is the field
+`canGoHome`'s "you were there N days ago" check actually reads. So the boss
+could spend a night at an address nobody in the house knows about and then
+go home the same evening as well. Fixed once in `canGoHome` rather than in
+each caller, which also closes the house-call case that had been open since
+`gen_panic_episode` shipped.
+
+UI: the two controls sit directly under the doctor on `PlayerPanel.tsx`,
+because both take weight off the same meter and which one a boss reaches for
+is the decision the layer poses. Discretion is shown as a bare number beside
+whichever of its two bars it is nearest, and **both** refusals render in the
+body, deduplicated — `refusalShown.test.ts`'s own history is four separate
+rounds of a blocker that lived only in a `title`.
+
+Tests: `sim/__tests__/confidant.test.ts` (29) and
+`ui/__tests__/confidantShown.test.ts` (4). Every new guard was fault-
+injected and watched red before restoring — including one that had to be
+rewritten because it passed with the fault in: the "both refusals render"
+check asserted the word `allowance` appeared nearby, and `allowanceCash`
+and `payConfidantAllowance` are both in the same block, so the word was
+there whether or not the check was.
+
+One disclosed reseed, DIRECTOR §5, and the same class as Milestone 5's:
+`deposition.test.ts`'s "fires from an ordinary career under the current
+gate" moved from seed 4062 to 4064. The wiretap term is a real change to
+how fast a case grows, so `advanceStage`/`resolveTrial` draw on different
+days. A scan of seeds 4062-4262 found 4064, 4073, 4074, 4083, 4100, 4104,
+4106 and 4111 all still reaching `generation > 1` with the same quiet
+fate; the guard was re-confirmed the standard way (`backersNeeded` back to
+2, generation stayed at 1, restored to 1). `eventgen.test.ts`'s
+one-of-everything fixture grew a confidant with its discretion below the
+discovery bar, the way it grew a household member past 18 for Milestone 4.
+
+Gates: `npx tsc -b` 0 errors. `npm test` PLACEHOLDER_TEST. `npm run probe`
+PLACEHOLDER_PROBE
+
 last run clean at 96/96 non-skipped (unrun since the diplomacy/refusal/
 tip/report/sitdown/contract-charge/rail-grouping/operations-focus/
 poverty-trap/succession-button fixes below — none of them touch balance,

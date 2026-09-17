@@ -51,8 +51,25 @@ import { stewardOf } from './delegation';
 import { nicknameOf } from './nicknames';
 import { priced } from './market';
 import { readWhispers } from './whispers';
-import { bodySpentTonight, canGoHome, goHome, home, memberAge, memberLifeStage, playerStress } from './personal';
-import { FAMILY_DILEMMAS, HOME, RELATIONS, STRESS, type FamilyDilemmaDef } from '../config/personal';
+import {
+  bodySpentTonight,
+  canGoHome,
+  confidant,
+  goHome,
+  home,
+  memberAge,
+  memberLifeStage,
+  playerStress,
+  setDiscretion,
+} from './personal';
+import {
+  CONFIDANT,
+  FAMILY_DILEMMAS,
+  HOME,
+  RELATIONS,
+  STRESS,
+  type FamilyDilemmaDef,
+} from '../config/personal';
 import { CIVIC_FIGURES } from '../config/civic';
 import { HOME_TERRITORY } from '../config/territories';
 import type { FactionId } from '../config/factions';
@@ -825,6 +842,72 @@ const familyCrossroads: EventDef = {
 };
 
 /**
+ * The kitchen, at an hour nobody chose.
+ *
+ * The one memo this milestone raises, and the only place the private life
+ * meets the household. Two ways in, and they are not the same failure: the
+ * meter run down (`discoveryDiscretionThreshold` — somebody talked, a face
+ * was remembered, a bill arrived at the wrong address) or the house simply
+ * cold enough long enough to work it out unassisted (`discoveryNeglect`). A
+ * boss who pays the allowance every month and is never home still gets this
+ * conversation, which is the point of the second door.
+ *
+ * Fires once per career. `ConfidantState.discovered` is set by every branch
+ * of the resolver and refused on here — the shape's `cooldownDays` is not
+ * what bounds it, same as `gen_family_crossroads` above. Nothing raises it
+ * again afterwards: the house already knows, and the wire does not care what
+ * was decided.
+ */
+const affairFallout: EventDef = {
+  id: 'gen_affair_fallout',
+  ...shape('gen_affair_fallout'),
+  applies(state) {
+    const her = confidant(state);
+    if (!her.active || her.discovered) return null;
+    const quiet = her.discretion >= CONFIDANT.discoveryDiscretionThreshold;
+    const warm = home(state).neglect < CONFIDANT.discoveryNeglect;
+    if (quiet && warm) return null;
+    return { atHome: true };
+  },
+  build(state, rng) {
+    const her = confidant(state);
+    const peaceCash = priced(state, CONFIDANT.falloutPeaceCost);
+    return {
+      defId: 'gen_affair_fallout',
+      title: 'The Address Across the River',
+      body: oneOf(rng, [
+        `It was not a fight. You came in at two in the morning and the light was on in the ` +
+          `kitchen, and the question was already asked before you had your coat off.`,
+        `Somebody said something to somebody. By the time it reached your own table it had ` +
+          `a name attached to it, and the name was ${her.name}.`,
+        `Nobody raised their voice. That is what told you how long it had been known, and ` +
+          `how long the deciding had already been going on without you.`,
+      ]),
+      severity: 'danger',
+      npcId: null,
+      data: {},
+      choices: [
+        {
+          id: 'end_it',
+          label: 'End it tonight',
+          hint: `Free. ${her.name} does not hear it from anybody else, and the house still counts that there was something to end.`,
+        },
+        {
+          id: 'deny',
+          label: 'Deny it',
+          hint: 'Free, and nothing about it stops. The house will draw its own conclusion anyway.',
+        },
+        {
+          id: 'peace',
+          label: 'Make it right at home',
+          ...payable(state, peaceCash, 'and it does not end anything, it only buys the room back'),
+        },
+      ],
+    };
+  },
+};
+
+/**
  * One of yours is in a cell.
  *
  * The state comes and goes, which is what makes it a memo rather than a
@@ -1370,6 +1453,7 @@ export const GEN_DEFS: EventDef[] = [
   familyDilemma,
   panicEpisode,
   familyCrossroads,
+  affairFallout,
   stewardAsks,
   theNameStuck,
   oldOwner,
@@ -1849,6 +1933,59 @@ export function resolveGenerated(
       house.neglect = clamp(house.neglect + GEN_EFFECT.crossroadsEstrangedNeglect, 0, 100);
       recordCareerEvent(state, `Let ${name} go their own way, and did not call it a loss out loud.`, 'bad');
       addLog(state, `${name} stopped asking. You do not think they will ask again.`, 'crew');
+      return;
+    }
+
+    case 'gen_affair_fallout': {
+      const her = confidant(state);
+      const house = home(state);
+      /*
+         Set before the branches, same discipline the crossroads flag above
+         follows and for the same reason: this is what stops the memo coming
+         back, and a branch added later cannot forget to write it. The house
+         knowing is not one of the three answers — it is the premise all three
+         are answers to.
+      */
+      her.discovered = true;
+
+      if (choiceId === 'end_it') {
+        her.active = false;
+        house.neglect = clamp(house.neglect + CONFIDANT.falloutBreakNeglect, 0, 100);
+        /*
+           The expensive part of ending it is not the household's ten points.
+           It is that the one relief in this file that was not a purchase is
+           gone, and the man is carrying the week without it — which is what
+           the stress is, rather than a punishment for the answer.
+        */
+        state.player.stress = clamp(playerStress(state) + CONFIDANT.falloutBreakStress, 0, STRESS.max);
+        recordCareerEvent(state, `Ended it with ${her.name}, and went home to a house that already knew.`, 'neutral');
+        addLog(state, `You told ${her.name} it was finished, and then you went home and sat in your own kitchen.`, 'crew');
+        return;
+      }
+
+      if (choiceId === 'peace') {
+        if (!spend(state, priced(state, CONFIDANT.falloutPeaceCost), 'world')) {
+          addLog(state, `You did not have it, so the only thing on the table was the truth.`, 'failure');
+          return;
+        }
+        house.neglect = clamp(house.neglect - CONFIDANT.falloutPeaceNeglectClear, 0, 100);
+        /*
+           A floor, not a gain. Either door can raise this memo, so a boss who
+           got here on neglect alone may still be perfectly discreet — adding
+           to what he has would pay him for being found out. `Math.max` means
+           the careless boss is bought back up to the figure and the careful
+           one is left exactly where he was.
+        */
+        setDiscretion(state, Math.max(her.discretion, CONFIDANT.falloutPeaceDiscretion));
+        addLog(state, `It cost money at home and money across the river, and nothing about it ended.`, 'crew');
+        return;
+      }
+
+      // 'deny': free, and the most expensive answer in the room.
+      house.neglect = clamp(house.neglect + CONFIDANT.falloutDenyNeglect, 0, 100);
+      setDiscretion(state, Math.max(her.discretion, CONFIDANT.falloutDenyDiscretion));
+      recordCareerEvent(state, `Was asked directly, at his own table, and said no.`, 'bad');
+      addLog(state, `You said there was nothing to it. Everybody in the room let you finish.`, 'crew');
       return;
     }
 

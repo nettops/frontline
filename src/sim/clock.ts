@@ -44,7 +44,7 @@ import { tickAging, type AgingHooks } from './aging';
 import { ageCapos, tickCapos } from './capos';
 import { tickPerception } from './perception';
 import { tickCivic } from './civic';
-import { tickHome, tickStress } from './personal';
+import { tickConfidant, tickHome, tickStress } from './personal';
 import { tickCards } from './cards';
 import { tickWhispers } from './whispers';
 import { tickEvents } from './events';
@@ -248,6 +248,14 @@ export function advanceDay(state: GameState): void {
   //       specifically. Placed right after it so a week's fresh neglect
   //       reading feeds this week's stress rather than last week's.
   tickStress(state);
+  // 7a2b. And the half of it that is not the household either.
+  //
+  //       Its own call for the same reason `tickStress` above is: this is not
+  //       a household fact, and `tickHome` is scoped to the household by its
+  //       own header. Placed here rather than anywhere later because
+  //       `tickInvestigations` (7d) reads the discretion this moves — so a
+  //       week's fresh decay feeds the same week's wiretap, not last week's.
+  tickConfidant(state);
   // 7a3. And the room slowly stops watching your hands.
   //
   //      Decay only — sitting down is a player action, never a tick. Touches

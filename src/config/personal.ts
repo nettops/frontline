@@ -494,3 +494,67 @@ export const STRESS_TIERS: StressTierDef[] = [
     blurb: 'Mind is clear. Decisions come without hesitation.',
   },
 ];
+
+// ------------------------------------------------------------ confidant ---
+
+/**
+ * The half of a boss that is not the household either.
+ *
+ * `HOME` above is the life a boss is supposed to have. This is the one he
+ * actually keeps — an apartment nobody in the family knows the address of,
+ * and somebody in it who wants nothing from the organization. It relieves
+ * exactly the pressure `STRESS` accumulates, and it is the only relief in
+ * this file that carries its own risk rather than just a price.
+ *
+ * **Discretion is the whole mechanic, and it does three things.** Below
+ * `wiretapDiscretionThreshold` a federal case already at `surveillance`
+ * starts absorbing evidence it did not have to work for
+ * (`sim/investigation.ts`). Below `discoveryDiscretionThreshold` the
+ * kitchen finds out (`gen_affair_fallout`, `sim/eventgen.ts`). And keeping
+ * it up costs money on a schedule, which is the third. A meter that only
+ * fed the first would be a second heat bar; a meter that only fed the
+ * third would be an upkeep line.
+ *
+ * **It decays faster in a house that is already cold.** `neglectDecayMultiplier`
+ * is the one coupling between this and `HOME`, and it runs the direction the
+ * fiction does: a spouse who has not seen you in two months is a spouse who
+ * has started counting the evenings.
+ *
+ * Figures are the brief's own.
+ */
+export const CONFIDANT = {
+  /** What a lounge singer, a curator or a nurse is doing when you are not there. */
+  roles: ['Lounge Singer', 'Art Gallery Curator', 'Boutique Manager', 'Hospital Nurse'],
+  initialDiscretion: 75,
+  weeklyDiscretionDecay: 3,
+  /** Extra decay once `home().neglect` is at or past the domestic-strain bar. */
+  neglectDecayMultiplier: 1.5,
+  /** Matches `STRESS.domesticStrain`'s own bar rather than a second number for the same idea. */
+  neglectDecayFrom: 50,
+  /** An evening. Priced well under `STRESS.consultCost` — this is not a doctor. */
+  visitCost: 250,
+  visitDiscretionGain: 15,
+  visitStressRelief: 12,
+  /** Money instead of time: rent, a dressmaker, somebody who does not ask. */
+  allowanceCost: 500,
+  allowanceDiscretionGain: 25,
+  /** Below this, a case at `surveillance` or past it starts hearing things. */
+  wiretapDiscretionThreshold: 45,
+  wiretapEvidenceWeekly: 1.5,
+  /** How long the intercept beat stays quiet before it is worth saying again. */
+  wiretapBeatEveryDays: 28,
+  /** Below this, the kitchen finds out — see `gen_affair_fallout`. */
+  discoveryDiscretionThreshold: 30,
+  /** Or a house this cold works it out on its own, whatever the discretion says. */
+  discoveryNeglect: 75,
+  /** Ending it: the house still counts the fact that there was something to end. */
+  falloutBreakNeglect: 10,
+  falloutBreakStress: 20,
+  /** Denying it: free, and the most expensive answer in the room. */
+  falloutDenyNeglect: 35,
+  falloutDenyDiscretion: 40,
+  /** Buying it back: real money, and it does not end anything. */
+  falloutPeaceCost: 5000,
+  falloutPeaceNeglectClear: 15,
+  falloutPeaceDiscretion: 60,
+} as const;

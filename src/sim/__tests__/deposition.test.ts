@@ -407,9 +407,27 @@ describe('deposition, played into rather than built', () => {
      arrested" fate, and the guard re-confirmed the same way as every prior
      reseed: reverting `backersNeeded` to 2 (generation stayed at 1) and
      restoring it to 1.
+
+     Reseeded a seventh time, 4062 to 4064, for Milestone 6. The confidant
+     layer reshuffles this seed the same way Milestone 5's item (1) did, and
+     for the same reason rather than the `applies()`-call-count reason of the
+     four before it: the wiretap term in `tickInvestigations` is a real
+     mechanical change to how fast a federal case grows once discretion
+     falls, so a case reaches indictment or trial on a different day, drawing
+     `advanceStage`/`resolveTrial`'s own rolls on a different day. The new
+     `gen_affair_fallout` shape adds to it from the other side — its answers
+     move cash, neglect and stress in a career the bot plays forward on those
+     numbers.
+
+     A scan of seeds 4062-4262 with the milestone in place found 4064, 4073,
+     4074, 4083, 4100, 4104, 4106 and 4111 all still reaching generation > 1
+     with the same quiet fate, so reachability did not regress. Seed 4064
+     confirmed, and the guard re-confirmed the same way as every prior
+     reseed: reverting `backersNeeded` to 2 (generation stayed at 1) and
+     restoring it to 1.
   */
   it('fires from an ordinary career under the current gate', () => {
-    const state = playOrdinaryCareer(4062, 1460);
+    const state = playOrdinaryCareer(4064, 1460);
     expect(
       state.succession.generation,
       'nobody was deposed — this is the reachability the config change exists to fix',
