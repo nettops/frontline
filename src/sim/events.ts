@@ -154,6 +154,13 @@ export interface EventContext {
   tensionCause?: TieCause;
   /** Set only by `gen_panic_episode` — a marker, since it has no other subject to carry. */
   panicEpisode?: true;
+  /**
+   * Which household member `gen_family_crossroads` found at or past 18 and
+   * not yet resolved — an id, not the member itself, same reason
+   * `familyDilemmaId` above is carried that way: the roster is state and
+   * `build`/the resolver both look it up fresh.
+   */
+  crossroadsRelationId?: string;
 }
 
 export interface EventDef {

@@ -33,10 +33,15 @@ import { territoryList } from '../territory';
 import { figure } from '../civic';
 import { canLaunch } from '../operations';
 import { OPERATION_BY_ID } from '../../config/operations';
-import { bodySpentTonight, home, neglectRisk, playerStress } from '../personal';
-import { HOME, STRESS } from '../../config/personal';
+import { bodySpentTonight, home, memberAge, neglectRisk, playerStress } from '../personal';
+import { FAMILY_DILEMMAS, HOME, STRESS } from '../../config/personal';
 import { launchOperation } from '../operations';
 import { totalFunds } from '../economy';
+import { money } from '../memo';
+import { priced } from '../market';
+import { activeCapos } from '../capoTension';
+import { legitimacy } from '../legacy';
+import { career } from '../career';
 import { answerFirst, runDays } from './helpers';
 import type { GameState, Npc } from '../types';
 
@@ -50,6 +55,27 @@ import type { GameState, Npc } from '../types';
 function world(seed = 88): GameState {
   const state = newGame({ name: 'Answer', difficulty: 'normal', seed });
   runDays(state, 60, new Rng(state.rng));
+
+  /*
+     Milestone 4: `gen_family_crossroads` needs a household member at or past
+     18 — one of the two relations `CHILD_START_AGES` tracks, given real
+     years to grow into. This seed's three-of-six household draw will not
+     reliably include either one, so the household is nudged directly, same
+     as the steward below is set directly rather than played toward.
+
+     The jump runs ahead of every other fixture value below it, so their own
+     `state.day - X` deltas — steward tenure, the nickname's age, the front's
+     purchase date — land exactly where they did before; nothing downstream
+     needs to move with it since all of it is computed relative to
+     `state.day` after this point, except `gen_old_owner`'s own upper-bound
+     freshness check, which also reads `purchasedDay` set later against the
+     same, already-jumped day.
+  */
+  const house = home(state);
+  if (!house.people.some((p) => p.relationId === 'eldest' || p.relationId === 'youngest')) {
+    house.people[0].relationId = 'eldest';
+  }
+  state.day += 18 * 365;
 
   state.org.cash = 400_000;
   state.org.dirtyCash = 50_000;
@@ -513,6 +539,161 @@ describe('the milestone family dilemmas', () => {
 });
 
 /*
+   Milestone 4: `teen_trouble`. Folded into `FAMILY_DILEMMAS`/`gen_family_dilemma`
+   itself rather than a separate shape — it is the same attend/send/stay
+   structure as the other four occasions, just gated to the teen life stage
+   on top of the existing relation check. `celebration`'s own `relationIds`
+   cover every relation, so a household with a teenager in it always has at
+   least one other dilemma eligible too; these tests draw many times off a
+   fixed rng rather than asserting on one draw, the same technique
+   `firstFire` above uses for a property that depends on which of several
+   eligible occasions gets picked.
+*/
+describe('teen trouble', () => {
+  /** A fresh household of one, aged precisely, and clear to go home. */
+  function householdState(relationId: 'eldest' | 'youngest', age: number): GameState {
+    const state = newGame({ name: 'Teen', difficulty: 'normal', seed: 5 });
+    home(state).people[0] = { name: 'Kid', relationId };
+    const base = memberAge(state, 'Kid', relationId)!;
+    state.day = (age - base) * 365 + 1;
+    home(state).lastVisitDay = state.day - 30;
+    return state;
+  }
+
+  function drawnDilemmaIds(state: GameState, tries: number): Set<string> {
+    const def = GEN_DEFS.find((d) => d.id === 'gen_family_dilemma')!;
+    const ids = new Set<string>();
+    for (let i = 0; i < tries; i++) {
+      const ctx = def.applies(state, new Rng({ seed: 909, calls: i * 11 }));
+      if (ctx?.familyDilemmaId) ids.add(String(ctx.familyDilemmaId));
+    }
+    return ids;
+  }
+
+  it('is in FAMILY_DILEMMAS, gated to the teen stage, with an $800 lawyer', () => {
+    const def = FAMILY_DILEMMAS.find((d) => d.id === 'teen_trouble')!;
+    expect(def.stages).toEqual(['teen']);
+    expect(def.relationIds.slice().sort()).toEqual(['eldest', 'youngest']);
+    expect(def.sendCost).toBe(800);
+  });
+
+  it('can be drawn for a household with a teenager in it', () => {
+    const state = householdState('eldest', 15);
+    expect(drawnDilemmaIds(state, 80).has('teen_trouble')).toBe(true);
+  });
+
+  /*
+     The guard that actually justifies the `stages` field: proven failing by
+     temporarily dropping the `d.stages` check out of `dilemmaFits`
+     (`sim/eventgen.ts`) — with the gate gone, `teen_trouble` also came up
+     for both a 10-year-old and a 25-year-old in this same run. Restored
+     afterwards; see the session's own report for that run.
+  */
+  it('is never drawn for the same relation as a child or as an adult', () => {
+    expect(drawnDilemmaIds(householdState('eldest', 10), 80).has('teen_trouble')).toBe(false);
+    expect(drawnDilemmaIds(householdState('eldest', 25), 80).has('teen_trouble')).toBe(false);
+  });
+
+  it('offers the same attend/send/stay shape as every other family dilemma, with the lawyer as "send"', () => {
+    const state = householdState('youngest', 15);
+    const def = GEN_DEFS.find((d) => d.id === 'gen_family_dilemma')!;
+    let built: ReturnType<typeof def.build> | null = null;
+    for (let i = 0; i < 200 && !built; i++) {
+      const rng = new Rng({ seed: 909, calls: i * 11 });
+      const ctx = def.applies(state, rng);
+      if (ctx?.familyDilemmaId === 'teen_trouble') built = def.build(state, rng, ctx);
+    }
+    expect(built, 'teen_trouble never came up to build across 200 tries').not.toBeNull();
+    expect(built!.choices.map((c) => c.id).sort()).toEqual(['attend', 'send', 'stay']);
+    const send = built!.choices.find((c) => c.id === 'send')!;
+    expect(send.hint).toContain(money(priced(state, 800)));
+  });
+
+  /** Draws until `teen_trouble` specifically comes up (celebration always
+   * also matches, so a single draw cannot be trusted), builds it, and
+   * queues it under a fixed id so `resolveEvent` can answer it. */
+  function raiseTeenTrouble(state: GameState) {
+    const def = GEN_DEFS.find((d) => d.id === 'gen_family_dilemma')!;
+    for (let i = 0; i < 300; i++) {
+      const rng = new Rng({ seed: 909, calls: i * 11 });
+      const ctx = def.applies(state, rng);
+      if (ctx?.familyDilemmaId === 'teen_trouble') {
+        const built = def.build(state, rng, ctx);
+        state.pendingEvents.push({ ...built, id: 'evt_test', day: state.day });
+        return built;
+      }
+    }
+    return null;
+  }
+
+  /*
+     The director's own exact deltas — different from every other occasion
+     in this table, which is why `teen_trouble` alone carries the
+     `attendNeglectClear`/`attendHeat`/`sendNeglect`/`stayNeglect` overrides
+     on `FamilyDilemmaDef` (`config/personal.ts`).
+
+     Watched to fail: with `dilemma.attendNeglectClear !== undefined` in
+     `resolveGenerated`'s `attend` branch changed to read `undefined` (i.e.
+     forcing the shared `goHome` + `familyDilemmaAttendExtraClear` path),
+     neglect cleared by ~33 instead of 20, `went_home_day` was still set (by
+     `goHome` itself) but no heat moved at all — both assertions below went
+     red. Restored afterwards.
+  */
+  it('settling it personally clears exactly 20 neglect, adds heat, spends the evening, and costs nothing', () => {
+    const state = householdState('youngest', 15);
+    home(state).neglect = 60;
+    const beforeNeglect = home(state).neglect;
+    const beforeCash = totalFunds(state);
+    const beforeHeat = state.org.heat;
+    expect(raiseTeenTrouble(state)).not.toBeNull();
+
+    resolveEvent(state, new Rng(state.rng), 'evt_test', 'attend');
+
+    expect(home(state).neglect).toBeCloseTo(beforeNeglect - 20, 5);
+    expect(totalFunds(state)).toBe(beforeCash);
+    expect(state.flags['went_home_day']).toBe(state.day);
+    expect(state.org.heat, 'settling it with the sergeant should draw real heat').toBeGreaterThan(beforeHeat);
+  });
+
+  /*
+     Watched to fail: with `dilemma.sendNeglect ?? ...` changed to always
+     read the shared `GEN_EFFECT.familyDilemmaSendNeglect` (2) regardless of
+     the dilemma's own override, this asserted a rise of exactly 3 and read
+     2 instead. Restored afterwards.
+  */
+  it('the lawyer costs $800 and nudges neglect up by exactly 3', () => {
+    const state = householdState('youngest', 15);
+    home(state).neglect = 40;
+    const beforeNeglect = home(state).neglect;
+    const beforeCash = totalFunds(state);
+    expect(raiseTeenTrouble(state)).not.toBeNull();
+
+    resolveEvent(state, new Rng(state.rng), 'evt_test', 'send');
+
+    expect(totalFunds(state)).toBeCloseTo(beforeCash - priced(state, 800), 5);
+    expect(home(state).neglect).toBeCloseTo(beforeNeglect + 3, 5);
+  });
+
+  /*
+     Watched to fail: with `dilemma.stayNeglect ?? ...` changed the same way
+     as the `send` guard above, this read the shared ~8.75 instead of the
+     director's own 12. Restored afterwards.
+  */
+  it('letting him spend the night is free and spikes neglect by exactly 12', () => {
+    const state = householdState('youngest', 15);
+    home(state).neglect = 40;
+    const beforeNeglect = home(state).neglect;
+    const beforeCash = totalFunds(state);
+    expect(raiseTeenTrouble(state)).not.toBeNull();
+
+    resolveEvent(state, new Rng(state.rng), 'evt_test', 'stay');
+
+    expect(totalFunds(state)).toBe(beforeCash);
+    expect(home(state).neglect).toBeCloseTo(beforeNeglect + 12, 5);
+  });
+});
+
+/*
    Milestone 3: the panic episode. The only shape whose subject is the boss
    himself — gated on `playerStress` alone, per `STRESS.panicThreshold` in
    `config/personal.ts`.
@@ -610,6 +791,149 @@ describe('the panic episode', () => {
     ).toBeLessThan(GEN_EFFECT.panicHouseCallClear);
     expect(state.flags['went_home_day'], 'sedatives should not spend the evening').toBe(wentHomeBefore);
     expect(state.flags['sedated_until_day']).toBe(state.day + STRESS.sedatedDays);
+  });
+});
+
+/*
+   Milestone 4: the family crossroads. One household member's 18th birthday,
+   handled once per person rather than as a recurring occasion — see
+   `state.flags['crossroads_resolved_<relationId>']` in `sim/eventgen.ts`.
+   No fourth term on `legitimacy()` for any of the three answers: that
+   formula (`sim/legacy.ts`) is untouched by this milestone on purpose — see
+   `CLAUDE.md`'s own correction on this point.
+*/
+describe('the family crossroads', () => {
+  /** A fresh household of one, aged precisely relative to their 18th year,
+   * with money enough that affordability is never what is under test. */
+  function adultState(relationId: 'eldest' | 'youngest' = 'eldest', yearsPast18 = 2): GameState {
+    const state = newGame({ name: 'Crossroads', difficulty: 'normal', seed: 7 });
+    home(state).people[0] = { name: 'Junior', relationId };
+    const base = memberAge(state, 'Junior', relationId)!;
+    state.day = (18 - base + yearsPast18) * 365 + 1;
+    state.org.cash = 50_000;
+    return state;
+  }
+
+  function crossroadsDef() {
+    return GEN_DEFS.find((d) => d.id === 'gen_family_crossroads')!;
+  }
+
+  function raise(state: GameState) {
+    const def = crossroadsDef();
+    const rng = new Rng(state.rng);
+    const ctx = def.applies(state, rng);
+    if (!ctx) return null;
+    const built = def.build(state, rng, ctx);
+    state.pendingEvents.push({ ...built, id: 'evt_test', day: state.day });
+    return built;
+  }
+
+  it('does not apply before 18', () => {
+    const state = adultState('eldest', -3); // three years shy of 18
+    expect(crossroadsDef().applies(state, new Rng(state.rng))).toBeNull();
+  });
+
+  it('applies at 18, offers all three choices, and does not itself move legitimacy', () => {
+    const state = adultState();
+    const before = legitimacy(state);
+    const built = raise(state);
+    expect(built, 'the shape did not fire').not.toBeNull();
+    expect(built!.choices.map((c) => c.id).sort()).toEqual(['bring_in', 'college', 'let_go']);
+    // Raising the memo alone changes nothing yet — legitimacy is a read, not
+    // a side effect of a memo merely existing.
+    expect(legitimacy(state)).toBe(before);
+  });
+
+  /*
+     Point 5's own requirement: a flag, not a re-derivable "eligible" check,
+     so the same member cannot be offered this twice. Watched to fail: with
+     `state.flags[crossroads_resolved_...]` commented out of the 'let_go'
+     path in `resolveGenerated`, this went red — `applies` fired again for
+     the same member on the very next check. Restored afterwards.
+  */
+  it('fires at most once for the same household member', () => {
+    const state = adultState();
+    expect(raise(state)).not.toBeNull();
+    resolveEvent(state, new Rng(state.rng), 'evt_test', 'let_go');
+
+    expect(
+      crossroadsDef().applies(state, new Rng(state.rng)),
+      'the same member should not be offered the crossroads twice',
+    ).toBeNull();
+  });
+
+  it('college: real money, real neglect clear, no Npc, and a career record instead of a fabricated number', () => {
+    const state = adultState();
+    home(state).neglect = 50;
+    const beforeCash = totalFunds(state);
+    const beforeNeglect = home(state).neglect;
+    const beforeNpcs = Object.keys(state.npcs).length;
+    const beforeCareer = career(state).length;
+    expect(raise(state)).not.toBeNull();
+
+    resolveEvent(state, new Rng(state.rng), 'evt_test', 'college');
+
+    expect(totalFunds(state)).toBeCloseTo(beforeCash - priced(state, 4_500), 5);
+    expect(home(state).neglect).toBeCloseTo(beforeNeglect - 20, 5);
+    expect(Object.keys(state.npcs).length).toBe(beforeNpcs);
+    expect(career(state).length).toBeGreaterThan(beforeCareer);
+  });
+
+  it("bring_in: free (the director's own figure), a real +35 domestic-rift neglect spike, and a real Npc on the roster", () => {
+    const state = adultState();
+    home(state).neglect = 50;
+    const beforeCash = totalFunds(state);
+    const beforeNeglect = home(state).neglect;
+    expect(raise(state)).not.toBeNull();
+
+    resolveEvent(state, new Rng(state.rng), 'evt_test', 'bring_in');
+
+    expect(totalFunds(state)).toBe(beforeCash);
+    // A spike, not a clear -- the household pays for this one in a real
+    // domestic rift, per the director's own figure (+35).
+    expect(home(state).neglect).toBeGreaterThan(beforeNeglect);
+    expect(home(state).neglect).toBeCloseTo(beforeNeglect + GEN_EFFECT.crossroadsHireNeglectSpike, 5);
+    const hire = Object.values(state.npcs).find((n) => n.name === 'Junior');
+    expect(hire, 'no Npc was created for the household member brought in').toBeDefined();
+    expect(hire!.role).toBe('soldier');
+  });
+
+  it('bring_in: lands a real grievance on a real active capo, when there is one', () => {
+    const state = adultState();
+    const capo = generateNpc(state, new Rng(state.rng), 'capo');
+    capo.stats.grievance = 10;
+    state.npcs[capo.id] = capo;
+    expect(activeCapos(state)).toHaveLength(1);
+    expect(raise(state)).not.toBeNull();
+
+    resolveEvent(state, new Rng(state.rng), 'evt_test', 'bring_in');
+
+    expect(capo.stats.grievance).toBeGreaterThan(10);
+  });
+
+  /*
+     Point 7's own requirement: silently skipped, not forced, when there is
+     no capo to carry it. Watched to fail: with the `capos.length` guard
+     removed from the `bring_in` branch, this threw calling `rng.pick` on an
+     empty array instead of completing quietly. Restored afterwards.
+  */
+  it('bring_in: skips the capo grievance silently when there is no capo at all', () => {
+    const state = adultState();
+    expect(activeCapos(state)).toHaveLength(0);
+    expect(raise(state)).not.toBeNull();
+    expect(() => resolveEvent(state, new Rng(state.rng), 'evt_test', 'bring_in')).not.toThrow();
+  });
+
+  it('let_go: costs nothing, and neglect rises by exactly 25 (permanent estrangement)', () => {
+    const state = adultState();
+    home(state).neglect = 50;
+    const beforeCash = totalFunds(state);
+    expect(raise(state)).not.toBeNull();
+
+    resolveEvent(state, new Rng(state.rng), 'evt_test', 'let_go');
+
+    expect(totalFunds(state)).toBe(beforeCash);
+    expect(home(state).neglect).toBeCloseTo(75, 5);
   });
 });
 
