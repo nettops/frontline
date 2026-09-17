@@ -1112,3 +1112,135 @@ describe('answering somebody settles it', () => {
     ).not.toMatch(/hurt working for you/);
   });
 });
+
+/*
+   Milestone 5: the boss's dual identity. Three set-piece occasions dressed
+   as flavour; the three answers are what matter, and none of them writes to
+   `publicStanding` directly — see that function's own header in
+   `sim/civic.ts`. `def.applies`/`def.build` run on the real causal `rng`
+   parameter, exactly like every other `GEN_DEFS` shape (see point 8 of the
+   brief this milestone was built against): no `Rng.stableNoise` anywhere in
+   this shape, because nothing here is a purely descriptive reading — every
+   branch is either a live mechanical decision or a derived read of state
+   that already exists.
+*/
+describe('gen_social_gathering', () => {
+  const def = GEN_DEFS.find((d) => d.id === 'gen_social_gathering')!;
+
+  /** A family with a real, if modest, public footprint — a clean front. */
+  function socialWorld(seed = 501): GameState {
+    const state = newGame({ name: 'Gala', difficulty: 'normal', seed });
+    state.org.cash = 400_000;
+    for (const t of Object.values(state.territories)) t.influence.player = 45;
+    acquireBusiness(state, 'laundromat', HOME_TERRITORY);
+    return state;
+  }
+
+  it('does not fire against a boss with no public footprint at all', () => {
+    const bare = newGame({ name: 'Nobody', difficulty: 'normal', seed: 501 });
+    expect(def.applies(bare, new Rng(bare.rng))).toBeNull();
+  });
+
+  it('fires once the family has a real front or civic standing, and presents all three choices', () => {
+    const state = socialWorld();
+    const ctx = def.applies(state, new Rng(state.rng));
+    expect(ctx, 'did not fire against a world that has its subject').not.toBeNull();
+    const built = def.build(state, new Rng(state.rng), ctx!);
+    expect(built.choices.map((c) => c.id).sort()).toEqual(['envelope', 'host', 'work']);
+  });
+
+  function raise(state: GameState): ReturnType<typeof def.build> {
+    const rng = new Rng(state.rng);
+    const ctx = def.applies(state, rng)!;
+    const built = def.build(state, rng, ctx);
+    state.pendingEvents.push({ ...built, id: 'evt_social_test', day: state.day });
+    return built;
+  }
+
+  it('hosting spends real money, lifts home sentiment, clears neglect, and helps the alderman', () => {
+    const state = socialWorld();
+    home(state).neglect = 60;
+    figure(state, 'alderman').standing = 0;
+    const beforeCash = totalFunds(state);
+    const beforeSentiment = state.territories[HOME_TERRITORY].sentiment;
+
+    raise(state);
+    resolveEvent(state, new Rng(state.rng), 'evt_social_test', 'host');
+
+    expect(totalFunds(state), 'hosting cost nothing').toBeLessThan(beforeCash);
+    expect(
+      state.territories[HOME_TERRITORY].sentiment,
+      'the gala moved nothing in the neighbourhood',
+    ).toBeGreaterThan(beforeSentiment);
+    expect(home(state).neglect, 'an evening with the family did not clear anything').toBeLessThan(60);
+    expect(figure(state, 'alderman').standing, 'the alderman noticed nothing').toBeGreaterThan(0);
+    expect(state.flags['went_home_day'], 'the evening was not spent').toBe(state.day);
+  });
+
+  it('working the room is free, and settles a grudge or raises a figure’s standing', () => {
+    const state = socialWorld();
+    const beforeCash = totalFunds(state);
+    const beforeNeglect = home(state).neglect;
+
+    const built = raise(state);
+    resolveEvent(state, new Rng(state.rng), 'evt_social_test', 'work');
+
+    expect(totalFunds(state), 'working the room was not free').toBe(beforeCash);
+    expect(home(state).neglect, 'the house did not notice being worked instead of visited').toBeGreaterThan(
+      beforeNeglect,
+    );
+    // A fresh career carries no grudge against anybody, so this fixture's
+    // own `applies` always lands on the civic-figure branch — see
+    // `socialGathering.applies` in `sim/eventgen.ts`.
+    expect(built.data.factionId, 'a brand-new career already has a rival grudge to settle').toBe('');
+    const civicId = String(built.data.civicId);
+    expect(['alderman', 'union']).toContain(civicId);
+    expect(figure(state, civicId).standing, "working the room did not move the figure it named").toBeGreaterThan(0);
+  });
+
+  it('sending an envelope costs the flat fee and dings home-district sentiment', () => {
+    const state = socialWorld();
+    const beforeCash = totalFunds(state);
+    const beforeSentiment = state.territories[HOME_TERRITORY].sentiment;
+
+    raise(state);
+    resolveEvent(state, new Rng(state.rng), 'evt_social_test', 'envelope');
+
+    expect(beforeCash - totalFunds(state), 'the envelope did not cost what it said').toBe(
+      GEN_EFFECT.socialEnvelopeCash,
+    );
+    expect(
+      state.territories[HOME_TERRITORY].sentiment,
+      'staying away did not cost anything in the neighbourhood',
+    ).toBeLessThan(beforeSentiment);
+  });
+
+  /*
+     Point 8's determinism requirement: the generated half's whole decision
+     runs on `generatedStream(state)` (`sim/events.ts`), a function of
+     `state.rng.seed` and `state.day` alone — never `state.rng.calls`. This
+     reconstructs that exact stream (its own documented formula) to prove
+     `applies`/`build` are a pure function of it: the same seed and day
+     produce the same context and the same memo, regardless of how much
+     unrelated causal history either state is carrying.
+  */
+  it('runs bit-identically on generatedStream(state), independent of the causal rng’s own history', () => {
+    const a = socialWorld();
+    const b = socialWorld();
+    // Unrelated causal draws on `b` only — proving the shape never reaches
+    // for `state.rng` itself.
+    const causal = new Rng(b.rng);
+    for (let i = 0; i < 500; i++) causal.next();
+
+    const streamFor = (state: GameState) =>
+      new Rng({ seed: (state.rng.seed ^ 0x2f7a9c11) >>> 0, calls: state.day * 32 });
+
+    const ctxA = def.applies(a, streamFor(a));
+    const ctxB = def.applies(b, streamFor(b));
+    expect(ctxA).toEqual(ctxB);
+
+    const builtA = def.build(a, streamFor(a), ctxA!);
+    const builtB = def.build(b, streamFor(b), ctxB!);
+    expect(builtA).toEqual(builtB);
+  });
+});
