@@ -175,6 +175,110 @@ reporting "0 days until adult" forever after the birthday had already
 passed instead of falling silent — caught by a personal.test.ts guard
 before this ever reached the panel; fixed by checking the *current* day
 against the birthday instead.
+
+**Update, 2026-09-16 (later the same day): Milestone 5, the boss's public and
+civic life — Public Standing & Civic Insulation.** Built on branch
+`public-standing-milestone5` (off `soprano-ue5-prototype` @ 247af75, the tip
+after tonight's `spread.probe` widening) in a separate worktree, not merged,
+for the developer to pull in.
+
+`publicStanding(state)`/`publicStandingTier(state)`/`publicStandingRead(state)`
+(`sim/civic.ts`) are a fully-derived 0..100 composite — no stored field, no
+`SAVE_VERSION` bump — synthesizing three facts the sim already keeps: average
+sentiment across districts actually held (`playerInfluence(t) > 0`, the same
+bar `delegation.ts` uses for "held," defaulting to `SENTIMENT_START` when the
+family holds no ground at all, so a brand-new boss reads as unmeasured rather
+than already hated), average `BusinessDef.legitimacy` of owned fronts
+(`config/businesses.ts`, not `estate()`, which has no such field — defaulting
+to 50 with none owned, same neutral-midpoint reasoning), and average standing
+with the four civic figures the brief actually names — `captain`/`union`/
+`judge`/`alderman`, not the fifth (`lawyer`) and not the "Police Chief" the
+brief's own prose used (there is no such id; `captain` is the police-adjacent
+figure). Federal heat docks the composite (`Math.round(heat * 0.2)`). Four
+tiers (`PUBLIC_STANDING_TIERS`, `config/civic.ts`) — Street Parasite (bar 0,
+x1.35), Known Operator (20, x1.15), Respected Merchant (45, x1.0), Community
+Pillar (70, x0.8) — each carrying `caseGrowthMultiplier`. A new card on
+`PlayerPanel.tsx`, directly below Household and Condition, shows the tier,
+the witness-shield/vulnerable reading in plain language, and the three-term
+breakdown.
+
+**Civic Insulation lands in `investigation.ts`'s `tickInvestigations`, on
+`absorbed` and `visibility`, deliberately not `work`.** That function's own
+comment already documents the exact mistake to avoid: an earlier
+defense-counsel multiplier once scaled only the agency's own work — the
+smallest of the three weekly growth terms — and changed nothing anyone could
+measure. `work` is the agency's professional skill, which a quiet
+neighbourhood does not make less competent; `absorbed` (evidence a community
+hands over) and `visibility` (ambient attention a community volunteers) are
+what "closing ranks against a subpoena" is actually about, and together they
+are the large majority of a case's weekly growth. A log line ("Local
+witnesses in {home district} refused to cooperate with federal subpoenas")
+fires once a week whenever the multiplier actually dampened a case, gated on
+the Pillar bar (>= 70).
+
+**`gen_social_gathering`** (`config/eventgen.ts`/`sim/eventgen.ts`, weight 2,
+cooldown 45 — matching `gen_panic_episode`, the closest existing shape with
+no single recurring subject to exhaust) is the milestone's set-piece: a
+feast/wedding/wake (flavour only, via `oneOf` on the real causal `rng`, never
+`Rng.stableNoise` — nothing in this shape is a purely descriptive reading).
+Gated on the family having *some* real public footprint (a front, or standing
+above zero with a civic figure) rather than firing against a brand-new
+career with nothing built yet — required after `eventgen.test.ts`'s existing
+"none of them fires against an empty world" guard caught the first,
+ungated draft. Three choices: host and donate (a priced $1,500-$2,500
+range, spends the evening via `went_home_day`, +12 home-district sentiment,
++8 alderman standing through the same rate-limited `helpFigure` credit
+`gen_someone_outside` already uses, -12 neglect); work the room (free,
+settles the family's worst rival grudge via `adjustRelationship` if one
+exists, else raises the alderman's or union boss's standing the same
+rate-limited way — this replaces the brief's literal "+10 political
+influence," which is not a stat this game has; +5 neglect since the house
+notices the difference); send an envelope and stay away ($400 flat, -14
+home sentiment, docking the composite roughly the brief's stated 5 points
+at the formula's own sentiment weight).
+
+**Corrections against the brief, all disclosed up front and implemented as
+corrected:** front legitimacy comes from `config/businesses.ts`'s
+`BusinessDef.legitimacy` via `ownedBusinesses`/`businessDef`, not from
+`estate()`. "Controlled" districts use `playerInfluence(t) > 0`. "+10
+political influence" became a real standing/grudge move (above). No new
+`Rng.stableNoise` call was introduced anywhere in this milestone.
+
+Tests: new `describe` blocks in `civic.test.ts` (the composite reflecting
+each of its three inputs independently, heat drag, the four-figures-not-five
+exclusion, the neutral-not-pariah default, all four tier boundaries),
+`investigation.test.ts` (Civic Insulation reduces growth at Pillar,
+accelerates it at Pariah, logs the witness-shield note), and
+`eventgen.test.ts` (the eligibility gate, all three choices' mechanical
+effects, and a determinism check reconstructing `generatedStream(state)`'s
+own formula to prove the shape is a pure function of `(seed, day)`
+regardless of the causal rng's history). Every new guard fault-injected and
+watched red before being restored.
+
+One disclosed reseed, DIRECTOR §5: `deposition.test.ts`'s "fires from an
+ordinary career under the current gate" moved from seed 4046 to 4062. Two
+separate causes, both genuine — not the `generatedStream`-isolation class of
+reshuffle this test's own header already extensively documents: the Civic
+Insulation multiplier changes real case-growth timing, which changes when
+`advanceStage`/`resolveTrial` draw on the causal stream; and
+`gen_social_gathering`'s eligibility gate changes which shape wins a given
+day's generated-pool pick, which changes what `resolveGenerated` branch runs
+that day. A scan of 200 seeds with both changes in place found 42 that still
+reach `generation > 1` with the same "nobody was killed and nobody was
+arrested" fate; seed 4062 was picked, and the guard was re-confirmed the
+standard way (`backersNeeded` reverted to 2, generation stayed at 1,
+restored to 1).
+
+Gates: `npx tsc -b` 0 errors. `npm test` **163 files, 1,938 passing, 0
+failing** (up from this branch's own parent at 163/1,920 — 18 new tests).
+**`npm run probe` was not run** — nothing in this milestone touches
+`src/sim/probes/` directly, but a fresh, unbuilt career now defaults to the
+Known Operator tier (composite ~33 with zero fronts and zero civic
+standing) and a x1.15 case-growth multiplier from day one, which is a real
+balance input the probe measures against; if the developer wants a sized
+number for how this moves case-close timing or any of the ladder's own
+bars, run it before merge.
+
 last run clean at 96/96 non-skipped (unrun since the diplomacy/refusal/
 tip/report/sitdown/contract-charge/rail-grouping/operations-focus/
 poverty-trap/succession-button fixes below — none of them touch balance,

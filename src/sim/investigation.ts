@@ -25,8 +25,9 @@ import { addHeat, channelHeat } from './heat';
 import { addNote, crewList } from './npc';
 import { applyVoucherConsequence } from './capoVouches';
 import { nightsWorked } from './standing';
-import { playerInfluence, territoryList } from './territory';
+import { playerInfluence, territoryDef, territoryList } from './territory';
 import { remember } from './memory';
+import { publicStandingTier } from './civic';
 import { spend, totalFunds } from './economy';
 import { ownedBusinesses } from './business';
 import { seizeStock } from './contraband';
@@ -89,6 +90,7 @@ import { CHANNEL_OF_SOURCE } from '../config/heat';
 import { ARREST_DAYS } from '../config/operations';
 import { DIFFICULTY_BY_ID } from '../config/difficulty';
 import { FEAR, PAYDAY_INTERVAL } from '../config/economy';
+import { HOME_TERRITORY } from '../config/territories';
 
 export function newLawEnforcement(): LawEnforcement {
   return {
@@ -762,6 +764,26 @@ export function tickInvestigations(state: GameState, rng: Rng): void {
   considerOpening(state);
 
   const ledger = state.law.ledger;
+  /*
+     Civic insulation. A community that reads the boss as a benefactor closes
+     ranks against a subpoena; one that reads him as a predator informs on
+     him — see `config/civic.ts`'s `PublicStandingTier` and its own header.
+
+     Applied to `absorbed` and `visibility` below, deliberately not to `work`.
+     Those two are what a community's own cooperation actually gates —
+     evidence that has to be found and handed over, and ambient attention
+     that has to be volunteered — while `work` is the agency's own
+     investigative skill, which a quiet neighbourhood does not make any less
+     competent. Given this function's own comment two paragraphs down about
+     `evidenceMultiplier` once being aimed at "the smallest of the three"
+     terms and changing nothing anybody could measure, this multiplier goes
+     on the two terms that comment's own numbers say are the large majority
+     of weekly growth (absorbed + visibility, against work alone), on
+     purpose, so as not to repeat that exact mistake in a new shape.
+  */
+  const civicTier = publicStandingTier(state);
+  const civicMult = civicTier.caseGrowthMultiplier;
+  let civicDampened = false;
 
   for (const investigation of activeCases(state)) {
     const agency = agencyOf(investigation);
@@ -788,7 +810,7 @@ export function tickInvestigations(state: GameState, rng: Rng): void {
     let absorbed = 0;
     for (const trace of availableFor(state, agency, investigation.id)) {
       trace.attachedTo.push(investigation.id);
-      absorbed += trace.strength * EVIDENCE_ABSORPTION * keptOut;
+      absorbed += trace.strength * EVIDENCE_ABSORPTION * keptOut * civicMult;
       for (const npcId of trace.npcIds) {
         if (!investigation.suspectIds.includes(npcId)) investigation.suspectIds.push(npcId);
       }
@@ -825,8 +847,9 @@ export function tickInvestigations(state: GameState, rng: Rng): void {
        followed was applied to `lastProgressDay` instead, so the case went cold
        on schedule and then kept growing anyway.
     */
-    const visibility = state.org.heat * HEAT_EVIDENCE_CONTRIBUTION * momentum;
+    const visibility = state.org.heat * HEAT_EVIDENCE_CONTRIBUTION * momentum * civicMult;
     investigation.strength += work + visibility;
+    if (civicMult < 1) civicDampened = true;
     if (ledger) {
       ledger.work += work;
       ledger.visibility += visibility;
@@ -889,6 +912,16 @@ export function tickInvestigations(state: GameState, rng: Rng): void {
     }
 
     advanceStage(state, rng, investigation);
+  }
+
+  // Named once a week, not once per case — it is a fact about the
+  // neighbourhood, not about any one file.
+  if (civicDampened) {
+    addLog(
+      state,
+      `Local witnesses in ${territoryDef(HOME_TERRITORY).name} refused to cooperate with federal subpoenas.`,
+      'crew',
+    );
   }
 }
 

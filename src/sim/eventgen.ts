@@ -34,6 +34,9 @@ import { addHeat } from './heat';
 import { gainFear, gainRespect, trainAttribute } from './player';
 import { ownedBusinesses, weeklyRevenue } from './business';
 import { activeCapos } from './capoTension';
+import { rivals } from './faction';
+import { adjustRelationship, bond } from './diplomacy';
+import { houseShort } from './houses';
 import {
   addInfluence,
   adjustSentiment,
@@ -51,6 +54,8 @@ import { readWhispers } from './whispers';
 import { bodySpentTonight, canGoHome, goHome, home, memberAge, memberLifeStage, playerStress } from './personal';
 import { FAMILY_DILEMMAS, HOME, RELATIONS, STRESS, type FamilyDilemmaDef } from '../config/personal';
 import { CIVIC_FIGURES } from '../config/civic';
+import { HOME_TERRITORY } from '../config/territories';
+import type { FactionId } from '../config/factions';
 import { GEN_EFFECT, GEN_SEVERITY_WEIGHT_MAX, GEN_SHAPES, GEN_WHEN } from '../config/eventgen';
 import { recordCareerEvent } from './career';
 import { ROLE_LABEL } from '../config/economy';
@@ -1256,6 +1261,100 @@ const theyAreFrightened: EventDef = {
   },
 };
 
+/**
+ * Milestone 5: the boss's dual identity. A parish feast, a wedding, a wake —
+ * dressed only as flavour drawn by `oneOf`; the three answers are what
+ * matter, and every one of them moves a number some existing system already
+ * owns. Nothing here writes to `publicStanding` directly — see that
+ * function's own header in `sim/civic.ts` for why there is no field to write
+ * to, and how each choice below instead moves one of the real inputs the
+ * formula reads.
+ *
+ * "Work the room" settles a real border grudge when the family actually has
+ * one, and raises a civic figure's standing otherwise — through
+ * `helpFigure`, the same rate-limited credit `gen_someone_outside` already
+ * uses, rather than the brief's literal "+10 political influence", which is
+ * not a stat this game has (see `config/civic.ts`'s `CIVIC_ATTRIBUTE`/
+ * `INFLUENCE_FROM` for the real one, which this deliberately does not touch —
+ * `helpFigure`'s own header is the whole argument for why not). The
+ * alderman and the union boss are the two this reaches, the same two
+ * `canCallWalkout`/`pullPermit` already established as this network's
+ * outward-facing figures, and the only two among `CIVIC_FIGURES` whose own
+ * blurb is about being seen with the right people.
+ */
+const socialGathering: EventDef = {
+  id: 'gen_social_gathering',
+  ...shape('gen_social_gathering'),
+  applies(state, rng) {
+    // A real border grudge to settle, if the family is actually carrying one
+    // — the same `bond` reading `rival_incursion` in `events.ts` already
+    // uses, picked by whichever rival resents the family most rather than at
+    // random.
+    const grudged = rivals(state)
+      .filter((f) => f.strength > 0 && bond(state, 'player', f.id).grudge > 0)
+      .sort((a, b) => bond(state, 'player', b.id).grudge - bond(state, 'player', a.id).grudge);
+    if (grudged.length > 0) return { faction: grudged[0] };
+
+    /*
+       A boss with no public footprint at all is not on anybody's invitation
+       list — no front to be seen running, no standing with a single soul
+       who matters. Every other shape in this table is instantiated against
+       a real subject; this is this shape's own version of that rule, and it
+       is what keeps a brand-new career from being invited to a gala on day
+       one (`eventgen.test.ts`'s "none of them fires against an empty
+       world").
+    */
+    const known = ownedBusinesses(state).length > 0 || CIVIC_FIGURES.some((def) => figure(state, def.id).standing > 0);
+    if (!known) return null;
+
+    // Nobody to make peace with tonight — the room still has an alderman or
+    // a union boss in it either way.
+    return { civicId: rng.pick(['alderman', 'union']) };
+  },
+  build(state, rng, ctx) {
+    const donateCost = priced(
+      state,
+      rng.int(GEN_EFFECT.socialDonateCashMin, GEN_EFFECT.socialDonateCashMax),
+    );
+    const occasion = oneOf(rng, [
+      'The Feast of Saint Anthony has taken over three blocks and the parish hall besides',
+      "A wedding — somebody's daughter, a business partner's family, it hardly matters whose — has the whole neighbourhood dressed up",
+      'A wake at the funeral home, for an old man half the street grew up calling an uncle',
+    ]);
+    return {
+      defId: 'gen_social_gathering',
+      title: 'An evening you are expected at',
+      body: oneOf(rng, [
+        `${occasion}. You are expected, and not showing up says something too.`,
+        `${occasion}. Everybody who is anybody in the neighbourhood will be there, ` +
+          `which is exactly why you were asked.`,
+        `${occasion}. It is the kind of night a man in your position is seen at, ` +
+          `one way or another.`,
+      ]),
+      severity: 'opportunity',
+      npcId: null,
+      data: { factionId: ctx.faction?.id ?? '', civicId: ctx.civicId ?? '', donateCost },
+      choices: [
+        {
+          id: 'host',
+          label: 'Play the generous benefactor',
+          ...payable(state, donateCost, 'and everybody sees who paid for it'),
+        },
+        {
+          id: 'work',
+          label: 'Work the room',
+          hint: 'Free. The house sees you working the room instead of attending as family.',
+        },
+        {
+          id: 'envelope',
+          label: 'Send an envelope, stay away',
+          ...payable(state, GEN_EFFECT.socialEnvelopeCash, 'and nobody mistakes it for showing up'),
+        },
+      ],
+    };
+  },
+};
+
 export const GEN_DEFS: EventDef[] = [
   wantsAWord,
   badBlood,
@@ -1275,6 +1374,7 @@ export const GEN_DEFS: EventDef[] = [
   theNameStuck,
   oldOwner,
   theyAreFrightened,
+  socialGathering,
 ];
 
 // ------------------------------------------------------------- resolution ---
@@ -1833,6 +1933,65 @@ export function resolveGenerated(
       adjustSentiment(state, t.id, GEN_EFFECT.frightenedRefusedSentiment);
       gainFear(state, GEN_EFFECT.frightenedRefusedFear);
       addLog(state, `The envelope went back to ${where} unopened. That will be talked about.`, 'neutral');
+      return;
+    }
+
+    case 'gen_social_gathering': {
+      const factionId = event.data.factionId ? String(event.data.factionId) : null;
+      const civicId = event.data.civicId ? String(event.data.civicId) : null;
+      const donateCost = Number(event.data.donateCost ?? 0);
+
+      if (choiceId === 'host') {
+        if (!spend(state, donateCost, 'world')) {
+          addLog(state, 'There was nothing to put into the evening, so you did not host it.', 'failure');
+          return;
+        }
+        // Spends the evening, same flag `goHome`/`gen_family_dilemma`'s
+        // `teen_trouble` branch write for an occasion that is not itself a
+        // visit home — see its comment in `personal.ts` for what this
+        // flag guards against (a same-day zero-crew job).
+        state.flags['went_home_day'] = state.day;
+        adjustSentiment(state, HOME_TERRITORY, GEN_EFFECT.socialDonateSentiment);
+        helpFigure(state, 'alderman', GEN_EFFECT.socialDonateStanding);
+        const house = home(state);
+        house.neglect = clamp(house.neglect - GEN_EFFECT.socialDonateNeglectClear, 0, 100);
+        addLog(
+          state,
+          `${money(donateCost)} into the evening, and ${territoryDef(HOME_TERRITORY).name} saw exactly who paid for it.`,
+          'money',
+        );
+        return;
+      }
+
+      if (choiceId === 'work') {
+        const house = home(state);
+        house.neglect = clamp(house.neglect + GEN_EFFECT.socialWorkRoomNeglect, 0, 100);
+        if (factionId) {
+          adjustRelationship(state, 'player', factionId as FactionId, GEN_EFFECT.socialWorkRoomGrudgeSettled);
+          addLog(
+            state,
+            `An old grudge with ${houseShort(state, factionId as FactionId)} got smaller over drinks nobody will mention again.`,
+            'crew',
+          );
+          return;
+        }
+        const def = CIVIC_FIGURES.find((f) => f.id === civicId);
+        helpFigure(state, civicId ?? '', GEN_EFFECT.socialWorkRoomStanding);
+        addLog(state, `${def?.title ?? 'Somebody useful'} remembers who worked the room tonight.`, 'crew');
+        return;
+      }
+
+      // 'envelope'
+      if (!spend(state, GEN_EFFECT.socialEnvelopeCash, 'world')) {
+        addLog(state, 'You did not even send the envelope. That got noticed too.', 'failure');
+        return;
+      }
+      adjustSentiment(state, HOME_TERRITORY, -GEN_EFFECT.socialEnvelopeSentimentHit);
+      addLog(
+        state,
+        `The envelope arrived. So did the absence — ${territoryDef(HOME_TERRITORY).name} noticed both.`,
+        'money',
+      );
       return;
     }
 

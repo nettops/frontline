@@ -51,6 +51,7 @@ import {
   sellPossession,
 } from '../../sim/possessions';
 import { controlledTerritories } from '../../sim/territory';
+import { publicStandingRead } from '../../sim/civic';
 import { formatMoney } from '../../sim/util';
 import { DIFFICULTY_BY_ID } from '../../config/difficulty';
 import { PlayerPortrait } from '../PlayerPortrait';
@@ -243,6 +244,7 @@ export default function PlayerPanel() {
   const pressure = stressPressure(state);
   const consulting = canConsult(state);
   const consultCash = priced(state, STRESS.consultCost);
+  const standing = publicStandingRead(state);
   const pressureParts = [
     pressure.wars > 0 && `Wars: +${pressure.wars.toFixed(1)}`,
     pressure.heat > 0 && `Heat: +${pressure.heat.toFixed(1)}`,
@@ -469,6 +471,40 @@ export default function PlayerPanel() {
               {consulting.reason}
             </p>
           )}
+          {/*
+             The boss's other reputation — public standing, not street Fear or
+             Respect. Directly below Household and Condition on purpose: this
+             is the same evenings this panel's Household section is already
+             about, read from the other side. Purely a derived read — see
+             `sim/civic.ts`'s `publicStandingRead` — so there is nothing to
+             spend here, only to build by how the family is actually run.
+          */}
+          <KeyValue
+            label="Public standing"
+            value={`${standing.tier.label} (${standing.score} of 100)`}
+            tone={standing.tier.tone}
+          />
+          <p className="faint tiny" style={{ margin: '2px 14px 4px' }}>{standing.tier.blurb}</p>
+          <KeyValue
+            label={
+              standing.tier.caseGrowthMultiplier < 1
+                ? 'Witness shield'
+                : standing.tier.caseGrowthMultiplier > 1
+                  ? 'Vulnerable'
+                  : 'Federal exposure'
+            }
+            value={
+              standing.tier.caseGrowthMultiplier < 1
+                ? `Federal case development slowed by ${Math.round((1 - standing.tier.caseGrowthMultiplier) * 100)}%`
+                : standing.tier.caseGrowthMultiplier > 1
+                  ? `Local tips accelerating cases by +${Math.round((standing.tier.caseGrowthMultiplier - 1) * 100)}%`
+                  : 'Neither helping nor hurting a federal case'
+            }
+            tone={standing.tier.caseGrowthMultiplier < 1 ? 'brass' : standing.tier.caseGrowthMultiplier > 1 ? 'hot' : undefined}
+          />
+          <KeyValue label="Street sentiment (worked ground)" value={`${Math.round(standing.sentiment)} of 100`} />
+          <KeyValue label="Business cleanliness" value={`${Math.round(standing.legitimacy)} of 100`} />
+          <KeyValue label="Civic alliances" value={`${Math.round(standing.alliance)} of 100`} />
           {/*
              Rank above shape, because a tester read the shape as the rank.
 

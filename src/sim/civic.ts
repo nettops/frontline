@@ -26,7 +26,7 @@ import { clamp } from './rng';
 import { priced } from './market';
 import { earnDirty } from './economy';
 import { crewList } from './npc';
-import { ownedBusinesses } from './business';
+import { businessDef, ownedBusinesses } from './business';
 import {
   adjustSentiment,
   playerInfluence,
@@ -40,7 +40,11 @@ import {
   CIVIC_FIGURES,
   CIVIC_WORK,
   FAVOUR_EFFECT,
+  PUBLIC_STANDING,
+  PUBLIC_STANDING_FIGURES,
+  PUBLIC_STANDING_TIERS,
   type CivicFigureDef,
+  type PublicStandingTier,
 } from '../config/civic';
 import { SENTIMENT_HOSTILE_BELOW } from '../config/territories';
 import { PATRON } from '../config/perception';
@@ -613,4 +617,93 @@ function apply(state: GameState, def: CivicFigureDef, target?: string): FavourRe
       };
     }
   }
+}
+
+// ------------------------------------------------------- public standing ---
+
+/**
+ * The three real, already-tracked facts `publicStanding` synthesizes.
+ *
+ * Split out so `publicStanding` and `publicStandingRead` (the UI's one call)
+ * share a single computation rather than two copies that could drift.
+ */
+function publicStandingTerms(state: GameState): {
+  sentiment: number;
+  legitimacy: number;
+  alliance: number;
+} {
+  // "Controlled" here is real presence, not a `SLOTS_BY_CONTROL` tier — the
+  // same bar `delegation.ts` uses to decide a district is yours at all.
+  const held = territoryList(state).filter((t) => playerInfluence(t) > 0);
+  const sentiment =
+    held.length > 0
+      ? held.reduce((sum, t) => sum + t.sentiment, 0) / held.length
+      : PUBLIC_STANDING.neutralSentimentDefault;
+
+  const owned = ownedBusinesses(state);
+  const legitimacy =
+    owned.length > 0
+      ? owned.reduce((sum, b) => sum + businessDef(b).legitimacy, 0) / owned.length
+      : PUBLIC_STANDING.neutralLegitimacyDefault;
+
+  const alliance =
+    PUBLIC_STANDING_FIGURES.reduce((sum, id) => sum + figure(state, id).standing, 0) /
+    PUBLIC_STANDING_FIGURES.length;
+
+  return { sentiment, legitimacy, alliance };
+}
+
+function publicStandingComposite(
+  terms: { sentiment: number; legitimacy: number; alliance: number },
+  heat: number,
+): number {
+  const heatDrag = Math.round(heat * PUBLIC_STANDING.heatDragScale);
+  const raw =
+    terms.sentiment * PUBLIC_STANDING.sentimentWeight +
+    terms.legitimacy * PUBLIC_STANDING.legitimacyWeight +
+    terms.alliance * PUBLIC_STANDING.allianceWeight -
+    heatDrag;
+  return clamp(Math.round(raw), 0, 100);
+}
+
+function tierFor(score: number): PublicStandingTier {
+  return (
+    PUBLIC_STANDING_TIERS.find((tier) => score >= tier.bar) ??
+    PUBLIC_STANDING_TIERS[PUBLIC_STANDING_TIERS.length - 1]
+  );
+}
+
+/**
+ * The boss's public identity, 0..100. Derived only — see `config/civic.ts`'s
+ * `PublicStandingTier` header for why this is never stored.
+ *
+ * Synthesizes district sentiment, front legitimacy and civic-figure standing
+ * — three facts the simulation already keeps — and docks federal heat. The
+ * weights and the two no-ground/no-fronts defaults live in `PUBLIC_STANDING`.
+ */
+export function publicStanding(state: GameState): number {
+  return publicStandingComposite(publicStandingTerms(state), state.org.heat);
+}
+
+/** Which of the four `PUBLIC_STANDING_TIERS` the current score reads as. */
+export function publicStandingTier(state: GameState): PublicStandingTier {
+  return tierFor(publicStanding(state));
+}
+
+export interface PublicStandingRead {
+  score: number;
+  tier: PublicStandingTier;
+  /** Average sentiment across districts actually held. */
+  sentiment: number;
+  /** Average legitimacy of owned fronts. */
+  legitimacy: number;
+  /** Average standing with the four civic figures the meter reads. */
+  alliance: number;
+}
+
+/** Everything the Public Standing card needs, in one call. See `PlayerPanel.tsx`. */
+export function publicStandingRead(state: GameState): PublicStandingRead {
+  const terms = publicStandingTerms(state);
+  const score = publicStandingComposite(terms, state.org.heat);
+  return { score, tier: tierFor(score), ...terms };
 }
