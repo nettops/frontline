@@ -40,7 +40,7 @@ import { isLayingLow } from '../heat';
 import { OPERATIONS } from '../../config/operations';
 import { rankIndex } from '../../config/economy';
 import type { GameState, Id, Npc, OperationDef } from '../types';
-import { median } from '../__tests__/helpers';
+import { lazyRuns, median } from '../__tests__/helpers';
 
 type Policy = 'best' | 'rotate';
 
@@ -261,8 +261,8 @@ const DAYS = 180;
    still a cheap price.
 */
 const SEEDS = Array.from({ length: 600 }, (_, i) => 2000 + i);
-const best = SEEDS.map((s) => play(s, DAYS, 'best'));
-const rotate = SEEDS.map((s) => play(s, DAYS, 'rotate'));
+const best = lazyRuns(() => SEEDS.map((s) => play(s, DAYS, 'best')));
+const rotate = lazyRuns(() => SEEDS.map((s) => play(s, DAYS, 'rotate')));
 
 function mean(values: number[]): number {
   return values.reduce((a, b) => a + b, 0) / values.length;

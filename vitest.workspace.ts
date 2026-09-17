@@ -43,6 +43,13 @@ export default defineWorkspace([
       // The probes share `__tests__/helpers.ts` with the unit suite — it is
       // test support for both, and moving it would rewrite 28 imports to say
       // nothing new.
+      pool: 'threads',
+      poolOptions: {
+        threads: {
+          maxThreads: 4,
+          minThreads: 2,
+        },
+      },
     },
   },
 ]);

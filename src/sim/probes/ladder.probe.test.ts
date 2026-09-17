@@ -1703,8 +1703,19 @@ const CUT_FAILURES_BEFORE = 3;
  */
 const CUT_FAILURES_SPARING = 6;
 const CUT_MOST_SPARING = 3;
+const climbCache = new Map<string, Climb>();
 
 function climb(seed: number, days: number, policy: Policy = {}): Climb {
+  const deadGround = (HOLDING as unknown as Record<string, number>).share === 0;
+  const key = `${seed}:${days}:${JSON.stringify(policy)}:${deadGround}`;
+  const hit = climbCache.get(key);
+  if (hit) return hit;
+  const res = climbRaw(seed, days, policy);
+  climbCache.set(key, res);
+  return res;
+}
+
+function climbRaw(seed: number, days: number, policy: Policy = {}): Climb {
   const state = newGame({ name: 'Ladder', difficulty: 'normal', seed });
   const rng = new Rng(state.rng);
   // The shipped switch, thrown on the first morning and never touched again.
@@ -6050,15 +6061,15 @@ const RUNS_CUTS_RARE = lazyRuns(() => Array.from({ length: 36 }, (_, i) =>
    - `BOTH` is there because a player who has decided to take this seriously
      takes it seriously in both columns, and two levers can interact.
 */
-const RUNS_PIECES_LONG = Array.from({ length: 36 }, (_, i) =>
+const RUNS_PIECES_LONG = lazyRuns(() => Array.from({ length: 36 }, (_, i) =>
   climb(700 + i, HUMAN_DAYS, { cuts: true, carries: 'long' }),
-);
-const RUNS_PIECES_DUMP = Array.from({ length: 36 }, (_, i) =>
+));
+const RUNS_PIECES_DUMP = lazyRuns(() => Array.from({ length: 36 }, (_, i) =>
   climb(700 + i, HUMAN_DAYS, { cuts: true, dumps: true }),
-);
-const RUNS_PIECES_BOTH = Array.from({ length: 36 }, (_, i) =>
+));
+const RUNS_PIECES_BOTH = lazyRuns(() => Array.from({ length: 36 }, (_, i) =>
   climb(700 + i, HUMAN_DAYS, { cuts: true, carries: 'long', dumps: true }),
-);
+));
 
 /*
    And the same question asked of a boss who does this three times in four
@@ -6072,9 +6083,9 @@ const RUNS_PIECES_BOTH = Array.from({ length: 36 }, (_, i) =>
 
    Paired against `RUNS_CUTS_RARE`, which is the same bot keeping.
 */
-const RUNS_PIECES_DUMP_RARE = Array.from({ length: 36 }, (_, i) =>
+const RUNS_PIECES_DUMP_RARE = lazyRuns(() => Array.from({ length: 36 }, (_, i) =>
   climb(700 + i, HUMAN_DAYS, { cutsRarely: true, dumps: true }),
-);
+));
 
 /*
    Sending people after somebody else's people.
@@ -6089,12 +6100,12 @@ const RUNS_PIECES_DUMP_RARE = Array.from({ length: 36 }, (_, i) =>
 
    Both against `RUNS_300`, which plays identically and never sends anybody.
 */
-const RUNS_CONTRACT_WAR = Array.from({ length: 36 }, (_, i) =>
+const RUNS_CONTRACT_WAR = lazyRuns(() => Array.from({ length: 36 }, (_, i) =>
   climb(700 + i, HUMAN_DAYS, { contractsAtWar: true }),
-);
-const RUNS_CONTRACT_FREE = Array.from({ length: 36 }, (_, i) =>
+));
+const RUNS_CONTRACT_FREE = lazyRuns(() => Array.from({ length: 36 }, (_, i) =>
   climb(700 + i, HUMAN_DAYS, { contractsFreely: true }),
-);
+));
 
 /*
    The allocator with the judgement call it was deliberately denied.
@@ -6256,7 +6267,7 @@ const RUNS_GROUND_AUTO = lazyRuns(() => Array.from({ length: 36 }, (_, i) =>
   climb(700 + i, HUMAN_DAYS, { chasesGround: true, handsOver: true }),
 ));
 
-const RUNS_GROUND_DEAD = (() => {
+const RUNS_GROUND_DEAD = lazyRuns(() => {
   const was = HOLDING.share;
   (HOLDING as unknown as Record<string, number>).share = 0;
   const runs = Array.from({ length: 36 }, (_, i) =>
@@ -6264,7 +6275,7 @@ const RUNS_GROUND_DEAD = (() => {
   );
   (HOLDING as unknown as Record<string, number>).share = was;
   return runs;
-})();
+});
 /*
    The same pair, widened, for the one bar 36 seeds cannot resolve.
 
