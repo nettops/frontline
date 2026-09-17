@@ -375,3 +375,54 @@ export const DEPOSITION = {
    */
   rumourAfterWeeks: 3,
 } as const;
+
+// ------------------------------------------------- blood, and the calendar ---
+
+/**
+ * What it costs to answer the question the whole file has been circling.
+ *
+ * Milestone 4 let a household child grow up and walk into the organization.
+ * Until now that was the end of it — the kid was a soldier with a first name
+ * and no surname, and the men who had carried this family for fifteen years
+ * had no opinion about him whatsoever. That is the one thing everybody in
+ * this business would have an opinion about.
+ *
+ * So there are two prices and no free answer. Name your own blood and every
+ * veteran capo reads a lifetime of service being valued below a surname; name
+ * a capo with your own child standing in the room and the house hears about
+ * it before you get home. `NAMING`'s ordinary passed-over cost is unchanged
+ * and stacks on top of the first of these: being passed over and being passed
+ * over *for the boss's son* are not the same injury.
+ *
+ * The aging numbers live here rather than in `config/personal.ts`'s `STRESS`
+ * because they are the same question from the other side. A boss only ever
+ * has to settle the succession because the body settles it for him.
+ */
+export const NEPOTISM = {
+  /** What a veteran capo carries, on top of `NAMING.passedOverGrievance`. */
+  capoGrievance: 25,
+  /** ...and what he stops feeling about the man who did it. */
+  capoLoyaltyDrop: 20,
+  /** What the house takes when the chair goes to somebody else's son. */
+  domesticNeglectOnCapoNamed: 20,
+
+  /**
+   * The day the body stops mending on its own.
+   *
+   * Past this, `STRESS.naturalRecovery` no longer runs — a quiet week is
+   * merely a week that did not make it worse — and a fixed weariness accrues
+   * whatever else is happening. Deliberately reachable: 300 days is inside
+   * the span a measured career actually plays, unlike `AGING.declineFrom`,
+   * which is about the men and needs twenty-five years of calendar.
+   */
+  agingStartDay: 300,
+  /** Extra weekly stress past `agingStartDay`, whatever else is or is not on. */
+  agingWearinessStress: 1.5,
+  /**
+   * How often the doctor is allowed to say it out loud, once the meter is
+   * already past `STRESS.panicThreshold`. The same reasoning the confidant's
+   * wiretap beat follows: a line every seven days about the same heart is a
+   * subscription rather than a warning.
+   */
+  agingWarningEveryDays: 60,
+} as const;
