@@ -394,6 +394,21 @@ export default function PlayerPanel() {
             </p>
           )}
           {/*
+             The one date in this household that is actually knowable in
+             advance, unlike the occasion above — age is a pure function of
+             `state.day`, not a later draw, so this can say a real number
+             rather than "could come up". See `daysUntilAdult`, `sim/personal.ts`.
+          */}
+          {houseNow.comingOfAge
+            .filter((c) => c.daysUntil <= HOME.comingOfAgeWithinDays)
+            .map((c) => (
+              <p key={c.relationId} className="faint tiny" style={{ margin: '2px 14px 0' }}>
+                {c.name} turns eighteen{' '}
+                {c.daysUntil === 0 ? 'any day now' : `in about ${c.daysUntil} days`} — whatever you
+                decide about that is coming up.
+              </p>
+            ))}
+          {/*
              And a way to actually go.
 
              There was no button here at first, on the reasoning that a pull

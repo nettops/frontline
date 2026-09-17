@@ -87,11 +87,78 @@ export const RELATIONS: RelationDef[] = [
   { id: 'elder', label: 'the oldest of them', asks: 'is old, and is asking after you' },
 ];
 
+/**
+ * Only `eldest` and `youngest` can start the game below adulthood — the
+ * other four relations (`spouse`, `parent`, `sibling`, `elder`) are already
+ * grown, and giving them a base age would be flavour with no mechanic
+ * behind it. `memberAge` returns `null` for a relation with no entry here,
+ * which is how `gen_family_crossroads`/`teen_trouble`'s gating knows to
+ * skip a household that has neither child in it (see `sim/personal.ts` and
+ * `CLAUDE.md`'s point about a household holding only 3 of 6 relations).
+ *
+ * The director's own figures for this milestone.
+ */
+export const CHILD_START_AGES: Record<string, { min: number; max: number }> = {
+  eldest: { min: 14, max: 16 },
+  youngest: { min: 8, max: 11 },
+};
+
+export type LifeStageId = 'child' | 'teen' | 'young_adult' | 'adult';
+
+export interface LifeStageDef {
+  id: LifeStageId;
+  label: string;
+  minAge: number;
+  maxAge: number;
+  /** The longer read, same role `HomeTier.blurb` plays for neglect. */
+  blurb: string;
+}
+
+/** The director's own bands and copy. */
+export const LIFE_STAGES: LifeStageDef[] = [
+  {
+    id: 'child',
+    label: 'Child',
+    minAge: 0,
+    maxAge: 12,
+    blurb: 'Still young enough to believe whatever you tell them.',
+  },
+  {
+    id: 'teen',
+    label: 'Teenager',
+    minAge: 13,
+    maxAge: 17,
+    blurb: 'Has started noticing the men parked down the block.',
+  },
+  {
+    id: 'young_adult',
+    label: 'Young Adult',
+    minAge: 18,
+    maxAge: 22,
+    blurb: 'Standing at the doorway of their own life.',
+  },
+  {
+    id: 'adult',
+    label: 'Adult',
+    minAge: 23,
+    maxAge: 100,
+    blurb: 'Out in the world with your last name.',
+  },
+];
+
 export const HOME = {
   /** Everybody forms an opinion once a week, like the rest of the game. */
   intervalDays: 7,
   /** How many people are in the house. Small on purpose. */
   household: 3,
+  /**
+   * How close a household member's 18th birthday has to be before the
+   * PlayerPanel says anything about it. See `memberAge`/`daysUntilAdult` in
+   * `sim/personal.ts` — the same "a heads-up, not a schedule" register
+   * `familyHorizon` already uses, just for a date that is actually knowable
+   * in advance rather than one that depends on a later day's draw.
+   */
+  comingOfAgeWithinDays: 30,
 
   /**
    * Neglect gained each week you are not seen at home, 0..100.
@@ -203,6 +270,13 @@ export interface FamilyDilemmaDef {
   id: string;
   /** Which household relation(s) this occasion fits. */
   relationIds: string[];
+  /**
+   * Which life stage(s) (`LifeStageId`, above) the matching member has to be
+   * in, for an occasion that only makes sense at one age. Undefined for the
+   * four original entries — they fit a relation regardless of age, and
+   * giving them all `'any'` would be a call site nobody asked to touch.
+   */
+  stages?: LifeStageId[];
   /** Names the occasion, for the title and the career record. */
   occasion: string;
   /** The memo's own words, third person implied -- for `oneOf()`. */
@@ -213,6 +287,23 @@ export interface FamilyDilemmaDef {
   sendCost: number;
   /** What gets sent, said the way the boss would put it. */
   sendGesture: string;
+  /**
+   * Overrides for this occasion alone — undefined on the four milestone 1-3
+   * entries, which share `GEN_EFFECT.familyDilemmaAttendExtraClear`/
+   * `familyDilemmaSendNeglect`/`familyDilemmaStayNeglect` uniformly. Only
+   * `teen_trouble` sets these: the director's own figures for "settle it
+   * with the sergeant" are a different shape than a nice evening at home,
+   * clearing *less* than an ordinary visit and drawing heat besides, so the
+   * shared constants (tuned for a school play or a sickbed) do not apply.
+   */
+  attendNeglectClear?: number;
+  /** Extra heat picked up when *attending* means dealing with the law rather
+   * than a school or a sickbed. Undefined everywhere but `teen_trouble`. */
+  attendHeat?: number;
+  /** Overrides `GEN_EFFECT.familyDilemmaSendNeglect` for this occasion alone. */
+  sendNeglect?: number;
+  /** Overrides `GEN_EFFECT.familyDilemmaStayNeglect` for this occasion alone. */
+  stayNeglect?: number;
 }
 
 export const FAMILY_DILEMMAS: FamilyDilemmaDef[] = [
@@ -267,6 +358,37 @@ export const FAMILY_DILEMMAS: FamilyDilemmaDef[] = [
     attendCost: 300,
     sendCost: 200,
     sendGesture: 'a gift, sent round with your name on the card',
+  },
+  /*
+     Milestone 4. The only entry in this table gated on age rather than only
+     on relation — a teenager is a different occasion than a child at the
+     same school, and `gen_family_dilemma`'s own `applies`/`build` now check
+     `stages` alongside `relationIds` for exactly that reason. `attendCost`
+     is 0, the same as `quiet_evening` -- intervening personally costs the
+     evening and nothing else; `sendCost` (800) is a lawyer, handled without
+     you, matching this milestone's own figure.
+  */
+  {
+    id: 'teen_trouble',
+    relationIds: ['eldest', 'youngest'],
+    stages: ['teen'],
+    occasion: 'trouble with the law',
+    bodies: [
+      'was caught joyriding with friends in a precinct where the sergeant recognized your last name',
+      'spent the night in a holding cell, and the desk sergeant already knew exactly whose kid it was',
+      'got pulled in with friends who somehow found the one precinct where somebody still remembers you',
+    ],
+    attendCost: 0,
+    sendCost: 800,
+    sendGesture: 'a lawyer, quietly, so the paperwork disappears without you ever showing your face',
+    // The director's own exact deltas: settling it personally clears less
+    // than an ordinary visit (-20, not the usual -33) and costs +3 heat;
+    // the lawyer nudges neglect +3 rather than the shared +2; letting him
+    // spend the night spikes neglect +12 rather than the shared ~8.75.
+    attendNeglectClear: 20,
+    attendHeat: 3,
+    sendNeglect: 3,
+    stayNeglect: 12,
   },
 ];
 

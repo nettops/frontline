@@ -61,7 +61,120 @@ Underboss/Consigliere) all landed and merged into `soprano-ue5-prototype`.
 had a blind round yet — see `docs/findings/director-log.md`'s newest entries
 for full detail per pass.
 
-`tsc` clean, `npm test` green (136 files, 1,581 passing), `npm run probe`
+**Update, 2026-09-16: household age/life-stage, milestone 4 of the
+family-conflict brief.** Built on branch `family-crossroads-a8cb9114`
+(off `soprano-ue5-prototype` @ 7671497, the tip after the `generatedStream`
+rng-isolation fix) in a separate worktree — not merged, for the developer to
+pull in. `LifeStageId`/`LIFE_STAGES`/`CHILD_START_AGES` (`config/personal.ts`)
+and `memberAge`/`memberLifeStage`/`daysUntilAdult` (`sim/personal.ts`) give
+`eldest`/`youngest` a fully-derived age and stage — no stored field, no
+`SAVE_VERSION` bump, same "reach for a derived read" discipline as
+`familyHorizon`. `homeRead().people` now names each member's age and stage
+("Carla, your eldest (15, Teenager)"), and a new `comingOfAge` field feeds a
+near-18th-birthday line on `PlayerPanel`.
+
+Two new pieces of content: `teen_trouble` folded into the existing
+`FAMILY_DILEMMAS`/`gen_family_dilemma` pipeline via a new optional `stages`
+field (gated to the teen stage; the four milestone 1-3 entries are
+untouched, `stages` undefined on all of them) — chosen over a separate
+shape because it is the same attend/send/stay structure as the other four
+occasions, just age-gated. `gen_family_crossroads` is its own `GEN_DEFS`
+entry, not folded into that pool, since a one-time three-way high-stakes
+choice at exactly one moment per household member (age >= 18, resolved
+exactly once via `state.flags['crossroads_resolved_<relationId>']`, keyed
+on the relation rather than the cosmetic name) is a different shape than a
+recurring dilemma. Its three choices: pay tuition ($4,500, real cash +
+neglect clear + a `recordCareerEvent` beat — no direct grant to
+`legitimacy()`, see below), bring them into the organization (free — the
+director's own figure — a `generateNpc` hire under the household member's
+own name + neglect clear + a grievance landed on one real active capo via
+`activeCapos`, silently skipped when there is none), or let them go (free,
+neglect rises, a bad career beat).
+
+**`legacy.ts`/`config/legacy.ts` were not touched.** The original brief for
+this milestone asked for the tuition option to grant Family Legitimacy
+directly; `legitimacy()` is a pure derived read (visible/quiet/unnamed/
+explainable, weighted) with no stored, writable field anywhere, and none of
+the four existing terms has an honest causal path from "paid for college"
+to a fixed point swing. Redesigning that formula to add a fifth term is a
+bigger call than this milestone should make unilaterally, so the grant was
+dropped and replaced with what the outcome actually is — the cash cost, the
+neglect clear, and the logged narrative beat.
+
+**Addendum, same day: reconciled against the real brief text**, which had
+been dropped from the original prompt and replaced with a placeholder the
+first time round. Three real figures differed and were corrected: `LIFE_STAGES`
+is now four bands (`child` 0-12, `teen` 13-17, `young_adult` 18-22, `adult`
+23-100, each with the director's own blurb) rather than my invented
+three-band guess; `CHILD_START_AGES` is `{ eldest: 14-16, youngest: 8-11 }`
+rather than my invented `9-17`/`2-11`; and the crossroads' "bring them in"
+option is free rather than the $1,500 I had invented for it (removed
+`GEN_EFFECT.crossroadsHireCost` entirely). `teen_trouble`'s body/gesture
+text was rewritten to the director's own "joyriding, a precinct sergeant who
+recognizes the name" scenario. Neglect/heat deltas for `teen_trouble` and
+the crossroads were left as originally built — the director's own
+reconciliation request scoped this pass to life-stage figures, dilemma
+text, and cash figures only. Re-ran `npm test` after: still 163/1,917, 0
+failures, `tsc` clean.
+
+**Addendum, same day, second pass: the deltas too.** The director followed up
+asking for the exact neglect/heat numbers rather than my originally-built
+ones, since there was no reason to deviate from figures given precisely.
+`FamilyDilemmaDef` (`config/personal.ts`) grew four optional per-occasion
+overrides — `attendNeglectClear`, `attendHeat`, `sendNeglect`, `stayNeglect`
+— defaulting to the shared `GEN_EFFECT.familyDilemma*` constants the four
+milestone 1-3 entries still use, set only on `teen_trouble`: attend/"settle
+it personally" now bypasses `goHome()` entirely (it is not a home visit —
+it sets `went_home_day` directly, the same flag `consultDoctor`/the panic
+episode's house-call use for "spent the evening, not at home") and clears
+neglect by exactly 20 while adding 3 heat (channel `'street'`); send/lawyer
+is +3 neglect ($800 unchanged); stay/let-him-spend-the-night is +12. The
+"-15 respect loss avoided" framing from the original brief text was never
+implemented — nothing in the shared `stay` branch applies a respect cost to
+override, and the director's own follow-up confirmed a plain neglect spike
+with no fake avoidance mechanic is correct.
+
+On the crossroads: option B ("bring them in") is now a **neglect spike of
++35**, not the clear I had originally built (renamed
+`GEN_EFFECT.crossroadsHireNeglectClear` -> `crossroadsHireNeglectSpike` and
+flipped the sign in `resolveGenerated`) — a spouse watching her son handed a
+place on the street instead of a degree is a rift, not a relief. Option C
+("let them go") is now a flat **+25** (`crossroadsEstrangedNeglect`,
+previously `HOME.perWeekAway * 3` = 10.5). Option A (tuition) was unchanged
+by this pass — the director's follow-up only named B and C.
+
+Three new dedicated `eventgen.test.ts` guards assert the exact `teen_trouble`
+deltas (attend -20/+3heat/spends-the-evening/no-cash, send +3/$800, stay
++12/free), and the existing crossroads tests were tightened from directional
+(`toBeLessThan`/`toBeGreaterThan`) to exact-value assertions for tuition
+(-20), bring_in (+35), and let_go (+25). All five changed-magnitude guards
+were proven the standard way — fault injected (wrong branch/wrong sign/wrong
+constant), watched red, restored — see this pass's own commit for the
+before/after evidence on each. Re-ran full suite after: **163 files, 1,920
+passing, 0 failing**, `tsc` clean.
+
+Gates: `npx tsc -b` 0 errors, `npm test` **163 files, 1,920 passing, 0
+failing** (up from this branch's own parent at 163/1,898 — 22 new tests).
+**`npm run probe` was not run** — tonight's `generatedStream` isolation
+means the new shapes cannot reshuffle anything outside the generated pool
+itself, but two more weight-2 entries in that pool (now ~19 shapes instead
+of 17) do dilute every other generated shape's own share of the daily draw
+by a small amount, which is exactly the kind of change the probe, not this
+disclosure, is the instrument for. Flagged rather than asserted clean —
+run it before merge if the developer wants the number rather than the
+argument. One test-fixture reseed, disclosed per
+DIRECTOR §5: `eventgen.test.ts`'s shared `world()` builder now forces a
+household member into the `eldest` relation and advances `state.day` by 18
+years so `gen_family_crossroads` has a subject to fire against in the
+"every shape can fire" and "resolves every choice" tests — every other
+fixture value in that builder is computed from `state.day` after the jump,
+so nothing else in it moved. A real bug was caught and fixed in the
+process: `daysUntilAdult`'s first draft nulled out only when the *base* age
+at day 1 was already 18 (never true for a tracked child), so it kept
+reporting "0 days until adult" forever after the birthday had already
+passed instead of falling silent — caught by a personal.test.ts guard
+before this ever reached the panel; fixed by checking the *current* day
+against the birthday instead.
 last run clean at 96/96 non-skipped (unrun since the diplomacy/refusal/
 tip/report/sitdown/contract-charge/rail-grouping/operations-focus/
 poverty-trap/succession-button fixes below — none of them touch balance,

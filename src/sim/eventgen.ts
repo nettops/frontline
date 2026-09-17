@@ -23,16 +23,17 @@
 
 import { Rng, clamp } from './rng';
 import type { EventDef } from './events';
-import type { GameState, Npc, PendingEvent, Territory } from './types';
+import type { GameState, HouseholdMember, Npc, PendingEvent, Territory } from './types';
 import { money, oneOf, payable } from './memo';
 import { addLog, seedFollowup } from './util';
-import { addNote, crewList } from './npc';
+import { addNote, crewList, generateNpc } from './npc';
 import { remember } from './memory';
 import { recordTie } from './ties';
 import { earnDirty, spend, totalFunds } from './economy';
 import { addHeat } from './heat';
 import { gainFear, gainRespect, trainAttribute } from './player';
 import { ownedBusinesses, weeklyRevenue } from './business';
+import { activeCapos } from './capoTension';
 import {
   addInfluence,
   adjustSentiment,
@@ -47,8 +48,8 @@ import { stewardOf } from './delegation';
 import { nicknameOf } from './nicknames';
 import { priced } from './market';
 import { readWhispers } from './whispers';
-import { bodySpentTonight, canGoHome, goHome, home, playerStress } from './personal';
-import { FAMILY_DILEMMAS, HOME, RELATIONS, STRESS } from '../config/personal';
+import { bodySpentTonight, canGoHome, goHome, home, memberAge, memberLifeStage, playerStress } from './personal';
+import { FAMILY_DILEMMAS, HOME, RELATIONS, STRESS, type FamilyDilemmaDef } from '../config/personal';
 import { CIVIC_FIGURES } from '../config/civic';
 import { GEN_EFFECT, GEN_SEVERITY_WEIGHT_MAX, GEN_SHAPES, GEN_WHEN } from '../config/eventgen';
 import { recordCareerEvent } from './career';
@@ -621,6 +622,22 @@ const homeOrBusiness: EventDef = {
  * not already spoken for tonight (`canGoHome`, the same body `goHome` itself
  * spends).
  */
+/**
+ * Whether an occasion in `FAMILY_DILEMMAS` fits this household member — the
+ * relation, and the life stage when the entry cares (`teen_trouble` is the
+ * only one that does; the milestone 1-3 entries carry no `stages` and match
+ * on relation alone). Shared by `applies` and `build` so which person
+ * matched cannot drift between the day the memo is raised and the day it is
+ * built — the same discipline `gen_family_crossroads`'s own resolved-flag
+ * lookup follows.
+ */
+function dilemmaFits(state: GameState, dilemma: FamilyDilemmaDef, p: HouseholdMember): boolean {
+  if (!dilemma.relationIds.includes(p.relationId)) return false;
+  if (!dilemma.stages) return true;
+  const age = memberAge(state, p.name, p.relationId);
+  return age !== null && dilemma.stages.includes(memberLifeStage(age).id);
+}
+
 const familyDilemma: EventDef = {
   id: 'gen_family_dilemma',
   ...shape('gen_family_dilemma'),
@@ -628,7 +645,7 @@ const familyDilemma: EventDef = {
     if (!canGoHome(state).ok) return null;
     const house = home(state);
     const matches = FAMILY_DILEMMAS.filter((d) =>
-      house.people.some((p) => d.relationIds.includes(p.relationId)),
+      house.people.some((p) => dilemmaFits(state, d, p)),
     );
     if (!matches.length) return null;
     return { atHome: true, familyDilemmaId: rng.pick(matches).id };
@@ -636,7 +653,7 @@ const familyDilemma: EventDef = {
   build(state, rng, ctx) {
     const dilemma = FAMILY_DILEMMAS.find((d) => d.id === ctx.familyDilemmaId)!;
     const house = home(state);
-    const who = house.people.find((p) => dilemma.relationIds.includes(p.relationId))!;
+    const who = house.people.find((p) => dilemmaFits(state, dilemma, p))!;
     const def = RELATIONS.find((r) => r.id === who.relationId);
     const relation = def ? def.label : 'somebody at home';
     const attendCash = priced(state, dilemma.attendCost);
@@ -723,6 +740,79 @@ const panicEpisode: EventDef = {
           id: 'sedatives',
           label: 'Prescription Sedatives',
           ...payable(state, sedativeCash, `clears less, dulls you for ${STRESS.sedatedDays} days, does not spend the night`),
+        },
+      ],
+    };
+  },
+};
+
+/**
+ * One household member's 18th birthday — the milestone 4 shape.
+ *
+ * The only shape whose eligibility is a flag rather than a cooldown: age is
+ * fully derived (`memberAge`) and only ever increases, so "eligible again in
+ * N days" would be false the moment the member turned 18 and stayed true
+ * forever after — this is a once-per-person event, not a recurring one.
+ * `state.flags[crossroads_resolved_<relationId>]` is what actually bounds
+ * it; `cooldownDays` on the shape only governs how often the shared daily
+ * draw bothers re-checking.
+ *
+ * Scans every household member rather than picking one at random off the
+ * causal `rng` — there are at most two who could ever match (`eldest`,
+ * `youngest`, the only relations `CHILD_START_AGES` tracks), and the first
+ * unresolved one found is the one raised, deterministically, same as any
+ * other `applies` that finds a single real subject rather than choosing
+ * among several.
+ */
+const familyCrossroads: EventDef = {
+  id: 'gen_family_crossroads',
+  ...shape('gen_family_crossroads'),
+  applies(state) {
+    const house = home(state);
+    for (const p of house.people) {
+      const age = memberAge(state, p.name, p.relationId);
+      if (age === null || age < 18) continue;
+      if (state.flags[`crossroads_resolved_${p.relationId}`]) continue;
+      return { atHome: true, crossroadsRelationId: p.relationId };
+    }
+    return null;
+  },
+  build(state, rng, ctx) {
+    const relationId = ctx.crossroadsRelationId!;
+    const house = home(state);
+    const who = house.people.find((p) => p.relationId === relationId)!;
+    const def = RELATIONS.find((r) => r.id === relationId);
+    const relation = def ? def.label : 'your child';
+    const tuitionCash = priced(state, GEN_EFFECT.crossroadsTuitionCost);
+    return {
+      defId: 'gen_family_crossroads',
+      title: `${who.name} is grown`,
+      body: oneOf(rng, [
+        `${who.name}, ${relation}, turned eighteen this year, and is not asking permission ` +
+          `for what comes next — just where you stand on it.`,
+        `Eighteen came and went without anybody deciding anything, and ${who.name}, ${relation}, ` +
+          `noticed that as much as you did.`,
+        `${who.name}, ${relation}, is grown now, and done waiting to be told what the plan is. ` +
+          `There has to be one.`,
+      ]),
+      severity: 'warning',
+      npcId: null,
+      data: { relationId },
+      choices: [
+        {
+          id: 'college',
+          label: 'Pay for college, and keep them out of it',
+          ...payable(state, tuitionCash, `${who.name} goes somewhere that has never heard your name`),
+        },
+        {
+          id: 'bring_in',
+          label: 'Bring them into the organization',
+          hint: `Free. ${who.name} is with you now, on the books like anybody else — some of your men will not like it.`,
+        },
+        {
+          id: 'let_go',
+          label: 'Let them go their own way',
+          hint: `Free. ${who.name} stops being somebody you can call on.`,
         },
       ],
     };
@@ -1180,6 +1270,7 @@ export const GEN_DEFS: EventDef[] = [
   homeOrBusiness,
   familyDilemma,
   panicEpisode,
+  familyCrossroads,
   stewardAsks,
   theNameStuck,
   oldOwner,
@@ -1498,6 +1589,26 @@ export function resolveGenerated(
           addLog(state, `The money was not there, so you did not go either.`, 'failure');
           return;
         }
+        if (dilemma.attendNeglectClear !== undefined) {
+          /*
+             `teen_trouble` alone: settling it with a precinct sergeant is
+             not a visit home, so it spends the same evening (`went_home_day`
+             — the flag `operations.ts` reads to refuse a same-day zero-crew
+             job, same resource `goHome`/`consultDoctor` spend) without going
+             through `goHome`'s own lastVisitDay/cold-reception machinery,
+             which is specific to an actual evening under the boss's own
+             roof. Clears less than the shared `familyDilemmaAttendExtraClear`
+             path (going to a police station is not a nice evening) and
+             draws real heat, per the director's own figures.
+          */
+          state.flags['went_home_day'] = state.day;
+          house.neglect = clamp(house.neglect - dilemma.attendNeglectClear, 0, 100);
+          if (dilemma.attendHeat) {
+            addHeat(state, dilemma.attendHeat, 'street', `settled ${name}'s trouble with the law personally`);
+          }
+          addLog(state, `You went down and settled it with the sergeant yourself. It cost you a favor and a little attention.`, 'crew');
+          return;
+        }
         goHome(state);
         // The occasion clears more than an ordinary evening. See
         // `GEN_EFFECT.familyDilemmaAttendExtraClear` for the 1.5x.
@@ -1511,13 +1622,21 @@ export function resolveGenerated(
           addLog(state, `You had nothing to send either, and ${name} noticed that too.`, 'failure');
           return;
         }
-        house.neglect = clamp(house.neglect + GEN_EFFECT.familyDilemmaSendNeglect, 0, 100);
+        house.neglect = clamp(
+          house.neglect + (dilemma.sendNeglect ?? GEN_EFFECT.familyDilemmaSendNeglect),
+          0,
+          100,
+        );
         addLog(state, `You sent ${dilemma.sendGesture}. ${name} noticed who was not holding it.`, 'crew');
         return;
       }
 
       // 'stay': free, and the most expensive answer in the room.
-      house.neglect = clamp(house.neglect + GEN_EFFECT.familyDilemmaStayNeglect, 0, 100);
+      house.neglect = clamp(
+        house.neglect + (dilemma.stayNeglect ?? GEN_EFFECT.familyDilemmaStayNeglect),
+        0,
+        100,
+      );
       recordCareerEvent(state, `Was not there for ${name}'s ${dilemma.occasion}.`, 'bad');
       addLog(state, `You did not go. Nobody said anything about it, which was worse.`, 'crew');
       return;
@@ -1558,6 +1677,78 @@ export function resolveGenerated(
       state.player.stress = clamp(playerStress(state) + GEN_EFFECT.panicPushThroughStressSpike, 0, STRESS.max);
       gainRespect(state, GEN_EFFECT.panicPushThroughRespect);
       addLog(state, `You gripped the edge of the desk until the gray cleared. The crew noticed the sweat on your collar.`, 'crew');
+      return;
+    }
+
+    case 'gen_family_crossroads': {
+      const relationId = String(event.data.relationId ?? '');
+      const house = home(state);
+      const who = house.people.find((p) => p.relationId === relationId);
+      const name = who?.name ?? 'they';
+      /*
+         Fires exactly once per household member, regardless of what the
+         shape's own `cooldownDays` says — keyed on `relationId`, the stable
+         identifier this whole system keys on, rather than `name`, which is
+         cosmetic flavor drawn from a shared pool and not guaranteed distinct
+         in the way that matters here. Set before the branches, same
+         discipline `gen_wants_a_word`'s per-person cooldown flag uses, so a
+         branch added later cannot forget it.
+      */
+      state.flags[`crossroads_resolved_${relationId}`] = state.day;
+
+      if (choiceId === 'college') {
+        if (!spend(state, priced(state, GEN_EFFECT.crossroadsTuitionCost), 'world')) {
+          addLog(state, `The tuition was not there, and ${name} noticed you could not manage it.`, 'failure');
+          return;
+        }
+        house.neglect = clamp(house.neglect - GEN_EFFECT.crossroadsTuitionNeglectClear, 0, 100);
+        recordCareerEvent(state, `Paid for ${name} to go somewhere the family name has never been said.`, 'good');
+        addLog(state, `You paid, and ${name} left for somewhere that has no idea who you are.`, 'crew');
+        return;
+      }
+
+      if (choiceId === 'bring_in') {
+        // Free -- the director's own figure. What this option actually
+        // costs is neglect and, when there is a capo to carry it, grievance;
+        // not cash.
+        //
+        // The one case allowed to create a real Npc -- the household layer's
+        // own header bans a second roster everywhere else, and this is the
+        // one true exception: the kid actually joins the organization.
+        const hire = generateNpc(state, rng, 'soldier');
+        hire.name = name;
+        hire.joinedDay = state.day;
+        state.npcs[hire.id] = hire;
+        addNote(hire, state.day, 'Brought in by family, not off the street.', 'neutral');
+        // A spike, not a clear -- a spouse watching her own son handed a
+        // place on the street instead of a diploma does not take it quietly.
+        house.neglect = clamp(house.neglect + GEN_EFFECT.crossroadsHireNeglectSpike, 0, 100);
+        // A real capo, if there is one to carry the grievance — silently
+        // skipped otherwise, same as `gen_bad_blood` finding nobody to pair.
+        const capos = activeCapos(state);
+        if (capos.length) {
+          const capo = rng.pick(capos);
+          capo.stats.grievance = clamp(
+            capo.stats.grievance + GEN_EFFECT.crossroadsHireCapoGrievance,
+            0,
+            100,
+          );
+          addNote(
+            capo,
+            state.day,
+            `Watched the boss put his own boy ahead of men who took bullets for this family.`,
+            'bad',
+          );
+        }
+        recordCareerEvent(state, `Brought ${name} into the organization.`, 'neutral');
+        addLog(state, `${name} is with you now. Some of the men noticed who did not have to ask first.`, 'crew');
+        return;
+      }
+
+      // 'let_go': free, and the house feels it more than either paid option.
+      house.neglect = clamp(house.neglect + GEN_EFFECT.crossroadsEstrangedNeglect, 0, 100);
+      recordCareerEvent(state, `Let ${name} go their own way, and did not call it a loss out loud.`, 'bad');
+      addLog(state, `${name} stopped asking. You do not think they will ask again.`, 'crew');
       return;
     }
 
