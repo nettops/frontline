@@ -38,6 +38,7 @@ import {
   canPayAllowance,
   canVisitConfidant,
   confidant,
+  consultCost,
   consultDoctor,
   familyHorizon,
   goHome,
@@ -49,8 +50,39 @@ import {
   stressTier,
   visitConfidant,
 } from '../../sim/personal';
-import { CONFIDANT, HOME, STRESS } from '../../config/personal';
+import { CONFIDANT, HOME } from '../../config/personal';
 import { NEPOTISM } from '../../config/succession';
+import {
+  currentDoctrine,
+  doctrineLockedUntil,
+  doctrineState,
+  relics,
+  setDoctrine,
+} from '../../sim/doctrine';
+import { DOCTRINE, DOCTRINES } from '../../config/doctrine';
+import type { DoctrineId } from '../../config/doctrine';
+import { activeCapos } from '../../sim/capoTension';
+import { hasHealthInsurance } from '../../sim/corporate';
+import { HEALTH_INSURANCE } from '../../config/corporate';
+import {
+  canRequestSuburbanFavour,
+  civiliansAreBeingQuestioned,
+  neighbour,
+  requestSuburbanFavour,
+} from '../../sim/suburbs';
+import { SUBURBAN_FAVOUR_BY_ID, SUBURBAN_NEIGHBOURS, SUBURBS } from '../../config/suburbs';
+import {
+  buyPetProject,
+  canBuyPetProject,
+  canSanitizePetProject,
+  canVisitPetProject,
+  petProjectDef,
+  petProjectState,
+  reliefScale,
+  sanitizePetProject,
+  visitPetProject,
+} from '../../sim/petProject';
+import { CONTAGION, PET_PROJECTS } from '../../config/petProject';
 import { priced } from '../../sim/market';
 import { ATTENTION } from '../../config/attention';
 import {
@@ -234,6 +266,316 @@ function Possessions() {
   );
 }
 
+/**
+ * What kind of thing this is, said out loud.
+ *
+ * The one choice in the game that is about the whole organization rather than
+ * about a week, so it gets its own panel and prints all four dials rather
+ * than a sentence about them — a boss deciding between his father's outfit
+ * and a holding company is comparing numbers that move every job, every
+ * front and every case he will ever have, and "harder to prove" is not a
+ * figure anybody can decide on.
+ *
+ * Undeclared is shown as the third state rather than hidden. Nothing about a
+ * career that has never declared one is neutral-by-default — it is a boss who
+ * has not answered, and the panel says so.
+ */
+function Doctrine() {
+  const state = useGame();
+  const held = doctrineState(state);
+  const now = currentDoctrine(state);
+  const locked = doctrineLockedUntil(state);
+  const relicCount = relics(state).length;
+
+  const declare = (id: DoctrineId) => mutate((g) => setDoctrine(g, id), false);
+  const dial = (v: number) => `${v.toFixed(2)}×`;
+
+  return (
+    <Panel title="What this is">
+      <KeyValue
+        label="Declared"
+        value={now ? now.name : 'Nothing, yet'}
+        tone={now ? 'brass' : undefined}
+      />
+      <p className="faint tiny" style={{ margin: '2px 14px 8px' }}>
+        {now
+          ? now.blurb
+          : 'You have not said what this is. Nothing is pushing either way, which is its own kind of answer to the men who are waiting for one.'}
+      </p>
+      <div className="table-wrap">
+        <table className="data">
+          <thead>
+            <tr>
+              <th>What it moves</th>
+              <th className="num">{DOCTRINES.traditional.name}</th>
+              <th className="num">{DOCTRINES.corporate.name}</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Attention a job draws</td>
+              <td className="num mono hot">{dial(DOCTRINES.traditional.federalHeat)}</td>
+              <td className="num mono good">{dial(DOCTRINES.corporate.federalHeat)}</td>
+            </tr>
+            <tr>
+              <td>What a front takes over the counter</td>
+              <td className="num mono hot">{dial(DOCTRINES.traditional.cleanYield)}</td>
+              <td className="num mono brass">{dial(DOCTRINES.corporate.cleanYield)}</td>
+            </tr>
+            <tr>
+              <td>How fast the street forgets to be frightened</td>
+              <td className="num mono good">{dial(DOCTRINES.traditional.fearDecay)}</td>
+              <td className="num mono hot">{dial(DOCTRINES.corporate.fearDecay)}</td>
+            </tr>
+            <tr>
+              <td>What you are worth on a job scored on fear</td>
+              <td className="num mono brass">+{DOCTRINES.traditional.intimidationBonus}</td>
+              <td className="num mono dim">+{DOCTRINES.corporate.intimidationBonus}</td>
+            </tr>
+            <tr>
+              <td>What the old men take from hearing it</td>
+              <td className="num mono good">
+                +{DOCTRINES.traditional.relicLoyalty} loyalty
+              </td>
+              <td className="num mono hot">
+                +{DOCTRINES.corporate.relicGrievance} grievance
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <p className="faint tiny" style={{ margin: '10px 0 8px' }}>
+        It lands once, at the table, on {relicCount}{' '}
+        {relicCount === 1 ? 'man who remembers' : 'men who remember'} the old way. After that it
+        stands for {DOCTRINE.switchCooldownDays} days, because an answer you can take back the
+        same afternoon is not an answer.
+      </p>
+      <div className="btn-row">
+        <button
+          className="btn small"
+          disabled={locked !== null || held?.current === 'traditional'}
+          title={DOCTRINES.traditional.blurb}
+          onClick={() => declare('traditional')}
+        >
+          Say it is {DOCTRINES.traditional.name}
+        </button>
+        <button
+          className="btn small"
+          disabled={locked !== null || held?.current === 'corporate'}
+          title={DOCTRINES.corporate.blurb}
+          onClick={() => declare('corporate')}
+        >
+          Say it is {DOCTRINES.corporate.name}
+        </button>
+      </div>
+      {locked !== null && (
+        <p className="faint tiny" style={{ margin: '6px 0 0' }}>
+          You said what this was {state.day - (held?.sinceDay ?? 0)} days ago and people arranged
+          their lives around it. Ask again in {locked - state.day}{' '}
+          {locked - state.day === 1 ? 'day' : 'days'}.
+        </p>
+      )}
+    </Panel>
+  );
+}
+
+/**
+ * The people either side of the driveway, and the bill that comes for them.
+ *
+ * Every favour on this panel is legal, cheap, and moves the same public
+ * standing a federal case already reads — so the immediate effect is
+ * genuinely good and the panel does not pretend otherwise. What it has to
+ * show beside that is the number that makes it a decision: how far into the
+ * life each civilian has been pulled, and whether anybody is out knocking on
+ * ordinary doors this week.
+ */
+function CulDeSac() {
+  const state = useGame();
+  const questioned = civiliansAreBeingQuestioned(state);
+
+  return (
+    <Panel title="The cul-de-sac">
+      <p className="dim" style={{ marginTop: 0 }}>
+        None of these people took an oath. All of them have children and a mortgage, and every
+        favour you do them puts one more of them on a list.
+      </p>
+      {questioned ? (
+        <p className="hot tiny" style={{ margin: '0 0 10px' }}>
+          Agents are on the street asking ordinary people ordinary questions. Anybody on this
+          block who owes you something can be asked about it, and one of them will fold.
+        </p>
+      ) : (
+        <p className="faint tiny" style={{ margin: '0 0 10px' }}>
+          Nobody is knocking on these doors. That lasts until heat passes {SUBURBS.panicHeatFloor}{' '}
+          or a case gets a van outside.
+        </p>
+      )}
+      {SUBURBAN_NEIGHBOURS.map((def) => {
+        const held = neighbour(state, def.id);
+        if (!held) return null;
+        return (
+          <div key={def.id} style={{ marginBottom: 14 }}>
+            <KeyValue
+              label={def.name}
+              value={
+                held.panicked
+                  ? 'Has already talked to them'
+                  : held.exposure === 0
+                    ? 'Owes you nothing'
+                    : `In ${Math.round(held.exposure)} deep`
+              }
+              tone={held.panicked ? 'hot' : held.exposure >= 40 ? 'hot' : undefined}
+            />
+            <p className="faint tiny" style={{ margin: '2px 14px 4px' }}>
+              {def.what}
+            </p>
+            {held.exposure > 0 && !held.panicked && (
+              <div style={{ margin: '0 14px 6px' }}>
+                <Bar value={held.exposure} max={SUBURBS.maxExposure} tone="hot" />
+                <p className="faint tiny" style={{ margin: '3px 0 0' }}>
+                  About{' '}
+                  {(held.exposure * SUBURBS.panicChancePerExposure * 100).toFixed(2)}% a week that
+                  he folds, while they are asking. He folds once, and then he is spent.
+                </p>
+              </div>
+            )}
+            <div className="btn-row">
+              {def.favours.map((favourId) => {
+                const fav = SUBURBAN_FAVOUR_BY_ID[favourId];
+                const can = canRequestSuburbanFavour(state, def.id, favourId);
+                return (
+                  <div key={favourId}>
+                    <button
+                      className="btn small"
+                      disabled={!can.ok}
+                      title={fav.blurb}
+                      onClick={() => mutate((g) => requestSuburbanFavour(g, def.id, favourId), true)}
+                    >
+                      {fav.name} ({formatMoney(priced(state, fav.cost))})
+                    </button>
+                    {!can.ok && <div className="tiny faint">{can.reason}</div>}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })}
+    </Panel>
+  );
+}
+
+/**
+ * The one thing the boss owns that is not supposed to earn.
+ *
+ * Bought with clean money, pays nothing back, and the only number on it is
+ * how much of the life has found its way in. Both answers to that number are
+ * bad, so both buttons are on the panel at once and each says what it costs —
+ * leaving it rots the peace the place was bought for, and sweeping it tells
+ * every capo he is not good enough for where the boss goes.
+ */
+function Sanctuary() {
+  const state = useGame();
+  const held = petProjectState(state);
+  const def = petProjectDef(state);
+  const visiting = canVisitPetProject(state);
+  const sweeping = canSanitizePetProject(state);
+
+  if (!def) {
+    return (
+      <Panel title="Somewhere that is not this">
+        <p className="dim" style={{ marginTop: 0 }}>
+          A place with your name on it that never launders a dollar, never pays a wage and never
+          appears in anybody's file. It is the only thing you can buy that does nothing.
+        </p>
+        {PET_PROJECTS.map((p) => {
+          const can = canBuyPetProject(state, p.id);
+          return (
+            <div key={p.id} style={{ marginBottom: 10 }}>
+              <KeyValue label={p.name} value={formatMoney(p.cost)} tone="brass" />
+              <p className="faint tiny" style={{ margin: '2px 14px 4px' }}>
+                {p.blurb} Worth about {p.weeklyStressRelief} off the weight, every quiet week.
+              </p>
+              <button
+                className="btn small"
+                disabled={!can.ok}
+                title="Clean money only. A place like this is not bought out of a bag."
+                onClick={() => mutate((g) => buyPetProject(g, p.id), true)}
+              >
+                Buy {p.name}
+              </button>
+              {!can.ok && (
+                <div className="tiny faint" style={{ marginTop: 4 }}>
+                  {can.message}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </Panel>
+    );
+  }
+
+  const scale = reliefScale(held.contagion);
+  const raided = held.contagion >= CONTAGION.raidThreshold;
+
+  return (
+    <Panel title={def.name}>
+      <p className="faint tiny" style={{ marginTop: 0 }}>
+        {def.blurb}
+      </p>
+      <KeyValue
+        label="They have found it"
+        value={`${Math.round(held.contagion)} of 100`}
+        tone={raided ? 'hot' : held.contagion > 40 ? 'hot' : undefined}
+      />
+      <div style={{ margin: '4px 14px 6px' }}>
+        <Bar value={held.contagion} max={100} tone="hot" />
+      </div>
+      <p className={raided ? 'hot tiny' : 'faint tiny'} style={{ margin: '0 14px 8px' }}>
+        {raided
+          ? `Past ${CONTAGION.raidThreshold} the place is worth raiding, and about ${Math.round(CONTAGION.raidChance * 100)}% of weeks it is. There are pallets in the back that are not yours.`
+          : `Your own people drift in at about ${(CONTAGION.baseWeeklyDrift + activeCapos(state).length * CONTAGION.driftPerCapo).toFixed(1)} a week. Past ${CONTAGION.raidThreshold} the police have a reason to take the doors off.`}
+      </p>
+      <KeyValue
+        label="What a quiet week there is still worth"
+        value={`${(def.weeklyStressRelief * scale).toFixed(1)} of ${def.weeklyStressRelief}`}
+        tone={scale < 0.5 ? 'hot' : 'good'}
+      />
+      <div className="btn-row" style={{ marginTop: 8 }}>
+        <button
+          className="btn small"
+          disabled={!visiting.ok}
+          title="An evening there. It spends the night, the same as going home does."
+          onClick={() => mutate((g) => visitPetProject(g), true)}
+        >
+          Spend the evening there (−{Math.round(CONTAGION.visitStressRelief * scale)})
+        </button>
+        <button
+          className="btn small danger"
+          disabled={!sweeping.ok}
+          title="Tell your own captains they are not welcome. Every one of them hears about it by Saturday."
+          onClick={() => mutate((g) => sanitizePetProject(g), true)}
+        >
+          Clear them out (−{CONTAGION.sanitizeInfluenceCost} respect)
+        </button>
+      </div>
+      {[
+        ...new Set(
+          [visiting, sweeping]
+            .filter((r) => !r.ok)
+            .map((r) => r.message)
+            .filter(Boolean),
+        ),
+      ].map((why) => (
+        <p key={why} className="faint tiny" style={{ margin: '6px 0 0' }}>
+          {why}
+        </p>
+      ))}
+    </Panel>
+  );
+}
+
 export default function PlayerPanel() {
   const state = useGame();
   const { player, org } = state;
@@ -250,13 +592,16 @@ export default function PlayerPanel() {
   const stressNowTier = stressTier(stressNow);
   const pressure = stressPressure(state);
   const consulting = canConsult(state);
-  const consultCash = priced(state, STRESS.consultCost);
+  // Not `STRESS.consultCost` directly: a covered boss sees a cardiologist and
+  // is billed for one. See `consultCost` in sim/personal.ts.
+  const consultCash = priced(state, consultCost(state));
   const her = confidant(state);
   const visiting = canVisitConfidant(state);
   const allowance = canPayAllowance(state);
   const visitCash = priced(state, CONFIDANT.visitCost);
   const allowanceCash = priced(state, CONFIDANT.allowanceCost);
   const standing = publicStandingRead(state);
+  const covered = hasHealthInsurance(state);
   const pressureParts = [
     pressure.wars > 0 && `Wars: +${pressure.wars.toFixed(1)}`,
     pressure.heat > 0 && `Heat: +${pressure.heat.toFixed(1)}`,
@@ -488,6 +833,27 @@ export default function PlayerPanel() {
               The doctor is the only way down now.
             </p>
           )}
+          {/*
+             Who is paying for the hour, directly above the button that bills
+             for it.
+
+             `consultCash` already reads the covered price, so an insured boss
+             was quietly being charged a different number with nothing on the
+             screen saying why — a figure that moved for a reason no panel
+             could name, which is rule 3. It also answers the `aging` line
+             directly above: the weariness a covered boss reads is zero, and
+             that is not the meter being broken.
+          */}
+          {covered && (
+            <p className="tiny" style={{ margin: '0 14px 6px' }}>
+              <span className="brass">Carried on somebody else's plan.</span>{' '}
+              <span className="faint">
+                A union local or your own payroll covers the card. It takes{' '}
+                {HEALTH_INSURANCE.wearinessRelief.toFixed(1)} a week off the weariness and buys a
+                cardiologist rather than an unmarked office.
+              </span>
+            </p>
+          )}
           <button
             className="btn small"
             style={{ marginTop: 2, marginBottom: 10 }}
@@ -654,6 +1020,13 @@ export default function PlayerPanel() {
       </div>
 
       <Possessions />
+
+      <Doctrine />
+
+      <div className="grid-2">
+        <CulDeSac />
+        <Sanctuary />
+      </div>
 
       <Panel title="What you are made of">
         {/*

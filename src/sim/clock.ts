@@ -27,7 +27,8 @@ import { tickTerritory } from './territory';
 import { tickAnnouncements } from './announce';
 import { tickDelegation } from './delegation';
 import { tickCapoPitches } from './capoPitches';
-import { checkCapoPowerImbalance } from './capoTension';
+import { tickWeeklyTribute } from './tribute';
+import { checkCapoPowerImbalance, checkGenerationalFracture } from './capoTension';
 import { checkCapoFavoritism } from './capoFavoritism';
 import { tickPromises } from './promises';
 import { markStanding } from './standing';
@@ -45,6 +46,10 @@ import { ageCapos, tickCapos } from './capos';
 import { tickPerception } from './perception';
 import { tickCivic } from './civic';
 import { tickConfidant, tickHome, tickStress } from './personal';
+import { tickSuburban } from './suburbs';
+import { tickPetProject } from './petProject';
+import { checkDementiaOnset, tickDementia } from './dementia';
+import { tickFlorida } from './florida';
 import { tickCards } from './cards';
 import { tickWhispers } from './whispers';
 import { tickEvents } from './events';
@@ -177,6 +182,13 @@ export function advanceDay(state: GameState): void {
   tickStakes(state);
   tickStanding(state);
   tickHoldings(state);
+  // 4b. What the capos bring up, once a week.
+  //
+  //     Here rather than beside the other capo systems at 6 because this is
+  //     income: it has to land before the book is ruled off at 5d or a whole
+  //     week of envelopes shows up as `unaccounted`. Weekly on its own clock
+  //     — see `tickWeeklyTribute`, which returns on every other day.
+  tickWeeklyTribute(state, rng);
   // 5. Availability timers, familiarity, and the calendar turning over.
   tickNpcs(state);
   // 5a. Once a year: decline, retirement, and the deaths that are nobody's
@@ -184,6 +196,13 @@ export function advanceDay(state: GameState): void {
   //     every crisis in a long game used to have to be caused by the player
   //     or by an agency.
   tickAging(state, rng, agingHooks(state));
+  // 5a1. And the one thing decline can do that retirement and death cannot:
+  //      leave a man in place who knows everything and can no longer be
+  //      trusted with it. Immediately after `tickAging` so both run off the
+  //      same freshly-incremented ages, and after it rather than before so a
+  //      man who died this morning is not diagnosed this afternoon. Draws
+  //      nothing unless somebody at the table is actually over sixty.
+  checkDementiaOnset(state, rng);
   // 5b. Anything you said you would do, checked against what you did. Before
   //     the weekly drift, so a man who was let down this morning is aggrieved
   //     when the drift asks him how he feels about you this afternoon.
@@ -214,6 +233,12 @@ export function advanceDay(state: GameState): void {
   //     standing gap lands as tension on the weaker man's own tie. Consumes
   //     no rng: a standing gap is a deterministic fact, not a roll.
   checkCapoPowerImbalance(state);
+  // 6c1. And whether the men at that table are even in the same business any
+  //      more. Same weekly pass, same cooldown, same tie sheet — the third
+  //      cause after power and ground, and the first that is about who the
+  //      men are rather than what they have built. Consumes no rng either: a
+  //      man's age, rank and traits either put him on one side of it or not.
+  checkGenerationalFracture(state);
   // 6d. Whether one capo's pitches have genuinely been getting the nod far
   //     more than another's this week — the ignored man carries it against
   //     the boss. Also consumes no rng: a share either clears the gap or it
@@ -256,6 +281,46 @@ export function advanceDay(state: GameState): void {
   //       `tickInvestigations` (7d) reads the discretion this moves — so a
   //       week's fresh decay feeds the same week's wiretap, not last week's.
   tickConfidant(state);
+  // 7a2c. The one place that is not work, and what the crew has done to it.
+  //
+  //       Before `tickStress` would be wrong and after it is right: the relief
+  //       this hands back is the week that just happened, and running it here
+  //       means a boss who owns somewhere quiet reads the benefit on the same
+  //       weekly close that charged him for the wars. Its raid draws from the
+  //       causal stream, so it sits with the other outcomes rather than with
+  //       the readings.
+  tickPetProject(state, rng);
+  // 7a2d. And the people on either side, who are not in the life and have
+  //       never been asked to be.
+  //
+  //       Before `tickInvestigations` (7d) on purpose, for the same reason
+  //       `tickConfidant` is: a neighbour who folded this week should feed
+  //       this week's file rather than next week's. Reads `activeCases` and
+  //       writes to one of them; nothing upstream depends on it.
+  tickSuburban(state, rng);
+  // 7a2e. And the old man in the coffee shop.
+  //
+  //       Before `tickInvestigations` (7d) for the same reason `tickConfidant`
+  //       and `tickSuburban` are: something said out loud this week should
+  //       feed this week's file. Returns before any draw when nobody on the
+  //       roster is failing, so a career with a young table is bit-identical
+  //       to one written before this existed.
+  tickDementia(state, rng);
+  // 7a2f. And the account nobody is supposed to know about.
+  //
+  //       Weekly. Before `tickDeposition` (9b) on purpose and by a long way:
+  //       the grievance this puts on the capos is what feeds `disaffected()`,
+  //       so a week that pushed somebody over the bar should be the week the
+  //       coup roll reads it rather than the week after. Returns before
+  //       touching anything at all until a boss has actually opened the
+  //       account, so a career that never siphons is bit-identical to one
+  //       written before this existed.
+  tickFlorida(state, rng);
+  if (state.gameOver) {
+    // A mutiny is the one thing in this block that can end the run mid-tick.
+    if (careerBefore) recordCareerMilestones(state, careerBefore);
+    return;
+  }
   // 7a3. And the room slowly stops watching your hands.
   //
   //      Decay only — sitting down is a player action, never a tick. Touches

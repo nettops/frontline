@@ -45,6 +45,109 @@ import {
   takePartner,
 } from '../../sim/partner';
 import { houseName } from '../../sim/houses';
+import {
+  canRetireToFlorida,
+  floridaState,
+  retireToFlorida,
+  siphonToFlorida,
+} from '../../sim/florida';
+import { FLORIDA } from '../../config/florida';
+
+/** What a single move puts aside. One figure, two buttons, so the two pools read alike. */
+const SIPHON_STEP = 10_000;
+
+/**
+ * The account the organization cannot follow.
+ *
+ * Everything else on this page is money for spending on the family. This is
+ * the opposite — it leaves the wallet, leaves what rank counts, and never
+ * comes back — so it gets its own panel rather than a row beside Holdings,
+ * which is the reversible version of the same idea and would be read as one.
+ *
+ * Both meters are printed because the trap only exists if the player can see
+ * both halves of it: the nest egg is what the plan is worth, and suspicion is
+ * what the plan costs, and the second one is paid to the exact people whose
+ * grievance already decides whether there is a coup this week.
+ */
+function Florida() {
+  const state = useGame();
+  const fl = floridaState(state);
+  const leaving = canRetireToFlorida(state);
+  const over = fl.suspicion >= FLORIDA.coupRiskSuspicionThreshold;
+
+  return (
+    <Panel title="Down there">
+      <KeyValue
+        label="Put somewhere else"
+        value={`${formatMoney(fl.nestEgg)} of ${formatMoney(FLORIDA.targetNestEgg)}`}
+        tone="brass"
+      />
+      <div style={{ margin: '4px 14px 8px' }}>
+        <Bar value={fl.nestEgg} max={FLORIDA.targetNestEgg} />
+      </div>
+      <KeyValue
+        label="What the room has worked out"
+        value={`${Math.round(fl.suspicion)} of 100`}
+        tone={over ? 'hot' : undefined}
+      />
+      <div style={{ margin: '4px 14px 8px' }}>
+        <Bar value={fl.suspicion} max={100} tone="hot" />
+      </div>
+      <p className={over ? 'hot tiny' : 'faint tiny'} style={{ margin: '0 14px 10px' }}>
+        {fl.suspicion >= FLORIDA.mutinyThreshold
+          ? 'They have stopped waiting for a reason. The next thing that happens at that table happens to you.'
+          : over
+            ? `Past ${FLORIDA.coupRiskSuspicionThreshold} they have worked out what the light weeks are about. A coup is twice as likely every week, and every week over the bar puts ${FLORIDA.grievancePerWeekOverThreshold} more grievance on every capo you have. At ${FLORIDA.mutinyThreshold} they stop waiting.`
+            : `A coup gets twice as likely past ${FLORIDA.coupRiskSuspicionThreshold}, and past ${FLORIDA.mutinyThreshold} they do not wait for the roll. It comes down about ${FLORIDA.suspicionDecayWeekly} a quiet week.`}
+      </p>
+      <p className="faint tiny" style={{ margin: '0 0 8px' }}>
+        Money that goes down there stops being the family's and stops being yours to spend. It
+        does not count toward what you are worth and there is no way to bring it back.
+      </p>
+      <div className="btn-row">
+        <button
+          className="btn small"
+          disabled={state.org.cash < SIPHON_STEP}
+          title="Clean money. An account like that does not take the other kind without somebody asking."
+          onClick={() => mutate((s) => siphonToFlorida(s, SIPHON_STEP, true), true)}
+        >
+          Move {formatMoney(SIPHON_STEP)} clean
+        </button>
+        <button
+          className="btn small danger"
+          disabled={totalFunds(state) < SIPHON_STEP}
+          title="Out of the pile. It is the cheap way and it leaves the loudest hole."
+          onClick={() => mutate((s) => siphonToFlorida(s, SIPHON_STEP, false), true)}
+        >
+          Move {formatMoney(SIPHON_STEP)} out of the pile
+        </button>
+        <button
+          className="btn small primary"
+          disabled={!leaving.ok}
+          title="A Tuesday, and a flight, and nobody told."
+          onClick={() => mutate((s) => retireToFlorida(s), true)}
+        >
+          Go
+        </button>
+      </div>
+      <p className={leaving.ok ? 'brass tiny' : 'faint tiny'} style={{ margin: '8px 0 0' }}>
+        {leaving.message}
+      </p>
+      {state.org.cash < SIPHON_STEP && totalFunds(state) >= SIPHON_STEP && (
+        <p className="faint tiny" style={{ margin: '4px 0 0' }}>
+          You hold {formatMoney(state.org.cash)} clean, which is not {formatMoney(SIPHON_STEP)}.
+          The pile will cover it and the pile is the loud way.
+        </p>
+      )}
+      {totalFunds(state) < SIPHON_STEP && (
+        <p className="faint tiny" style={{ margin: '4px 0 0' }}>
+          Moving {formatMoney(SIPHON_STEP)} takes {formatMoney(SIPHON_STEP)}, and you have{' '}
+          {formatMoney(totalFunds(state))} in the place.
+        </p>
+      )}
+    </Panel>
+  );
+}
 
 /**
  * Money you have decided not to be able to spend.
@@ -278,6 +381,7 @@ export default function FinancesPanel() {
 
       <TheCycle />
       <Credit />
+      <Florida />
 
       <Panel
         title="Operation results"

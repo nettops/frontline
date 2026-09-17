@@ -222,6 +222,16 @@ function world(seed = 88): GameState {
   }
   state.org.fear = 70;
 
+  /*
+     Phase 4: `gen_ancestral_ghost` needs a boss who has said out loud what
+     this organization is — that declaration is the shape's whole subject, the
+     same way stress is `gen_panic_episode`'s. Written straight onto the field
+     rather than through `setDoctrine`, for the same reason the steward and the
+     nickname above are: `setDoctrine` also moves every relic's loyalty, and
+     this fixture's other shapes read the crew's stats.
+  */
+  state.doctrine = { current: 'traditional', sinceDay: state.day - 30 };
+
   // And a file with something in it.
   state.law.investigations['case_test'] = {
     id: 'case_test',

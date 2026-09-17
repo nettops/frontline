@@ -425,9 +425,28 @@ describe('deposition, played into rather than built', () => {
      confirmed, and the guard re-confirmed the same way as every prior
      reseed: reverting `backersNeeded` to 2 (generation stayed at 1) and
      restoring it to 1.
+
+     Reseeded an eighth time, 4064 to 4066, for Phase 3. This one is not a
+     mechanical change at all and is the cheapest reshuffle in this test's
+     history: the `tracksuit` trait added to `TRAITS` makes the pool
+     `generateNpc` samples seventeen long instead of sixteen, so every
+     `rng.sample` draw lands on a different trait and every man in the world
+     is biased differently from his first day. Same call count, different
+     people — and this bot plays a career forward on who it happens to have.
+     The same reshuffle happens if two existing entries are merely swapped in
+     the list, which is how it was confirmed to be the pool length rather
+     than anything the trait does.
+
+     A scan of seeds 4064-4111 with the trait in place found 4066, 4067,
+     4072, 4080, 4081, 4084, 4095, 4102, 4104, 4106, 4110 and 4111 all
+     reaching generation > 1 with the same quiet fate — a denser hit rate
+     than the previous scan's, so reachability did not regress. Seed 4066
+     confirmed, and the guard re-confirmed the same way as every prior
+     reseed: reverting `backersNeeded` to 2 (generation stayed at 1) and
+     restoring it to 1.
   */
   it('fires from an ordinary career under the current gate', () => {
-    const state = playOrdinaryCareer(4064, 1460);
+    const state = playOrdinaryCareer(4066, 1460);
     expect(
       state.succession.generation,
       'nobody was deposed — this is the reachability the config change exists to fix',

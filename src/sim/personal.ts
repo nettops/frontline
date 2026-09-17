@@ -43,6 +43,8 @@ import { canAfford, spend } from './economy';
 import { priced } from './market';
 import { activeCases } from './investigation';
 import { recordCareerEvent } from './career';
+import { hasHealthInsurance, wearinessRelief } from './corporate';
+import { HEALTH_INSURANCE } from '../config/corporate';
 import type { ConfidantState, GameState, Home, HouseholdMember } from './types';
 
 /** The worst tier's own bar — read rather than retyped, so a cold-reception
@@ -494,7 +496,19 @@ export function stressPressure(state: GameState): StressPressure {
   const heat = state.org.heat >= 50 ? STRESS.highHeat : 0;
   const domestic = home(state).neglect >= 50 ? STRESS.domesticStrain : 0;
   const payroll = (state.org.wagesOwed ?? 0) > 0 ? STRESS.wageArrears : 0;
-  const aging = isAging(state) ? NEPOTISM.agingWearinessStress : 0;
+  /*
+     The calendar's weekly withdrawal, less whatever somebody else is paying
+     for.
+
+     `wearinessRelief` is a subtraction rather than a branch on purpose — see
+     `HEALTH_INSURANCE.wearinessRelief`, which is set equal to the weariness
+     so an insured boss reads exactly zero here and the two constants cannot
+     drift apart without somebody deciding they should. Floored at zero: a
+     plan stops the body giving out, it does not make a man younger.
+  */
+  const aging = isAging(state)
+    ? Math.max(0, NEPOTISM.agingWearinessStress - wearinessRelief(state))
+    : 0;
   /*
      Recovery is the calendar's to withdraw.
 
@@ -580,8 +594,22 @@ export function stressLeadershipMultiplier(state: GameState): number {
  * being worth less so soon after the last one, which has nothing to say
  * about a doctor's office.
  */
+/**
+ * What an hour on the chest costs tonight.
+ *
+ * A covered boss sees a cardiologist rather than a man in an unmarked office,
+ * and pays more for it. That is not a penalty: the scarce resource here is
+ * the evening, not the money — `consultCooldownDays` is the same seven either
+ * way — so more cleared per night is strictly the better deal for anybody who
+ * can reach it, and reaching it is the whole point of building something
+ * legitimate.
+ */
+export function consultCost(state: GameState): number {
+  return hasHealthInsurance(state) ? HEALTH_INSURANCE.cardiologistCost : STRESS.consultCost;
+}
+
 export function canConsult(state: GameState): { ok: boolean; reason?: string } {
-  const cost = priced(state, STRESS.consultCost);
+  const cost = priced(state, consultCost(state));
   if (!canAfford(state, cost)) {
     return { ok: false, reason: `A discreet doctor runs ${Math.round(cost).toLocaleString('en-US')}, and you do not have it.` };
   }
@@ -609,13 +637,19 @@ export function canConsult(state: GameState): { ok: boolean; reason?: string } {
  */
 export function consultDoctor(state: GameState): void {
   if (!canConsult(state).ok) return;
-  if (!spend(state, priced(state, STRESS.consultCost), 'world')) return;
-  state.player.stress = clamp(playerStress(state) - STRESS.consultRecovery, 0, STRESS.max);
+  if (!spend(state, priced(state, consultCost(state)), 'world')) return;
+  // See `HEALTH_INSURANCE.cardiologistRecoveryBonus`: more of the hour goes on
+  // the heart when it is not also going on not being seen.
+  const covered = hasHealthInsurance(state);
+  const cleared = STRESS.consultRecovery + (covered ? HEALTH_INSURANCE.cardiologistRecoveryBonus : 0);
+  state.player.stress = clamp(playerStress(state) - cleared, 0, STRESS.max);
   state.flags['went_home_day'] = state.day;
   state.flags['last_consult_day'] = state.day;
   addLog(
     state,
-    'An hour in an unmarked office on 72nd Street. Nobody in the crew knows you were there. The air came back into your chest.',
+    covered
+      ? 'A cardiologist in a building with a lobby, billed to a local you have never set foot in. He put you on a machine for an hour and told you what you already knew.'
+      : 'An hour in an unmarked office on 72nd Street. Nobody in the crew knows you were there. The air came back into your chest.',
     'crew',
   );
   /*

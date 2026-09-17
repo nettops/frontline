@@ -77,6 +77,8 @@ import { GEN_EFFECT, GEN_SEVERITY_WEIGHT_MAX, GEN_SHAPES, GEN_WHEN } from '../co
 import { recordCareerEvent } from './career';
 import { ROLE_LABEL } from '../config/economy';
 import { MEMORIES } from '../config/memories';
+import { ANCESTRAL_GHOST, ANCESTRAL_GHOSTS } from '../config/doctrine';
+import { relics } from './doctrine';
 
 /** Whether a memo came out of here rather than out of the authored table. */
 export function isGenerated(defId: string): boolean {
@@ -1438,6 +1440,71 @@ const socialGathering: EventDef = {
   },
 };
 
+/**
+ * Somebody your father owed, standing in your social club.
+ *
+ * The only shape in the catalogue whose subject is nobody in the game. These
+ * men are not crew, not a faction and not a civic figure — they are a debt
+ * from thirty years ago attached to a person who is dead, and the only reason
+ * they are here is that you took his chair.
+ *
+ * Gated on the doctrine having been declared, which does two things at once:
+ * it is the design (the past turns up once you have said out loud what you
+ * are going to do with it), and it is what makes a twenty-first generated
+ * shape free — this `applies` returns null before touching the stream for
+ * every career that has never declared, so those careers never put it in the
+ * day's pool and their draws are unchanged.
+ *
+ * Once per ghost per career. `state.flags` carries that rather than the
+ * shape's `cooldownDays`, the same way `gen_family_crossroads` does it and
+ * for the same reason: a settled debt is settled, not on a timer.
+ */
+const ancestralGhost: EventDef = {
+  id: 'gen_ancestral_ghost',
+  ...shape('gen_ancestral_ghost'),
+  applies(state, rng) {
+    if (!state.doctrine) return null;
+    const unsettled = ANCESTRAL_GHOSTS.filter((g) => !state.flags[`ghost_${g.id}`]);
+    if (unsettled.length === 0) return null;
+    return { ancestralGhostId: rng.pick(unsettled).id };
+  },
+  build(state, rng, ctx) {
+    const ghost = ANCESTRAL_GHOSTS.find((g) => g.id === ctx.ancestralGhostId)!;
+    const ask = priced(state, ghost.settlement);
+    return {
+      defId: 'gen_ancestral_ghost',
+      title: "Somebody Your Father Knew",
+      body: oneOf(rng, [
+        `He waited outside until somebody went and got you. He is ${ghost.who}, and what ` +
+          `he is here about is ${ghost.claim}. He has no paper. He did not expect to need any.`,
+        `There is a man sitting in the back who has been there two hours. He is ${ghost.who}. ` +
+          `What he wants is ${ghost.claim}, and he is not asking you, exactly — he is ` +
+          `telling you what was agreed.`,
+        `Nobody could say who let him in. He is ${ghost.who}, and the thing he came about ` +
+          `is ${ghost.claim}. He said your father's name twice and yours not at all.`,
+      ]),
+      severity: 'warning',
+      npcId: null,
+      // Carried on the memo rather than re-picked in the resolver: a second
+      // draw would answer a different man's question from the one the player
+      // was shown.
+      data: { ghostId: ghost.id },
+      choices: [
+        {
+          id: 'settle',
+          label: 'Settle it',
+          ...payable(state, ask, 'and the last person alive who was owed it stops being owed it'),
+        },
+        {
+          id: 'refuse',
+          label: 'Tell him it died with your father',
+          hint: 'Free, and the older men at your own table will hear how it was said.',
+        },
+      ],
+    };
+  },
+};
+
 export const GEN_DEFS: EventDef[] = [
   wantsAWord,
   badBlood,
@@ -1459,6 +1526,7 @@ export const GEN_DEFS: EventDef[] = [
   oldOwner,
   theyAreFrightened,
   socialGathering,
+  ancestralGhost,
 ];
 
 // ------------------------------------------------------------- resolution ---
@@ -1933,6 +2001,44 @@ export function resolveGenerated(
       house.neglect = clamp(house.neglect + GEN_EFFECT.crossroadsEstrangedNeglect, 0, 100);
       recordCareerEvent(state, `Let ${name} go their own way, and did not call it a loss out loud.`, 'bad');
       addLog(state, `${name} stopped asking. You do not think they will ask again.`, 'crew');
+      return;
+    }
+
+    case 'gen_ancestral_ghost': {
+      const ghost = ANCESTRAL_GHOSTS.find((g) => g.id === String(event.data.ghostId ?? ''));
+      if (!ghost) return;
+      /*
+         Set before the branches, the same discipline the crossroads and the
+         fallout above follow: whichever way it went, this man has been
+         answered and does not come back. A branch added later cannot forget
+         it, which is exactly how `gen_wants_a_word` became a subscription.
+      */
+      state.flags[`ghost_${ghost.id}`] = state.day;
+
+      if (choiceId === 'settle') {
+        if (!spend(state, priced(state, ghost.settlement), 'world')) {
+          addLog(state, 'You did not have it, and he could see that you did not have it.', 'failure');
+          return;
+        }
+        gainRespect(state, ANCESTRAL_GHOST.settleRespect);
+        for (const npc of relics(state)) {
+          npc.stats.loyalty = clamp(npc.stats.loyalty + ANCESTRAL_GHOST.settleRelicLoyalty, 0, 100);
+          addNote(npc, state.day, "Heard you paid one of your father's debts.", 'good');
+        }
+        recordCareerEvent(state, `Settled an old debt of your father's.`, 'good');
+        addLog(state, 'He counted it in the car. Word of that was around the neighbourhood by Friday.', 'money');
+        return;
+      }
+
+      // 'refuse': free, and the older men at your own table hear how it was said.
+      gainRespect(state, ANCESTRAL_GHOST.refuseRespect);
+      gainFear(state, ANCESTRAL_GHOST.refuseFear);
+      for (const npc of relics(state)) {
+        npc.stats.grievance = clamp(npc.stats.grievance + ANCESTRAL_GHOST.refuseRelicGrievance, 0, 100);
+        addNote(npc, state.day, "Heard you sent one of your father's people away.", 'bad');
+      }
+      recordCareerEvent(state, `Sent away somebody your father owed.`, 'bad');
+      addLog(state, 'He did not argue. He put his hat on and went, and that was worse.', 'crew');
       return;
     }
 

@@ -115,6 +115,9 @@ import { rivals } from './faction';
 import { FAMILIARITY_PER_OPERATION, BEHAVIOUR } from '../config/npcs';
 import { DIFFICULTY_BY_ID } from '../config/difficulty';
 import { rankNow } from './rank';
+import { TRIBUTE } from '../config/tribute';
+import { insulateCommand } from './tribute';
+import { doctrineAttributeBonus, doctrineFederalHeat } from './doctrine';
 
 /**
  * Everything a job's unlock condition is allowed to know about.
@@ -323,13 +326,27 @@ export function heatScale(
     0,
   );
   const territory = territoryId ? state.territories[territoryId] : undefined;
-  return heatScaleForDistance(
-    heatDistance({
-      rankGap: standing(state) - def.tier,
-      sentSeniority,
-      stewarded: !!territory?.stewardId,
-      crew: crewList(state).filter((n) => n.status !== 'dead').length,
-    }),
+  return (
+    heatScaleForDistance(
+      heatDistance({
+        rankGap: standing(state) - def.tier,
+        sentSeniority,
+        stewarded: !!territory?.stewardId,
+        crew: crewList(state).filter((n) => n.status !== 'dead').length,
+      }),
+    ) *
+    /*
+       And what kind of organization the people building cases think they are
+       looking at.
+
+       Here rather than on `addHeat` because this is exactly what `heatScale`
+       already is — how much attention this job draws given who the player is
+       now — and because the panel that prints the figure reads this function.
+       A doctrine that quietly moved heat somewhere the breakdown could not
+       name would be the one thing rule 2 forbids. Returns 1 for every career
+       that has never declared one.
+    */
+    doctrineFederalHeat(state)
   );
 }
 
@@ -474,8 +491,19 @@ export function successBreakdown(
   const diff = DIFFICULTY_BY_ID[state.difficulty];
   // Competence is centred on 50, so an average crew is neutral rather than a bonus.
   const crewTerm = ((crewCompetence(crew) - 50) / 50) * CREW_COMPETENCE_WEIGHT;
-  const attrTerm =
-    (state.player.attributes[def.attribute] / ATTRIBUTE_MAX) * ATTRIBUTE_WEIGHT;
+  /*
+     And what the Iron Hand is worth on a job that is about fear.
+
+     Added here rather than written into `state.player.attributes` — see
+     `doctrineAttributeBonus`. Clamped at `ATTRIBUTE_MAX` so a boss who has
+     already maxed intimidation is not paid twice for it, which is also what
+     stops this row ever reading over 100% of the attribute's weight.
+  */
+  const attrPoints = Math.min(
+    ATTRIBUTE_MAX,
+    state.player.attributes[def.attribute] + doctrineAttributeBonus(state, def.attribute),
+  );
+  const attrTerm = (attrPoints / ATTRIBUTE_MAX) * ATTRIBUTE_WEIGHT;
   /*
      Two costs, two rows, because they are two different problems.
 
@@ -744,6 +772,30 @@ export function launchOperation(
   const check = canLaunch(state, def, crewIds, territoryId, approach);
   if (!check.ok) return null;
 
+  /*
+     A boss on a corner.
+
+     Tier 0 is street work — the jobs `work_it_yourself` exists to answer when
+     there is nobody else to send. Once the player is a capo there is somebody
+     else to send, and being seen doing it himself is the whole of the cost:
+     no gate, no refusal, just standing. `outgrewStreetWork` already takes
+     these off the board in most of those careers; this prices the case where
+     the player reaches for one anyway.
+
+     Read before the stake is spent, so "he had the money and did it himself"
+     is judged on what he was holding when he decided rather than on what the
+     job left him. Below `handsOnPovertyExemptionFunds` nobody thinks less of
+     a man for working — that is not pride, that is being broke.
+  */
+  if (
+    def.tier === 0 &&
+    rankIndex(rankNow(state).id) >= rankIndex('capo') &&
+    totalFunds(state) >= TRIBUTE.handsOnPovertyExemptionFunds
+  ) {
+    gainRespect(state, -TRIBUTE.handsOnStreetWorkRespectPenalty);
+    addLog(state, 'A boss seen working street shakedowns is a boss losing respect.', 'crew');
+  }
+
   const cost = operationCost(state, def);
   if (!spend(state, cost, 'stakes')) return null;
 
@@ -963,6 +1015,19 @@ function resolveOperation(state: GameState, rng: Rng, op: ActiveOperation): void
        once it has gone.
     */
     payout = Math.round(payout * (1 + earningsBonus(state)));
+    /*
+       And what a job the boss never touched actually pays the boss.
+
+       Money flows up, but not all of it. A capo running his own crew on his
+       own account keeps the rest — `TRIBUTE.bossAutonomousCut` is the family's
+       end, and the difference is what delegation costs. Taken off `payout`
+       before `result.payout` rather than after, because the result is what
+       the briefing prints: the family's take is the true number, and the
+       crew's end is named in the log beside it rather than quietly missing.
+    */
+    const runner = op.autonomous && op.capoId ? state.npcs[op.capoId] : undefined;
+    const crewEnd = runner ? payout - Math.round(payout * TRIBUTE.bossAutonomousCut) : 0;
+    payout -= crewEnd;
     result.payout = payout;
     result.heat = heat;
     earnDirty(state, payout, 'jobs');
@@ -1004,7 +1069,8 @@ function resolveOperation(state: GameState, rng: Rng, op: ActiveOperation): void
 
     addLog(
       state,
-      `${def.name} in ${tDef.name} paid out $${payout.toLocaleString('en-US')}.`,
+      `${def.name} in ${tDef.name} paid out $${payout.toLocaleString('en-US')}.` +
+        (runner ? ` ${runner.name}'s crew kept $${crewEnd.toLocaleString('en-US')}.` : ''),
       'success',
     );
   } else {
@@ -1041,7 +1107,21 @@ function resolveOperation(state: GameState, rng: Rng, op: ActiveOperation): void
     addInfluence(state, op.territoryId, influenceStep * INFLUENCE_ON_FAILURE_SHARE);
     adjustSentiment(state, op.territoryId, SENTIMENT_ON_FAILURE);
 
+    /*
+       Command insulation.
+
+       The consequence table is shared by every job in the game, so the trail
+       a bad night leaves is cut off here rather than inside it — one snapshot
+       either side of the one call, instead of a flag threaded through every
+       branch of `applyFailureConsequence` and every other caller of it.
+
+       See `insulateCommand`: what the night added to the file is struck and
+       lands on the capo instead, unless there is already a wire up.
+    */
+    const capo = op.autonomous && op.capoId ? state.npcs[op.capoId] : undefined;
+    const fileBefore = capo ? new Set(Object.keys(state.evidence)) : null;
     result.consequence = applyFailureConsequence(state, rng, def, crew, op.territoryId);
+    if (capo && fileBefore) insulateCommand(state, capo, fileBefore);
     addLog(state, `${def.name} in ${tDef.name} failed. ${result.consequence}`, 'failure');
   }
 

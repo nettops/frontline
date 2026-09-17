@@ -313,7 +313,16 @@ function evidenceMultiplier(state: GameState, investigation: Investigation): num
   return multiplier;
 }
 
-function record(
+/**
+ * A line on the file, capped, and told to the player when they could not have
+ * missed it.
+ *
+ * Exported so anything outside this module that genuinely moves a case —
+ * `suburbs.ts`'s panicked neighbour is the first — writes its line through the
+ * same door rather than pushing onto `history` directly and quietly skipping
+ * the 40-entry cap.
+ */
+export function recordCaseEvent(
   state: GameState,
   investigation: Investigation,
   text: string,
@@ -368,7 +377,7 @@ function advanceStage(state: GameState, rng: Rng, investigation: Investigation):
       daysLeft <= worldPull(state, 'instinct') * WORLD.instinctWarnDays
     ) {
       investigation.warnedStage = next.id;
-      record(
+      recordCaseEvent(
         state,
         investigation,
         `Your man inside ${agency.shortName} says ${next.name.toLowerCase()} is coming.`,
@@ -388,7 +397,7 @@ function advanceStage(state: GameState, rng: Rng, investigation: Investigation):
      people are being followed and photographed" — and it was sitting behind a
      colon and a stage name nobody outside the department uses.
   */
-  record(
+  recordCaseEvent(
     state,
     investigation,
     /*
@@ -556,7 +565,7 @@ function applyStageEffect(
         addNote(npc, state.day, `Approached by ${agency.shortName}.`, 'bad');
       }
       if (picked.length) {
-        record(
+        recordCaseEvent(
           state,
           investigation,
           `${agency.shortName} have been talking to ${picked.map((n) => n.name).join(' and ')}.`,
@@ -570,7 +579,7 @@ function applyStageEffect(
       const businesses = ownedBusinesses(state).sort((a, b) => b.exposure - a.exposure);
       investigation.businessIds = businesses.slice(0, 3).map((b) => b.id);
       if (investigation.businessIds.length) {
-        record(
+        recordCaseEvent(
           state,
           investigation,
           `${agency.shortName} have subpoenaed your books. Everything moves slower now.`,
@@ -584,7 +593,7 @@ function applyStageEffect(
       const share = rng.float(WARRANT_SEIZURE_SHARE[0], WARRANT_SEIZURE_SHARE[1]);
       const seized = Math.round((state.org.cash + state.org.dirtyCash) * share);
       spend(state, seized, 'law');
-      record(
+      recordCaseEvent(
         state,
         investigation,
         `They came through the doors and took $${seized.toLocaleString('en-US')}.`,
@@ -604,7 +613,7 @@ function applyStageEffect(
       */
       const took = seizeOnePossession(state, agency.shortName);
       if (took) {
-        record(
+        recordCaseEvent(
           state,
           investigation,
           `They took ${POSSESSION_BY_ID[took.defId]?.name.toLowerCase() ?? 'property of yours'} as well.`,
@@ -621,7 +630,7 @@ function applyStageEffect(
         if (!investigation.suspectIds.includes(npc.id)) investigation.suspectIds.push(npc.id);
       }
       if (taken.length) {
-        record(
+        recordCaseEvent(
           state,
           investigation,
           `${agency.shortName} took ${taken.map((n) => n.name).join(', ')}.`,
@@ -700,7 +709,7 @@ function resolveTrial(state: GameState, rng: Rng, investigation: Investigation):
   if (rng.chance(conviction)) {
     investigation.verdict = 'convicted';
     cover(state, rng, 'conviction', { named: true });
-    record(state, investigation, 'The jury convicted. It is over for them.', true);
+    recordCaseEvent(state, investigation, 'The jury convicted. It is over for them.', true);
     // They got who they came for, and the file closes with him in it.
     closeCase(state, investigation, 'They got their conviction. The file is closed.');
     /*
@@ -722,7 +731,7 @@ function resolveTrial(state: GameState, rng: Rng, investigation: Investigation):
     // — and a humiliation the city reads about, which is not the same as good.
     gainRespect(state, TRIAL.acquittalRespect);
     cover(state, rng, 'acquittal', { named: true });
-    record(
+    recordCaseEvent(
       state,
       investigation,
       'Acquitted. They spent years on you and walked out with nothing.',
@@ -1388,7 +1397,7 @@ export function destroyEvidence(
   if (rng.chance(chance)) {
     const removed = rng.float(DESTROY_EVIDENCE.removed[0], DESTROY_EVIDENCE.removed[1]);
     investigation.strength = Math.max(0, investigation.strength - removed);
-    record(state, investigation, 'Something they were relying on is no longer available.', false);
+    recordCaseEvent(state, investigation, 'Something they were relying on is no longer available.', false);
     /*
        The player destroyed evidence and was told a riddle about it.
 
@@ -1415,7 +1424,7 @@ export function destroyEvidence(
     100,
   );
   addHeat(state, DESTROY_EVIDENCE.backfireHeat, 'inside', 'tampering');
-  record(state, investigation, 'Somebody tried to get at the file. That is a charge of its own.', true);
+  recordCaseEvent(state, investigation, 'Somebody tried to get at the file. That is a charge of its own.', true);
   addLog(
     state,
     say(`tamper_failed_${investigation.id}`, state.day, [
@@ -1489,6 +1498,6 @@ export function pressureWitness(
     detail: `${npc.name} reported being threatened.`,
     attachedTo: [investigation.id],
   });
-  record(state, investigation, `${npc.name} told them they had been threatened.`, true);
+  recordCaseEvent(state, investigation, `${npc.name} told them they had been threatened.`, true);
   return { ok: false, message: 'They went straight to them.' };
 }

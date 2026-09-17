@@ -262,4 +262,23 @@ export const VOICES: Record<string, VoiceDef> = {
       '“I do not bring my family into this room and I would rather you did not.”',
     ],
   },
+
+  /*
+     Written against `old_school` on purpose, because that is the pair
+     `capoTension.ts` reads as a fracture. He is not stupid and he is not
+     disloyal; he is simply working in a business the men above him have not
+     noticed changed, and every line is him being faster than the room.
+  */
+  tracksuit: {
+    landed: [
+      '“Great. Great. Can we do the rest of this over the phone, or —”',
+      '“See, that is what I keep saying. Nobody listens until somebody agrees.”',
+      '“Done. I will have it back to you by Thursday, which is fast, which is the point.”',
+    ],
+    missed: [
+      '“You are aware there are people doing this from an apartment, yes? With a laptop?”',
+      '“I am not the problem here. I am the only one in this room still earning.”',
+      '“Fine. Whatever. We will do it the long way, like it is nineteen sixty.”',
+    ],
+  },
 };

@@ -236,6 +236,34 @@ export const TRAITS: TraitDef[] = [
     obvious: true,
     effects: { poachable: 0.7, exposure: 1.25, loyaltyPerWeek: 0.4 },
   },
+  {
+    /*
+       The other end of `old_school`, and the reason that trait now has
+       somebody to be old-school *at*.
+
+       `old_school` has been in this catalogue since the beginning and it
+       clashed with `greedy` and `calculating` — two dispositions, not a
+       generation. What it never had was a counterpart: nobody in the
+       organization represented the business having moved on without him.
+       This does, and `capoTension.ts` reads the pair as a fracture line
+       rather than as two men who merely differ.
+
+       Every field pulls the same way, which is unusual here and deliberate.
+       He earns (skill, greed), he is expensive (`wageExpectation`), he leaves
+       a trail a subpoena can follow because his rackets are made of records
+       (`exposure`), and he will take a better offer (`poachable`). That is a
+       real trade rather than a flaw: the money is good and the man is a
+       liability, and a boss has to decide which of those he minds more.
+    */
+    id: 'tracksuit',
+    name: 'Tracksuit',
+    description:
+      'Modern earner. Runs cyber schemes, credit cards, and sports apps. Flashy, impatient, low omertà.',
+    bias: { greed: 20, discipline: -15, skill: 10 },
+    obvious: true,
+    effects: { wageExpectation: 1.25, exposure: 1.4, poachable: 1.2 },
+    clashesWith: ['old_school', 'loyalist'],
+  },
 ];
 
 export const TRAIT_BY_ID: Record<string, TraitDef> = Object.fromEntries(

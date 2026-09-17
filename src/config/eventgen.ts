@@ -309,6 +309,22 @@ export const GEN_SHAPES: GenShapeDef[] = [
   */
   { id: 'gen_panic_episode', subject: 'player', weight: 2, cooldownDays: 45 },
   /*
+     The one shape whose subject is not in the game at all.
+
+     Old business with your father's name on it, and the only piece of the
+     past this simulation carries that is not a stat on somebody. Gated in
+     `applies` on the doctrine having been declared, which is both the design
+     (the ghost turns up once you have said out loud what you are doing with
+     what he left you) and the reason adding a twenty-first shape moved no
+     existing career: an `applies` that returns null before touching the
+     stream never enters the day's pool.
+
+     Weight 2 and a 40-day cooldown, the same band as the household shapes —
+     there are four ghosts in the catalogue and each is once-per-career, so
+     this is texture across a long run rather than a subscription.
+  */
+  { id: 'gen_ancestral_ghost', subject: 'player', weight: 2, cooldownDays: 40 },
+  /*
      Three shapes for the three systems built after this file was written.
 
      The generated pool thins exactly where the authored one does — late, once

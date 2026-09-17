@@ -67,6 +67,7 @@ import { termExposure, termRevenueShare } from './frontDeal';
 import { WORLD } from '../config/build';
 import { worldPull } from './build';
 import type { ControlLevel } from '../config/territories';
+import { doctrineCleanYield } from './doctrine';
 
 export function businessDef(business: Business): BusinessDef {
   return BUSINESS_BY_ID[business.defId];
@@ -110,6 +111,11 @@ export function revenueIfBought(
       LEGITIMATE_REVENUE_SCALE *
       (HEALTH.revenueAtZero +
         (1 - HEALTH.revenueAtZero) * clamp(HEALTH.start / 100, 0, 1)) *
+      // Same term `weeklyRevenue` charges, applied to the figure the buy
+      // screen quotes. A doctrine that moved the takings without moving the
+      // estimate would be the acquisition panel lying about what it is
+      // selling.
+      doctrineCleanYield(state) *
       activity(state),
   );
 }
@@ -135,6 +141,15 @@ export function weeklyRevenue(state: GameState, business: Business): number {
          from here is still his, and nothing in the game ever buys that back.
       */
       termRevenueShare(business) *
+      /*
+         And what kind of organization is standing behind the counter.
+
+         The Holding Company's whole argument: accountants and quiet influence
+         make the legitimate side work, and the Iron Hand makes people not want
+         to come in. Applied to the one function every front's weekly takings
+         route through, so there is no second place for it to be missed.
+      */
+      doctrineCleanYield(state) *
       // The cycle. A front is the most exposed thing you own to what the city
       // is actually doing — it is the only income in the game that comes from
       // people choosing to walk in.
