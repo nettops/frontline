@@ -117,8 +117,44 @@ reconciliation request scoped this pass to life-stage figures, dilemma
 text, and cash figures only. Re-ran `npm test` after: still 163/1,917, 0
 failures, `tsc` clean.
 
-Gates: `npx tsc -b` 0 errors, `npm test` **163 files, 1,917 passing, 0
-failing** (up from this branch's own parent at 163/1,898 — 19 new tests).
+**Addendum, same day, second pass: the deltas too.** The director followed up
+asking for the exact neglect/heat numbers rather than my originally-built
+ones, since there was no reason to deviate from figures given precisely.
+`FamilyDilemmaDef` (`config/personal.ts`) grew four optional per-occasion
+overrides — `attendNeglectClear`, `attendHeat`, `sendNeglect`, `stayNeglect`
+— defaulting to the shared `GEN_EFFECT.familyDilemma*` constants the four
+milestone 1-3 entries still use, set only on `teen_trouble`: attend/"settle
+it personally" now bypasses `goHome()` entirely (it is not a home visit —
+it sets `went_home_day` directly, the same flag `consultDoctor`/the panic
+episode's house-call use for "spent the evening, not at home") and clears
+neglect by exactly 20 while adding 3 heat (channel `'street'`); send/lawyer
+is +3 neglect ($800 unchanged); stay/let-him-spend-the-night is +12. The
+"-15 respect loss avoided" framing from the original brief text was never
+implemented — nothing in the shared `stay` branch applies a respect cost to
+override, and the director's own follow-up confirmed a plain neglect spike
+with no fake avoidance mechanic is correct.
+
+On the crossroads: option B ("bring them in") is now a **neglect spike of
++35**, not the clear I had originally built (renamed
+`GEN_EFFECT.crossroadsHireNeglectClear` -> `crossroadsHireNeglectSpike` and
+flipped the sign in `resolveGenerated`) — a spouse watching her son handed a
+place on the street instead of a degree is a rift, not a relief. Option C
+("let them go") is now a flat **+25** (`crossroadsEstrangedNeglect`,
+previously `HOME.perWeekAway * 3` = 10.5). Option A (tuition) was unchanged
+by this pass — the director's follow-up only named B and C.
+
+Three new dedicated `eventgen.test.ts` guards assert the exact `teen_trouble`
+deltas (attend -20/+3heat/spends-the-evening/no-cash, send +3/$800, stay
++12/free), and the existing crossroads tests were tightened from directional
+(`toBeLessThan`/`toBeGreaterThan`) to exact-value assertions for tuition
+(-20), bring_in (+35), and let_go (+25). All five changed-magnitude guards
+were proven the standard way — fault injected (wrong branch/wrong sign/wrong
+constant), watched red, restored — see this pass's own commit for the
+before/after evidence on each. Re-ran full suite after: **163 files, 1,920
+passing, 0 failing**, `tsc` clean.
+
+Gates: `npx tsc -b` 0 errors, `npm test` **163 files, 1,920 passing, 0
+failing** (up from this branch's own parent at 163/1,898 — 22 new tests).
 **`npm run probe` was not run** — tonight's `generatedStream` isolation
 means the new shapes cannot reshuffle anything outside the generated pool
 itself, but two more weight-2 entries in that pool (now ~19 shapes instead

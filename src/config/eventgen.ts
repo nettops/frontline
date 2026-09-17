@@ -679,14 +679,20 @@ export const GEN_EFFECT = {
 
      Cash figures are the director's own: $4,500 tuition on option A, and
      option B (bringing them in) is free -- the "cost" of putting your own
-     kid ahead of the men is the grievance it lands, not a price tag.
+     kid ahead of the men is the grievance and the domestic rift it lands,
+     not a price tag. Neglect deltas below are also the director's own exact
+     figures, not this milestone's originally-built guesses.
   */
   /** Option A: pay for college, and keep them out of the life entirely. */
   crossroadsTuitionCost: 4_500,
   crossroadsTuitionNeglectClear: 20,
-  /** Option B: bring them into the organization, as a real hire. Free --
-   * the household pays for this one in neglect and capo grievance, not cash. */
-  crossroadsHireNeglectClear: 10,
+  /**
+   * Option B: bring them into the organization, as a real hire. Free in
+   * cash -- the household pays in a real domestic rift instead: a spouse
+   * who watches her own son handed a place on the street rather than a
+   * degree does not take it quietly.
+   */
+  crossroadsHireNeglectSpike: 35,
   /**
    * The grievance landed on one real active capo when there is one to land
    * it on (`activeCapos`, `sim/capoTension.ts`) -- an outsider handed a
@@ -695,7 +701,7 @@ export const GEN_EFFECT = {
    * to carry it, same as `gen_bad_blood`'s own pair check finding nobody.
    */
   crossroadsHireCapoGrievance: 10,
-  /** Option C: let them go their own way. Costs nothing, clears nothing --
-   * an estrangement, not a decision that was handled. */
-  crossroadsEstrangedNeglect: HOME.perWeekAway * 3,
+  /** Option C: let them go their own way. Costs nothing in cash -- a
+   * permanent estrangement, not a decision that was handled. */
+  crossroadsEstrangedNeglect: 25,
 } as const;

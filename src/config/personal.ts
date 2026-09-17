@@ -287,6 +287,23 @@ export interface FamilyDilemmaDef {
   sendCost: number;
   /** What gets sent, said the way the boss would put it. */
   sendGesture: string;
+  /**
+   * Overrides for this occasion alone — undefined on the four milestone 1-3
+   * entries, which share `GEN_EFFECT.familyDilemmaAttendExtraClear`/
+   * `familyDilemmaSendNeglect`/`familyDilemmaStayNeglect` uniformly. Only
+   * `teen_trouble` sets these: the director's own figures for "settle it
+   * with the sergeant" are a different shape than a nice evening at home,
+   * clearing *less* than an ordinary visit and drawing heat besides, so the
+   * shared constants (tuned for a school play or a sickbed) do not apply.
+   */
+  attendNeglectClear?: number;
+  /** Extra heat picked up when *attending* means dealing with the law rather
+   * than a school or a sickbed. Undefined everywhere but `teen_trouble`. */
+  attendHeat?: number;
+  /** Overrides `GEN_EFFECT.familyDilemmaSendNeglect` for this occasion alone. */
+  sendNeglect?: number;
+  /** Overrides `GEN_EFFECT.familyDilemmaStayNeglect` for this occasion alone. */
+  stayNeglect?: number;
 }
 
 export const FAMILY_DILEMMAS: FamilyDilemmaDef[] = [
@@ -364,6 +381,14 @@ export const FAMILY_DILEMMAS: FamilyDilemmaDef[] = [
     attendCost: 0,
     sendCost: 800,
     sendGesture: 'a lawyer, quietly, so the paperwork disappears without you ever showing your face',
+    // The director's own exact deltas: settling it personally clears less
+    // than an ordinary visit (-20, not the usual -33) and costs +3 heat;
+    // the lawyer nudges neglect +3 rather than the shared +2; letting him
+    // spend the night spikes neglect +12 rather than the shared ~8.75.
+    attendNeglectClear: 20,
+    attendHeat: 3,
+    sendNeglect: 3,
+    stayNeglect: 12,
   },
 ];
 

@@ -608,6 +608,89 @@ describe('teen trouble', () => {
     const send = built!.choices.find((c) => c.id === 'send')!;
     expect(send.hint).toContain(money(priced(state, 800)));
   });
+
+  /** Draws until `teen_trouble` specifically comes up (celebration always
+   * also matches, so a single draw cannot be trusted), builds it, and
+   * queues it under a fixed id so `resolveEvent` can answer it. */
+  function raiseTeenTrouble(state: GameState) {
+    const def = GEN_DEFS.find((d) => d.id === 'gen_family_dilemma')!;
+    for (let i = 0; i < 300; i++) {
+      const rng = new Rng({ seed: 909, calls: i * 11 });
+      const ctx = def.applies(state, rng);
+      if (ctx?.familyDilemmaId === 'teen_trouble') {
+        const built = def.build(state, rng, ctx);
+        state.pendingEvents.push({ ...built, id: 'evt_test', day: state.day });
+        return built;
+      }
+    }
+    return null;
+  }
+
+  /*
+     The director's own exact deltas — different from every other occasion
+     in this table, which is why `teen_trouble` alone carries the
+     `attendNeglectClear`/`attendHeat`/`sendNeglect`/`stayNeglect` overrides
+     on `FamilyDilemmaDef` (`config/personal.ts`).
+
+     Watched to fail: with `dilemma.attendNeglectClear !== undefined` in
+     `resolveGenerated`'s `attend` branch changed to read `undefined` (i.e.
+     forcing the shared `goHome` + `familyDilemmaAttendExtraClear` path),
+     neglect cleared by ~33 instead of 20, `went_home_day` was still set (by
+     `goHome` itself) but no heat moved at all — both assertions below went
+     red. Restored afterwards.
+  */
+  it('settling it personally clears exactly 20 neglect, adds heat, spends the evening, and costs nothing', () => {
+    const state = householdState('youngest', 15);
+    home(state).neglect = 60;
+    const beforeNeglect = home(state).neglect;
+    const beforeCash = totalFunds(state);
+    const beforeHeat = state.org.heat;
+    expect(raiseTeenTrouble(state)).not.toBeNull();
+
+    resolveEvent(state, new Rng(state.rng), 'evt_test', 'attend');
+
+    expect(home(state).neglect).toBeCloseTo(beforeNeglect - 20, 5);
+    expect(totalFunds(state)).toBe(beforeCash);
+    expect(state.flags['went_home_day']).toBe(state.day);
+    expect(state.org.heat, 'settling it with the sergeant should draw real heat').toBeGreaterThan(beforeHeat);
+  });
+
+  /*
+     Watched to fail: with `dilemma.sendNeglect ?? ...` changed to always
+     read the shared `GEN_EFFECT.familyDilemmaSendNeglect` (2) regardless of
+     the dilemma's own override, this asserted a rise of exactly 3 and read
+     2 instead. Restored afterwards.
+  */
+  it('the lawyer costs $800 and nudges neglect up by exactly 3', () => {
+    const state = householdState('youngest', 15);
+    home(state).neglect = 40;
+    const beforeNeglect = home(state).neglect;
+    const beforeCash = totalFunds(state);
+    expect(raiseTeenTrouble(state)).not.toBeNull();
+
+    resolveEvent(state, new Rng(state.rng), 'evt_test', 'send');
+
+    expect(totalFunds(state)).toBeCloseTo(beforeCash - priced(state, 800), 5);
+    expect(home(state).neglect).toBeCloseTo(beforeNeglect + 3, 5);
+  });
+
+  /*
+     Watched to fail: with `dilemma.stayNeglect ?? ...` changed the same way
+     as the `send` guard above, this read the shared ~8.75 instead of the
+     director's own 12. Restored afterwards.
+  */
+  it('letting him spend the night is free and spikes neglect by exactly 12', () => {
+    const state = householdState('youngest', 15);
+    home(state).neglect = 40;
+    const beforeNeglect = home(state).neglect;
+    const beforeCash = totalFunds(state);
+    expect(raiseTeenTrouble(state)).not.toBeNull();
+
+    resolveEvent(state, new Rng(state.rng), 'evt_test', 'stay');
+
+    expect(totalFunds(state)).toBe(beforeCash);
+    expect(home(state).neglect).toBeCloseTo(beforeNeglect + 12, 5);
+  });
 });
 
 /*
@@ -790,13 +873,13 @@ describe('the family crossroads', () => {
 
     resolveEvent(state, new Rng(state.rng), 'evt_test', 'college');
 
-    expect(totalFunds(state)).toBeLessThan(beforeCash);
-    expect(home(state).neglect).toBeLessThan(beforeNeglect);
+    expect(totalFunds(state)).toBeCloseTo(beforeCash - priced(state, 4_500), 5);
+    expect(home(state).neglect).toBeCloseTo(beforeNeglect - 20, 5);
     expect(Object.keys(state.npcs).length).toBe(beforeNpcs);
     expect(career(state).length).toBeGreaterThan(beforeCareer);
   });
 
-  it('bring_in: free (the director\'s own figure), real neglect clear, and a real Npc on the roster', () => {
+  it("bring_in: free (the director's own figure), a real +35 domestic-rift neglect spike, and a real Npc on the roster", () => {
     const state = adultState();
     home(state).neglect = 50;
     const beforeCash = totalFunds(state);
@@ -806,7 +889,10 @@ describe('the family crossroads', () => {
     resolveEvent(state, new Rng(state.rng), 'evt_test', 'bring_in');
 
     expect(totalFunds(state)).toBe(beforeCash);
-    expect(home(state).neglect).toBeLessThan(beforeNeglect);
+    // A spike, not a clear -- the household pays for this one in a real
+    // domestic rift, per the director's own figure (+35).
+    expect(home(state).neglect).toBeGreaterThan(beforeNeglect);
+    expect(home(state).neglect).toBeCloseTo(beforeNeglect + GEN_EFFECT.crossroadsHireNeglectSpike, 5);
     const hire = Object.values(state.npcs).find((n) => n.name === 'Junior');
     expect(hire, 'no Npc was created for the household member brought in').toBeDefined();
     expect(hire!.role).toBe('soldier');
@@ -838,7 +924,7 @@ describe('the family crossroads', () => {
     expect(() => resolveEvent(state, new Rng(state.rng), 'evt_test', 'bring_in')).not.toThrow();
   });
 
-  it('let_go: costs nothing, and neglect rises rather than falls', () => {
+  it('let_go: costs nothing, and neglect rises by exactly 25 (permanent estrangement)', () => {
     const state = adultState();
     home(state).neglect = 50;
     const beforeCash = totalFunds(state);
@@ -847,7 +933,7 @@ describe('the family crossroads', () => {
     resolveEvent(state, new Rng(state.rng), 'evt_test', 'let_go');
 
     expect(totalFunds(state)).toBe(beforeCash);
-    expect(home(state).neglect).toBeGreaterThan(50);
+    expect(home(state).neglect).toBeCloseTo(75, 5);
   });
 });
 

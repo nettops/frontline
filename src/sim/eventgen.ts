@@ -1589,6 +1589,26 @@ export function resolveGenerated(
           addLog(state, `The money was not there, so you did not go either.`, 'failure');
           return;
         }
+        if (dilemma.attendNeglectClear !== undefined) {
+          /*
+             `teen_trouble` alone: settling it with a precinct sergeant is
+             not a visit home, so it spends the same evening (`went_home_day`
+             — the flag `operations.ts` reads to refuse a same-day zero-crew
+             job, same resource `goHome`/`consultDoctor` spend) without going
+             through `goHome`'s own lastVisitDay/cold-reception machinery,
+             which is specific to an actual evening under the boss's own
+             roof. Clears less than the shared `familyDilemmaAttendExtraClear`
+             path (going to a police station is not a nice evening) and
+             draws real heat, per the director's own figures.
+          */
+          state.flags['went_home_day'] = state.day;
+          house.neglect = clamp(house.neglect - dilemma.attendNeglectClear, 0, 100);
+          if (dilemma.attendHeat) {
+            addHeat(state, dilemma.attendHeat, 'street', `settled ${name}'s trouble with the law personally`);
+          }
+          addLog(state, `You went down and settled it with the sergeant yourself. It cost you a favor and a little attention.`, 'crew');
+          return;
+        }
         goHome(state);
         // The occasion clears more than an ordinary evening. See
         // `GEN_EFFECT.familyDilemmaAttendExtraClear` for the 1.5x.
@@ -1602,13 +1622,21 @@ export function resolveGenerated(
           addLog(state, `You had nothing to send either, and ${name} noticed that too.`, 'failure');
           return;
         }
-        house.neglect = clamp(house.neglect + GEN_EFFECT.familyDilemmaSendNeglect, 0, 100);
+        house.neglect = clamp(
+          house.neglect + (dilemma.sendNeglect ?? GEN_EFFECT.familyDilemmaSendNeglect),
+          0,
+          100,
+        );
         addLog(state, `You sent ${dilemma.sendGesture}. ${name} noticed who was not holding it.`, 'crew');
         return;
       }
 
       // 'stay': free, and the most expensive answer in the room.
-      house.neglect = clamp(house.neglect + GEN_EFFECT.familyDilemmaStayNeglect, 0, 100);
+      house.neglect = clamp(
+        house.neglect + (dilemma.stayNeglect ?? GEN_EFFECT.familyDilemmaStayNeglect),
+        0,
+        100,
+      );
       recordCareerEvent(state, `Was not there for ${name}'s ${dilemma.occasion}.`, 'bad');
       addLog(state, `You did not go. Nobody said anything about it, which was worse.`, 'crew');
       return;
@@ -1692,7 +1720,9 @@ export function resolveGenerated(
         hire.joinedDay = state.day;
         state.npcs[hire.id] = hire;
         addNote(hire, state.day, 'Brought in by family, not off the street.', 'neutral');
-        house.neglect = clamp(house.neglect - GEN_EFFECT.crossroadsHireNeglectClear, 0, 100);
+        // A spike, not a clear -- a spouse watching her own son handed a
+        // place on the street instead of a diploma does not take it quietly.
+        house.neglect = clamp(house.neglect + GEN_EFFECT.crossroadsHireNeglectSpike, 0, 100);
         // A real capo, if there is one to carry the grievance — silently
         // skipped otherwise, same as `gen_bad_blood` finding nobody to pair.
         const capos = activeCapos(state);
