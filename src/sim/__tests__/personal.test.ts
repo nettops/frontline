@@ -29,11 +29,14 @@ import {
   canConsult,
   canGoHome,
   consultDoctor,
+  daysUntilAdult,
   familyHorizon,
   goHome,
   home,
   homeRead,
   homeTier,
+  memberAge,
+  memberLifeStage,
   neglectRisk,
   playerStress,
   stressLeadershipMultiplier,
@@ -630,5 +633,108 @@ describe('stress', () => {
       state.day += 1; // now exactly at the stamped day
       expect(stressLeadershipMultiplier(state)).toBe(1);
     });
+  });
+});
+
+/*
+   Milestone 4: age and life stage. Fully derived per `CLAUDE.md`'s "reach
+   for a derived read before stored state" — nothing here is ever written to
+   `Home` or `HouseholdMember`, so there is no `SAVE_VERSION` bump and no
+   second copy of an age to drift from `state.day`.
+*/
+describe('age and life stage', () => {
+  /** Overwrites one household slot so a test does not depend on this seed's
+   * own three-of-six draw actually landing on a child relation. */
+  function withChild(state: GameState, relationId: 'eldest' | 'youngest', name = 'Testy'): void {
+    home(state).people[0] = { name, relationId };
+  }
+
+  it('is null for the four relations nobody tracks an age for', () => {
+    const state = game();
+    for (const relationId of ['spouse', 'parent', 'sibling', 'elder']) {
+      expect(memberAge(state, 'Anybody', relationId), relationId).toBeNull();
+    }
+  });
+
+  it('draws a base age in range at household creation, and ages a year every 365 days', () => {
+    const state = game();
+    withChild(state, 'eldest');
+    const base = memberAge(state, 'Testy', 'eldest')!;
+    expect(base).toBeGreaterThanOrEqual(9);
+    expect(base).toBeLessThanOrEqual(17);
+
+    state.day += 365 * 20;
+    expect(memberAge(state, 'Testy', 'eldest')).toBe(base + 20);
+  });
+
+  it('crosses from Teenager into Adult at 18, not before', () => {
+    const state = game();
+    withChild(state, 'eldest');
+    const base = memberAge(state, 'Testy', 'eldest')!;
+
+    state.day += (17 - base) * 365;
+    expect(memberLifeStage(memberAge(state, 'Testy', 'eldest')!).id).toBe('teen');
+
+    state.day += 365; // now 18
+    expect(memberLifeStage(memberAge(state, 'Testy', 'eldest')!).id).toBe('adult');
+  });
+
+  it('counts down to the 18th birthday, and stops once there is nothing left to count', () => {
+    const state = game();
+    withChild(state, 'youngest');
+    const base = memberAge(state, 'Testy', 'youngest')!;
+    const before = daysUntilAdult(state, 'youngest')!;
+    expect(before).toBeGreaterThan(0);
+
+    state.day += (18 - base) * 365;
+    expect(daysUntilAdult(state, 'youngest')).toBeNull();
+  });
+
+  /*
+     CLAUDE.md point 2: a household has only 3 of 6 possible relations, and
+     "no child in this household" must be a silent no-op everywhere, not a
+     bug. Built rather than played toward, so this does not depend on a seed
+     that happens to skip both child relations.
+  */
+  it('is silent for a household with neither eldest nor youngest in it', () => {
+    const state = game();
+    home(state).people = [
+      { name: 'A', relationId: 'spouse' },
+      { name: 'B', relationId: 'parent' },
+      { name: 'C', relationId: 'sibling' },
+    ];
+    expect(home(state).people.every((p) => memberAge(state, p.name, p.relationId) === null)).toBe(
+      true,
+    );
+    expect(homeRead(state).comingOfAge).toEqual([]);
+  });
+
+  it('homeRead names age and stage beside a household member who has one, and nothing extra for one who does not', () => {
+    const state = game();
+    // All three slots forced, so this does not depend on whichever two
+    // non-child relations this seed's own draw happened to pick.
+    home(state).people = [
+      { name: 'Testy', relationId: 'youngest' },
+      { name: 'Ma', relationId: 'parent' },
+      { name: 'Sib', relationId: 'sibling' },
+    ];
+    const read = homeRead(state);
+    const line = read.people.find((p) => p.startsWith('Testy'))!;
+    expect(line).toMatch(/^Testy, your youngest \(\d+, (Child|Teenager|Adult)\)$/);
+
+    // Nobody spouse/parent/sibling/elder gets a fabricated age tacked on.
+    const others = read.people.filter((p) => !p.startsWith('Testy'));
+    expect(others).toHaveLength(2);
+    expect(others.every((p) => !/\(\d+,/.test(p))).toBe(true);
+  });
+
+  it("comingOfAge reports a household member inside the panel's own window, and stays empty outside it", () => {
+    const state = game();
+    withChild(state, 'eldest');
+    const base = memberAge(state, 'Testy', 'eldest')!;
+    // Land just outside the window first.
+    state.day += (18 - base) * 365 - HOME.comingOfAgeWithinDays - 5;
+    const before = homeRead(state).comingOfAge.find((c) => c.relationId === 'eldest')!.daysUntil;
+    expect(before).toBeGreaterThan(HOME.comingOfAgeWithinDays);
   });
 });
