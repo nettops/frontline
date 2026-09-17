@@ -16,6 +16,10 @@ import { describe, expect, it } from 'vitest';
 import { newGame } from '../../sim/state';
 import { runDaysSolvent } from '../../sim/__tests__/helpers';
 import { recruit } from '../../sim/crew';
+import { setCarry } from '../../sim/pieces';
+import { recordCareerEvent } from '../../sim/career';
+import { crewList, generateNpc } from '../../sim/npc';
+import { Rng } from '../../sim/rng';
 import {
   TIPS,
   dismissTip,
@@ -182,6 +186,61 @@ describe('urgency', () => {
     expect(nextTip(state)?.id).toBe('first_job');
     state.org.heat = 60;
     expect(nextTip(state)?.id).toBe('heat');
+  });
+});
+
+/*
+   2026-09-10: the polish audit found the Armoury with no tip, no rail
+   badge and no event ever pointing at it — the one system that could go a
+   whole career unnoticed. Tested against the predicate directly rather than
+   through `nextTip`, since the tip sits well down the list and several
+   earlier ones could coincidentally also be true on a hand-built fixture.
+*/
+describe('the armoury tip', () => {
+  const armoury = () => TIPS.find((t) => t.id === 'armoury')!;
+
+  /** Straight into the roster, so this does not depend on the recruit pool's own depth. */
+  function crewed(n: number): GameState {
+    const state = fresh();
+    const rng = new Rng(state.rng);
+    while (crewList(state).length < n) {
+      const npc = generateNpc(state, rng, 'soldier');
+      state.npcs[npc.id] = npc;
+    }
+    return state;
+  }
+
+  it('says nothing to a boss with too few people for it to matter', () => {
+    expect(armoury().when(crewed(2))).toBe(false);
+  });
+
+  it('speaks once there is a real crew and the policy has never been touched', () => {
+    expect(armoury().when(crewed(3))).toBe(true);
+  });
+
+  it('goes quiet the moment the policy is actually set, done or not', () => {
+    const state = crewed(3);
+    setCarry(state, 'coat');
+    expect(armoury().when(state)).toBe(false);
+  });
+});
+
+/*
+   2026-09-10: `CareerPanel.tsx` shipped this session with a rail entry and
+   no tip. Gated on a chapter actually existing so it never points at an
+   empty page.
+*/
+describe('the career tip', () => {
+  const careerTip = () => TIPS.find((t) => t.id === 'career')!;
+
+  it('says nothing before there is a chapter to read', () => {
+    expect(careerTip().when(fresh())).toBe(false);
+  });
+
+  it('speaks the moment the first chapter is written', () => {
+    const state = fresh();
+    recordCareerEvent(state, 'Had somebody killed.', 'good');
+    expect(careerTip().when(state)).toBe(true);
   });
 });
 

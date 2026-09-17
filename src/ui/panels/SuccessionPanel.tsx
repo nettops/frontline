@@ -6,13 +6,27 @@ import {
   eligibleHeirs,
   heirOf,
   inheritRank,
+  isBloodHeir,
   nameHeir,
   perceivedClaim,
+  weakClaim,
 } from '../../sim/succession';
 import { formatShortDay } from '../../sim/util';
 import { chronicle, chronicleSummary } from '../../sim/chronicle';
 import { ROLE_LABEL, RANK_BY_ID } from '../../config/economy';
-import { CLAIM, HANDOVER } from '../../config/succession';
+import { CLAIM, HANDOVER, NEPOTISM } from '../../config/succession';
+
+/*
+   Said once and read twice — on the row and in the button's own title.
+
+   Built out of `NEPOTISM` rather than typed as a sentence with a 25 in it,
+   so the warning cannot drift from the number it is warning about. "Shown
+   odds are real odds" is about a percentage on a job; this is the same rule
+   applied to the most expensive irreversible click on this screen.
+*/
+const bloodWarning =
+  `Naming your own blood will land as nepotism with every veteran capo ` +
+  `(+${NEPOTISM.capoGrievance} grievance, -${NEPOTISM.capoLoyaltyDrop} loyalty, each).`;
 
 export default function SuccessionPanel() {
   const state = useGame();
@@ -210,11 +224,20 @@ export default function SuccessionPanel() {
                 {candidates.map((npc) => {
                   const claim = perceivedClaim(state, npc);
                   const isHeir = heir?.id === npc.id;
+                  /*
+                     The one fact about a candidate that is not a stat and not
+                     fogged. Everybody in the room already knows whose son he
+                     is, so there is nothing for `perceive` to withhold — and
+                     it is the single largest thing naming him will cost, so
+                     it is said on the row and again on the button.
+                  */
+                  const blood = isBloodHeir(state, npc);
                   return (
                     <tr key={npc.id} className={isHeir ? 'selected' : undefined}>
                       <td>
                         <div className="name-cell">
                           <span className="name-main">{npc.name}</span>
+                          {blood && <span className="name-sub brass">Blood Heir</span>}
                           {isHeir && <span className="name-sub">named successor</span>}
                         </div>
                       </td>
@@ -233,21 +256,39 @@ export default function SuccessionPanel() {
                         <Bar value={claim * 100} />
                       </td>
                       <td className="num">
+                        {/*
+                           Round 28's blind report never once tried this
+                           button in a 300-day career — every candidate sat
+                           in the worst claim band, which reads exactly like
+                           `nameHeir`'s own refusal for a rank too low to be
+                           eligible at all ("Nobody would follow them" /
+                           "Move them up first"). The button was never
+                           disabled; nothing on it said so. See `weakClaim`.
+                        */}
                         <button
                           className="btn small"
                           disabled={isHeir}
                           title={
                             isHeir
                               ? 'They are already next'
-                              : 'Everyone senior enough to have hoped will hear about it'
+                              : blood
+                                ? bloodWarning
+                                : weakClaim(claim)
+                                  ? 'The room is against it, but the choice is still yours to make'
+                                  : 'Everyone senior enough to have hoped will hear about it'
                           }
                           onClick={() => {
                             const result = mutate((s) => nameHeir(s, npc.id), true);
                             if (result) setMessage(result.message);
                           }}
                         >
-                          {isHeir ? 'Named' : 'Name them'}
+                          {isHeir ? 'Named' : weakClaim(claim) ? 'Name them anyway' : 'Name them'}
                         </button>
+                        {blood && !isHeir && (
+                          <p className="hot tiny" style={{ margin: '4px 0 0', maxWidth: 220 }}>
+                            {bloodWarning}
+                          </p>
+                        )}
                       </td>
                     </tr>
                   );

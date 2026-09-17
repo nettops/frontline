@@ -171,6 +171,53 @@ export const BOND = {
   betrayalWitnessTrust: -18,
   /** Refusing an ally who asked for help. Same idea, smaller. */
   letDownTrust: -25,
+
+  /**
+   * Tall poppy. The strongest of three or more families draws grudge from the
+   * others just for being on top, independent of anything it has done to
+   * them — without it, three families that reach parity have no reason to
+   * ever move again. `AI.weights.consolidate`'s own history names exactly
+   * that dead equilibrium: 69% of all rival-weeks spent doing nothing once
+   * the board settles. New this pass and deliberately conservative — not yet
+   * run through a probe.
+   */
+  tallPoppyGrudgePerWeek: 0.3,
+
+  /**
+   * Common enemy. Two organizations fighting the same third party build
+   * trust with each other every week, whether or not they are allied. This
+   * is a standing-builder with no cash cost and no strength requirement — the
+   * two things F17 found walled off for a player who trails every rival in
+   * strength the whole game. New, conservative.
+   */
+  commonEnemyTrustPerWeek: 0.4,
+
+  /**
+   * Ambient friction from standing on the same contested ground, on top of
+   * whatever an actual clash there does. Without this the map can partition
+   * cleanly and freeze solid — `AI.expand.contestedFloor`'s own comment
+   * documents that failure and patches only the expansion side of it. This is
+   * the relationship side of the same problem. New, conservative.
+   */
+  contestedGrudgePerWeek: 0.15,
+
+  /**
+   * Share of the respect target that comes from the *gap* between two sides'
+   * strength, rather than only the target's own absolute number. The
+   * original formula could not distinguish a strong family sizing up an
+   * equal from a weak one sizing up somebody far above it — both read the
+   * target's strength and nothing else. New, conservative.
+   */
+  respectFromStrengthGap: 0.15,
+
+  /**
+   * Days after peace before either side will consider a fresh war on the
+   * same target — a separate, legible dial from grudge decay, which is tuned
+   * for the ordinary ebb and flow of standing rather than for "we just
+   * stopped shooting at each other ten minutes ago." New, conservative — call
+   * it two months.
+   */
+  truceDays: 60,
 } as const;
 
 /**

@@ -25,7 +25,7 @@ import type { GameState } from '../types';
 import { advanceDay } from '../clock';
 import { crewList, generateNpc } from '../npc';
 import { caposOf } from '../capos';
-import { armouryOf, setCharge, setDump, shelf } from '../pieces';
+import { armouryOf, setDump, shelf } from '../pieces';
 import { setAutopilot } from '../autopilot';
 import { declareWar } from '../diplomacy';
 import { boardItems } from '../../ui/board';
@@ -377,8 +377,7 @@ describe('doing it with a charge', () => {
   */
   function charged(seed: number): GameState {
     const state = ready(seed);
-    setCharge(state, true);
-    openContract(state, aCapo(state));
+    openContract(state, aCapo(state), true);
     playOut(state, new Rng(state.rng));
     return state;
   }
@@ -403,10 +402,9 @@ describe('doing it with a charge', () => {
 
   it('spends nothing off the shelf, because a charge is not a piece', () => {
     const state = ready(3);
-    setCharge(state, true);
     setDump(state, true);
     const had = shelf(state).length;
-    openContract(state, aCapo(state));
+    openContract(state, aCapo(state), true);
     playOut(state, new Rng(state.rng));
     expect(shelf(state).length, 'a charge took a gun off the shelf').toBe(had);
   });
@@ -416,10 +414,9 @@ describe('doing it with a charge', () => {
     for (let seed = 1; seed <= 20; seed++) {
       const quiet = ready(seed);
       const loud = ready(seed);
-      setCharge(loud, true);
       const where = (s: GameState) => s.territories[contractList(s)[0]?.territoryId ?? ''];
       openContract(quiet, aCapo(quiet));
-      openContract(loud, aCapo(loud));
+      openContract(loud, aCapo(loud), true);
       const at = contractList(loud)[0].territoryId;
       if (!at) continue;
       const before = loud.territories[at].sentiment;
@@ -431,11 +428,24 @@ describe('doing it with a charge', () => {
     expect(worse, 'a car went up and the neighbourhood did not mind at all').toBeGreaterThan(0);
   });
 
+  it('is a choice snapshotted per contract, not a standing policy', () => {
+    // Used to be a family-wide toggle read at resolution, so two contracts
+    // open at once had no way to disagree with each other. Now it is decided
+    // at `openContract`, the same moment `chance` is, and lives on the record.
+    const state = ready(7);
+    const capos = caposOf(state, 'falcone');
+    openContract(state, { kind: 'capo', factionId: 'falcone', capoId: capos[0].id }, true);
+    openContract(state, { kind: 'capo', factionId: 'falcone', capoId: capos[1].id }, false);
+    const [loud, quiet] = contractList(state);
+    expect(loud.charged, 'the charge was not snapshotted on its own contract').toBe(true);
+    expect(quiet.charged, 'the quiet contract inherited a charge it never asked for').toBe(false);
+  });
+
   it('is never used on one of your own', () => {
     // There is no version of this aimed at a man sitting in a room, and
-    // `silence` is not getting a bomb.
+    // `silence` is not getting a bomb. `openContract` refuses the charge
+    // itself for a witness target, so this asks for it anyway.
     const state = ready(5);
-    setCharge(state, true);
     const npc = crewList(state).find((n) => n.status === 'active')!;
     state.law.investigations['c1'] = {
       id: 'c1',
@@ -448,7 +458,7 @@ describe('doing it with a charge', () => {
       evidenceIds: [],
       suspectIds: [npc.id],
     } as never;
-    openContract(state, { kind: 'witness', caseId: 'c1', npcId: npc.id });
+    openContract(state, { kind: 'witness', caseId: 'c1', npcId: npc.id }, true);
     playOut(state, new Rng(state.rng));
     expect(
       Object.values(state.evidence).some((e) => e.source === 'ordnance'),

@@ -1,0 +1,305 @@
+import { Container, Graphics, RenderLayer, Sprite, Text, Texture } from 'pixi.js';
+import type { Bounds } from './camera';
+import type { MapDef, MapObject, SpawnPoint, WallEdge } from '../map/types';
+import type { WalkGrid } from '../map/grid';
+import { cellRoomIndex } from '../map/grid';
+import { cellToScreen, heightOffset, TILE_W, TILE_H, HEIGHT_PX } from './iso';
+import {
+  ROOM_COLORS, WALL_COLOR, DOOR_COLOR, VOID_COLOR,
+  GRID_LINE_COLOR, NAV_EDGE_COLOR, COLLISION_COLOR,
+  SPAWN_PLAYER_COLOR, SPAWN_NPC_COLOR, ROOM_BOUNDS_COLOR,
+} from './palette';
+import { SPRITES, PERSON_PALETTES, PERSON_BACK, blitIsoSprite, hash } from './isoSprites';
+
+/** Sprite pixels per iso-sprite row/column unit; sprites are authored at
+ * roughly 5 columns per footprint cell, so this keeps a footprint's drawn
+ * width close to its floor diamond's screen width — a W x H footprint's
+ * diamond spans (W + H) * TILE_W / 2 px in this 2:1 projection. */
+const SPRITE_SCALE = 6;
+
+export interface MapLayers {
+  world: Container;
+  floor: Container;
+  walls: Container;
+  objects: Container;
+  grid: Container;
+  collision: Container;
+  nav: Container;
+  roomBounds: Container;
+  spawns: Container;
+  getPersonTexture: (paletteIndex: number, variant: 'front' | 'back') => Texture;
+}
+
+export type SelectableNode = Container & { mapEntity?: MapObject | SpawnPoint };
+
+export interface LayerVisibility {
+  floor: boolean;
+  walls: boolean;
+  objects: boolean;
+  grid: boolean;
+  collision: boolean;
+  nav: boolean;
+  roomBounds: boolean;
+  spawns: boolean;
+}
+
+export const DEFAULT_LAYER_VISIBILITY: LayerVisibility = {
+  floor: true, walls: true, objects: true, grid: false,
+  collision: false, nav: false, roomBounds: true, spawns: true,
+};
+
+// World-height units, tall enough to read as a wall. Module-scope so
+// mapPixelBounds (below) can account for how far a lifted wall top reaches
+// above the floor-corner box, without duplicating the number.
+const WALL_HEIGHT = 3;
+
+/** S/E door edges render nowhere (autoWalls never draws a wall on top of a door, and the
+ * N/W-only wall loop below skips S/E outright), so fold every door onto the mirror edge
+ * of its neighboring cell — the same physical boundary, expressed from the other side —
+ * before drawing. Render-only transform; `map.walls` itself is left untouched. */
+function foldToVisibleFace(wall: WallEdge): WallEdge {
+  if (wall.kind !== 'door') return wall;
+  const [c, r] = wall.cell;
+  if (wall.side === 'S') return { ...wall, cell: [c, r + 1], side: 'N' };
+  if (wall.side === 'E') return { ...wall, cell: [c + 1, r], side: 'W' };
+  return wall;
+}
+
+export function buildMapLayers(map: MapDef, grid: WalkGrid): MapLayers {
+  const roomIndex = cellRoomIndex(map);
+  const world = new Container();
+  const floor = new Container();
+  const walls = new Container();
+  const objects = new Container();
+  const gridLines = new Container();
+  const collision = new Container();
+  const nav = new Container();
+  const roomBounds = new Container();
+  const spawns = new Container();
+  // Global painter's-order pass: objects and spawns keep their own logical Containers
+  // above (for the Objects/Spawns visibility toggle and PixiStage's child lookups), but
+  // both attach their sprites here so one shared, depth-sorted layer decides draw order
+  // across furniture AND people — a RenderLayer draws attached objects by this layer's
+  // zIndex order without reparenting them, so the logical grouping above still holds.
+  const entities = new RenderLayer({ sortableChildren: true });
+
+  // Per-build texture caches. Local to this call (not module-scope) so a cache's
+  // lifetime matches the display tree it populates: `app.destroy(true, true)` on
+  // unmount destroys every sprite's texture, and a module-scope cache would keep
+  // handing out those now-destroyed textures to the next buildMapLayers call.
+  const objectTextures = new Map<string, Texture>();
+  function objectTexture(kind: string): Texture {
+    let tex = objectTextures.get(kind);
+    if (!tex) {
+      const sprite = SPRITES[kind] ?? SPRITES.table;
+      tex = Texture.from(blitIsoSprite(sprite, SPRITE_SCALE));
+      objectTextures.set(kind, tex);
+    }
+    return tex;
+  }
+
+  const personTextures = new Map<string, Texture>();
+  function personTexture(paletteIndex: number, facingVariant: 'front' | 'back' = 'front'): Texture {
+    const key = `${paletteIndex}:${facingVariant}`;
+    let tex = personTextures.get(key);
+    if (!tex) {
+      const base = facingVariant === 'back' ? PERSON_BACK : SPRITES.person;
+      const sprite = { ...base, palette: PERSON_PALETTES[paletteIndex] };
+      tex = Texture.from(blitIsoSprite(sprite, SPRITE_SCALE));
+      personTextures.set(key, tex);
+    }
+    return tex;
+  }
+
+  for (let r = 0; r < map.grid.rows; r++) {
+    for (let c = 0; c < map.grid.cols; c++) {
+      if (map.cells[r][c] !== 'floor') continue;
+      const room = roomIndex.get(`${c},${r}`);
+      const color = room ? ROOM_COLORS[room.kind] : VOID_COLOR;
+      const p0 = cellToScreen(c, r);
+      const p1 = cellToScreen(c + 1, r);
+      const p2 = cellToScreen(c + 1, r + 1);
+      const p3 = cellToScreen(c, r + 1);
+      const g = new Graphics();
+      g.poly([p0.x, p0.y, p1.x, p1.y, p2.x, p2.y, p3.x, p3.y]).fill(color);
+      floor.addChild(g);
+    }
+  }
+
+  for (const rawWall of map.walls) {
+    const wall = foldToVisibleFace(rawWall);
+    if (wall.side !== 'N' && wall.side !== 'W') continue; // only the two visible faces
+    const [c, r] = wall.cell;
+    // Ground-level endpoints of this cell edge.
+    const a = cellToScreen(c, r);
+    const b = wall.side === 'N' ? cellToScreen(c + 1, r) : cellToScreen(c, r + 1);
+    const lift = heightOffset(wall.kind === 'door' ? WALL_HEIGHT * 0.4 : WALL_HEIGHT);
+    const color = wall.kind === 'wall' ? WALL_COLOR : wall.kind === 'door' ? DOOR_COLOR : 0x666666;
+    const g = new Graphics();
+    g.poly([a.x, a.y, b.x, b.y, b.x, b.y + lift, a.x, a.y + lift]).fill(color);
+    // Same global depth-sort as objects/spawns (entities RenderLayer) — a wall and a
+    // piece of furniture at comparable cx+cy now paint in correct relative order instead
+    // of walls always drawing under everything.
+    g.zIndex = Math.floor(c) + Math.floor(r);
+    walls.addChild(g);
+    entities.attach(g);
+  }
+
+  // Depth key shared by the pre-sort below (for hit-test child order) and the RenderLayer
+  // zIndex (for draw order) — keyed off the footprint's centre, matching where the sprite
+  // is actually drawn (anchor 0.5,1 at base = x+w/2, y+h/2), not its origin corner.
+  const objectDepthKey = (obj: MapObject) =>
+    Math.floor(obj.x + obj.footprint.w / 2) + Math.floor(obj.y + obj.footprint.h / 2);
+
+  // Pixi's hit-test/event system picks the last/front-most child of a container on an
+  // overlapping hit, independent of the RenderLayer zIndex that controls paint order —
+  // so `objects`/`spawns` (the containers PixiStage's pointertap picking walks) still
+  // need their own children added in depth order, same as before the RenderLayer change.
+  const orderedObjects = [...map.objects].sort((a, b) => objectDepthKey(a) - objectDepthKey(b));
+  for (const obj of orderedObjects) {
+    // Base-center of the footprint, at floor level — the sprite's own art
+    // (top face + front faces) depicts the object's height, so no vertical
+    // lift here or the sprite would float above its cell.
+    const base = cellToScreen(obj.x + obj.footprint.w / 2, obj.y + obj.footprint.h / 2);
+    const sprite = new Sprite(objectTexture(obj.kind)) as Sprite & SelectableNode;
+    sprite.anchor.set(0.5, 1);
+    sprite.x = base.x;
+    sprite.y = base.y;
+    sprite.zIndex = objectDepthKey(obj);
+    sprite.eventMode = 'static';
+    sprite.cursor = 'pointer';
+    sprite.mapEntity = obj;
+    objects.addChild(sprite);
+    entities.attach(sprite);
+  }
+
+  const gLines = new Graphics();
+  for (let r = 0; r < map.grid.rows; r++) {
+    for (let c = 0; c < map.grid.cols; c++) {
+      const p0 = cellToScreen(c, r);
+      const p1 = cellToScreen(c + 1, r);
+      const p2 = cellToScreen(c + 1, r + 1);
+      const p3 = cellToScreen(c, r + 1);
+      gLines.poly([p0.x, p0.y, p1.x, p1.y, p2.x, p2.y, p3.x, p3.y]);
+    }
+  }
+  gLines.stroke({ width: 1, color: GRID_LINE_COLOR, alpha: 0.15 });
+  gridLines.addChild(gLines);
+
+  const collisionG = new Graphics();
+  for (let r = 0; r < map.grid.rows; r++) {
+    for (let c = 0; c < map.grid.cols; c++) {
+      if (map.cells[r][c] === 'floor' && !grid.isWalkable([c, r])) {
+        const p0 = cellToScreen(c, r);
+        const p1 = cellToScreen(c + 1, r);
+        const p2 = cellToScreen(c + 1, r + 1);
+        const p3 = cellToScreen(c, r + 1);
+        collisionG.poly([p0.x, p0.y, p1.x, p1.y, p2.x, p2.y, p3.x, p3.y]).fill({ color: COLLISION_COLOR, alpha: 0.4 });
+      }
+    }
+  }
+  collision.addChild(collisionG);
+
+  const navG = new Graphics();
+  for (let r = 0; r < map.grid.rows; r++) {
+    for (let c = 0; c < map.grid.cols; c++) {
+      if (!grid.isWalkable([c, r])) continue;
+      const center = cellToScreen(c + 0.5, r + 0.5);
+      if (grid.canMove([c, r], [c + 1, r])) {
+        const next = cellToScreen(c + 1.5, r + 0.5);
+        navG.moveTo(center.x, center.y).lineTo(next.x, next.y);
+      }
+      if (grid.canMove([c, r], [c, r + 1])) {
+        const next = cellToScreen(c + 0.5, r + 1.5);
+        navG.moveTo(center.x, center.y).lineTo(next.x, next.y);
+      }
+    }
+  }
+  navG.stroke({ width: 1, color: NAV_EDGE_COLOR, alpha: 0.5 });
+  nav.addChild(navG);
+
+  for (const room of map.rooms) {
+    const cols = room.cells.map(([c]) => c);
+    const rowsArr = room.cells.map(([, r]) => r);
+    const minC = Math.min(...cols);
+    const minR = Math.min(...rowsArr);
+    const maxC = Math.max(...cols);
+    const maxR = Math.max(...rowsArr);
+    const p0 = cellToScreen(minC, minR);
+    const p1 = cellToScreen(maxC + 1, minR);
+    const p2 = cellToScreen(maxC + 1, maxR + 1);
+    const p3 = cellToScreen(minC, maxR + 1);
+    const g = new Graphics();
+    g.poly([p0.x, p0.y, p1.x, p1.y, p2.x, p2.y, p3.x, p3.y])
+      .stroke({ width: 2, color: ROOM_BOUNDS_COLOR, alpha: 0.6 });
+    roomBounds.addChild(g);
+    const label = new Text({ text: room.name, style: { fill: ROOM_BOUNDS_COLOR, fontSize: 10 } });
+    label.x = p0.x + 4;
+    label.y = p0.y + 4;
+    roomBounds.addChild(label);
+  }
+
+  // Same depth-ordered-insertion reasoning as orderedObjects above, for spawns' own
+  // container. Spawns have no footprint (a single point), so the key is already
+  // centre-based — no origin-vs-centre discrepancy to fix here (Fix 4 doesn't apply).
+  const orderedSpawns = [...map.spawns].sort(
+    (a, b) => (Math.floor(a.x) + Math.floor(a.y)) - (Math.floor(b.x) + Math.floor(b.y)),
+  );
+  for (const spawn of orderedSpawns) {
+    const base = cellToScreen(spawn.x, spawn.y);
+    const container: SelectableNode = new Container();
+    container.x = base.x;
+    container.y = base.y;
+    // A small ground ring keeps the player/npc colour distinction the flat
+    // marker used to carry; the person sprite stands on top of it, anchored
+    // at its feet so it reads as standing on the spawn cell. Both are drawn
+    // at the container's local origin — the container itself carries world
+    // position, so moving an entity later is one `container.x/y` update.
+    const ring = new Graphics();
+    const ringColor = spawn.kind === 'player' ? SPAWN_PLAYER_COLOR : SPAWN_NPC_COLOR;
+    ring.ellipse(0, 0, TILE_W * 0.28, TILE_H * 0.28).fill({ color: ringColor, alpha: 0.6 });
+    const paletteIndex = hash(spawn.id) % PERSON_PALETTES.length;
+    const person = new Sprite(personTexture(paletteIndex, 'front'));
+    person.label = 'person';
+    person.anchor.set(0.5, 1);
+    container.addChild(ring, person);
+    container.zIndex = Math.floor(spawn.x) + Math.floor(spawn.y);
+    container.eventMode = 'static';
+    container.cursor = 'pointer';
+    container.mapEntity = spawn;
+    spawns.addChild(container);
+    entities.attach(container);
+  }
+
+  // entities (the shared RenderLayer holding the actual visible sprites/wall graphics)
+  // sits right after walls so debug overlays (collision/nav/grid/room-bounds) draw on
+  // top of them, as before the RenderLayer change — objects/spawns/walls stay in the
+  // child list too since MapLayers fields and PixiStage's .visible toggling/child
+  // lookups still resolve against those containers.
+  world.addChild(floor, walls, objects, spawns, entities, roomBounds, gridLines, collision, nav);
+  return {
+    world, floor, walls, objects, grid: gridLines, collision, nav, roomBounds, spawns,
+    getPersonTexture: personTexture,
+  };
+}
+
+export function mapPixelBounds(map: MapDef): Bounds {
+  const corners = [
+    cellToScreen(0, 0),
+    cellToScreen(map.grid.cols, 0),
+    cellToScreen(map.grid.cols, map.grid.rows),
+    cellToScreen(0, map.grid.rows),
+  ];
+  const xs = corners.map((p) => p.x);
+  const ys = corners.map((p) => p.y);
+  const minX = Math.min(...xs);
+  const maxX = Math.max(...xs);
+  const minY = Math.min(...ys);
+  const maxY = Math.max(...ys);
+  // N/W wall tops are lifted `heightOffset(WALL_HEIGHT)` px above the floor corners
+  // computed above; pad the top edge by that much rather than re-deriving the box from
+  // each wall's lifted corners — cheaper, and exact for this map (every wall sits on
+  // the floor's outer boundary, so no wall reaches further sideways than a floor corner).
+  const topPad = WALL_HEIGHT * HEIGHT_PX;
+  return { x: minX, y: minY - topPad, width: maxX - minX, height: maxY - minY + topPad };
+}

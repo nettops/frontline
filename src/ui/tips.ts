@@ -47,6 +47,8 @@ import { canContract } from '../sim/contract';
 import { RIVAL_IDS } from '../config/factions';
 import { availableCrew } from '../sim/npc';
 import { autopilotOn } from '../sim/autopilot';
+import { armouryOf } from '../sim/pieces';
+import { career } from '../sim/career';
 
 export interface Tip {
   id: string;
@@ -625,13 +627,46 @@ export const TIPS: Tip[] = [
     when: (s) => !heirOf(s) && eligibleHeirs(s).length > 0,
   },
   {
+    /*
+       Round 28's blind report: unlocked at $2,800 to his name, mid solvency
+       crisis, and never touched the trade all game — filed under "wanted to,
+       was blocked" by a retainer this tip never mentioned. The panel itself
+       already learned this lesson once (the fourth bar on the supply row,
+       above — a tester held the money, the ground and the people and still
+       found the retainer by clicking a greyed-out button). This is the same
+       gap one screen earlier: the tip that sends a player here said nothing
+       about there being a price of entry at all.
+
+       No figure quoted — `priced()` scales this 0.6x to 8x with the market,
+       so a number honest today could be wrong by the time anybody reads it.
+       Naming that it costs something up front, and that it's worth checking
+       before committing, is true regardless of where prices happen to sit.
+    */
     id: 'trade',
     only: ['career', 'sandbox'],
     label: 'The trade',
     text:
-      'You have premises now, so people will deal with you. The Trade runs on a standing arrangement and districts to move through — steady money, and the one thing on your books a warrant can physically take.',
+      'You have premises now, so people will deal with you. The Trade runs on a standing arrangement and districts to move through — steady money, and the one thing on your books a warrant can physically take. Opening one costs a retainer up front; see what each costs before you commit to it.',
     panel: 'contraband',
     when: (s) => tradeUnlocked(s, 'product') && !s.contraband.supplierId,
+  },
+  /*
+     2026-09-10, closing a real gap the polish audit found: the Armoury sits
+     unconditionally on the rail from day one, gets no rail badge the way
+     delegation and standing orders do, and had never had a tip pointing at
+     it at all — the one system in the audit that could plausibly go a whole
+     career unnoticed. Gated on the one policy decision the screen actually
+     offers (`setCarry`) still sitting at its untouched default, and a crew
+     big enough that what they carry could plausibly matter.
+  */
+  {
+    id: 'armoury',
+    only: ['career', 'sandbox'],
+    label: 'The armoury',
+    text:
+      'Nobody has ever told your people what to carry. The Armoury is a policy, not a shop — set it once, in Muscle or Instinct or nothing at all, and read what happens after. Nobody is asked at the moment it matters.',
+    panel: 'armoury',
+    when: (s) => armouryOf(s).carry === 'pocket' && crewList(s).length >= 3,
   },
   {
     id: 'why',
@@ -640,6 +675,23 @@ export const TIPS: Tip[] = [
       'When a family does something that makes no sense, Why has the decision they took and the ones they turned down, with the numbers. None of it is scripted, so the answer is always in there.',
     panel: 'why',
     when: (s) => s.day >= 60,
+  },
+  /*
+     2026-09-10. `CareerPanel.tsx` shipped this session with a rail entry and
+     no tip at all — every other system old enough to have one gets pointed
+     at organically; a brand-new panel deserves the same rather than an
+     assumption a player finds an unfamiliar rail item unprompted. Gated on
+     the first chapter actually existing, so this never fires on an empty
+     page with nothing yet to show for it.
+  */
+  {
+    id: 'career',
+    only: ['career', 'sandbox'],
+    label: 'Career',
+    text:
+      'Something just happened worth calling a chapter — a rank, a war, a district, a man. The log only reaches back so far; Career keeps the handful of things that were actually worth remembering, for as long as you play.',
+    panel: 'career',
+    when: (s) => career(s).length > 0,
   },
 
   // ----------------------------------------------------------- simulation ---

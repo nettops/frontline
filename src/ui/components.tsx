@@ -1,9 +1,8 @@
 /** Shared presentational pieces. No game logic lives here. */
 
 import type { ReactNode } from 'react';
-import type { Npc, NpcStatId } from '../sim/types';
-import { perceive } from '../sim/npc';
-import { ROLE_WAGE } from '../config/economy';
+import type { GameState, Npc, NpcStatId } from '../sim/types';
+import { perceive, wageExpectation } from '../sim/npc';
 
 export function Panel({
   title,
@@ -136,14 +135,19 @@ export function Gauge({
  * a crew table because they were the top two rows, not because I knew who they
  * were."
  *
- * Reads their *perceived* greed, never the real number. When you do not know a
- * man, you do not know whether he thinks he is underpaid.
+ * The fog gates whether you get a reading at all — you do not know if a
+ * stranger feels underpaid — but once greed is known, the reading itself
+ * uses the real `wageExpectation(state, npc)`, the same figure
+ * `loyaltyPressures` compares against. It used to re-derive an approximation
+ * from the perceived greed band, anchored to the nominal role wage with no
+ * price indexation and no trait effects — which meant a wage that kept pace
+ * with inflation could still read "paid well" long after the man himself, by
+ * the game's own math, had started thinking he was worth more.
  */
-export function payRead(npc: Npc): { text: string; tone: string } {
+export function payRead(state: GameState, npc: Npc): { text: string; tone: string } {
   const greed = perceive(npc, 'greed');
   if (!greed.known) return { text: 'no idea what they expect', tone: 'faint' };
-  const base = ROLE_WAGE[npc.role];
-  const expected = base * (0.75 + ((greed.bandIndex * 20 + 10) / 100) * 0.5);
+  const expected = wageExpectation(state, npc);
   if (npc.wage >= expected * 1.15) return { text: 'paid well', tone: 'good' };
   if (npc.wage >= expected * 0.95) return { text: 'paid fairly', tone: 'dim' };
   return { text: 'thinks they are worth more', tone: 'hot' };

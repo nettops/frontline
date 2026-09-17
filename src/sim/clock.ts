@@ -26,6 +26,10 @@ import { tickLaunderer } from './launderers';
 import { tickTerritory } from './territory';
 import { tickAnnouncements } from './announce';
 import { tickDelegation } from './delegation';
+import { tickCapoPitches } from './capoPitches';
+import { tickWeeklyTribute } from './tribute';
+import { checkCapoPowerImbalance, checkGenerationalFracture } from './capoTension';
+import { checkCapoFavoritism } from './capoFavoritism';
 import { tickPromises } from './promises';
 import { markStanding } from './standing';
 import { tickInformants } from './informants';
@@ -41,13 +45,17 @@ import { tickAging, type AgingHooks } from './aging';
 import { ageCapos, tickCapos } from './capos';
 import { tickPerception } from './perception';
 import { tickCivic } from './civic';
-import { tickHome } from './personal';
+import { tickConfidant, tickHome, tickStress } from './personal';
+import { tickSuburban } from './suburbs';
+import { tickPetProject } from './petProject';
+import { checkDementiaOnset, tickDementia } from './dementia';
+import { tickFlorida } from './florida';
 import { tickCards } from './cards';
 import { tickWhispers } from './whispers';
 import { tickEvents } from './events';
 import { tickWorld } from './world';
 import { tickFear, tickRecord, tickStanding } from './player';
-import { tickCard, tickInside } from './verbs';
+import { tickCard, tickInside, tickStakes } from './verbs';
 import { tickPoints } from './build';
 import { tickNickname } from './nicknames';
 import { refreshRecruits } from './crew';
@@ -57,12 +65,23 @@ import { DRIFT_INTERVAL_DAYS } from '../config/npcs';
 import { PAYDAY_INTERVAL } from '../config/economy';
 import { RIVAL_IDS, type FactionId } from '../config/factions';
 import { houseShort } from './houses';
+import { careerSnapshot, recordCareerMilestones } from './career';
 
 export function advanceDay(state: GameState): void {
   if (state.gameOver) return;
 
   state.day += 1;
   const rng = new Rng(state.rng);
+  /*
+     Taken before anything below moves, so `recordCareerMilestones` (see its
+     own call sites) has something to diff against. In Simulation mode there
+     is no player and no career to keep a chapter of, so this stays unread —
+     the snapshot itself is cheap, three derived reads and an object walk,
+     and skipping it would just be a second special case to keep in sync
+     with the one already guarding the block near the bottom of this
+     function.
+  */
+  const careerBefore = state.mode !== 'simulation' ? careerSnapshot(state) : null;
 
   // 0. What a dollar is worth today. First, because every figure produced by
   //    every system below is quoted in it.
@@ -160,8 +179,16 @@ export function advanceDay(state: GameState): void {
   tickNickname(state);
   tickCard(state);
   tickInside(state);
+  tickStakes(state);
   tickStanding(state);
   tickHoldings(state);
+  // 4b. What the capos bring up, once a week.
+  //
+  //     Here rather than beside the other capo systems at 6 because this is
+  //     income: it has to land before the book is ruled off at 5d or a whole
+  //     week of envelopes shows up as `unaccounted`. Weekly on its own clock
+  //     — see `tickWeeklyTribute`, which returns on every other day.
+  tickWeeklyTribute(state, rng);
   // 5. Availability timers, familiarity, and the calendar turning over.
   tickNpcs(state);
   // 5a. Once a year: decline, retirement, and the deaths that are nobody's
@@ -169,6 +196,13 @@ export function advanceDay(state: GameState): void {
   //     every crisis in a long game used to have to be caused by the player
   //     or by an agency.
   tickAging(state, rng, agingHooks(state));
+  // 5a1. And the one thing decline can do that retirement and death cannot:
+  //      leave a man in place who knows everything and can no longer be
+  //      trusted with it. Immediately after `tickAging` so both run off the
+  //      same freshly-incremented ages, and after it rather than before so a
+  //      man who died this morning is not diagnosed this afternoon. Draws
+  //      nothing unless somebody at the table is actually over sixty.
+  checkDementiaOnset(state, rng);
   // 5b. Anything you said you would do, checked against what you did. Before
   //     the weekly drift, so a man who was let down this morning is aggrieved
   //     when the drift asks him how he feels about you this afternoon.
@@ -193,6 +227,23 @@ export function advanceDay(state: GameState): void {
   //     running it the other way round would bleed influence out of districts
   //     somebody is standing in.
   tickDelegation(state, rng);
+  // 6b. What a capo is bringing the boss this week, above street work.
+  tickCapoPitches(state, rng);
+  // 6c. Whether one capo has genuinely outgrown another this week — a real
+  //     standing gap lands as tension on the weaker man's own tie. Consumes
+  //     no rng: a standing gap is a deterministic fact, not a roll.
+  checkCapoPowerImbalance(state);
+  // 6c1. And whether the men at that table are even in the same business any
+  //      more. Same weekly pass, same cooldown, same tie sheet — the third
+  //      cause after power and ground, and the first that is about who the
+  //      men are rather than what they have built. Consumes no rng either: a
+  //      man's age, rank and traits either put him on one side of it or not.
+  checkGenerationalFracture(state);
+  // 6d. Whether one capo's pitches have genuinely been getting the nod far
+  //     more than another's this week — the ignored man carries it against
+  //     the boss. Also consumes no rng: a share either clears the gap or it
+  //     does not.
+  checkCapoFavoritism(state);
   // 7. Influence bleeds where you stopped showing up; feeling drifts back.
   if (state.day % 7 === 0) tickTerritory(state);
   // 7a. Whatever reached you this week, and how sure whoever brought it was.
@@ -214,6 +265,62 @@ export function advanceDay(state: GameState): void {
   //      so it can sit anywhere in the week. Here, beside the other opinions
   //      being formed about you.
   tickHome(state);
+  // 7a2a. What carrying all of it is doing to the man carrying it.
+  //
+  //       Own call rather than nested inside `tickHome` above: two of its
+  //       four drivers (wars, heat) are not household facts at all, and
+  //       `tickHome`'s own header scopes that function to the household
+  //       specifically. Placed right after it so a week's fresh neglect
+  //       reading feeds this week's stress rather than last week's.
+  tickStress(state);
+  // 7a2b. And the half of it that is not the household either.
+  //
+  //       Its own call for the same reason `tickStress` above is: this is not
+  //       a household fact, and `tickHome` is scoped to the household by its
+  //       own header. Placed here rather than anywhere later because
+  //       `tickInvestigations` (7d) reads the discretion this moves — so a
+  //       week's fresh decay feeds the same week's wiretap, not last week's.
+  tickConfidant(state);
+  // 7a2c. The one place that is not work, and what the crew has done to it.
+  //
+  //       Before `tickStress` would be wrong and after it is right: the relief
+  //       this hands back is the week that just happened, and running it here
+  //       means a boss who owns somewhere quiet reads the benefit on the same
+  //       weekly close that charged him for the wars. Its raid draws from the
+  //       causal stream, so it sits with the other outcomes rather than with
+  //       the readings.
+  tickPetProject(state, rng);
+  // 7a2d. And the people on either side, who are not in the life and have
+  //       never been asked to be.
+  //
+  //       Before `tickInvestigations` (7d) on purpose, for the same reason
+  //       `tickConfidant` is: a neighbour who folded this week should feed
+  //       this week's file rather than next week's. Reads `activeCases` and
+  //       writes to one of them; nothing upstream depends on it.
+  tickSuburban(state, rng);
+  // 7a2e. And the old man in the coffee shop.
+  //
+  //       Before `tickInvestigations` (7d) for the same reason `tickConfidant`
+  //       and `tickSuburban` are: something said out loud this week should
+  //       feed this week's file. Returns before any draw when nobody on the
+  //       roster is failing, so a career with a young table is bit-identical
+  //       to one written before this existed.
+  tickDementia(state, rng);
+  // 7a2f. And the account nobody is supposed to know about.
+  //
+  //       Weekly. Before `tickDeposition` (9b) on purpose and by a long way:
+  //       the grievance this puts on the capos is what feeds `disaffected()`,
+  //       so a week that pushed somebody over the bar should be the week the
+  //       coup roll reads it rather than the week after. Returns before
+  //       touching anything at all until a boss has actually opened the
+  //       account, so a career that never siphons is bit-identical to one
+  //       written before this existed.
+  tickFlorida(state, rng);
+  if (state.gameOver) {
+    // A mutiny is the one thing in this block that can end the run mid-tick.
+    if (careerBefore) recordCareerMilestones(state, careerBefore);
+    return;
+  }
   // 7a3. And the room slowly stops watching your hands.
   //
   //      Decay only — sitting down is a player action, never a tick. Touches
@@ -249,10 +356,20 @@ export function advanceDay(state: GameState): void {
   //     it is the only way out of the chair that is entirely the player's own
   //     work, and the only one a boss who is thirty can reach.
   tickDeposition(state, rng);
-  if (state.gameOver) return;
+  if (state.gameOver) {
+    // The run just ended mid-tick — the most career-worthy thing that can
+    // happen, and the diff still only reads what is already true in state,
+    // so an early exit costs nothing but a few later systems' worth of the
+    // same day's chapters.
+    if (careerBefore) recordCareerMilestones(state, careerBefore);
+    return;
+  }
   // 10. Agencies read what you left behind. This is where the bill comes due.
   tickInvestigations(state, rng);
-  if (state.gameOver) return;
+  if (state.gameOver) {
+    if (careerBefore) recordCareerMilestones(state, careerBefore);
+    return;
+  }
   // 10a. The city reads about all of the above and forms a view; city hall
   //      catches up with the city some weeks later. This has to sit after
   //      everything that generates coverage and before the conditions that
@@ -280,6 +397,7 @@ export function advanceDay(state: GameState): void {
     // 15. Has the organization earned the next rank?
   }
 
+  if (careerBefore) recordCareerMilestones(state, careerBefore);
 }
 
 /**

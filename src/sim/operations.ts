@@ -35,6 +35,7 @@ import {
   traitEffect,
 } from './npc';
 import { tiesFromOperation, tookTheBlame } from './ties';
+import { applyVoucherConsequence } from './capoVouches';
 import { patternDelta, patternHeat, patternOn } from './standingOrders';
 import { remember } from './memory';
 import { keepPromise } from './promises';
@@ -107,12 +108,16 @@ import {
 } from '../config/operations';
 import { LAWYER_BY_LEVEL } from '../config/lawEnforcement';
 import { CANCEL_OPERATION_HEAT } from '../config/heat';
-import { ATTRIBUTE_MAX, FEAR, ROLE_ORDER } from '../config/economy';
+import { ATTRIBUTE_MAX, FEAR, ROLE_ORDER, rankIndex } from '../config/economy';
 import { civicRoster } from './civic';
 import { bond } from './diplomacy';
 import { rivals } from './faction';
 import { FAMILIARITY_PER_OPERATION, BEHAVIOUR } from '../config/npcs';
 import { DIFFICULTY_BY_ID } from '../config/difficulty';
+import { rankNow } from './rank';
+import { TRIBUTE } from '../config/tribute';
+import { insulateCommand } from './tribute';
+import { doctrineAttributeBonus, doctrineFederalHeat } from './doctrine';
 
 /**
  * Everything a job's unlock condition is allowed to know about.
@@ -236,6 +241,63 @@ export function lockedOperations(state: GameState): OperationDef[] {
 }
 
 /**
+ * The jobs a boss runs personally, on a corner, with his own hands.
+ *
+ * `work_it_yourself`'s own doc comment says what these are for: the answer to
+ * "what can I do this week" when there is nobody else to send. Once there is
+ * somebody else to send, offering them on the board is offering the player a
+ * downgrade — see `config/operations.ts`'s header on why the free job is
+ * strictly worse money than anything a real crew can run.
+ */
+export const STREET_WORK_IDS = new Set([
+  'work_it_yourself',
+  'corner_shakedown',
+  'boost_cars',
+  'burglary_run',
+  'freelance_muscle',
+]);
+
+/**
+ * Whether the organization has grown a layer between the boss and the street.
+ *
+ * Either a district somebody else already answers for (`stewardOf` exists
+ * somewhere), or Crew Leader itself — read off `rankNow`, not a second set of
+ * thresholds, for the same reason `rank.ts`'s own header gives: what a player
+ * is called and what they are allowed to do cannot come apart.
+ *
+ * Backs off the moment there is nowhere else to turn. Two ways that happens:
+ * no district held at all — ground can decay under a steward without ever
+ * running `takeItBack`, so "a steward exists" and "a district is held" are
+ * not the same fact — or nothing else on the board is actually affordable,
+ * which is the exact broke state `work_it_yourself` exists to answer (see
+ * `attention.ts`'s identical check for idle crew with nothing to send them
+ * on).
+ */
+export function outgrewStreetWork(state: GameState): boolean {
+  const delegated = territoryList(state).some((t) => !!t.stewardId);
+  const promoted = rankIndex(rankNow(state).id) >= rankIndex('crew_leader');
+  if (!delegated && !promoted) return false;
+
+  const board = opsBoard(state);
+  if (board.districtsHeld === 0) return false;
+
+  return OPERATIONS.some(
+    (op) =>
+      !STREET_WORK_IDS.has(op.id) &&
+      op.tier > 0 &&
+      isOpen(op, board) &&
+      operationCost(state, op) <= totalFunds(state),
+  );
+}
+
+/** What the manual board actually shows — `availableOperations`, minus street work the organization has outgrown. */
+export function manualBoard(state: GameState): OperationDef[] {
+  const ops = availableOperations(state);
+  if (!outgrewStreetWork(state)) return ops;
+  return ops.filter((op) => !STREET_WORK_IDS.has(op.id));
+}
+
+/**
  * How much attention this job actually draws given who the player is now.
  *
  * Work far beneath your standing is close to invisible — nobody building a
@@ -264,13 +326,27 @@ export function heatScale(
     0,
   );
   const territory = territoryId ? state.territories[territoryId] : undefined;
-  return heatScaleForDistance(
-    heatDistance({
-      rankGap: standing(state) - def.tier,
-      sentSeniority,
-      stewarded: !!territory?.stewardId,
-      crew: crewList(state).filter((n) => n.status !== 'dead').length,
-    }),
+  return (
+    heatScaleForDistance(
+      heatDistance({
+        rankGap: standing(state) - def.tier,
+        sentSeniority,
+        stewarded: !!territory?.stewardId,
+        crew: crewList(state).filter((n) => n.status !== 'dead').length,
+      }),
+    ) *
+    /*
+       And what kind of organization the people building cases think they are
+       looking at.
+
+       Here rather than on `addHeat` because this is exactly what `heatScale`
+       already is — how much attention this job draws given who the player is
+       now — and because the panel that prints the figure reads this function.
+       A doctrine that quietly moved heat somewhere the breakdown could not
+       name would be the one thing rule 2 forbids. Returns 1 for every career
+       that has never declared one.
+    */
+    doctrineFederalHeat(state)
   );
 }
 
@@ -415,8 +491,19 @@ export function successBreakdown(
   const diff = DIFFICULTY_BY_ID[state.difficulty];
   // Competence is centred on 50, so an average crew is neutral rather than a bonus.
   const crewTerm = ((crewCompetence(crew) - 50) / 50) * CREW_COMPETENCE_WEIGHT;
-  const attrTerm =
-    (state.player.attributes[def.attribute] / ATTRIBUTE_MAX) * ATTRIBUTE_WEIGHT;
+  /*
+     And what the Iron Hand is worth on a job that is about fear.
+
+     Added here rather than written into `state.player.attributes` — see
+     `doctrineAttributeBonus`. Clamped at `ATTRIBUTE_MAX` so a boss who has
+     already maxed intimidation is not paid twice for it, which is also what
+     stops this row ever reading over 100% of the attribute's weight.
+  */
+  const attrPoints = Math.min(
+    ATTRIBUTE_MAX,
+    state.player.attributes[def.attribute] + doctrineAttributeBonus(state, def.attribute),
+  );
+  const attrTerm = (attrPoints / ATTRIBUTE_MAX) * ATTRIBUTE_WEIGHT;
   /*
      Two costs, two rows, because they are two different problems.
 
@@ -578,6 +665,25 @@ export function canLaunch(
         reason: 'You are already out on one of these. There is only one of you.',
       };
     }
+    /*
+       And the other place that one body goes.
+
+       An evening at home (`personal.ts`'s `goHome`) spends the same body this
+       job does, over the same one day — see the note there. A flag rather
+       than reading `home(state).lastVisitDay` directly: that field is also
+       the day `home()` was first lazily built, on whichever day `tickHome`
+       first runs for a career that has never visited at all, and comparing
+       it to `state.day` would misread that coincidence as a visit on
+       whichever day it happens to land — the same "went" flag idiom
+       `arrest_pressure` and this file's own `ran_${def.id}` cooldown already
+       use, rather than a field that means two different things.
+    */
+    if (state.flags['went_home_day'] === state.day) {
+      return {
+        ok: false,
+        reason: 'You went home tonight. There is only one of you, and that is where you were.',
+      };
+    }
   }
   for (const id of crewIds) {
     const npc = state.npcs[id];
@@ -665,6 +771,30 @@ export function launchOperation(
 
   const check = canLaunch(state, def, crewIds, territoryId, approach);
   if (!check.ok) return null;
+
+  /*
+     A boss on a corner.
+
+     Tier 0 is street work — the jobs `work_it_yourself` exists to answer when
+     there is nobody else to send. Once the player is a capo there is somebody
+     else to send, and being seen doing it himself is the whole of the cost:
+     no gate, no refusal, just standing. `outgrewStreetWork` already takes
+     these off the board in most of those careers; this prices the case where
+     the player reaches for one anyway.
+
+     Read before the stake is spent, so "he had the money and did it himself"
+     is judged on what he was holding when he decided rather than on what the
+     job left him. Below `handsOnPovertyExemptionFunds` nobody thinks less of
+     a man for working — that is not pride, that is being broke.
+  */
+  if (
+    def.tier === 0 &&
+    rankIndex(rankNow(state).id) >= rankIndex('capo') &&
+    totalFunds(state) >= TRIBUTE.handsOnPovertyExemptionFunds
+  ) {
+    gainRespect(state, -TRIBUTE.handsOnStreetWorkRespectPenalty);
+    addLog(state, 'A boss seen working street shakedowns is a boss losing respect.', 'crew');
+  }
 
   const cost = operationCost(state, def);
   if (!spend(state, cost, 'stakes')) return null;
@@ -885,6 +1015,19 @@ function resolveOperation(state: GameState, rng: Rng, op: ActiveOperation): void
        once it has gone.
     */
     payout = Math.round(payout * (1 + earningsBonus(state)));
+    /*
+       And what a job the boss never touched actually pays the boss.
+
+       Money flows up, but not all of it. A capo running his own crew on his
+       own account keeps the rest — `TRIBUTE.bossAutonomousCut` is the family's
+       end, and the difference is what delegation costs. Taken off `payout`
+       before `result.payout` rather than after, because the result is what
+       the briefing prints: the family's take is the true number, and the
+       crew's end is named in the log beside it rather than quietly missing.
+    */
+    const runner = op.autonomous && op.capoId ? state.npcs[op.capoId] : undefined;
+    const crewEnd = runner ? payout - Math.round(payout * TRIBUTE.bossAutonomousCut) : 0;
+    payout -= crewEnd;
     result.payout = payout;
     result.heat = heat;
     earnDirty(state, payout, 'jobs');
@@ -926,7 +1069,8 @@ function resolveOperation(state: GameState, rng: Rng, op: ActiveOperation): void
 
     addLog(
       state,
-      `${def.name} in ${tDef.name} paid out $${payout.toLocaleString('en-US')}.`,
+      `${def.name} in ${tDef.name} paid out $${payout.toLocaleString('en-US')}.` +
+        (runner ? ` ${runner.name}'s crew kept $${crewEnd.toLocaleString('en-US')}.` : ''),
       'success',
     );
   } else {
@@ -963,7 +1107,21 @@ function resolveOperation(state: GameState, rng: Rng, op: ActiveOperation): void
     addInfluence(state, op.territoryId, influenceStep * INFLUENCE_ON_FAILURE_SHARE);
     adjustSentiment(state, op.territoryId, SENTIMENT_ON_FAILURE);
 
+    /*
+       Command insulation.
+
+       The consequence table is shared by every job in the game, so the trail
+       a bad night leaves is cut off here rather than inside it — one snapshot
+       either side of the one call, instead of a flag threaded through every
+       branch of `applyFailureConsequence` and every other caller of it.
+
+       See `insulateCommand`: what the night added to the file is struck and
+       lands on the capo instead, unless there is already a wire up.
+    */
+    const capo = op.autonomous && op.capoId ? state.npcs[op.capoId] : undefined;
+    const fileBefore = capo ? new Set(Object.keys(state.evidence)) : null;
     result.consequence = applyFailureConsequence(state, rng, def, crew, op.territoryId);
+    if (capo && fileBefore) insulateCommand(state, capo, fileBefore);
     addLog(state, `${def.name} in ${tDef.name} failed. ${result.consequence}`, 'failure');
   }
 
@@ -1083,7 +1241,9 @@ function resolveSetup(
  */
 const VIOLENT_OUTCOMES = ['crew_injured', 'crew_arrested', 'heat_spike'];
 
-function applyFailureConsequence(
+// Exported so a test can reach `crew_arrested` directly, the same reason
+// `investigation.ts`'s `sweep` was pulled out of its own stage machine.
+export function applyFailureConsequence(
   state: GameState,
   rng: Rng,
   def: OperationDef,
@@ -1173,6 +1333,8 @@ function applyFailureConsequence(
       victim.stats.fear = clamp(victim.stats.fear + ARREST_FEAR_INCREASE, 0, 100);
       victim.stats.loyalty = clamp(victim.stats.loyalty - ARREST_LOYALTY_HIT, 0, 100);
       addNote(victim, state.day, `Arrested on the ${def.name}.`, 'bad');
+      // He was somebody's word before he was somebody's exposure.
+      applyVoucherConsequence(state, victim, state.day, 'was taken on a job');
       addEvidence(state, {
         day: state.day,
         source: 'operation',

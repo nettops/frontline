@@ -46,6 +46,8 @@ import {
 } from '../../config/lawEnforcement';
 import { CHANNEL_OF_SOURCE, HEAT_CHANNELS, type HeatChannel } from '../../config/heat';
 import { setHeat, tickHeat } from '../heat';
+import { figure, publicStandingTier } from '../civic';
+import { PUBLIC_STANDING_FIGURES } from '../../config/civic';
 import type { EvidenceTrace, GameState, Investigation } from '../types';
 
 function fresh(seed = 606): GameState {
@@ -578,6 +580,45 @@ describe('counterplay', () => {
     expect(informed.stageName).not.toBeNull();
   });
 
+  /*
+     Section 15/16 of the 2026-09-10 polish pass: `tickInvestigations` already
+     computes three named causal terms every week and none of them ever
+     reached the player — a case's growth read as one fact with no way to
+     trace it to a decision (evidence left behind), neglect (being loud), or
+     the agency's own unavoidable work. `lastGrowth` is the itemized reading;
+     `readCase(...).growth` is the same gate `strength`'s exact percentage
+     already uses, so a breakdown of a number you cannot precisely see is
+     never handed over either.
+  */
+  describe('what last week actually grew the case', () => {
+    it('splits the number into what was found, what they did, and how loud you were', () => {
+      const state = fresh();
+      const investigation = openCaseFor(state, 'city_police');
+      heatAt(state, 40);
+      drop(state, 'operation', 30);
+      runLaw(state, 1);
+
+      expect(investigation.lastGrowth?.absorbed).toBeGreaterThan(0);
+      expect(investigation.lastGrowth?.visibility).toBeGreaterThan(0);
+    });
+
+    it('is hidden behind the same intel bar the exact percentage needs', () => {
+      const state = fresh();
+      const investigation = openCaseFor(state, 'city_police');
+      heatAt(state, 40);
+      drop(state, 'operation', 30);
+      runLaw(state, 1);
+
+      expect(readCase(state, investigation).growth, 'blind but shown a breakdown anyway').toBeNull();
+
+      state.org.cash = 500_000;
+      buyContact(state, 'city_police');
+      const seen = readCase(state, investigation).growth;
+      expect(seen, 'informed and still shown nothing').not.toBeNull();
+      expect(seen).toEqual(investigation.lastGrowth);
+    });
+  });
+
   it('makes a contact cheaper the more pull you have', () => {
     const state = fresh();
     const plain = contactCost(state, 'city_police');
@@ -640,6 +681,89 @@ describe('counterplay', () => {
     const investigation = openCaseFor(state, 'city_police', 40);
     expect(destroyEvidence(state, new Rng(state.rng), investigation.id).ok).toBe(false);
     expect(state.org.cash).toBe(0);
+  });
+});
+
+/*
+   Milestone 5's Civic Insulation: `publicStandingTier(state).caseGrowthMultiplier`
+   applied to `absorbed` and `visibility` in `tickInvestigations` — see that
+   function's own comment for why those two terms and not `work`.
+
+   Ambient heat is held low and fixed across every scenario below, on
+   purpose: `publicStanding`'s heat-drag term would otherwise make Pillar
+   (bar 70) unreachable at the heat a case ordinarily runs at, and the point
+   here is to isolate the multiplier, not to also re-prove heat drags the
+   score (`civic.test.ts` already does that).
+*/
+describe('civic insulation', () => {
+  /**
+   * Fresh evidence every week, so `momentum` never gates the reading this
+   * test cares about. Sentiment is set on every district, not just home —
+   * `openCaseFor`'s own `bulkUp` raises influence in several districts to
+   * clear the federal noticing bar, and `publicStanding`'s sentiment term
+   * averages every district actually held, so a fixture that only touched
+   * home would have most of that average sitting on the untouched default.
+   */
+  function growthAt(
+    sentiment: number,
+    allianceStanding: number,
+    weeks = 6,
+  ): { growth: number; tierId: string } {
+    const state = fresh(4242);
+    const investigation = openCaseFor(state, 'federal_bureau', 20);
+    heatAt(state, 5);
+    for (const t of Object.values(state.territories)) t.sentiment = sentiment;
+    for (const id of PUBLIC_STANDING_FIGURES) figure(state, id).standing = allianceStanding;
+    const tierId = publicStandingTier(state).id;
+
+    const rng = new Rng(state.rng);
+    const before = investigation.strength;
+    let day = state.day;
+    for (let w = 0; w < weeks; w++) {
+      day += 7;
+      state.day = day;
+      drop(state, 'operation', 15);
+      tickInvestigations(state, rng);
+    }
+    return { growth: investigation.strength - before, tierId };
+  }
+
+  it('reduces evidence accumulation when public standing reads Community Pillar (>= 70)', () => {
+    const pillar = growthAt(100, 100); // publicStanding 74 -- Community Pillar, x0.8
+    const businessman = growthAt(50, 80); // publicStanding 52 -- Respected Merchant, x1.0
+    expect(pillar.tierId, 'the fixture is not isolating the tier it claims to').toBe('pillar');
+    expect(businessman.tierId, 'the baseline is not the neutral tier it claims to be').toBe('businessman');
+    expect(pillar.growth, 'a benefactor grows federal cases exactly as fast as a nobody').toBeLessThan(
+      businessman.growth,
+    );
+  });
+
+  it('accelerates evidence accumulation when public standing reads Street Parasite (< 20)', () => {
+    const pariah = growthAt(0, 0); // publicStanding 14 -- Street Parasite, x1.35
+    const businessman = growthAt(50, 80); // publicStanding 52 -- Respected Merchant, x1.0
+    expect(pariah.tierId, 'the fixture is not isolating the tier it claims to').toBe('pariah');
+    expect(pariah.growth, 'a known predator draws no extra federal attention').toBeGreaterThan(
+      businessman.growth,
+    );
+  });
+
+  it('logs a witness-shield note only once the tier actually clears the Pillar bar', () => {
+    const state = fresh(4242);
+    openCaseFor(state, 'federal_bureau', 20);
+    heatAt(state, 5);
+    for (const t of Object.values(state.territories)) t.sentiment = 100;
+    for (const id of PUBLIC_STANDING_FIGURES) figure(state, id).standing = 100;
+    expect(publicStandingTier(state).id).toBe('pillar');
+
+    const rng = new Rng(state.rng);
+    state.day += 7;
+    drop(state, 'operation', 15);
+    tickInvestigations(state, rng);
+
+    expect(
+      state.log.some((l) => l.text.includes('refused to cooperate with federal subpoenas')),
+      'a Community Pillar boss got no note that the neighbourhood was covering for him',
+    ).toBe(true);
   });
 });
 

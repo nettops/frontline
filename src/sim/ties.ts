@@ -18,12 +18,14 @@ import type { GameState, Id, Npc, Tie } from './types';
 import {
   MAX_TIES,
   TIE_CAUSE_TEXT,
+  TIE_COMPAT,
   TIE_DEPARTURE,
   TIE_DRIFT,
   TIE_EVENTS,
   TIE_FROM_OPERATION,
   type TieCause,
 } from '../config/ties';
+import { TRAIT_BY_ID } from '../config/npcs';
 
 /** Dead, gone, or running the place. Local copy of npc.ts:isFormerCrew. */
 function gone(npc: Npc): boolean {
@@ -107,13 +109,59 @@ export function passedOver(
   }
 }
 
+/**
+ * How much who two people *are* changes what the same job builds between
+ * them. Same trait, more; a trait one holds that the other's clashes with,
+ * less. See `TIE_COMPAT` — most pairs are simply different and read as 1.
+ */
+function traitCompatibility(a: Npc, b: Npc): number {
+  let mult = 1;
+  for (const id of a.traits) {
+    if (b.traits.includes(id)) mult *= TIE_COMPAT.sameTraitMult;
+    for (const clash of TRAIT_BY_ID[id]?.clashesWith ?? []) {
+      if (b.traits.includes(clash)) mult *= TIE_COMPAT.clashTraitMult;
+    }
+  }
+  return mult;
+}
+
+/**
+ * Peer contagion: two people who already trust each other well, put on a job
+ * together, let one's grievance rub off on the other rather than sitting as
+ * two fully independent numbers. The one who has been here longer carries
+ * more of "the official line" — the junior moves further than the senior
+ * does, not none at all.
+ */
+function peerInfluence(a: Npc, b: Npc): void {
+  const tieAB = find(a, b.id);
+  const tieBA = find(b, a.id);
+  if (!tieAB || !tieBA) return;
+  if (tieAB.trust < TIE_COMPAT.contagionTrustAbove || tieBA.trust < TIE_COMPAT.contagionTrustAbove) {
+    return;
+  }
+  const seniorIsA = a.daysInCrew >= b.daysInCrew;
+  const [senior, junior] = seniorIsA ? [a, b] : [b, a];
+  const gap = junior.stats.grievance - senior.stats.grievance;
+  junior.stats.grievance = clamp(
+    junior.stats.grievance - gap * TIE_COMPAT.contagionJuniorPull,
+    0,
+    100,
+  );
+  senior.stats.grievance = clamp(
+    senior.stats.grievance + gap * TIE_COMPAT.contagionSeniorPull,
+    0,
+    100,
+  );
+}
+
 /** A finished job writes acquaintance between the people who were on it. */
 export function tiesFromOperation(state: GameState, rng: Rng, crew: Npc[]): void {
   if (crew.length < 2) return;
   for (let i = 0; i < crew.length; i++) {
     for (let j = i + 1; j < crew.length; j++) {
+      peerInfluence(crew[i], crew[j]);
       if (!rng.chance(TIE_FROM_OPERATION)) continue;
-      recordTie(state.day, crew[i], crew[j], 'worked_together');
+      recordTie(state.day, crew[i], crew[j], 'worked_together', traitCompatibility(crew[i], crew[j]));
     }
   }
 }

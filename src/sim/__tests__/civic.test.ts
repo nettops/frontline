@@ -16,20 +16,39 @@
 import { describe, expect, it } from 'vitest';
 import { newGame } from '../state';
 import {
+  callTheLaw,
+  callWalkout,
+  canCallTheLaw,
+  canCallWalkout,
+  canPullPermit,
   canSpendFavour,
   civicRead,
   figure,
   helpFigure,
+  pullPermit,
+  publicStanding,
+  publicStandingTier,
   scoreFor,
   spendFavour,
   tickCivic,
 } from '../civic';
+import { collectIncome } from '../faction';
+import { ownedBusinesses } from '../business';
+import { rivalBusinesses } from '../verbs';
 import { withFronts } from './helpers';
 import { Rng } from '../rng';
 import { crewList, generateNpc } from '../npc';
-import { CIVIC, CIVIC_BY_ID, CIVIC_FIGURES, FAVOUR_EFFECT } from '../../config/civic';
+import {
+  CIVIC,
+  CIVIC_BY_ID,
+  CIVIC_FIGURES,
+  FAVOUR_EFFECT,
+  PUBLIC_STANDING_FIGURES,
+  PUBLIC_STANDING_TIERS,
+} from '../../config/civic';
 import { SENTIMENT_HOSTILE_BELOW, HOME_TERRITORY } from '../../config/territories';
-import type { GameState } from '../types';
+import { AI, RIVAL_IDS, type FactionId } from '../../config/factions';
+import type { GameState, RivalBusiness } from '../types';
 
 function game(seed = 12): GameState {
   return newGame({ name: 'Pull', difficulty: 'normal', seed });
@@ -410,6 +429,54 @@ describe('spending a favour', () => {
   });
 
   /*
+     The lawyer. Same shape as every other figure — reads a quantity the
+     simulation already keeps, grants a favour the machinery already knows how
+     to do — so nothing here should need a new case in either `scoreFor` or
+     `apply`. Watches the same thing the judge does (legal exposure) and
+     grants what the captain grants (bury a case), a combination no existing
+     figure uses.
+  */
+  it('is on the roster and reads the same quantity the judge does', () => {
+    const state = game();
+    expect(CIVIC_BY_ID['lawyer']).toBeDefined();
+    const lawyer = CIVIC_BY_ID['lawyer'];
+    const judge = CIVIC_BY_ID['judge'];
+    expect(lawyer.watches).toBe(judge.watches);
+    expect(scoreFor(state, lawyer)).toBe(scoreFor(state, judge));
+  });
+
+  it('buries a case when the lawyer is owed one, the same way the captain does', () => {
+    const state = game();
+    state.law.investigations['case_test'] = {
+      id: 'case_test',
+      agencyId: 'city_police',
+      stage: 'suspicion',
+      openedDay: 1,
+      stageSince: 1,
+      strength: 80,
+      suspectIds: [],
+      businessIds: [],
+      lastProgressDay: state.day,
+      status: 'open',
+      verdict: null,
+      verdictDay: null,
+      history: [],
+    };
+    state.player.attributes.influence = CIVIC_BY_ID['lawyer'].needsInfluence;
+    const lawyer = figure(state, 'lawyer');
+    lawyer.standing = 100;
+    lawyer.owed = 1;
+
+    const target = state.law.investigations['case_test'];
+    const was = target.strength;
+    const result = spendFavour(state, 'lawyer', target.id);
+
+    expect(result.ok).toBe(true);
+    expect(figure(state, 'lawyer').owed).toBe(0);
+    expect(was - target.strength).toBeGreaterThanOrEqual(FAVOUR_EFFECT.buryEvidence - 1);
+  });
+
+  /*
      The union favour exists to answer F10, F12 and F15 at once: a district
      below the bar sells you nothing, fronts are what makes a career compound,
      and 25 of 36 careers never get a second one.
@@ -504,6 +571,202 @@ describe('helping somebody outside the family', () => {
     expect(helpFigure(state, 'judge', 12)).toBe(true);
   });
 
+  /*
+     The one favour this network spends outward, rather than on a problem of
+     the player's own.
+
+     Reuses the same setup `civic.test.ts` already uses to get the union boss
+     owing one — a real payroll, through the real tick — because a fixture
+     that grants the favour by hand measures nothing about reachability.
+  */
+  function unionOwed(state: GameState): void {
+    const rng = new Rng(state.rng);
+    for (let i = 0; i < CIVIC.unionPayroll; i++) {
+      const npc = generateNpc(state, rng, 'soldier');
+      state.npcs[npc.id] = npc;
+    }
+    weeks(state, 20);
+  }
+
+  describe('calling a walkout on a rival', () => {
+    const target: FactionId = RIVAL_IDS[0];
+
+    it('refuses when the union boss owes you nothing', () => {
+      const state = game();
+      expect(canCallWalkout(state, target).ok).toBe(false);
+    });
+
+    /*
+       Isolated to `collectIncome` directly, on the same faction run twice,
+       rather than the full weekly tick or two different houses — `tickFactions`
+       also runs each faction's own decision (invest, expand, pressure) through
+       the shared `rng` stream, and two different houses start with different
+       territory and strength, either of which would confound a diff. Running
+       the identical object once plain and once walked-out, from the same
+       restored wealth, isolates exactly the term this feature is supposed to
+       zero.
+    */
+    it('costs a rival exactly their businesses’ worth of income for the week', () => {
+      const state = game();
+      unionOwed(state);
+      const owedBefore = figure(state, 'union').owed;
+      expect(owedBefore, 'the setup produced no favour to spend').toBeGreaterThan(0);
+
+      const rival = state.factions[target];
+      rival.businessCount = 4;
+      const wealthBefore = 500_000;
+
+      rival.wealth = wealthBefore;
+      collectIncome(state, rival);
+      const normalDelta = rival.wealth - wealthBefore;
+
+      rival.wealth = wealthBefore;
+      const result = callWalkout(state, target);
+      expect(result.ok).toBe(true);
+      expect(figure(state, 'union').owed).toBe(owedBefore - 1);
+      expect(rival.walkoutUntilDay).toBe(state.day + FAVOUR_EFFECT.walkoutDays);
+
+      collectIncome(state, rival);
+      const walkedOutDelta = rival.wealth - wealthBefore;
+
+      expect(
+        normalDelta - walkedOutDelta,
+        'a walked-out rival earned the same as one nobody touched',
+      ).toBe(rival.businessCount * AI.invest.incomePerBusiness);
+    });
+
+    it('refuses a second walkout on the same house while the first is running', () => {
+      const state = game();
+      unionOwed(state);
+      callWalkout(state, target);
+      expect(canCallWalkout(state, target).ok).toBe(false);
+    });
+
+    it('is open again once the walkout runs out', () => {
+      const state = game();
+      unionOwed(state);
+      callWalkout(state, target);
+      state.day = state.factions[target].walkoutUntilDay!;
+      unionOwed(state);
+      expect(canCallWalkout(state, target).ok).toBe(true);
+    });
+  });
+
+  describe('having a rival looked at', () => {
+    const target: FactionId = RIVAL_IDS[0];
+
+    /** A quiet family the captain has come to owe, same setup the captain's own tests use. */
+    function captainOwed(state: GameState): void {
+      state.org.heat = 0;
+      weeks(state, 20);
+    }
+
+    it('refuses when the captain owes you nothing', () => {
+      const state = game();
+      expect(canCallTheLaw(state, target).ok).toBe(false);
+    });
+
+    it('spends the captain’s favour and puts real heat on the house', () => {
+      const state = game();
+      captainOwed(state);
+      const owedBefore = figure(state, 'captain').owed;
+      expect(owedBefore, 'the setup produced no favour to spend').toBeGreaterThan(0);
+
+      const rival = state.factions[target];
+      const before = rival.heat;
+
+      const result = callTheLaw(state, target);
+      expect(result.ok).toBe(true);
+      expect(figure(state, 'captain').owed).toBe(owedBefore - 1);
+      expect(rival.heat).toBe(Math.min(100, before + FAVOUR_EFFECT.heatOnRival));
+    });
+
+    it('has nothing to spend it on once that house is finished', () => {
+      const state = game();
+      captainOwed(state);
+      state.factions[target].strength = 0;
+      expect(canCallTheLaw(state, target).ok).toBe(false);
+    });
+  });
+
+  describe('pulling a permit on a rival’s front', () => {
+    const target: FactionId = RIVAL_IDS[0];
+
+    /** A ward the alderman has come to respect, same shape the alderman's own tests use. */
+    function aldermanOwed(state: GameState): void {
+      const made = withFronts(state, CIVIC.respectableFronts);
+      for (const b of made) {
+        state.territories[b.territoryId].sentiment = Math.max(
+          state.territories[b.territoryId].sentiment,
+          SENTIMENT_HOSTILE_BELOW + 1,
+        );
+      }
+      state.player.attributes.influence = CIVIC_BY_ID['alderman'].needsInfluence;
+      weeks(state, 20);
+    }
+
+    function aFront(state: GameState): RivalBusiness {
+      const biz: RivalBusiness = {
+        id: 'rbiz_permit_test',
+        factionId: target,
+        defId: 'laundromat',
+        territoryId: 'northside',
+      };
+      rivalBusinesses(state)[biz.id] = biz;
+      return biz;
+    }
+
+    it('refuses when the alderman owes you nothing', () => {
+      const state = game();
+      const biz = aFront(state);
+      expect(canPullPermit(state, biz.id).ok).toBe(false);
+    });
+
+    it('spends the alderman’s favour and stops the business earning', () => {
+      const state = game();
+      aldermanOwed(state);
+      const owedBefore = figure(state, 'alderman').owed;
+      expect(owedBefore, 'the setup produced no favour to spend').toBeGreaterThan(0);
+
+      const biz = aFront(state);
+      const rival = state.factions[target];
+      rival.businessCount = 4;
+      const wealthBefore = 500_000;
+
+      rival.wealth = wealthBefore;
+      collectIncome(state, rival);
+      const normalDelta = rival.wealth - wealthBefore;
+
+      rival.wealth = wealthBefore;
+      const result = pullPermit(state, biz.id);
+      expect(result.ok).toBe(true);
+      expect(figure(state, 'alderman').owed).toBe(owedBefore - 1);
+      expect(biz.permitPulledUntilDay).toBe(state.day + FAVOUR_EFFECT.permitPulledDays);
+
+      collectIncome(state, rival);
+      const pulledDelta = rival.wealth - wealthBefore;
+
+      expect(
+        normalDelta - pulledDelta,
+        'pulling one permit cost the whole family’s payroll, not one business’ worth',
+      ).toBe(AI.invest.incomePerBusiness);
+    });
+
+    it('refuses a second pull on the same business while the first is running', () => {
+      const state = game();
+      aldermanOwed(state);
+      // A favour still in hand afterwards, so the refusal below is provably
+      // about the permit already pulled and not about the account running dry.
+      figure(state, 'alderman').owed = 2;
+      const biz = aFront(state);
+      pullPermit(state, biz.id);
+      expect(figure(state, 'alderman').owed, 'the setup left nothing to isolate the guard with').toBeGreaterThan(0);
+      const check = canPullPermit(state, biz.id);
+      expect(check.ok).toBe(false);
+      expect(check.reason).toMatch(/paperwork/i);
+    });
+  });
+
   it('buys nothing at all in the way of general pull', () => {
     /*
        The whole point. A man you helped thinks better of you; the city does
@@ -517,5 +780,118 @@ describe('helping somebody outside the family', () => {
       helpFigure(state, 'captain', 12);
     }
     expect(state.player.attributes.influence).toBe(before);
+  });
+});
+
+/*
+   Milestone 5: the boss's public and civic life. A dual reputation running
+   beside street Fear and Respect, synthesized from facts the sim already
+   keeps rather than a second roster — see `publicStanding`'s own header in
+   `sim/civic.ts`.
+*/
+describe('public standing', () => {
+  it('reflects district sentiment, front legitimacy and civic-figure standing, each on its own', () => {
+    const state = game();
+    const baseline = publicStanding(state);
+
+    // The sentiment term: a friendlier home street.
+    state.territories[HOME_TERRITORY].sentiment = 95;
+    const afterSentiment = publicStanding(state);
+    expect(afterSentiment, 'a friendlier street moved nothing').toBeGreaterThan(baseline);
+    state.territories[HOME_TERRITORY].sentiment = 50;
+    expect(publicStanding(state), 'the fixture is not isolating what it claims to').toBe(baseline);
+
+    // The legitimacy term: a clean front, owned outright.
+    expect(withFronts(state, 1), 'the fixture could not open a front to measure with').toHaveLength(1);
+    const afterFront = publicStanding(state);
+    expect(afterFront, 'a legitimate front moved nothing').toBeGreaterThan(baseline);
+
+    /*
+       The alliance term: real standing with the civic figures.
+
+       All four, not just one — `roster()`'s own lazy init materializes
+       every figure in `CIVIC_FIGURES` at once the moment any single one is
+       touched, so raising only the alderman would also reveal the other
+       three at a real, recorded zero and could move the composite *down*,
+       out from under a neutral-default alliance term that had been
+       covering for all four. See `publicStandingTerms`'s own comment.
+    */
+    for (const id of PUBLIC_STANDING_FIGURES) figure(state, id).standing = 90;
+    const afterAlliance = publicStanding(state);
+    expect(afterAlliance, 'civic standing moved nothing').toBeGreaterThan(afterFront);
+  });
+
+  it('docks the composite as federal heat rises', () => {
+    const state = game();
+    const quiet = publicStanding(state);
+    state.org.heat = 90;
+    expect(publicStanding(state), 'heat cost nothing').toBeLessThan(quiet);
+  });
+
+  it('reads the four civic figures the brief names, not the fifth (`lawyer`)', () => {
+    expect(PUBLIC_STANDING_FIGURES).toEqual(['captain', 'union', 'judge', 'alderman']);
+    const state = game();
+    /*
+       Touch all four watched figures first, so `state.civic` already
+       exists in a known state before `lawyer`'s own entry is added.
+       Otherwise merely creating the roster for the first time — which
+       `figure()`'s own lazy init does for every figure in `CIVIC_FIGURES`
+       at once, `lawyer` included — would itself move the alliance term out
+       from under this comparison, for a reason that has nothing to do with
+       whether `lawyer` is read.
+    */
+    for (const id of PUBLIC_STANDING_FIGURES) figure(state, id).standing = 40;
+    const before = publicStanding(state);
+    figure(state, 'lawyer').standing = 100;
+    expect(publicStanding(state), "the lawyer's own standing is not part of this meter").toBe(before);
+  });
+
+  it('reads a brand-new career as neutral rather than already a pariah', () => {
+    const state = game();
+    // Nothing built yet — no fronts, no civic standing above the starting
+    // zero — beyond the home foothold every career starts with.
+    expect(ownedBusinesses(state)).toHaveLength(0);
+    const score = publicStanding(state);
+    expect(score, 'day one already reads as a known criminal').toBeGreaterThan(0);
+    expect(score, 'day one already reads as a benefactor').toBeLessThan(70);
+  });
+});
+
+describe('public standing tiers', () => {
+  it('reads a quiet, unbuilt start as Respected Merchant (businessman)', () => {
+    // No fronts, no civic standing, no heat -- the state `game()` itself
+    // produces, with every one of the three composite terms reading its own
+    // neutral default (50): 50*.35 + 50*.3 + 50*.25 - 0 = 45, exactly the
+    // Respected Merchant bar. See the previous describe block for why an
+    // untouched career reads neutral rather than the floor.
+    const state = game();
+    expect(publicStandingTier(state).id).toBe('businessman');
+  });
+
+  it('reads a hated, hunted family as Street Parasite (pariah)', () => {
+    const state = game();
+    state.territories[HOME_TERRITORY].sentiment = 0;
+    state.org.heat = 100;
+    expect(publicStandingTier(state).id).toBe('pariah');
+    expect(publicStandingTier(state).caseGrowthMultiplier).toBeGreaterThan(1);
+  });
+
+  it('reads real civic pull as Respected Merchant (businessman)', () => {
+    const state = game();
+    for (const id of PUBLIC_STANDING_FIGURES) figure(state, id).standing = 80;
+    expect(publicStandingTier(state).id).toBe('businessman');
+    expect(publicStandingTier(state).caseGrowthMultiplier).toBe(1);
+  });
+
+  it('reads a beloved, well-connected boss as Community Pillar (pillar)', () => {
+    const state = game();
+    state.territories[HOME_TERRITORY].sentiment = 100;
+    for (const id of PUBLIC_STANDING_FIGURES) figure(state, id).standing = 100;
+    expect(publicStandingTier(state).id).toBe('pillar');
+    expect(publicStandingTier(state).caseGrowthMultiplier).toBeLessThan(1);
+  });
+
+  it('the four tiers are ordered highest bar first, covering 0..100 with no gap', () => {
+    expect(PUBLIC_STANDING_TIERS.map((t) => t.bar)).toEqual([70, 45, 20, 0]);
   });
 });

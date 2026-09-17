@@ -151,22 +151,6 @@ export function setDump(state: GameState, on: boolean): void {
   armouryOf(state).dump = on;
 }
 
-export function setCharge(state: GameState, on: boolean): void {
-  armouryOf(state).charge = on;
-}
-
-/**
- * Whether tonight's contract goes up rather than gets shot.
- *
- * A separate reading from `armFor` because a charge is not a piece off the
- * shelf — the family does not keep an inventory of them and nothing is spent
- * when one is used. What it changes is the odds, the noise, the street, and —
- * the whole point — which agency ends up holding the file. See `CHARGE`.
- */
-export function usingCharge(state: GameState): boolean {
-  return armouryOf(state).charge === true;
-}
-
 /**
  * What a player is allowed to know about a piece before they use it.
  *

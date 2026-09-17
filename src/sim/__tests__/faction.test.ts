@@ -13,6 +13,7 @@ import { newGame } from '../state';
 import { runDaysSolvent } from './helpers';
 import {
   contestedWith,
+  executeInvest,
   factionInfluence,
   factionIntel,
   mostHostile,
@@ -22,6 +23,8 @@ import {
   rivals,
   tickFactions,
 } from '../faction';
+import { rivalBusinesses } from '../verbs';
+import { BUSINESS_BY_ID } from '../../config/businesses';
 import { playerInfluence, territoryList } from '../territory';
 import { relationship, setRelationship } from '../diplomacy';
 import { HOME_TERRITORY } from '../../config/territories';
@@ -523,5 +526,65 @@ describe('rivals do not break the world', () => {
     runDaysSolvent(a, 120);
     runDaysSolvent(b, 120);
     expect(JSON.stringify(a.factions)).toEqual(JSON.stringify(b.factions));
+  });
+});
+
+/*
+   A rival's front, named rather than only counted.
+
+   `businessCount` was enough for a family's own income line and stopped
+   being enough the day `canBuyIn` needed something to resolve an id
+   against — see `RivalBusiness`'s own doc comment in `sim/types.ts`.
+*/
+describe('a rival investing in something real', () => {
+  it('names a business, not just a count', () => {
+    const state = fresh();
+    const faction = state.factions['falcone'];
+    const before = Object.keys(rivalBusinesses(state)).length;
+
+    executeInvest(state, faction);
+
+    const after = Object.values(rivalBusinesses(state));
+    expect(after.length).toBe(before + 1);
+    const made = after[after.length - 1];
+    expect(made.factionId).toBe('falcone');
+    expect(BUSINESS_BY_ID[made.defId]).toBeDefined();
+  });
+
+  it('pins it to ground the family actually holds, when it holds any', () => {
+    const state = fresh();
+    const faction = state.factions['falcone'];
+    for (const t of territoryList(state)) t.influence.falcone = 90;
+
+    executeInvest(state, faction);
+
+    const made = Object.values(rivalBusinesses(state)).at(-1)!;
+    expect(made.territoryId).not.toBeNull();
+  });
+
+  it('is not tied to a street for a family that holds none', () => {
+    const state = fresh();
+    const faction = state.factions['falcone'];
+    for (const t of territoryList(state)) t.influence.falcone = 0;
+
+    executeInvest(state, faction);
+
+    const made = Object.values(rivalBusinesses(state)).at(-1)!;
+    expect(made.territoryId).toBeNull();
+  });
+
+  /*
+     Flavour, not a fact anything reads back — so it has to come off
+     `Rng.stableNoise` rather than the causal stream, the same rule
+     `variation.test.ts` and this project's determinism guard hold everywhere
+     else. Proven the same way the suite above proves it for the rest of a
+     rival's week: two identical seeds, same result.
+  */
+  it('picks the same business for the same seed, same as everything else a rival does', () => {
+    const a = fresh(777);
+    const b = fresh(777);
+    executeInvest(a, a.factions['falcone']);
+    executeInvest(b, b.factions['falcone']);
+    expect(JSON.stringify(rivalBusinesses(a))).toEqual(JSON.stringify(rivalBusinesses(b)));
   });
 });

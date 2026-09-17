@@ -17,6 +17,8 @@ import { Rng } from '../../sim/rng';
 import { approachCapo, canApproach, readCapos } from '../../sim/capos';
 import { canContract, openContract, type ContractTarget } from '../../sim/contract';
 import { CONTRACT } from '../../config/contract';
+import { CHARGE } from '../../config/pieces';
+import { clamp } from '../../sim/rng';
 import { prices } from '../../sim/market';
 import { spend, totalFunds } from '../../sim/economy';
 import {
@@ -28,6 +30,9 @@ import {
 import { BossPortrait } from '../BossPortrait';
 import { styleFor } from '../art/bossLook';
 import { PERCEPTION_TIERS } from '../../config/npcs';
+import { FACTION_INTEL_ROUGH_ABOVE } from '../../config/factions';
+import { buyIn, canBuyIn, rivalBusinessRead } from '../../sim/verbs';
+import { canPullPermit, pullPermit } from '../../sim/civic';
 import type { Faction } from '../../sim/types';
 
 /**
@@ -352,6 +357,8 @@ function RivalDetail({ faction, onClose }: { faction: Faction; onClose: () => vo
 
       <Roster faction={faction} intel={read.intel} />
 
+      <RivalBusinesses faction={faction} intel={read.intel} />
+
       <div className="tiny" style={{ margin: '18px 0 6px' }}>
         What you have actually seen them do
       </div>
@@ -404,6 +411,12 @@ function RivalDetail({ faction, onClose }: { faction: Faction; onClose: () => vo
  * It says nothing at all about what the family will conclude. That is
  * `beliefs.ts`'s rule, not a UI decision: you find out who they blame by
  * watching what they do.
+ *
+ * Two buttons rather than one, because there is a second real choice here —
+ * a charge instead of a gun — and it used to live as a standing policy on
+ * the Armoury screen, decided in a different room from the one where you
+ * actually send somebody. Snapshotted onto the contract at `openContract`,
+ * the same way `chance` is, so the choice made here is the one that resolves.
  */
 function ContractButton({
   target,
@@ -420,24 +433,43 @@ function ContractButton({
      the cost uncovered — sitting only in the hover. Same rule 4 defect
      `LawPanel`'s witness-contract row had, fixed the same way.
   */
+  const send = (charged: boolean) => {
+    const out = mutate((s) => openContract(s, target, charged), true);
+    if (out) onDone(out.message);
+  };
+  if (!check.ok) {
+    return (
+      <button className="btn small danger" disabled title={check.message}>
+        {check.message}
+      </button>
+    );
+  }
+  const chargedChance = clamp((check.chance ?? 0) + CHARGE.odds, 0, 1);
   return (
-    <button
-      className="btn small danger"
-      disabled={!check.ok}
-      title={
-        check.ok
-          ? `${formatMoney(check.cost ?? 0)}, ${CONTRACT.crew} men gone for ${CONTRACT.days} days, ` +
-            `and roughly ${Math.round((check.chance ?? 0) * 100)}% that it happens. ` +
-            'If it does not, they know somebody tried.'
-          : check.message
-      }
-      onClick={() => {
-        const out = mutate((s) => openContract(s, target), true);
-        if (out) onDone(out.message);
-      }}
-    >
-      {check.ok ? `Send somebody — ${formatMoney(check.cost ?? 0)}` : check.message}
-    </button>
+    <div className="carry-row">
+      <button
+        className="btn small danger"
+        title={
+          `${formatMoney(check.cost ?? 0)}, ${CONTRACT.crew} men gone for ${CONTRACT.days} days, ` +
+          `and roughly ${Math.round((check.chance ?? 0) * 100)}% that it happens. ` +
+          'If it does not, they know somebody tried.'
+        }
+        onClick={() => send(false)}
+      >
+        Send somebody — {formatMoney(check.cost ?? 0)}
+      </button>
+      <button
+        className="btn small danger"
+        title={
+          `${formatMoney(check.cost ?? 0)}, and roughly ${Math.round(chargedChance * 100)}% that it happens. ` +
+          'It does not miss the way somebody with a gun misses. It also takes the street with it, ' +
+          'and no local force handles a thing like that — it goes straight to the two people in this city who can finish you.'
+        }
+        onClick={() => send(true)}
+      >
+        Use a charge
+      </button>
+    </div>
   );
 }
 
@@ -545,6 +577,100 @@ function Roster({ faction, intel }: { faction: Faction; intel: number }) {
                         target={{ kind: 'capo', factionId: faction.id, capoId: capo.id }}
                         onDone={setNote}
                       />
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+      {note && (
+        <p className="hot" style={{ marginBottom: 0 }}>
+          {note}
+        </p>
+      )}
+    </>
+  );
+}
+
+/**
+ * The Ledger verb's one target — the fronts a rival has bought that a player
+ * has actually been close enough to hear about.
+ *
+ * Gated on the same `FACTION_INTEL_ROUGH_ABOVE` line `faction.ts` already
+ * uses before a rival's own investment becomes visible in `read.known` —
+ * knowing about the business without ever having been told the family
+ * bought one would be a second, inconsistent way to learn the same fact.
+ */
+function RivalBusinesses({ faction, intel }: { faction: Faction; intel: number }) {
+  const state = useGame();
+  const [note, setNote] = useState<string | null>(null);
+  if (intel < FACTION_INTEL_ROUGH_ABOVE) return null;
+
+  const mine = rivalBusinessRead(state).filter((b) => b.factionId === faction.id);
+
+  return (
+    <>
+      <div className="tiny" style={{ margin: '18px 0 6px' }}>
+        What they have bought in the neighbourhood
+      </div>
+      {mine.length === 0 ? (
+        <Empty>Nothing you have heard about yet.</Empty>
+      ) : (
+        <div className="table-wrap">
+          <table className="data">
+            <thead>
+              <tr>
+                <th>Business</th>
+                <th>Where</th>
+                <th />
+              </tr>
+            </thead>
+            <tbody>
+              {mine.map((b) => {
+                const check = canBuyIn(state, b.id);
+                const permit = canPullPermit(state, b.id);
+                return (
+                  <tr key={b.id}>
+                    <td className="name-cell">{b.name}</td>
+                    <td className="dim">{b.where ?? 'no fixed address'}</td>
+                    <td>
+                      {b.stake ? (
+                        <span className="tiny faint">You already have a piece of it.</span>
+                      ) : (
+                        <button
+                          className="btn small"
+                          disabled={!check.ok}
+                          onClick={() =>
+                            mutate((s) => {
+                              setNote(buyIn(s, b.id).message);
+                            })
+                          }
+                        >
+                          {check.ok ? 'Buy in' : check.message}
+                        </button>
+                      )}
+                      {/*
+                         The alderman's own outward favour — see the doc
+                         comment on `canCallWalkout` for why this and Buy In
+                         sit on the same row without being the same action:
+                         one takes a piece of it, the other shuts it down
+                         for a while. Both real, neither the other in disguise.
+                      */}
+                      <button
+                        className="btn small"
+                        disabled={!permit.ok}
+                        title={permit.ok ? undefined : permit.reason}
+                        style={{ marginLeft: 6 }}
+                        onClick={() =>
+                          mutate((s) => {
+                            setNote(pullPermit(s, b.id).message);
+                          })
+                        }
+                      >
+                        Pull the permit
+                      </button>
                     </td>
                   </tr>
                 );

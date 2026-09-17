@@ -82,6 +82,27 @@ export function pushEvent(
   return full;
 }
 
+/**
+ * One thing tolerated enough times that it seeds a different, later thing.
+ *
+ * `heir_gone` (npc.ts) and the collective-defection cascade (`followDeparture`,
+ * ties.ts) already have this shape: a consequence elsewhere in the tick
+ * ripples forward instead of stopping at the man it happened to. This is that
+ * shape pulled out to where both events.ts and eventgen.ts can reach it —
+ * neither can import the other, so it lives here rather than in either.
+ *
+ * Kept to "count it, and say so once it is enough" on purpose. What a caller
+ * does with a `true` — spread the skim to somebody else, worsen a number,
+ * push a wholly different memo — stays with the caller, which already knows
+ * the field and the voice; this only owns the counting, on `state.flags`, the
+ * same ledger every other one-off counter in this game already uses.
+ */
+export function seedFollowup(state: GameState, key: string, after: number): boolean {
+  const count = (state.flags[key] ?? 0) + 1;
+  state.flags[key] = count;
+  return count >= after;
+}
+
 // -------------------------------------------------------------- calendar ---
 
 /** The world starts here. Day 1 is this date. */
@@ -169,11 +190,21 @@ export function withArticle(word: string): string {
 export function weightedPick<T extends { weight: number }>(
   items: readonly T[],
   roll: number,
+  /**
+   * Sharpens (>0) or flattens (<0) selection without touching a single
+   * item's own weight — `e^(weight * sharpness)` in place of the raw weight.
+   * Omitted (every existing caller) keeps the original linear-proportional
+   * behaviour exactly; this only matters to a caller that explicitly wants a
+   * real gap between two weights to translate into a bigger gap in odds than
+   * a flat multiplier does. See `EVENT_WEIGHT_SHARPNESS`.
+   */
+  sharpness?: number,
 ): T {
-  const total = items.reduce((sum, i) => sum + i.weight, 0);
+  const effective = (w: number) => (sharpness === undefined ? w : Math.exp(w * sharpness));
+  const total = items.reduce((sum, i) => sum + effective(i.weight), 0);
   let target = roll * total;
   for (const item of items) {
-    target -= item.weight;
+    target -= effective(item.weight);
     if (target <= 0) return item;
   }
   return items[items.length - 1];

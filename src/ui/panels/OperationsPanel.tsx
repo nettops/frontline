@@ -1,11 +1,11 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { canCase, caseJob } from '../../sim/verbs';
 import { hasVerb } from '../../sim/build';
 import { STAT_BY_ID } from '../../config/build';
 import { useGame, mutate } from '../../store';
 import { Panel, Empty, Bar, StatRead } from '../components';
 import {
-  availableOperations,
+  manualBoard,
   lockedOperations,
   canLaunch,
   cancelOperation,
@@ -17,6 +17,17 @@ import {
   successBreakdown,
   sentimentOutlook,
 } from '../../sim/operations';
+import {
+  approvePitch,
+  delegatePitchAutonomous,
+  livePitches,
+  pitchCapoPool,
+  reassignPitch,
+  rejectPitch,
+  specialtyLine,
+} from '../../sim/capoPitches';
+import { pendingEnvelopes, resolveLightEnvelope } from '../../sim/tribute';
+import { TRIBUTE } from '../../config/tribute';
 import {
   canOpenScore,
   kitOf,
@@ -44,6 +55,7 @@ import {
   standingFor,
 } from '../../sim/standingOrders';
 import { availableCrew } from '../../sim/npc';
+import { squadFor } from '../../sim/crew';
 import { nightsWorked } from '../../sim/standing';
 import {
   controlLevel,
@@ -64,7 +76,7 @@ import {
 } from '../../config/operations';
 import { CONTROL_LABEL, SENTIMENT_HOSTILE_BELOW } from '../../config/territories';
 import { ATTRIBUTE_LABEL, ROLE_LABEL } from '../../config/economy';
-import type { OperationDef } from '../../sim/types';
+import type { CapoPitch, OperationDef } from '../../sim/types';
 
 const RISKS = Object.keys(AUTOPILOT_RISK) as AutopilotRisk[];
 
@@ -94,8 +106,29 @@ export default function OperationsPanel() {
   const [approach, setApproach] = useState<ApproachId>(() =>
     isLayingLow(state) ? 'quiet' : DEFAULT_APPROACH,
   );
+  /*
+     The same defect `CrewPanel` and `RivalsPanel` were both fixed for
+     (round 24): the assemble panel opens below the job table rather than
+     in a modal, and on a board long enough to fill the viewport — this one
+     runs to nine open jobs, an eight-district picker, a full crew table,
+     and a fourteen-row locked table, before the assemble panel itself —
+     that open lands off-screen with no cue it happened. The click worked;
+     nothing said so. Same fix, same reason.
+  */
+  const detailRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (selected) detailRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }, [selected]);
 
-  const open = availableOperations(state);
+  /*
+     Tier 0 only. Tier 1 and above used to be a permanent row per open job def
+     — every one of them, every time, no matter how large the organization had
+     grown. That is what `pitches` below replaces: a short live list a capo
+     actually brought, rather than a menu the boss keeps browsing himself.
+  */
+  const open = manualBoard(state).filter((op) => op.tier === 0);
+  const pitches = livePitches(state);
+  const envelopes = pendingEnvelopes(state);
   const locked = lockedOperations(state);
   const active = Object.values(state.activeOperations);
   const free = availableCrew(state);
@@ -133,6 +166,16 @@ export default function OperationsPanel() {
   };
 
   /*
+     Approving a pitch consumes it — the slot it held frees up on the next
+     weekly refresh — and opens the same assemble screen a hand-picked job
+     always used. Nothing about resolution changed; only how you got here.
+  */
+  const approve = (pitchId: string, defId: string, territoryId: string) => {
+    mutate((s) => approvePitch(s, pitchId), true);
+    choose(defId, territoryId);
+  };
+
+  /*
      Two ways to fill a crew, and deliberately not one.
 
      Ticking men one at a time was the single largest cost of playing this
@@ -155,6 +198,16 @@ export default function OperationsPanel() {
         : [...free].sort((a, b) => nightsWorked(state, a.id) - nightsWorked(state, b.id));
     setCrewPicked(order.slice(0, crewNeeded(state, def)).map((n) => n.id));
   };
+
+  /*
+     A third way to fill a crew, additive to the two above: where a capo
+     already has people under him, dispatch him and let his own reports go
+     rather than hand-checking each one. Only offered when that group can
+     cover the job by itself — see `squadFor` — so a roster with no hierarchy
+     yet, or one too small for this job, sees exactly the two buttons above and
+     nothing has changed for it.
+  */
+  const squad = def ? squadFor(free, needed) : null;
 
   const toggleCrew = (id: string) => {
     setCrewPicked((prev) =>
@@ -247,6 +300,74 @@ export default function OperationsPanel() {
         Every job takes people off the street for its duration and adds to what the
         world knows about you. The odds you are shown are the odds you get.
       </p>
+
+      {/*
+         The one decision somebody else has already made for you.
+
+         Top of the page, above the running jobs, because it is the only thing
+         on this screen that is already waiting rather than available — a
+         capo handed the envelope over on payday and it was light, and until
+         the boss answers, the table is watching him not answer.
+
+         The excuse is printed rather than summarised. It is the only
+         information the player has, it is a lie about a third of the time,
+         and the whole of the decision is that the screen cannot tell which.
+      */}
+      {envelopes.length > 0 && (
+        <Panel title="The envelopes came up light">
+          {envelopes.map((d) => {
+            const auditable = totalFunds(state) >= TRIBUTE.auditCost;
+            return (
+              <div key={d.id} className="kv" style={{ alignItems: 'flex-start', marginBottom: 12 }}>
+                <span className="kv-key">
+                  <span className="name-main">{d.capoName}</span>{' '}
+                  <span className="faint tiny">
+                    {formatMoney(d.expected)} expected · {formatMoney(d.offered)} handed over ·{' '}
+                    <span className="hot">{formatMoney(d.shortage)} short</span>
+                  </span>
+                  <br />
+                  <span className="dim tiny">“{d.excuse}”</span>
+                </span>
+                <div className="btn-row">
+                  <button
+                    className="btn small"
+                    title="It costs you standing at the table and it buys you the man."
+                    onClick={() => mutate((s) => resolveLightEnvelope(s, d.capoId, 'let_it_slide'), true)}
+                  >
+                    Let it go
+                  </button>
+                  <button
+                    className="btn small danger"
+                    title="He finds the rest of it. He does not enjoy finding it."
+                    onClick={() => mutate((s) => resolveLightEnvelope(s, d.capoId, 'squeeze'), true)}
+                  >
+                    Have him find the rest
+                  </button>
+                  <button
+                    className="btn small"
+                    disabled={!auditable}
+                    title="Somebody goes through his books. If he was honest, he will know he was counted."
+                    onClick={() => mutate((s) => resolveLightEnvelope(s, d.capoId, 'audit'), true)}
+                  >
+                    Have him looked at ({formatMoney(TRIBUTE.auditCost)})
+                  </button>
+                  {!auditable && (
+                    <span className="tiny faint">
+                      Having a man looked at runs {formatMoney(TRIBUTE.auditCost)}, and you do not
+                      have it.
+                    </span>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+          <p className="faint tiny" style={{ margin: '8px 0 0' }}>
+            Money comes up. A capo who is short has either had a bad month or has been taking
+            it, and nothing on this page knows which. Letting it go costs you at the table,
+            squeezing costs you the man, and counting him costs you both if he was straight.
+          </p>
+        </Panel>
+      )}
 
       {active.length > 0 && (
         <Panel title="Running now" flush>
@@ -520,6 +641,29 @@ export default function OperationsPanel() {
         </Panel>
       )}
 
+      {pitches.length > 0 && (
+        <Panel title="Brought to you">
+          {pitches.map((p) => (
+            <PitchCard
+              key={p.id}
+              pitch={p}
+              selected={p.defId === selected && p.territoryId === territoryId}
+              onApprove={() => approve(p.id, p.defId, p.territoryId)}
+              onDelegate={() => mutate((s) => delegatePitchAutonomous(s, p.id), true)}
+              onReject={() => mutate((s) => rejectPitch(s, p.id), true)}
+              onReassign={(capoId) => mutate((s) => reassignPitch(s, p.id, capoId), true)}
+            />
+          ))}
+          <p className="faint tiny" style={{ margin: '8px 0 0' }}>
+            What a capo brings you this week. Turn one down and it costs nothing; hand it to
+            somebody else and the man it was taken from remembers it. Let the man who brought
+            it run it himself and {Math.round(TRIBUTE.bossAutonomousCut * 100)}% of the take
+            comes up to you — the rest is his, and so is everything a federal file could put
+            at the scene.
+          </p>
+        </Panel>
+      )}
+
       <Panel
         title="Work available"
         action={<SameAgain onLaunched={() => setSelected(null)} />}
@@ -571,6 +715,7 @@ export default function OperationsPanel() {
       </Panel>
 
       {def && (
+        <div ref={detailRef}>
         <Panel title={`Assemble — ${def.name}`}>
           <p className="dim" style={{ marginTop: 0 }}>
             {def.description}
@@ -794,6 +939,15 @@ export default function OperationsPanel() {
                   >
                     Send whoever is rested
                   </button>
+                  {squad && (
+                    <button
+                      className="btn small"
+                      title={`${squad.capo.name} and his own people. Nobody else to pick.`}
+                      onClick={() => setCrewPicked(squad.members.map((n) => n.id))}
+                    >
+                      Dispatch {squad.capo.name}'s crew
+                    </button>
+                  )}
                   {crewPicked.length > 0 && (
                     <button className="btn small" onClick={() => setCrewPicked([])}>
                       Clear
@@ -824,21 +978,25 @@ export default function OperationsPanel() {
                       </tr>
                     </thead>
                     <tbody>
-                      {free.map((npc) => (
+                      {/*
+                         A row that looked exactly as clickable once the
+                         crew was full as it did with a seat open — same
+                         cursor, same class, no title — and clicking it did
+                         nothing. `toggleCrew` was always a correct no-op
+                         here; nothing on the row ever said so.
+                      */}
+                      {free.map((npc) => {
+                        const picked = crewPicked.includes(npc.id);
+                        const full = !picked && needed > 0 && crewPicked.length >= needed;
+                        return (
                         <tr
                           key={npc.id}
-                          className={
-                            crewPicked.includes(npc.id) ? 'clickable selected' : 'clickable'
-                          }
-                          onClick={() => toggleCrew(npc.id)}
+                          className={picked ? 'clickable selected' : full ? 'dim' : 'clickable'}
+                          title={full ? `${needed} is the most this job takes. Drop somebody first.` : undefined}
+                          onClick={full ? undefined : () => toggleCrew(npc.id)}
                         >
                           <td>
-                            <input
-                              type="checkbox"
-                              checked={crewPicked.includes(npc.id)}
-                              readOnly
-                              tabIndex={-1}
-                            />
+                            <input type="checkbox" checked={picked} readOnly tabIndex={-1} />
                           </td>
                           <td>
                             <div className="name-cell">
@@ -854,7 +1012,8 @@ export default function OperationsPanel() {
                           </td>
                           <td className="num mono">{nightsWorked(state, npc.id)}</td>
                         </tr>
-                      ))}
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
@@ -1024,9 +1183,17 @@ export default function OperationsPanel() {
             </div>
           </div>
         </Panel>
+        </div>
       )}
 
-      {locked.length > 0 && (
+      {/*
+         Hidden while a job is being assembled — it decides nothing about
+         the job in front of you, and it is the single longest table on
+         this screen. Fourteen rows of work you cannot do yet, sitting
+         between the assemble panel and nothing, was the biggest single
+         contributor to how far this page runs once a job is open.
+      */}
+      {locked.length > 0 && !def && (
         <Panel title="Above your standing" flush>
           <div className="table-wrap">
             <table className="data">
@@ -1120,6 +1287,97 @@ function SameAgain({ onLaunched }: { onLaunched: () => void }) {
     >
       Same again — {def.name}
     </button>
+  );
+}
+
+/**
+ * One thing a capo has brought you, and the three answers you can give him.
+ *
+ * Reads its own state rather than taking every field as a prop, the same
+ * shape `SameAgain` uses — a card knows what it needs to say about itself.
+ */
+function PitchCard({
+  pitch,
+  selected,
+  onApprove,
+  onDelegate,
+  onReject,
+  onReassign,
+}: {
+  pitch: CapoPitch;
+  selected: boolean;
+  onApprove: () => void;
+  onDelegate: () => void;
+  onReject: () => void;
+  onReassign: (capoId: string) => void;
+}) {
+  const state = useGame();
+  const def = OPERATION_BY_ID[pitch.defId];
+  const capo = state.npcs[pitch.capoId];
+  if (!def || !capo) return null;
+
+  // Whoever else could take it instead — the same pool a pitch is drawn from,
+  // capped so this row stays a row and not a second crew sheet.
+  const alternatives = pitchCapoPool(state)
+    .filter((n) => n.id !== pitch.capoId)
+    .slice(0, 2);
+  const specialty = specialtyLine(capo);
+
+  return (
+    <div className="kv" style={{ alignItems: 'flex-start', marginBottom: 10 }}>
+      <span className="kv-key">
+        <span className="name-main">{def.name}</span>{' '}
+        <span className="faint tiny">
+          {capo.name} · in {territoryDef(pitch.territoryId)?.name} ·{' '}
+          {formatMoney(def.payout[0])}–{formatMoney(def.payout[1])}
+        </span>
+        {specialty && (
+          <>
+            <br />
+            <span className="faint tiny">{specialty}</span>
+          </>
+        )}
+      </span>
+      <div className="btn-row">
+        <button
+          className={selected ? 'btn small primary' : 'btn small'}
+          title={def.description}
+          onClick={onApprove}
+        >
+          Approve
+        </button>
+        {/*
+           The other half of the same pitch, and the one the whole tribute
+           layer is for.
+
+           Approve opens the assemble screen and the boss picks the crew — his
+           hands on the job, his name on whatever the job leaves behind.
+           Delegating hands the whole thing to the capo, who takes his own
+           people and keeps the majority of it. What the boss buys with the
+           difference is not being in the room.
+        */}
+        <button
+          className="btn small"
+          title={`${capo.name} runs it with his own crew and keeps his end. You never touch it, and what it leaves behind does not point at you.`}
+          onClick={onDelegate}
+        >
+          Let {capo.name} run it ({Math.round(TRIBUTE.bossAutonomousCut * 100)}% to you)
+        </button>
+        <button className="btn small" onClick={onReject}>
+          Reject
+        </button>
+        {alternatives.map((alt) => (
+          <button
+            key={alt.id}
+            className="btn small danger"
+            title={`${capo.name} watches ${alt.name} get this instead. Not free for him.`}
+            onClick={() => onReassign(alt.id)}
+          >
+            Give it to {alt.name}
+          </button>
+        ))}
+      </div>
+    </div>
   );
 }
 

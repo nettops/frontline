@@ -180,6 +180,21 @@ export const HANDOVER = {
   rivalRespectHit: -14,
   /** The new boss starts one rung below the man he replaces. */
   ranksLost: 1,
+
+  /**
+   * How long a weak-claim handover leaves the room genuinely unsettled.
+   *
+   * `weakClaim` already changes the odds of who wins; it never changed what a
+   * shaky win *costs*. This is the honest, synchronous stand-in for a real
+   * multi-day interregnum — no leaderless gap between removal and resolution,
+   * which this codebase's turn structure has no scheduling hook for — a
+   * lingering vulnerability window instead, read by `driftNpcs`'s existing
+   * collective-defection term (see `BEHAVIOUR.shakyHandoverDefectBoost`) so a
+   * badly-supported new boss is visibly more likely to lose people to it, not
+   * just more likely to have lost the room in the first place. New,
+   * conservative, not yet probe-measured.
+   */
+  shakyHandoverDays: 45,
 } as const;
 
 /**
@@ -307,10 +322,35 @@ export const DEPOSITION = {
   claimAbove: 0.34,
 
   /**
-   * How many other senior men have to be disaffected before it is a room
-   * rather than a man. Counted among everyone eligible to be an heir.
+   * How many disaffected men it takes before it is a room rather than a man.
+   * Counted among everyone eligible to be an heir, the mover included.
+   *
+   * Was 2. Measured across 40 seeded 300-day careers and confirmed at 15
+   * seeds x 1460 days, with two bots — the scorecard probe's passive one
+   * (recruit, one job a day, cheapest event choice) and a second that also
+   * promotes and names an heir — this gate never held true once, in over
+   * 1,700 career-weeks checked. Root cause was not the other three numbers:
+   * `eligibleHeirs` (soldier rank or above) sits at a median of 1 person and a
+   * 90th percentile of 2, at day 200-300, under both bots. Requiring 2
+   * disaffected men therefore required a second eligible senior man to exist
+   * *at all*, which most careers never have, let alone one who is also
+   * disaffected — so the gate was never about the ambition, respect, grievance
+   * or claim bars beneath it.
+   *
+   * Dropped to 1 and reran the same instrument with every other number here
+   * unchanged: 0/40 at 300 days (the drift takes longer than a young career to
+   * mature), 7/15 (47%) at 1460 days. That is comparable to the other
+   * self-inflicted removal risk in this file — HANDOVER's own measurement
+   * found a bot that never manages heat gets convicted in 9 of 12 careers —
+   * without being the same number, and it leaves a career that is actually
+   * managed with a real way to avoid it, which is the point of the route.
+   *
+   * `wouldTakeIt`'s own candidate filter (ambitionAbove, respectBelow,
+   * grievanceAbove, claimAbove) is unchanged and still strictly tighter than
+   * this bar, so nothing here is checked only once: a lone disaffected man
+   * still has to clear all four bars below on his own to be a mover.
    */
-  backersNeeded: 2,
+  backersNeeded: 1,
   backerRespectBelow: 45,
   backerGrievanceAbove: 35,
 
@@ -334,4 +374,55 @@ export const DEPOSITION = {
    * about — not by whom — and has this long to do something about it.
    */
   rumourAfterWeeks: 3,
+} as const;
+
+// ------------------------------------------------- blood, and the calendar ---
+
+/**
+ * What it costs to answer the question the whole file has been circling.
+ *
+ * Milestone 4 let a household child grow up and walk into the organization.
+ * Until now that was the end of it — the kid was a soldier with a first name
+ * and no surname, and the men who had carried this family for fifteen years
+ * had no opinion about him whatsoever. That is the one thing everybody in
+ * this business would have an opinion about.
+ *
+ * So there are two prices and no free answer. Name your own blood and every
+ * veteran capo reads a lifetime of service being valued below a surname; name
+ * a capo with your own child standing in the room and the house hears about
+ * it before you get home. `NAMING`'s ordinary passed-over cost is unchanged
+ * and stacks on top of the first of these: being passed over and being passed
+ * over *for the boss's son* are not the same injury.
+ *
+ * The aging numbers live here rather than in `config/personal.ts`'s `STRESS`
+ * because they are the same question from the other side. A boss only ever
+ * has to settle the succession because the body settles it for him.
+ */
+export const NEPOTISM = {
+  /** What a veteran capo carries, on top of `NAMING.passedOverGrievance`. */
+  capoGrievance: 25,
+  /** ...and what he stops feeling about the man who did it. */
+  capoLoyaltyDrop: 20,
+  /** What the house takes when the chair goes to somebody else's son. */
+  domesticNeglectOnCapoNamed: 20,
+
+  /**
+   * The day the body stops mending on its own.
+   *
+   * Past this, `STRESS.naturalRecovery` no longer runs — a quiet week is
+   * merely a week that did not make it worse — and a fixed weariness accrues
+   * whatever else is happening. Deliberately reachable: 300 days is inside
+   * the span a measured career actually plays, unlike `AGING.declineFrom`,
+   * which is about the men and needs twenty-five years of calendar.
+   */
+  agingStartDay: 300,
+  /** Extra weekly stress past `agingStartDay`, whatever else is or is not on. */
+  agingWearinessStress: 1.5,
+  /**
+   * How often the doctor is allowed to say it out loud, once the meter is
+   * already past `STRESS.panicThreshold`. The same reasoning the confidant's
+   * wiretap beat follows: a line every seven days about the same heart is a
+   * subscription rather than a warning.
+   */
+  agingWarningEveryDays: 60,
 } as const;

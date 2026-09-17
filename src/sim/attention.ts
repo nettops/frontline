@@ -32,14 +32,16 @@ import { isLayingLow } from './heat';
 import { liveStanding, patternOn } from './standingOrders';
 import { territoryDef } from './territory';
 import { playerWars } from './diplomacy';
-import { eligibleHeirs, heirOf } from './succession';
+import { eligibleHeirs, heirOf, wouldTakeIt } from './succession';
 import { activeCases } from './investigation';
 import { ownedBusinesses, businessDef } from './business';
 import { tradeUnlocked } from './contraband';
 import { promisesTo, daysLeft } from './promises';
 import { crewList } from './npc';
+import { familyHorizon, homeRead, playerStress } from './personal';
 import { PROMISE, PROMISES } from '../config/promises';
 import { ATTENTION } from '../config/attention';
+import { HOME, STRESS } from '../config/personal';
 import { OPERATION_BY_ID } from '../config/operations';
 import { PATTERN } from '../config/standingOrders';
 
@@ -128,26 +130,44 @@ export function attention(state: GameState): Wanting[] {
   }
 
   /*
-     A war with nobody named to survive you.
+     Nobody named to survive you — a war, or a room that has already stopped
+     believing in you.
 
-     Round 18's blind report is the reason this exists: a tester fought a
-     war for a hundred days, was killed in it, and the death screen named
-     the exact cause — "there was nobody senior enough to take it." Nothing
-     on the war screen, the overview, or anywhere else had pointed back at
-     Succession while it still mattered, and by the time the war made it
-     urgent it was too late to do anything about it.
+     Round 18's blind report is the reason the war half exists: a tester
+     fought a war for a hundred days, was killed in it, and the death screen
+     named the exact cause — "there was nobody senior enough to take it."
+     Nothing on the war screen, the overview, or anywhere else had pointed
+     back at Succession while it still mattered, and by the time the war
+     made it urgent it was too late to do anything about it.
 
-     Gated on there being somebody who actually could be named, the same
-     discipline `steward` and `teaching` use above — a badge demanding
-     something the player has no way to satisfy is worse than no badge.
+     An audit found the same gap on the other two doors out of the chair
+     (`succession.ts`'s own words: "being removed is not the same as
+     losing... losing is having nobody"). Deposition does not need a war —
+     `tickDeposition` rolls it off `wouldTakeIt` alone — and it was only
+     ever visible here as a bare log line naming no destination and no
+     action, which is exactly the failure this file's header exists to
+     rule out. `wouldTakeIt` is cheap (no rng, reused as-is) and already
+     exported for this purpose; reusing it here is a read, not a new
+     mechanism. Conviction (`removePlayer` in investigation.ts) has no
+     equivalent standing signal to read cheaply and stays a gap — it would
+     need new plumbing, not a call site.
+
+     Still one nudge, one id, one panel — the cause changes only the
+     sentence, never the mechanism. Gated on there being somebody who
+     actually could be named, the same discipline `steward` and `teaching`
+     use above — a badge demanding something the player has no way to
+     satisfy is worse than no badge.
   */
-  if (playerWars(state).length > 0 && !heirOf(state)) {
+  const atWar = playerWars(state).length > 0;
+  const atRisk = wouldTakeIt(state) !== null;
+  if ((atWar || atRisk) && !heirOf(state)) {
     const candidate = eligibleHeirs(state)[0];
+    const situation = atWar
+      ? 'You are at war and nobody is named to take this if it goes wrong.'
+      : 'There is enough bad blood in the room to lose this, and nobody is named to take it if you do.';
     out.push({
       id: 'heir',
-      text: candidate
-        ? `You are at war and nobody is named to take this if it goes wrong. ${candidate.name} is senior enough.`
-        : 'You are at war and nobody is named to take this if it goes wrong.',
+      text: candidate ? `${situation} ${candidate.name} is senior enough.` : situation,
       panel: 'succession',
     });
   }
@@ -321,12 +341,78 @@ export function attention(state: GameState): Wanting[] {
 
      One-shot rather than persistent: once a supplier arrangement exists,
      the player has found the door, whatever they did with it next.
+
+     Round 28's blind report is the third to name this trade, from the other
+     direction: unlocked at $2,800 with a solvency crisis under way, saw
+     this exact line, went and looked, and hit a retainer running from
+     $40,000 — filed under "wanted to, was blocked." `tips.ts`'s own `trade`
+     tip had the identical gap and was fixed the same way; no figure quoted
+     here either, since `priced()` scales the real cost 0.6x to 8x with the
+     market and a number could be wrong by the time anybody reads it.
   */
   if (tradeUnlocked(state, 'product') && !state.contraband?.supplierId) {
     out.push({
       id: 'trade',
-      text: 'You have enough fronts to run product through them. Look at The Trade.',
+      text: 'You have enough fronts to run product through them — it costs a retainer up front, so see what one runs before you go looking.',
       panel: 'contraband',
+    });
+  }
+
+  /*
+     The family, from the outside.
+
+     Two ids, and only one shows on a given day. `family_neglect_crisis` is
+     strictly the worse situation — the multiplier from `neglectRisk` is
+     already live — so a boss already being told that does not also need the
+     softer heads-up that an occasion could be coming; both would say "go
+     home" and the crisis is the more urgent reason to.
+
+     `family_horizon` only names a day, never an occasion or a face — see
+     `familyHorizon`'s own comment in `sim/personal.ts` for why naming which
+     one would be a guess dressed as a fact. Skipped while a memo from this
+     shape is already sitting in the inbox; the player has already been
+     asked, and the badge would be pointing at something already answered.
+     Also skipped before the shape has ever fired once: with nothing fired
+     yet, `familyHorizon` reads as permanently eligible-now — true, but a
+     line that is always present from day one is the wallpaper this file's
+     own header rules out, not a heads-up about a pattern.
+  */
+  const house = homeRead(state);
+  if (house.neglect >= HOME.depositionFrom) {
+    out.push({
+      id: 'family_neglect_crisis',
+      text: 'Your own people are more likely to move against you the longer you stay away — go home and it starts coming back down.',
+      panel: 'player',
+    });
+  } else {
+    const horizon = familyHorizon(state);
+    const alreadyPending = state.pendingEvents.some((e) => e.defId === 'gen_family_dilemma');
+    if (horizon.everFired && !alreadyPending && horizon.daysUntil <= ATTENTION.familyHorizonWithin) {
+      out.push({
+        id: 'family_horizon',
+        text:
+          horizon.daysUntil === 0
+            ? 'A family occasion could come up any day now — going home before it does costs nothing and clears what is owed.'
+            : `A family occasion could come up as soon as day ${horizon.eligibleFromDay} — going home before then costs nothing and clears what is owed.`,
+        panel: 'player',
+      });
+    }
+  }
+
+  /*
+     The body, past the point of pretending it is fine.
+
+     Same bar `gen_panic_episode` (`sim/eventgen.ts`) reads to fire at all —
+     see `STRESS.panicThreshold` — so this line and that memo arrive on the
+     same condition, one on the morning briefing and one as the thing that
+     actually happens. Named `panel: 'player'`, not `'yourself'`; see
+     `ui/Rail.tsx`'s `PanelId` union.
+  */
+  if (playerStress(state) >= STRESS.panicThreshold) {
+    out.push({
+      id: 'stress_critical',
+      text: `You are near a physical breaking point (Stress: ${Math.round(playerStress(state))}%). The pressure is showing.`,
+      panel: 'player',
     });
   }
 

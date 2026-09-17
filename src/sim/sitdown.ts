@@ -43,8 +43,10 @@ import { remember } from './memory';
 import { spend } from './economy';
 import { makePromise } from './promises';
 import { trainAttribute } from './player';
-import { adjustBond } from './diplomacy';
+import { adjustBond, atWar } from './diplomacy';
 import { houseName } from './houses';
+import { hasVerb } from './build';
+import { stressLeadershipMultiplier } from './personal';
 
 // ----------------------------------------------------------------- guards --
 
@@ -85,6 +87,27 @@ export function canSitDownWith(state: GameState, id: string): Check {
         message: `You sat down ${since} ${since === 1 ? 'day' : 'days'} ago. Give it time.`,
       };
     }
+  }
+  /*
+     Word's one real restriction, added 2026-09-10.
+
+     Everything else about a sit-down was already open to everybody — see the
+     comment `canCallATable` used to carry, and `PlayerPanel.tsx`'s note that
+     the verb gated a thing that was never actually gated. It stays open for a
+     crew member and for a house you are at peace with; nobody needs a
+     reputation to ask a friendly family to talk. A house that is actively at
+     war with you is the one room a nobody does not get shown into — they have
+     no reason to sit across from you unless your word already carries
+     something. This is not the only way out of a war: the family can still
+     offer peace on its own (`faction.ts`'s `peace_offer`), and war-weariness
+     still wears both sides down regardless. It is the only way to *ask*.
+  */
+  const house = state.factions[id as FactionId];
+  if (house && atWar(state, 'player', house.id) && !hasVerb(state, 'word')) {
+    return {
+      ok: false,
+      message: `${houseName(state, house.id)} is not taking your calls while you are shooting at each other. You are not the kind of boss whose word gets you into that room yet.`,
+    };
   }
   return { ok: true, message: '' };
 }
@@ -345,8 +368,16 @@ function lands(state: GameState, sit: Sitdown, reg: RegisterDef): boolean {
   const stats = statsOf(state, sit);
   if (!stats) return false;
 
+  /*
+     A boss carrying real stress reads worse, not just feels worse.
+
+     `stressLeadershipMultiplier` (`sim/personal.ts`) is 1 outside the worst
+     stress tier and outside a sedatives comedown — a real man in an ordinary
+     week is not penalised for having a bad week. See `STRESS.criticalLeadershipPenalty`.
+  */
+  const effectiveLeadership = state.player.attributes.leadership * stressLeadershipMultiplier(state);
   let help =
-    (state.player.attributes.leadership / 100) * SITDOWN.leadershipHelp +
+    (effectiveLeadership / 100) * SITDOWN.leadershipHelp +
     (stats.respectForBoss / 100) * SITDOWN.regardHelp;
 
   // A man with a real grudge answers almost nothing until it is named. The

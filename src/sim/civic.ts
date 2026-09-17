@@ -26,7 +26,7 @@ import { clamp } from './rng';
 import { priced } from './market';
 import { earnDirty } from './economy';
 import { crewList } from './npc';
-import { ownedBusinesses } from './business';
+import { businessDef, ownedBusinesses } from './business';
 import {
   adjustSentiment,
   playerInfluence,
@@ -40,12 +40,21 @@ import {
   CIVIC_FIGURES,
   CIVIC_WORK,
   FAVOUR_EFFECT,
+  PUBLIC_STANDING,
+  PUBLIC_STANDING_FIGURES,
+  PUBLIC_STANDING_TIERS,
   type CivicFigureDef,
+  type PublicStandingTier,
 } from '../config/civic';
 import { SENTIMENT_HOSTILE_BELOW } from '../config/territories';
 import { PATRON } from '../config/perception';
 import type { CivicStanding, GameState } from './types';
 import { holdingShare } from './holdings';
+import { rivals } from './faction';
+import { houseShort } from './houses';
+import { rivalBusinesses } from './verbs';
+import { BUSINESS_BY_ID } from '../config/businesses';
+import type { FactionId } from '../config/factions';
 
 /** Lazily created, so a save written before this existed still loads. */
 function roster(state: GameState): CivicStanding[] {
@@ -410,6 +419,147 @@ export function askForWork(state: GameState, id: string): FavourResult {
   return { ok: true, message };
 }
 
+/**
+ * The first of three favours in this network spent outward, on a rival,
+ * rather than inward on a problem of the player's own.
+ *
+ * Every one of `apply()`'s four grants fixes something happening to the
+ * player — a case, a man in custody, a district, city-hall pressure. Three
+ * of the four figures turn out to have an honest reading pointed the other
+ * way as well. The union boss does not just calm a street, he can also
+ * empty one, and there is nothing else in this game that lets a boss reach
+ * a rival's payroll without a bullet involved. See `callTheLaw` for the
+ * captain's own outward reading, added the same day for the same reason,
+ * and `pullPermit` for the alderman's — added later the same day, once
+ * `RivalBusiness` gave a rival's fronts a real identity to point a permit
+ * at, which this comment originally (and at the time correctly) said did
+ * not exist.
+ *
+ * Deliberately not extended to all four. The judge is the one grant with
+ * no honest outward reading and none has turned up since: `open_the_door`
+ * springs a specific man from a specific cell, and a rival's own men are
+ * `Capo[]` and a count rather than individuals the sim can name one of.
+ * Inventing a use for him would be manufacturing parity rather than
+ * following where a relationship actually reaches, which is the same
+ * judgment call this comment's own history has already made twice.
+ */
+export function canCallWalkout(state: GameState, targetFactionId: FactionId): FavourCheck {
+  const check = canSpendFavour(state, 'union');
+  if (!check.ok) return check;
+  const target = rivals(state).find((f) => f.id === targetFactionId);
+  if (!target || target.strength <= 0) return { ok: false, reason: 'There is nobody there to walk out.' };
+  if (target.walkoutUntilDay && state.day < target.walkoutUntilDay) {
+    const left = target.walkoutUntilDay - state.day;
+    return {
+      ok: false,
+      reason: `${houseShort(state, targetFactionId)} is already sitting idle — ${left} ${left === 1 ? 'day' : 'days'} left on it.`,
+    };
+  }
+  return { ok: true };
+}
+
+export function callWalkout(state: GameState, targetFactionId: FactionId): FavourResult {
+  const check = canCallWalkout(state, targetFactionId);
+  if (!check.ok) return { ok: false, message: check.reason ?? 'No.' };
+
+  const held = figure(state, 'union');
+  held.owed -= 1;
+  const target = state.factions[targetFactionId];
+  target.walkoutUntilDay = state.day + FAVOUR_EFFECT.walkoutDays;
+
+  const message =
+    `Nobody is showing up to work for the ${houseShort(state, targetFactionId)} for ` +
+    `${FAVOUR_EFFECT.walkoutDays} days. Their fronts are not making them anything until it lifts.`;
+  addLog(state, message, 'crew');
+  return { ok: true, message };
+}
+
+/**
+ * The captain's own outward reading — see `canCallWalkout`'s doc comment
+ * for why he and the union boss are the two figures this applies to.
+ *
+ * `bury_a_case` cools a live file of the player's own; this is the same
+ * lever pointed at a rival. A rival family has no individually tracked
+ * case the way the player does, so there is nothing here to bury or build
+ * — what exists instead is `Faction.heat`, a real number their own weekly
+ * decisions already read (a hot family scores every option more
+ * cautiously, and `AGENDA`'s go-quiet option scores higher above
+ * `quietAbove`), so a captain's division taking an interest in somebody
+ * else genuinely changes how that family behaves, not only what it feels
+ * like to have spent the favour.
+ *
+ * No duration to track, unlike the walkout: heat already decays on its
+ * own every week (`AI.heatDecayPerWeek`), so a one-time addition ages out
+ * by the mechanism the game already has rather than needing a second one.
+ */
+export function canCallTheLaw(state: GameState, targetFactionId: FactionId): FavourCheck {
+  const check = canSpendFavour(state, 'captain');
+  if (!check.ok) return check;
+  const target = rivals(state).find((f) => f.id === targetFactionId);
+  if (!target || target.strength <= 0) {
+    return { ok: false, reason: 'There is nobody there for a division to take an interest in.' };
+  }
+  return { ok: true };
+}
+
+export function callTheLaw(state: GameState, targetFactionId: FactionId): FavourResult {
+  const check = canCallTheLaw(state, targetFactionId);
+  if (!check.ok) return { ok: false, message: check.reason ?? 'No.' };
+
+  const held = figure(state, 'captain');
+  held.owed -= 1;
+  const target = state.factions[targetFactionId];
+  target.heat = clamp(target.heat + FAVOUR_EFFECT.heatOnRival, 0, 100);
+
+  const message = `A division has started asking questions about the ${houseShort(state, targetFactionId)}. That is their problem now.`;
+  addLog(state, message, 'crew');
+  return { ok: true, message };
+}
+
+/**
+ * The alderman's own outward reading — see `canCallWalkout`'s doc comment
+ * for the third of the three figures this applies to, and why.
+ *
+ * Scoped narrower than the other two on purpose: a permit is pulled on one
+ * specific business, not on a family generally, because that is genuinely
+ * what an alderman controls and a captain or a union boss does not — a
+ * signature on one particular building rather than a division or a
+ * membership. The mechanism is the walkout's own, at the scale of one
+ * business rather than a whole payroll: `collectIncome` in `faction.ts`
+ * already reads `businessCount` for its income term, so pulling a permit
+ * simply excludes this one business from that count for the duration
+ * rather than needing a second formula.
+ */
+export function canPullPermit(state: GameState, businessId: string): FavourCheck {
+  const check = canSpendFavour(state, 'alderman');
+  if (!check.ok) return check;
+  const biz = rivalBusinesses(state)[businessId];
+  if (!biz) return { ok: false, reason: 'No such business.' };
+  if (biz.permitPulledUntilDay && state.day < biz.permitPulledUntilDay) {
+    const left = biz.permitPulledUntilDay - state.day;
+    return {
+      ok: false,
+      reason: `Already tied up in paperwork — ${left} ${left === 1 ? 'day' : 'days'} left on it.`,
+    };
+  }
+  return { ok: true };
+}
+
+export function pullPermit(state: GameState, businessId: string): FavourResult {
+  const check = canPullPermit(state, businessId);
+  if (!check.ok) return { ok: false, message: check.reason ?? 'No.' };
+
+  const held = figure(state, 'alderman');
+  held.owed -= 1;
+  const biz = rivalBusinesses(state)[businessId];
+  biz.permitPulledUntilDay = state.day + FAVOUR_EFFECT.permitPulledDays;
+
+  const name = BUSINESS_BY_ID[biz.defId]?.name ?? 'The business';
+  const message = `${name} has a permit problem that will take ${FAVOUR_EFFECT.permitPulledDays} days to sort out. It is not making anybody anything until then.`;
+  addLog(state, message, 'crew');
+  return { ok: true, message };
+}
+
 function apply(state: GameState, def: CivicFigureDef, target?: string): FavourResult {
   switch (def.grants) {
     case 'bury_a_case': {
@@ -467,4 +617,112 @@ function apply(state: GameState, def: CivicFigureDef, target?: string): FavourRe
       };
     }
   }
+}
+
+// ------------------------------------------------------- public standing ---
+
+/**
+ * The three real, already-tracked facts `publicStanding` synthesizes.
+ *
+ * Split out so `publicStanding` and `publicStandingRead` (the UI's one call)
+ * share a single computation rather than two copies that could drift.
+ */
+function publicStandingTerms(state: GameState): {
+  sentiment: number;
+  legitimacy: number;
+  alliance: number;
+} {
+  // "Controlled" here is real presence, not a `SLOTS_BY_CONTROL` tier — the
+  // same bar `delegation.ts` uses to decide a district is yours at all.
+  const held = territoryList(state).filter((t) => playerInfluence(t) > 0);
+  const sentiment =
+    held.length > 0
+      ? held.reduce((sum, t) => sum + t.sentiment, 0) / held.length
+      : PUBLIC_STANDING.neutralSentimentDefault;
+
+  const owned = ownedBusinesses(state);
+  const legitimacy =
+    owned.length > 0
+      ? owned.reduce((sum, b) => sum + businessDef(b).legitimacy, 0) / owned.length
+      : PUBLIC_STANDING.neutralLegitimacyDefault;
+
+  /*
+     Same neutral-default reasoning as the two terms above — a figure nobody
+     has ever engaged has not been measured, which is not the same as a
+     figure genuinely run down to zero through real anger. The distinction
+     lives in whether the id is already in `state.civic`, checked here by
+     reading that field directly rather than through `figure()`/`roster()` —
+     both of those auto-create the entry (and, via `roster()`'s own lazy
+     init, every other figure in `CIVIC_FIGURES` alongside it, in one shot)
+     the instant they are called, which would make "never engaged" mean
+     nothing by the time this function finished asking the question.
+
+     Averaged only over whichever of the four already exist; a figure that
+     exists and has genuinely decayed to a real 0 still counts as that 0 —
+     only "not in the roster at all" gets the neutral substitute.
+  */
+  const engaged = PUBLIC_STANDING_FIGURES
+    .map((id) => state.civic?.find((f) => f.id === id))
+    .filter((f): f is CivicStanding => f !== undefined);
+  const alliance =
+    engaged.length > 0
+      ? engaged.reduce((sum, f) => sum + f.standing, 0) / engaged.length
+      : PUBLIC_STANDING.neutralAllianceDefault;
+
+  return { sentiment, legitimacy, alliance };
+}
+
+function publicStandingComposite(
+  terms: { sentiment: number; legitimacy: number; alliance: number },
+  heat: number,
+): number {
+  const heatDrag = Math.round(heat * PUBLIC_STANDING.heatDragScale);
+  const raw =
+    terms.sentiment * PUBLIC_STANDING.sentimentWeight +
+    terms.legitimacy * PUBLIC_STANDING.legitimacyWeight +
+    terms.alliance * PUBLIC_STANDING.allianceWeight -
+    heatDrag;
+  return clamp(Math.round(raw), 0, 100);
+}
+
+function tierFor(score: number): PublicStandingTier {
+  return (
+    PUBLIC_STANDING_TIERS.find((tier) => score >= tier.bar) ??
+    PUBLIC_STANDING_TIERS[PUBLIC_STANDING_TIERS.length - 1]
+  );
+}
+
+/**
+ * The boss's public identity, 0..100. Derived only — see `config/civic.ts`'s
+ * `PublicStandingTier` header for why this is never stored.
+ *
+ * Synthesizes district sentiment, front legitimacy and civic-figure standing
+ * — three facts the simulation already keeps — and docks federal heat. The
+ * weights and the two no-ground/no-fronts defaults live in `PUBLIC_STANDING`.
+ */
+export function publicStanding(state: GameState): number {
+  return publicStandingComposite(publicStandingTerms(state), state.org.heat);
+}
+
+/** Which of the four `PUBLIC_STANDING_TIERS` the current score reads as. */
+export function publicStandingTier(state: GameState): PublicStandingTier {
+  return tierFor(publicStanding(state));
+}
+
+export interface PublicStandingRead {
+  score: number;
+  tier: PublicStandingTier;
+  /** Average sentiment across districts actually held. */
+  sentiment: number;
+  /** Average legitimacy of owned fronts. */
+  legitimacy: number;
+  /** Average standing with the four civic figures the meter reads. */
+  alliance: number;
+}
+
+/** Everything the Public Standing card needs, in one call. See `PlayerPanel.tsx`. */
+export function publicStandingRead(state: GameState): PublicStandingRead {
+  const terms = publicStandingTerms(state);
+  const score = publicStandingComposite(terms, state.org.heat);
+  return { score, tier: tierFor(score), ...terms };
 }

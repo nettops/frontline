@@ -1,3 +1,4 @@
+import { Fragment } from 'react';
 import { useGame } from '../store';
 import type { GameState } from '../sim/types';
 import { controlledTerritories, territoryDef } from '../sim/territory';
@@ -27,6 +28,7 @@ export type PanelId =
   | 'finances'
   | 'player'
   | 'saves'
+  | 'career'
   | 'tips'
   | 'why';
 
@@ -40,30 +42,43 @@ interface Entry {
    * there are none of those.
    */
   city?: true;
+  /**
+   * Which part of the rail this sits under, playing rather than watching.
+   * Fifteen items in one flat column was the complaint a developer's own
+   * Interface playtest brought back 2026-09-09 — "a lot of tabs, someone
+   * could get lost." No panel moved and no data changed; this only chunks
+   * the same fifteen buttons into landmarks. Watching mode ignores it and
+   * keeps its single "The City" header — five items was never the problem.
+   */
+  section?: string;
 }
 
 const BUILT: Entry[] = [
   { id: 'dashboard', label: 'Overview', city: true },
-  { id: 'operations', label: 'Operations' },
-  { id: 'territory', label: 'Territory', city: true },
-  { id: 'businesses', label: 'Businesses' },
-  { id: 'contraband', label: 'The Trade' },
-  { id: 'armoury', label: 'The Armoury' },
-  { id: 'rivals', label: 'Rivals', city: true },
-  { id: 'law', label: 'Law Enforcement' },
-  { id: 'intelligence', label: 'Intelligence' },
-  { id: 'diplomacy', label: 'Diplomacy', city: true },
-  { id: 'city', label: 'The City', city: true },
-  { id: 'crew', label: 'Organization' },
-  { id: 'succession', label: 'Succession' },
-  { id: 'finances', label: 'Finances' },
-  { id: 'player', label: 'Yourself' },
+  { id: 'operations', label: 'Operations', section: 'The Business' },
+  { id: 'businesses', label: 'Businesses', section: 'The Business' },
+  { id: 'contraband', label: 'The Trade', section: 'The Business' },
+  { id: 'armoury', label: 'The Armoury', section: 'The Business' },
+  { id: 'finances', label: 'Finances', section: 'The Business' },
+  { id: 'territory', label: 'Territory', city: true, section: 'The City' },
+  { id: 'rivals', label: 'Rivals', city: true, section: 'The City' },
+  { id: 'diplomacy', label: 'Diplomacy', city: true, section: 'The City' },
+  { id: 'law', label: 'Law Enforcement', section: 'The City' },
+  { id: 'intelligence', label: 'Intelligence', section: 'The City' },
+  { id: 'city', label: 'The City', city: true, section: 'The City' },
+  { id: 'crew', label: 'Organization', section: 'The Family' },
+  { id: 'succession', label: 'Succession', section: 'The Family' },
+  { id: 'player', label: 'Yourself', section: 'The Family' },
 ];
 
 /** The panels this mode has anything to put in. */
 export function panelsFor(mode: GameState['mode']): PanelId[] {
-  const entries = mode === 'simulation' ? BUILT.filter((e) => e.city) : BUILT;
-  return [...entries.map((e) => e.id), 'saves', 'tips', 'why'];
+  const watching = mode === 'simulation';
+  const entries = watching ? BUILT.filter((e) => e.city) : BUILT;
+  const ids: PanelId[] = [...entries.map((e) => e.id), 'saves', 'tips', 'why'];
+  // A career belongs to a player. Watching mode has nobody's to show.
+  if (!watching) ids.push('career');
+  return ids;
 }
 
 export default function Rail({
@@ -167,14 +182,17 @@ export default function Rail({
 
   return (
     <nav className="rail">
-      <div className="rail-group">{watching ? 'The City' : 'The Book'}</div>
-      {entries.map((entry) => (
-        <button
-          key={entry.id}
-          className={entry.id === active ? 'rail-item active' : 'rail-item'}
-          onClick={() => onSelect(entry.id)}
-        >
-          <span>{entry.label}</span>
+      {watching && <div className="rail-group">The City</div>}
+      {entries.map((entry, i) => (
+        <Fragment key={entry.id}>
+          {!watching && entry.section && entry.section !== entries[i - 1]?.section && (
+            <div className="rail-group">{entry.section}</div>
+          )}
+          <button
+            className={entry.id === active ? 'rail-item active' : 'rail-item'}
+            onClick={() => onSelect(entry.id)}
+          >
+            <span>{entry.label}</span>
           {/*
              Every badge says what it wants.
 
@@ -282,7 +300,8 @@ export default function Rail({
               {pending}
             </span>
           )}
-        </button>
+          </button>
+        </Fragment>
       ))}
 
       <div className="rail-group">Records</div>
@@ -292,6 +311,15 @@ export default function Rail({
       >
         <span>Saves</span>
       </button>
+      {!watching && (
+        <button
+          className={active === 'career' ? 'rail-item active' : 'rail-item'}
+          onClick={() => onSelect('career')}
+          title="The chapters of this run, kept"
+        >
+          <span>Career</span>
+        </button>
+      )}
       <button
         className={active === 'tips' ? 'rail-item active' : 'rail-item'}
         onClick={() => onSelect('tips')}

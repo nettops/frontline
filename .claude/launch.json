@@ -45,6 +45,18 @@
         "round15"
       ],
       "port": 5315
+    },
+    {
+      "name": "mafia-orgpolitics",
+      "runtimeExecutable": "node",
+      "runtimeArgs": [
+        "scripts/playtest-run.mjs",
+        "--port",
+        "5329",
+        "--id",
+        "orgpolitics0914"
+      ],
+      "port": 5329
     }
   ]
 }

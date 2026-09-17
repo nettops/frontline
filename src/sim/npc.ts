@@ -17,12 +17,14 @@ import type {
 import { addEvidence, addLog, nextId, pushEvent, say } from './util';
 import { applyGoalDrift, goalBoard, goalEffect, reviewGoal } from './goals';
 import { decayTies, followDeparture, tieDrift } from './ties';
+import { applyVoucherConsequence } from './capoVouches';
 import {
   AGE_RANGE,
   BEHAVIOUR,
   DRIFT,
   FAMILIARITY_MAX,
   FAMILIARITY_PER_DAY,
+  MENTOR_TRAIT_CHANCE,
   NICKNAMES,
   NICKNAME_CHANCE,
   PERCEPTION_TIERS,
@@ -106,7 +108,12 @@ function poolFor(state: GameState): NationalityDef {
   return others[Math.floor(Rng.stableNoise(`crewother:${state.rng.seed}:${at}`, 0) * others.length)];
 }
 
-export function generateNpc(state: GameState, rng: Rng, role: RoleId): Npc {
+/**
+ * @param mentor An established hand a new recruit's traits may lean toward —
+ *   see `MENTOR_TRAIT_CHANCE`. Optional; a mentorless recruit is drawn from
+ *   the open pool exactly as before.
+ */
+export function generateNpc(state: GameState, rng: Rng, role: RoleId, mentor?: Npc): Npc {
   // First name and surname come from the same pool: a Murphy is a Patrick far
   // more often than a Stanislaw, and splitting them produced people who read
   // as a random-name-generator rather than as somebody's cousin.
@@ -119,6 +126,17 @@ export function generateNpc(state: GameState, rng: Rng, role: RoleId): Npc {
 
   const traitCount = rng.int(TRAIT_COUNT[0], TRAIT_COUNT[1]);
   const traits = rng.sample(TRAITS, traitCount).map((t) => t.id);
+  /*
+     New blood plausibly resembles who is already around it. Replaces a slot
+     rather than adding one, so a mentored recruit is not simply "more
+     traited" than one drawn cold — see MENTOR_TRAIT_CHANCE.
+  */
+  if (mentor && mentor.traits.length > 0 && traits.length > 0) {
+    const inherited = mentor.traits.filter((t) => !traits.includes(t));
+    if (inherited.length > 0 && rng.chance(MENTOR_TRAIT_CHANCE)) {
+      traits[rng.int(0, traits.length - 1)] = rng.pick(inherited);
+    }
+  }
 
   const stats = {} as NpcStats;
   for (const id of STAT_IDS) {
@@ -300,6 +318,67 @@ export function visibleTraits(npc: Npc): string[] {
 
 export function secretKnown(npc: Npc): boolean {
   return npc.familiarity >= 80;
+}
+
+export interface LoyaltyPressure {
+  text: string;
+  tone: 'good' | 'bad' | 'dim';
+}
+
+/**
+ * What is actually working on this man's loyalty right now.
+ *
+ * `driftNpcs` computes five real, weekly terms — pay against expectation,
+ * stagnation, heat-fear, an unresolved grievance, and the player's own
+ * Grip — and until this function existed none of them had any UI surface
+ * at all, not even qualitative. That is a real gap `perceive()`'s own rule
+ * makes narrow to close: a numeric breakdown (`ChanceBreakdown`-style,
+ * the pattern `successBreakdown` and the case-strength growth reading
+ * both use) would hand over the raw stat every one of those terms reads,
+ * which is exactly what this project's hidden-stat fog exists to refuse.
+ * So each candidate line is gated on its own `perceive()` call rather than
+ * on one blanket threshold — a stranger you barely know can still tell you
+ * are underpaying him if wage-versus-market is the only thing that needs
+ * no fog, while a read on his temper needs the familiarity to have earned it.
+ *
+ * Grip is deliberately left out: it is the same number for every man in
+ * the family, it is the player's own build stat rather than anything
+ * hidden about the person, and it is already visible on the Yourself
+ * screen. Repeating it on every row would be noise, not a reading.
+ */
+export function loyaltyPressures(state: GameState, npc: Npc): LoyaltyPressure[] {
+  const out: LoyaltyPressure[] = [];
+
+  const greed = perceive(npc, 'greed');
+  if (greed.known) {
+    const expected = wageExpectation(state, npc);
+    if (npc.wage >= expected) {
+      out.push({ text: 'Paid enough that money is not the question', tone: 'good' });
+    } else {
+      out.push({ text: 'Thinks he is worth more than he is drawing', tone: 'bad' });
+    }
+  }
+
+  const ambition = perceive(npc, 'ambition');
+  if (
+    ambition.known &&
+    ambition.bandIndex >= 3 &&
+    daysSinceGood(state, npc) > DRIFT.daysInRoleBeforeStagnation
+  ) {
+    out.push({ text: 'Nothing has moved for him in a long while, and he wants it to', tone: 'bad' });
+  }
+
+  const fear = perceive(npc, 'fear');
+  if (fear.known && fear.bandIndex >= 3 && state.org.heat > DRIFT.heatFearThreshold) {
+    out.push({ text: 'Rattled by how hot things are right now', tone: 'bad' });
+  }
+
+  const grievance = perceive(npc, 'grievance');
+  if (grievance.known && grievance.bandIndex >= 2) {
+    out.push({ text: 'Carrying something he has not said out loud', tone: 'bad' });
+  }
+
+  return out;
 }
 
 /**
@@ -535,6 +614,21 @@ export function driftNpcs(state: GameState, rng: Rng): void {
   */
   const held = worldPull(state, 'grip');
 
+  /*
+     Safety in numbers. Computed once, from the same population the loop
+     below skips arrests and former crew from, so a family that is
+     collectively sour produces a cascade of walkouts rather than a drip —
+     see BEHAVIOUR.collectiveDefectFactor.
+  */
+  let unhappyCount = 0;
+  let liveCount = 0;
+  for (const npc of Object.values(state.npcs)) {
+    if (isFormerCrew(npc) || npc.status === 'arrested') continue;
+    liveCount++;
+    if (npc.stats.loyalty < BEHAVIOUR.defectLoyaltyBelow) unhappyCount++;
+  }
+  const unhappyShare = liveCount > 0 ? unhappyCount / liveCount : 0;
+
   for (const npc of Object.values(state.npcs)) {
     if (isFormerCrew(npc)) continue;
     /*
@@ -620,6 +714,18 @@ export function driftNpcs(state: GameState, rng: Rng): void {
       loyaltyDelta += DRIFT.heatFearLoyalty * pressure * (npc.stats.fear / 100);
     }
 
+    /*
+       A new hire's honeymoon. Falls linearly to nothing over
+       DRIFT.honeymoonDays, so day one reads as "still finding their feet"
+       rather than being judged by the same stagnation clock as a veteran.
+       Reads `joinedDay` rather than `daysInCrew` — the same clock
+       `daysSinceGood` already uses — because `daysInCrew` only advances
+       through a real daily tick and several test fixtures jump `state.day`
+       forward directly without one.
+    */
+    const honeymoon = clamp(1 - (state.day - npc.joinedDay) / DRIFT.honeymoonDays, 0, 1);
+    if (honeymoon > 0) loyaltyDelta += DRIFT.honeymoonLoyalty * honeymoon;
+
     // Unresolved grievances.
     loyaltyDelta += npc.stats.grievance * DRIFT.grievanceLoyaltyFactor;
     npc.stats.grievance = clamp(
@@ -675,14 +781,32 @@ export function driftNpcs(state: GameState, rng: Rng): void {
        low loyalty is the same gate that makes him leave, so every informant
        defected within a month of turning and never handed over a single night.
     */
+    /*
+       A weak-claim handover leaves the room genuinely unsettled for a while —
+       see HANDOVER.shakyHandoverDays. Read once outside the loop's own scope
+       would be cheaper, but this only evaluates when the defect branch's
+       other two conditions already hold, which is rare enough not to matter.
+    */
+    const shaky =
+      state.org.shakyHandoverUntilDay !== undefined && state.day < state.org.shakyHandoverUntilDay
+        ? BEHAVIOUR.shakyHandoverDefectBoost
+        : 0;
+
     if (
       npc.informingSince === undefined &&
       npc.stats.loyalty < BEHAVIOUR.defectLoyaltyBelow &&
-      rng.chance(BEHAVIOUR.defectChancePerTick * diff.eventPressure * defectionChill)
+      rng.chance(
+        BEHAVIOUR.defectChancePerTick *
+          diff.eventPressure *
+          defectionChill *
+          (1 + unhappyShare * BEHAVIOUR.collectiveDefectFactor + shaky),
+      )
     ) {
       npc.status = 'defected';
       npc.unavailableUntilDay = null;
       addNote(npc, state.day, 'Left the organization.', 'bad');
+      // Loyalty this low is exactly what a vouch was supposed to rule out.
+      applyVoucherConsequence(state, npc, state.day, 'walked out');
       /*
          The same repair. Measured at 2.8% of everything read, and it is a
          sentence a player meets dozens of times in a career.
@@ -767,6 +891,8 @@ export function driftNpcs(state: GameState, rng: Rng): void {
       const followers = followDeparture(state, rng, npc, (other) => {
         other.status = 'defected';
         other.unavailableUntilDay = null;
+        // Whoever's man this was, this is the same walkout as npc's own.
+        applyVoucherConsequence(state, other, state.day, 'walked out');
       });
       if (followers.length > 0) {
         addLog(

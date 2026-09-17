@@ -23,9 +23,11 @@ import type {
 import { addEvidence, addLog, formatMoney, nextId, pushEvent, say, weightedPick } from './util';
 import { addHeat, channelHeat } from './heat';
 import { addNote, crewList } from './npc';
+import { applyVoucherConsequence } from './capoVouches';
 import { nightsWorked } from './standing';
-import { playerInfluence, territoryList } from './territory';
+import { playerInfluence, territoryDef, territoryList } from './territory';
 import { remember } from './memory';
+import { publicStandingTier } from './civic';
 import { spend, totalFunds } from './economy';
 import { ownedBusinesses } from './business';
 import { seizeStock } from './contraband';
@@ -88,6 +90,9 @@ import { CHANNEL_OF_SOURCE } from '../config/heat';
 import { ARREST_DAYS } from '../config/operations';
 import { DIFFICULTY_BY_ID } from '../config/difficulty';
 import { FEAR, PAYDAY_INTERVAL } from '../config/economy';
+import { HOME_TERRITORY } from '../config/territories';
+import { CONFIDANT } from '../config/personal';
+import { confidantIsExposed } from './personal';
 
 export function newLawEnforcement(): LawEnforcement {
   return {
@@ -308,7 +313,16 @@ function evidenceMultiplier(state: GameState, investigation: Investigation): num
   return multiplier;
 }
 
-function record(
+/**
+ * A line on the file, capped, and told to the player when they could not have
+ * missed it.
+ *
+ * Exported so anything outside this module that genuinely moves a case —
+ * `suburbs.ts`'s panicked neighbour is the first — writes its line through the
+ * same door rather than pushing onto `history` directly and quietly skipping
+ * the 40-entry cap.
+ */
+export function recordCaseEvent(
   state: GameState,
   investigation: Investigation,
   text: string,
@@ -363,7 +377,7 @@ function advanceStage(state: GameState, rng: Rng, investigation: Investigation):
       daysLeft <= worldPull(state, 'instinct') * WORLD.instinctWarnDays
     ) {
       investigation.warnedStage = next.id;
-      record(
+      recordCaseEvent(
         state,
         investigation,
         `Your man inside ${agency.shortName} says ${next.name.toLowerCase()} is coming.`,
@@ -383,7 +397,7 @@ function advanceStage(state: GameState, rng: Rng, investigation: Investigation):
      people are being followed and photographed" — and it was sitting behind a
      colon and a stage name nobody outside the department uses.
   */
-  record(
+  recordCaseEvent(
     state,
     investigation,
     /*
@@ -477,6 +491,8 @@ export function sweep(state: GameState, rng: Rng, agencyName = 'the police'): Np
     npc.unavailableUntilDay = state.day + Math.max(7, Math.round(rolled * shorten));
     npc.stats.fear = clamp(npc.stats.fear + 20, 0, 100);
     addNote(npc, state.day, `Swept up by ${agencyName}.`, 'bad');
+    // He was somebody's word before he was somebody's exposure.
+    applyVoucherConsequence(state, npc, state.day, 'was swept up');
   }
   return taken;
 }
@@ -549,7 +565,7 @@ function applyStageEffect(
         addNote(npc, state.day, `Approached by ${agency.shortName}.`, 'bad');
       }
       if (picked.length) {
-        record(
+        recordCaseEvent(
           state,
           investigation,
           `${agency.shortName} have been talking to ${picked.map((n) => n.name).join(' and ')}.`,
@@ -563,7 +579,7 @@ function applyStageEffect(
       const businesses = ownedBusinesses(state).sort((a, b) => b.exposure - a.exposure);
       investigation.businessIds = businesses.slice(0, 3).map((b) => b.id);
       if (investigation.businessIds.length) {
-        record(
+        recordCaseEvent(
           state,
           investigation,
           `${agency.shortName} have subpoenaed your books. Everything moves slower now.`,
@@ -577,7 +593,7 @@ function applyStageEffect(
       const share = rng.float(WARRANT_SEIZURE_SHARE[0], WARRANT_SEIZURE_SHARE[1]);
       const seized = Math.round((state.org.cash + state.org.dirtyCash) * share);
       spend(state, seized, 'law');
-      record(
+      recordCaseEvent(
         state,
         investigation,
         `They came through the doors and took $${seized.toLocaleString('en-US')}.`,
@@ -597,7 +613,7 @@ function applyStageEffect(
       */
       const took = seizeOnePossession(state, agency.shortName);
       if (took) {
-        record(
+        recordCaseEvent(
           state,
           investigation,
           `They took ${POSSESSION_BY_ID[took.defId]?.name.toLowerCase() ?? 'property of yours'} as well.`,
@@ -614,7 +630,7 @@ function applyStageEffect(
         if (!investigation.suspectIds.includes(npc.id)) investigation.suspectIds.push(npc.id);
       }
       if (taken.length) {
-        record(
+        recordCaseEvent(
           state,
           investigation,
           `${agency.shortName} took ${taken.map((n) => n.name).join(', ')}.`,
@@ -693,7 +709,7 @@ function resolveTrial(state: GameState, rng: Rng, investigation: Investigation):
   if (rng.chance(conviction)) {
     investigation.verdict = 'convicted';
     cover(state, rng, 'conviction', { named: true });
-    record(state, investigation, 'The jury convicted. It is over for them.', true);
+    recordCaseEvent(state, investigation, 'The jury convicted. It is over for them.', true);
     // They got who they came for, and the file closes with him in it.
     closeCase(state, investigation, 'They got their conviction. The file is closed.');
     /*
@@ -715,7 +731,7 @@ function resolveTrial(state: GameState, rng: Rng, investigation: Investigation):
     // — and a humiliation the city reads about, which is not the same as good.
     gainRespect(state, TRIAL.acquittalRespect);
     cover(state, rng, 'acquittal', { named: true });
-    record(
+    recordCaseEvent(
       state,
       investigation,
       'Acquitted. They spent years on you and walked out with nothing.',
@@ -759,6 +775,34 @@ export function tickInvestigations(state: GameState, rng: Rng): void {
   considerOpening(state);
 
   const ledger = state.law.ledger;
+  /*
+     Civic insulation. A community that reads the boss as a benefactor closes
+     ranks against a subpoena; one that reads him as a predator informs on
+     him — see `config/civic.ts`'s `PublicStandingTier` and its own header.
+
+     Applied to `absorbed` and `visibility` below, deliberately not to `work`.
+     Those two are what a community's own cooperation actually gates —
+     evidence that has to be found and handed over, and ambient attention
+     that has to be volunteered — while `work` is the agency's own
+     investigative skill, which a quiet neighbourhood does not make any less
+     competent. Given this function's own comment two paragraphs down about
+     `evidenceMultiplier` once being aimed at "the smallest of the three"
+     terms and changing nothing anybody could measure, this multiplier goes
+     on the two terms that comment's own numbers say are the large majority
+     of weekly growth (absorbed + visibility, against work alone), on
+     purpose, so as not to repeat that exact mistake in a new shape.
+  */
+  const civicTier = publicStandingTier(state);
+  const civicMult = civicTier.caseGrowthMultiplier;
+  let civicDampened = false;
+
+  /*
+     Read once for the week rather than per case. The bar itself lives in
+     `sim/personal.ts` beside the meter it reads, so it cannot drift from
+     what the panel tells the player about the same two facts.
+  */
+  const wired = confidantIsExposed(state);
+  let wiretapHeard = false;
 
   for (const investigation of activeCases(state)) {
     const agency = agencyOf(investigation);
@@ -785,11 +829,35 @@ export function tickInvestigations(state: GameState, rng: Rng): void {
     let absorbed = 0;
     for (const trace of availableFor(state, agency, investigation.id)) {
       trace.attachedTo.push(investigation.id);
-      absorbed += trace.strength * EVIDENCE_ABSORPTION * keptOut;
+      absorbed += trace.strength * EVIDENCE_ABSORPTION * keptOut * civicMult;
       for (const npcId of trace.npcIds) {
         if (!investigation.suspectIds.includes(npcId)) investigation.suspectIds.push(npcId);
       }
     }
+    /*
+       1a. And whatever a wire picks up at an address the boss thinks is his
+           own business.
+
+       Counted as `absorbed` rather than as agency `work`, on purpose and for
+       a mechanical reason as much as a fictional one: `absorbed > 0` is what
+       keeps a file warm (see the `lastProgressDay` comment below), and the
+       whole bite of this layer is that a private life nobody is minding
+       feeds a case through a month when the family has otherwise gone
+       completely still. Folded into the same term so `lastGrowth` and the
+       ledger stay a complete account of the week without a fourth line
+       nobody else writes to.
+
+       Per-case, not organization-wide: a wire is this agency's wire, and a
+       second file still at `rumor` has nobody sitting in a van. Unscaled by
+       `keptOut` and `civicMult` — a neighbourhood that will not talk to a
+       subpoena is not what is producing this, and there is nothing here for
+       a lawyer to have excluded.
+    */
+    if (wired && stageIndex(investigation.stage) >= stageIndex('surveillance')) {
+      absorbed += CONFIDANT.wiretapEvidenceWeekly;
+      wiretapHeard = true;
+    }
+
     investigation.strength += absorbed;
     if (ledger) ledger.absorbed += absorbed;
 
@@ -822,13 +890,17 @@ export function tickInvestigations(state: GameState, rng: Rng): void {
        followed was applied to `lastProgressDay` instead, so the case went cold
        on schedule and then kept growing anyway.
     */
-    const visibility = state.org.heat * HEAT_EVIDENCE_CONTRIBUTION * momentum;
+    const visibility = state.org.heat * HEAT_EVIDENCE_CONTRIBUTION * momentum * civicMult;
     investigation.strength += work + visibility;
+    if (civicMult < 1) civicDampened = true;
     if (ledger) {
       ledger.work += work;
       ledger.visibility += visibility;
     }
     investigation.strength = clamp(investigation.strength, 0, 100);
+    // The itemized reading of the line above — see `Investigation.lastGrowth`'s
+    // own comment for why this overwrites rather than joining `history`.
+    investigation.lastGrowth = { absorbed, work, visibility };
 
     /*
        A case stays warm on what they find, not on how loud you are.
@@ -883,6 +955,41 @@ export function tickInvestigations(state: GameState, rng: Rng): void {
     }
 
     advanceStage(state, rng, investigation);
+  }
+
+  /*
+     Told, eventually, and never in full.
+
+     "Everything the player sees is true" cuts both ways: a case growing from
+     an address the boss has not thought about in two months has to be
+     something he can find out, or the meter on the panel is the only warning
+     and the memo never comes. Said on its own long clock
+     (`wiretapBeatEveryDays`) rather than weekly — a line every seven days
+     about the same wire is a subscription, and this is supposed to be the
+     cold moment you realize what you have been leaving open.
+
+     `Rng.stableNoise` is not needed: there is one sentence and no variant to
+     pick, so nothing here touches the causal stream at all.
+  */
+  const lastBeat = state.flags['confidant_wire_beat_day'] ?? -Infinity;
+  if (wiretapHeard && state.day - lastBeat >= CONFIDANT.wiretapBeatEveryDays) {
+    state.flags['confidant_wire_beat_day'] = state.day;
+    addLog(
+      state,
+      `Word came back through the courthouse that the government has been asking about an ` +
+        `address across the river. Nobody asked whose it is.`,
+      'failure',
+    );
+  }
+
+  // Named once a week, not once per case — it is a fact about the
+  // neighbourhood, not about any one file.
+  if (civicDampened) {
+    addLog(
+      state,
+      `Local witnesses in ${territoryDef(HOME_TERRITORY).name} refused to cooperate with federal subpoenas.`,
+      'crew',
+    );
   }
 }
 
@@ -952,6 +1059,14 @@ export interface CaseRead {
   strength: string;
   suspects: string | null;
   known: { day: number; text: string }[];
+  /**
+   * What last week's number was actually made of — same intel gate as the
+   * exact `strength` percentage, since a breakdown of a figure you cannot
+   * see the precise value of would hand over more than the fog is for.
+   * Null before the case's first weekly tick under this feature, same as an
+   * absent `investigation.lastGrowth`.
+   */
+  growth: { absorbed: number; work: number; visibility: number } | null;
 }
 
 export function readCase(state: GameState, investigation: Investigation): CaseRead {
@@ -984,6 +1099,7 @@ export function readCase(state: GameState, investigation: Investigation): CaseRe
     known: investigation.history
       .filter((h) => h.obvious || intel >= CASE_INTEL_STAGE_ABOVE)
       .slice(0, 12),
+    growth: intel >= CASE_INTEL_STRENGTH_ABOVE ? (investigation.lastGrowth ?? null) : null,
   };
 }
 
@@ -1281,7 +1397,7 @@ export function destroyEvidence(
   if (rng.chance(chance)) {
     const removed = rng.float(DESTROY_EVIDENCE.removed[0], DESTROY_EVIDENCE.removed[1]);
     investigation.strength = Math.max(0, investigation.strength - removed);
-    record(state, investigation, 'Something they were relying on is no longer available.', false);
+    recordCaseEvent(state, investigation, 'Something they were relying on is no longer available.', false);
     /*
        The player destroyed evidence and was told a riddle about it.
 
@@ -1308,7 +1424,7 @@ export function destroyEvidence(
     100,
   );
   addHeat(state, DESTROY_EVIDENCE.backfireHeat, 'inside', 'tampering');
-  record(state, investigation, 'Somebody tried to get at the file. That is a charge of its own.', true);
+  recordCaseEvent(state, investigation, 'Somebody tried to get at the file. That is a charge of its own.', true);
   addLog(
     state,
     say(`tamper_failed_${investigation.id}`, state.day, [
@@ -1382,6 +1498,6 @@ export function pressureWitness(
     detail: `${npc.name} reported being threatened.`,
     attachedTo: [investigation.id],
   });
-  record(state, investigation, `${npc.name} told them they had been threatened.`, true);
+  recordCaseEvent(state, investigation, `${npc.name} told them they had been threatened.`, true);
   return { ok: false, message: 'They went straight to them.' };
 }

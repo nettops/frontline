@@ -33,15 +33,17 @@
  * true, and a rank on a panel is something the player sees.
  */
 import type { GameState, RankId } from './types';
-import { addLog } from './util';
+import { addLog, say } from './util';
 import { rankNow } from './rank';
 import { tradeUnlocked } from './contraband';
+import { outgrewStreetWork } from './operations';
 import { TRADES, TRADE_IDS } from '../config/contraband';
 import { RANKS, rankIndex } from '../config/economy';
 
 export function tickAnnouncements(state: GameState): void {
   announceRank(state);
   announceTrades(state);
+  announceStreetWorkRetired(state);
 }
 
 /**
@@ -103,4 +105,32 @@ function announceTrades(state: GameState): void {
 
 function nameFor(id: RankId): string {
   return RANKS.find((r) => r.id === id)?.name ?? id;
+}
+
+/**
+ * And street work, the day it actually comes off the board.
+ *
+ * The blind round run against the pass that built `outgrewStreetWork` found
+ * this exact fault: delegating a district silently dropped `work_it_yourself`
+ * and its neighbors off the manual board, and the tester traced the missing
+ * jobs back to that decision only by accident, days later. The steward panel
+ * already says what a hand is worth before the decision; this is the other
+ * half, on the same one-way-until-it-reverses idiom `announceTrades` already
+ * uses for a door that opened — said once, on the day it changes.
+ */
+function announceStreetWorkRetired(state: GameState): void {
+  const now = outgrewStreetWork(state);
+  const said = state.org.streetWorkRetiredSaid;
+  if (said === now) return;
+  state.org.streetWorkRetiredSaid = now;
+  if (!now) return; // reverses in silence, same as a trade closing — nothing new to report
+  addLog(
+    state,
+    say('street_work_retired', state.day, [
+      'You do not run the corners yourself anymore. Your own people bring you the work now.',
+      "Somebody else's hands do that kind of thing now. Yours are full.",
+      "That is a young man's work, and you have not been one in a while.",
+    ]),
+    'neutral',
+  );
 }

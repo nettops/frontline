@@ -178,7 +178,7 @@ export default function MemoModal() {
                   </span>
                   <span>
                     {formatMoney(subject.wage)}/wk{' '}
-                    <span className={payRead(subject).tone}>{payRead(subject).text}</span>
+                    <span className={payRead(state, subject).tone}>{payRead(state, subject).text}</span>
                   </span>
                 </div>
               </div>

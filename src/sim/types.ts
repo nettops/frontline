@@ -19,6 +19,9 @@ import type { CyclePhaseId } from '../config/market';
 import type { ApproachId } from '../config/operations';
 import type { HeatChannel } from '../config/heat';
 import type { NationalityId } from '../config/nationalities';
+import type { LightEnvelopeDilemma } from '../config/tribute';
+import type { DementiaCareStatus } from '../config/dementia';
+import type { DoctrineId } from '../config/doctrine';
 
 export type Id = string;
 
@@ -123,6 +126,18 @@ export interface Player {
    * render time — see ui/art/playerLook.ts.
    */
   look?: PlayerLook;
+  /**
+   * What the double life is doing to the man living it, 0..100.
+   *
+   * Optional and lazily read, like `build`, `points` and the rest above — a
+   * save written before this existed loads as a boss who has been carrying
+   * nothing, which is correct: `tickStress` in `sim/personal.ts` only moves
+   * it forward a week at a time, from real drivers (wars, heat, neglect,
+   * wages owed) the simulation already tracks. See `config/personal.ts`'s
+   * `STRESS` block for why. SAVE_VERSION does not move for this, same as it
+   * does not for the other optional fields here.
+   */
+  stress?: number;
 }
 
 // ---------------------------------------------------- organization state ---
@@ -156,6 +171,14 @@ export interface Org {
    * loads with nothing owed.
    */
   frontUpkeepOwed?: number;
+  /**
+   * The room stays genuinely unsettled until this day, set by a handover
+   * whose winner had a weak claim — see `HANDOVER.shakyHandoverDays`. Read by
+   * `driftNpcs`'s collective-defection term; a shaky win costs more than the
+   * odds of who wins, for a while. Optional so a save written before this
+   * loads with nothing shaky, which is correct.
+   */
+  shakyHandoverUntilDay?: number;
   /**
    * Whoever handles the money, and what they think of you.
    *
@@ -310,6 +333,8 @@ export interface Org {
    */
   rankSaid?: RankId;
   tradeSaid?: Partial<Record<TradeId, boolean>>;
+  /** Same idiom, for `outgrewStreetWork` — see `announce.ts`'s `announceStreetWorkRetired`. */
+  streetWorkRetiredSaid?: boolean;
 }
 
 // ------------------------------------------------------------------- npcs ---
@@ -451,6 +476,76 @@ export interface Npc {
   informingSince?: number;
   /** Set after somebody else was killed for it. He is not stupid. */
   carefulUntilDay?: number;
+  /**
+   * The capo (or above) this man was put under, if the crew has grown a
+   * chain of command.
+   *
+   * `capos.ts`'s `Capo[]` is the equivalent idea for a rival family; this is
+   * not that type, because the player's own men are `Npc` — they draw a wage,
+   * hold traits and memories, and go on jobs, none of which is true of a
+   * rival's capo. Optional with no initialiser, the same idiom as
+   * `informingSince` and `carefulUntilDay` above: a save written before this
+   * existed loads with everybody answering straight to the boss, which is
+   * exactly what a flat roster has always meant.
+   */
+  reportsTo?: Id;
+  /**
+   * The last day a capo's recommendation to make this man was set aside —
+   * by an explicit Wait, or by a Deny, which sets it too. `capoVouches.ts`
+   * reads this only to hold the recommendation off the list for
+   * `CAPO_VOUCH.cooldownDays`; it does not gate whether he is *ready*, only
+   * whether the game should mention it again yet. Optional with no
+   * initialiser, so a save written before this existed loads with every
+   * recommendation free to surface the first time it is checked — exactly
+   * what "never been asked" means.
+   */
+  vouchDeferredDay?: number;
+  /**
+   * The capo who put his name behind this man, if he was made through a
+   * vouch rather than a plain promotion. Set once, by `makeVouch`, and never
+   * cleared — a man does not stop having been vouched for. `crew.ts`'s
+   * `dismiss` reads it to charge the capo when a man he vouched for is cut
+   * loose. Optional with no initialiser: a save written before this existed
+   * loads with every made man's history blank, which for those saves is true.
+   */
+  vouchedBy?: Id;
+  /**
+   * The last day this capo registered as disfavored next to whichever peer
+   * the boss has been favoring — `capoFavoritism.ts`'s own cooldown, read the
+   * same way `vouchDeferredDay` above is: it does not gate whether the gap is
+   * real, only whether the game has already made him feel it recently.
+   * Optional with no initialiser, so a save written before this existed loads
+   * with nobody having noticed yet, which for those saves is true.
+   */
+  favoritismNoticedDay?: number;
+  /**
+   * The day this man's mind started going, if it has.
+   *
+   * Set once by `checkDementiaOnset` and never cleared — there is no getting
+   * better from it, which is the whole weight of the decision it forces. The
+   * presence of the field is the condition; there is no separate boolean
+   * agreeing with it.
+   *
+   * Optional with no initialiser, the same idiom as `informingSince` and
+   * `vouchedBy` above: a save written before this existed loads with nobody
+   * failing, which for those saves is true.
+   */
+  dementiaSince?: number;
+  /**
+   * What is being done about it. Absent until `dementiaSince` is set, and
+   * `'active'` from that moment until the boss pays for something better —
+   * see `sim/dementia.ts`.
+   */
+  dementiaCare?: DementiaCareStatus;
+  /**
+   * The soldier sitting in his house, if the boss chose that answer.
+   *
+   * Stored rather than derived because the minder has to be released when the
+   * arrangement ends, and `status: 'busy'` with no timer is indistinguishable
+   * from any other open-ended job — there would be nothing to read back to
+   * find out who he was.
+   */
+  dementiaMinderId?: Id;
 }
 
 export interface NpcNote {
@@ -526,6 +621,17 @@ export interface GoalBoard {
 export type OperationRisk = 'low' | 'moderate' | 'high' | 'extreme';
 
 /**
+ * What kind of business a job actually is, apart from what tier it sits at.
+ *
+ * Four clusters the table already sorts into once you read it that way: rooms
+ * that print money off a vice (`vice`), goods that move without a bill of sale
+ * (`contraband`), a threat or a debt collected in person (`muscle`), and a
+ * seat bought with favours, a union card or a share of somebody's books
+ * (`influence`). See `config/operations.ts` for which job is which and why.
+ */
+export type OperationCategory = 'vice' | 'contraband' | 'muscle' | 'influence';
+
+/**
  * The board, flattened, so a job's unlock condition can live in config.
  *
  * The same trick `config/goals.ts` and the world conditions use: config
@@ -573,6 +679,8 @@ export interface OperationDef {
   id: string;
   name: string;
   description: string;
+  /** What kind of business this is, apart from its tier. See `OperationCategory`. */
+  category: OperationCategory;
   /**
    * How far up the table this sits, 0 for street work to 5 for the last jobs.
    *
@@ -648,6 +756,18 @@ export interface ActiveOperation {
   successChance: number;
   projectedPayout: number;
   /**
+   * Run by a capo's own crew rather than assembled by the boss.
+   *
+   * Two consequences, both in `resolveOperation`: the family keeps only
+   * `TRIBUTE.bossAutonomousCut` of what it pays, and what it leaves behind
+   * stops at the capo instead of entering the family's evidence. Optional
+   * because every job launched before this existed was the boss's own, and
+   * `undefined` means exactly that.
+   */
+  autonomous?: boolean;
+  /** Whose crew is out on it. Only set alongside `autonomous`. */
+  capoId?: Id;
+  /**
    * How it is being done. Optional because saves written before approaches
    * existed do not have one; read it through `approachOf`, never directly.
    */
@@ -694,6 +814,144 @@ export interface Score {
    */
   status: 'open' | 'running' | 'done' | 'expired';
   settledDay?: number;
+}
+
+/**
+ * Work somebody else brought you, rather than a row you picked off a menu.
+ *
+ * See `sim/capoPitches.ts` for the machine and `config/capoPitches.ts` for the
+ * table. `defId` and `territoryId` are the same job-and-place pair a normal
+ * launch takes; what a pitch adds is whose idea it was, which is what
+ * `reassign` spends.
+ */
+export interface CapoPitch {
+  id: Id;
+  /** An existing `OperationDef.id`, tier 1 or above — street work has no pitches. */
+  defId: string;
+  territoryId: string;
+  /** Whose idea this is. Reassigning it costs whoever it is now. */
+  capoId: Id;
+  offeredDay: number;
+  /**
+   * `open` until the boss answers it. `approved` hands it to the assemble
+   * screen exactly the same way choosing a job off the old board did — this
+   * never runs `resolveOperation` itself. `rejected` and `expired` both clear
+   * it for nothing; the difference is only which of the two decided that.
+   */
+  status: 'open' | 'approved' | 'rejected' | 'expired';
+  settledDay?: number;
+}
+
+/**
+ * One week's envelope from one capo, after the boss has finished with it.
+ *
+ * `paid` is what the family actually received, `shortage` what was missing
+ * when the envelope arrived — so a squeezed week reads "short $900, paid in
+ * full" rather than pretending the envelope was never light. See
+ * `tribute.ts`.
+ */
+export interface TributeRecord {
+  capoId: Id;
+  day: number;
+  expected: number;
+  paid: number;
+  shortage: number;
+  status: 'paid' | 'squeezed' | 'slid' | 'audited_clean' | 'audited_guilty';
+}
+
+export interface TributeState {
+  history: TributeRecord[];
+  /** Light envelopes waiting on an answer. One per capo at most. */
+  pendingDilemmas: LightEnvelopeDilemma[];
+}
+
+// ------------------------------------------------------------- the suburbs ---
+
+/**
+ * A civilian who lives near the boss, and how far in he is.
+ *
+ * `exposure` is the only number, and it does exactly one thing: it is the
+ * weekly odds this man folds when a federal agent asks him what he knows.
+ * `panicked` latches, because a witness only turns once — everything after
+ * that is the same statement being read back.
+ */
+export interface SuburbanNeighbour {
+  id: string;
+  name: string;
+  /** 0..100. Rises with every favour. Never falls. */
+  exposure: number;
+  /** Day of the last favour, for the per-neighbour cooldown. */
+  lastFavourDay: number;
+  panicked?: boolean;
+}
+
+export interface ResolvedFavour {
+  neighbourId: string;
+  favourId: string;
+  day: number;
+}
+
+export interface SuburbanState {
+  neighbours: SuburbanNeighbour[];
+  resolvedFavours: ResolvedFavour[];
+  /**
+   * Who is currently reachable by a subpoena — recomputed every weekly tick
+   * rather than accumulated, so it is a reading of right now and cannot go
+   * stale when a case closes.
+   */
+  activeInformantThreats: string[];
+}
+
+// -------------------------------------------------------------- the doctrine ---
+
+/**
+ * What the boss has said this organization is.
+ *
+ * Two fields and no cached modifiers: everything the doctrine does is looked
+ * up out of `DOCTRINES` at the call site, so changing a number in config
+ * changes the game rather than changing the game for new saves only.
+ */
+export interface MobDoctrineState {
+  current: DoctrineId;
+  /** The day it was last declared. Also the switch cooldown's clock. */
+  sinceDay: number;
+}
+
+// --------------------------------------------------------------- the exit ---
+
+/**
+ * The plan the organization is not supposed to know about.
+ *
+ * `nestEgg` is deliberately not part of `cleanWorth` — see `config/florida.ts`
+ * for why that is the whole design rather than an oversight.
+ */
+export interface FloridaExitState {
+  nestEgg: number;
+  /** 0..100. What the room has worked out. */
+  suspicion: number;
+  /** Day of the last siphon, for the weekly decay's "quiet week" test. */
+  lastSiphonDay: number;
+  /**
+   * Set when suspicion crosses `FLORIDA.mutinyThreshold` somewhere with no
+   * rng in hand. The next weekly pass fires it. Latched rather than rolled:
+   * past that bar the room has stopped waiting for a reason.
+   */
+  mutinyPending?: boolean;
+}
+
+// ---------------------------------------------------------- the pet project ---
+
+/** The place itself. `defId` indexes `PET_PROJECTS`. */
+export interface PetProject {
+  defId: string;
+  boughtDay: number;
+}
+
+export interface PetProjectState {
+  current: PetProject | null;
+  /** 0..100. How much of the life has followed the boss into it. */
+  contagion: number;
+  sanitizedDay?: number;
 }
 
 /**
@@ -871,6 +1129,37 @@ export interface Home {
 }
 
 /**
+ * The apartment nobody in the house has the address of.
+ *
+ * One record, not a roster — the same argument `config/personal.ts`'s header
+ * makes about the household: this person is never assigned a job, never paid
+ * a wage and never appears on the crew sheet, so making them an `Npc` would
+ * put a lounge singer on the payroll. See `CONFIDANT` for what the one number
+ * on here actually drives.
+ */
+export interface ConfidantState {
+  name: string;
+  /** One of `CONFIDANT.roles`. Flavour, and the only thing the panel calls them. */
+  role: string;
+  /** 0..100. How well this is being kept quiet. The whole mechanic. */
+  discretion: number;
+  lastVisitDay: number;
+  /** False once it has been ended — by the boss, in `gen_affair_fallout`. */
+  active: boolean;
+  /** True once the house has found out, whatever was decided afterwards. */
+  discovered: boolean;
+}
+
+export type CareerTone = 'good' | 'bad' | 'neutral';
+
+/** One chapter. See `sim/career.ts` for what gets curated into these. */
+export interface CareerEntry {
+  day: number;
+  text: string;
+  tone: CareerTone;
+}
+
+/**
  * One thing the boss owns, as against one thing the organization trades out of.
  *
  * The design note is in `config/possessions.ts`. Two fields here are worth a
@@ -948,6 +1237,12 @@ export interface Contract {
   endDay: number;
   /** Snapshotted at launch, so the panel cannot lie about it afterwards. */
   chance: number;
+  /**
+   * A charge instead of a gun, decided when the men went — not a standing
+   * policy read at resolution, and never true for a witness. Same reason as
+   * `chance`: what happens later has to match what the button said.
+   */
+  charged: boolean;
   paid: number;
   status: 'open' | 'landed' | 'missed' | 'void';
   settledDay?: number;
@@ -966,15 +1261,6 @@ export interface Armoury {
   carry: 'pocket' | 'coat' | 'long';
   /** Get rid of it afterwards, at the cost of the piece. */
   dump: boolean;
-  /**
-   * Use a charge on a contract instead of sending somebody with a gun.
-   *
-   * Optional so a save written before charges existed loads as a family that
-   * has never done it, which for those saves is exactly true. See `CHARGE` in
-   * `config/pieces.ts` — the point of it is which agency ends up reading the
-   * file, not how large the number is.
-   */
-  charge?: boolean;
 }
 
 /**
@@ -1082,6 +1368,19 @@ export interface Investigation {
    * "nothing warned yet," true for every case that predates the plant verb.
    */
   warnedStage?: StageId;
+  /**
+   * What last week's growth was actually made of — see `tickInvestigations`'
+   * own comment on the three terms this splits (fresh evidence absorbed, the
+   * agency's own work, and ambient visibility from how loud the player has
+   * been). Overwritten each week rather than appended, unlike `history`:
+   * this is "why is the number what it is right now", not a timeline, and a
+   * routine number every week would fill `history`'s 40-entry cap with
+   * nothing but itself inside a year, pushing out the headline moments that
+   * belong there. Optional and absent until the case's next weekly tick, so
+   * a save from before this existed loads with no breakdown shown rather
+   * than a fabricated one.
+   */
+  lastGrowth?: { absorbed: number; work: number; visibility: number };
 }
 
 /** Somebody inside an agency who tells you things and slows them down. */
@@ -1237,6 +1536,15 @@ export interface FactionBond {
    * same one twice is one.
    */
   lastApproachDay?: number;
+  /**
+   * The day peace was last made between this pair, or absent if they have
+   * never fought (or never made peace). Feeds the truce timer in
+   * `BOND.truceDays`, which is deliberately separate from grudge decay — a
+   * dial for "we just stopped shooting" rather than one number doing both
+   * jobs. Optional so a save written before this existed loads as "no truce
+   * on record", which for those saves is either true or close enough.
+   */
+  peaceSince?: number;
 }
 
 /**
@@ -1341,6 +1649,14 @@ export interface Faction {
   /** Accumulated losses. High weariness makes a faction want out of a war. */
   warWeariness: number;
   businessCount: number;
+  /**
+   * Set by `civic.ts`'s `callWalkout` — the union boss shutting a rival's
+   * payroll down for a while. Absent on every save from before this existed
+   * and on a faction nobody has ever called one on; `collectIncome` in
+   * `faction.ts` reads it as "no walkout" either way, so no lazy-init
+   * accessor is needed for a field that is only ever compared against.
+   */
+  walkoutUntilDay?: number;
   /** Who is running it, and for how long. */
   leader: FactionLeader;
   /** The three to five men under him. Empty only for the player's entry. */
@@ -1430,6 +1746,14 @@ export interface Business {
   health: number;
   status: 'operating' | 'shuttered';
   /**
+   * Has earned back `REINVEST.thresholdRevenue` and been put back into the
+   * place — a permanent revenue bump, once. Optional so a save written before
+   * this existed loads as "not yet", which is correct: the check in
+   * `tickBusinesses` re-evaluates against the front's own lifetime
+   * `revenueTotal`, which was already being tracked.
+   */
+  reinvested?: boolean;
+  /**
    * How hard you lean on it.
    *
    * Optional, so a save written before the dial existed loads unchanged — an
@@ -1437,13 +1761,6 @@ export interface Business {
    * existing front behaves exactly as it did.
    */
   pressure?: PressureId;
-  /**
-   * A piece of somebody else's place, rather than a place of your own.
-   *
-   * Set by the Ledger verb. Optional and absent everywhere else, so a front
-   * the family actually bought behaves exactly as it always has.
-   */
-  stake?: number;
   /**
    * What was agreed with the man who sold it.
    *
@@ -1453,6 +1770,47 @@ export interface Business {
    * one a decision rather than a discount.
    */
   terms?: string[];
+}
+
+/**
+ * A rival's front, named and addressable rather than a number on `Faction`.
+ *
+ * `Faction.businessCount` is enough for the rival's own income simulation —
+ * it never needed to know which laundromat it was. The moment a player could
+ * buy a piece of one, "some number of businesses" stopped being sufficient:
+ * `canBuyIn` has to resolve an id to something, and `state.businesses` never
+ * held anything but the player's own fronts. This is the minimum that fixes
+ * that — a name, a type for the name, whose it is and roughly where — not a
+ * second simulation of a rival's economics. What it earns, how exposed it
+ * is, whether it is thriving: none of that is modelled per-business for a
+ * rival, on purpose, the same way a rival's own crew are `Capo[]` and a
+ * count rather than a full roster.
+ */
+export interface RivalBusiness {
+  id: Id;
+  factionId: FactionId;
+  /** Which entry in `BUSINESSES` this is, for a name and nothing else. */
+  defId: string;
+  /**
+   * Where it sits, when the family that owns it holds real ground somewhere.
+   * Null for a business bought before the family controlled any district
+   * outright — still theirs, just not pinned to a street.
+   */
+  territoryId: string | null;
+  /**
+   * A piece of somebody else's place, rather than a place of your own.
+   *
+   * Set by the Ledger verb (`buyIn` in `sim/verbs.ts`). Absent on every
+   * business nobody has bought into.
+   */
+  stake?: number;
+  /**
+   * Set by `civic.ts`'s `pullPermit` — the alderman making paperwork
+   * trouble for this one specific front rather than for the family's
+   * business generally, the way the union's walkout does. Absent on every
+   * business nobody has ever pulled a permit on.
+   */
+  permitPulledUntilDay?: number;
 }
 
 // ------------------------------------------------------------ contraband ---
@@ -1868,6 +2226,15 @@ export interface GameState {
 
   territories: Record<string, Territory>;
   businesses: Record<Id, Business>;
+  /**
+   * The rival fronts a player has ever been able to name — materialized one
+   * at a time as `faction.ts`'s `executeInvest` fires, not backfilled for a
+   * `businessCount` a rival was already carrying. Absent on every save from
+   * before this existed, and on any career where no rival has invested yet;
+   * `verbs.ts`'s `rivalBusinesses` accessor lazily creates the map, matching
+   * `career`/`home`/`civic` before it.
+   */
+  rivalBusinesses?: Record<Id, RivalBusiness>;
   /** Rival organizations. Keyed by faction id; the player is not in here. */
   factions: Record<string, Faction>;
   /** What the last payday moved, so the finances panel can show it. */
@@ -1952,6 +2319,71 @@ export interface GameState {
    */
   orders?: Order[];
   /**
+   * Work a capo brought to you, rather than a row you picked off a menu.
+   *
+   * Optional with a lazy initialiser in `capoPitches.ts`, the same idiom as
+   * `promises`, `civic` and `orders` — so `SAVE_VERSION` does not move and a
+   * save written before this existed loads with nobody having pitched you
+   * anything, which for those saves is exactly true.
+   */
+  capoPitches?: CapoPitch[];
+  /**
+   * What the capos have been bringing up, and what is still owed.
+   *
+   * Optional with a lazy initialiser in `tribute.ts`'s `tributeState`, the
+   * same idiom as `home`, `civic` and `capoPitches` before it — so
+   * `SAVE_VERSION` does not move and a save written before the envelopes
+   * existed loads with an empty book rather than a crash.
+   */
+  tribute?: TributeState;
+  /**
+   * Whether the family has a payroll somebody else's plan will carry.
+   *
+   * Only the decision lives here. Whether the boss *qualifies* is derived
+   * every time by `corporate.ts`'s `hasHealthInsurance` from the union
+   * figure and the front count, so there is no second copy to drift — the
+   * same reasoning `rank.ts` and `chronicle.ts` follow. Optional with no
+   * initialiser at all: an absent field reads as "nothing taken up", which
+   * is right for every save written before this existed.
+   */
+  corporateMob?: { insured?: boolean };
+  /**
+   * The people on either side, and what they have done for you.
+   *
+   * Optional with a lazy initialiser in `suburbs.ts`'s `suburbanState`, the
+   * same idiom as `tribute`, `civic` and `home` before it — so
+   * `SAVE_VERSION` does not move and a save written before the cul-de-sac
+   * existed loads with neighbours who owe nothing and are owed nothing.
+   */
+  suburban?: SuburbanState;
+  /**
+   * The one thing he owns that is not a front.
+   *
+   * Optional with a lazy initialiser in `petProject.ts`, same idiom as
+   * `suburban` above. An absent field reads as "he never bought one", which
+   * for those saves is exactly true.
+   */
+  petProject?: PetProjectState;
+  /**
+   * What the boss has declared this thing is.
+   *
+   * Optional with **no** initialiser, the same idiom as `corporateMob` — and
+   * for a stronger reason than the others. A lazy default would have to pick
+   * one of the two doctrines, and either choice retroactively re-tunes federal
+   * heat and front yields for every career ever written. An absent field reads
+   * as "he has never said", which for those saves is exactly true and is also
+   * a real state a live career can sit in for years.
+   */
+  doctrine?: MobDoctrineState;
+  /**
+   * The offshore account, and what the room has worked out about it.
+   *
+   * Optional with a lazy initialiser in `florida.ts`'s `floridaState` — a save
+   * written before this existed loads with nothing put aside and nobody
+   * suspicious, which is right.
+   */
+  florida?: FloridaExitState;
+  /**
    * The half of a boss that is not the business.
    *
    * Optional with a lazy initialiser in `personal.ts`, the same idiom as
@@ -1961,6 +2393,27 @@ export interface GameState {
    * are.
    */
   home?: Home;
+  /**
+   * The half of a boss that is not the household either.
+   *
+   * Optional with a lazy initialiser in `personal.ts`, exactly as `home`
+   * above — so `SAVE_VERSION` does not move and a save written before this
+   * existed loads with a private life it turns out it always had. Not in
+   * `validate()`, for the same reason none of the others are.
+   */
+  confidant?: ConfidantState;
+  /**
+   * The story of the run, curated. See `sim/career.ts`'s own header for why
+   * this is a second list where `chronicle.ts` gets by on derivation alone —
+   * a district taken and lost, a war fought and settled, leave nothing
+   * behind once they are over.
+   *
+   * Optional with a lazy initialiser, the same idiom as `home` and `civic` —
+   * so `SAVE_VERSION` does not move and a save written before this existed
+   * loads with no chapters yet, which for that save is exactly true. Not in
+   * `validate()`, for the same reason none of the others are.
+   */
+  career?: CareerEntry[];
 
   /**
    * What has reached you, and how sure whoever brought it was.
