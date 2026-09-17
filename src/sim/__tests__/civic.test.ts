@@ -806,8 +806,17 @@ describe('public standing', () => {
     const afterFront = publicStanding(state);
     expect(afterFront, 'a legitimate front moved nothing').toBeGreaterThan(baseline);
 
-    // The alliance term: a civic figure who thinks well of the family.
-    figure(state, 'alderman').standing = 90;
+    /*
+       The alliance term: real standing with the civic figures.
+
+       All four, not just one — `roster()`'s own lazy init materializes
+       every figure in `CIVIC_FIGURES` at once the moment any single one is
+       touched, so raising only the alderman would also reveal the other
+       three at a real, recorded zero and could move the composite *down*,
+       out from under a neutral-default alliance term that had been
+       covering for all four. See `publicStandingTerms`'s own comment.
+    */
+    for (const id of PUBLIC_STANDING_FIGURES) figure(state, id).standing = 90;
     const afterAlliance = publicStanding(state);
     expect(afterAlliance, 'civic standing moved nothing').toBeGreaterThan(afterFront);
   });
@@ -822,6 +831,16 @@ describe('public standing', () => {
   it('reads the four civic figures the brief names, not the fifth (`lawyer`)', () => {
     expect(PUBLIC_STANDING_FIGURES).toEqual(['captain', 'union', 'judge', 'alderman']);
     const state = game();
+    /*
+       Touch all four watched figures first, so `state.civic` already
+       exists in a known state before `lawyer`'s own entry is added.
+       Otherwise merely creating the roster for the first time — which
+       `figure()`'s own lazy init does for every figure in `CIVIC_FIGURES`
+       at once, `lawyer` included — would itself move the alliance term out
+       from under this comparison, for a reason that has nothing to do with
+       whether `lawyer` is read.
+    */
+    for (const id of PUBLIC_STANDING_FIGURES) figure(state, id).standing = 40;
     const before = publicStanding(state);
     figure(state, 'lawyer').standing = 100;
     expect(publicStanding(state), "the lawyer's own standing is not part of this meter").toBe(before);
@@ -839,12 +858,14 @@ describe('public standing', () => {
 });
 
 describe('public standing tiers', () => {
-  it('reads a quiet, unbuilt start as Known Operator (shadow)', () => {
+  it('reads a quiet, unbuilt start as Respected Merchant (businessman)', () => {
     // No fronts, no civic standing, no heat -- the state `game()` itself
-    // produces. See the previous describe block for why this is neutral
-    // rather than the floor.
+    // produces, with every one of the three composite terms reading its own
+    // neutral default (50): 50*.35 + 50*.3 + 50*.25 - 0 = 45, exactly the
+    // Respected Merchant bar. See the previous describe block for why an
+    // untouched career reads neutral rather than the floor.
     const state = game();
-    expect(publicStandingTier(state).id).toBe('shadow');
+    expect(publicStandingTier(state).id).toBe('businessman');
   });
 
   it('reads a hated, hunted family as Street Parasite (pariah)', () => {

@@ -646,9 +646,28 @@ function publicStandingTerms(state: GameState): {
       ? owned.reduce((sum, b) => sum + businessDef(b).legitimacy, 0) / owned.length
       : PUBLIC_STANDING.neutralLegitimacyDefault;
 
+  /*
+     Same neutral-default reasoning as the two terms above — a figure nobody
+     has ever engaged has not been measured, which is not the same as a
+     figure genuinely run down to zero through real anger. The distinction
+     lives in whether the id is already in `state.civic`, checked here by
+     reading that field directly rather than through `figure()`/`roster()` —
+     both of those auto-create the entry (and, via `roster()`'s own lazy
+     init, every other figure in `CIVIC_FIGURES` alongside it, in one shot)
+     the instant they are called, which would make "never engaged" mean
+     nothing by the time this function finished asking the question.
+
+     Averaged only over whichever of the four already exist; a figure that
+     exists and has genuinely decayed to a real 0 still counts as that 0 —
+     only "not in the roster at all" gets the neutral substitute.
+  */
+  const engaged = PUBLIC_STANDING_FIGURES
+    .map((id) => state.civic?.find((f) => f.id === id))
+    .filter((f): f is CivicStanding => f !== undefined);
   const alliance =
-    PUBLIC_STANDING_FIGURES.reduce((sum, id) => sum + figure(state, id).standing, 0) /
-    PUBLIC_STANDING_FIGURES.length;
+    engaged.length > 0
+      ? engaged.reduce((sum, f) => sum + f.standing, 0) / engaged.length
+      : PUBLIC_STANDING.neutralAllianceDefault;
 
   return { sentiment, legitimacy, alliance };
 }

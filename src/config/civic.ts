@@ -663,4 +663,13 @@ export const PUBLIC_STANDING = {
   neutralSentimentDefault: SENTIMENT_START,
   /** Same reasoning as `neutralSentimentDefault`, for a boss with no fronts yet. */
   neutralLegitimacyDefault: 50,
+  /**
+   * Same reasoning again, for a boss who has never engaged a single civic
+   * figure. Not the `standing: 0` a never-created `CivicStanding` entry
+   * would carry — that value is also what a figure genuinely run down
+   * through real anger decays toward, so it cannot double as "unmeasured"
+   * without reading an untouched boss as already hated. See
+   * `publicStandingTerms` in `sim/civic.ts` for how the two are told apart.
+   */
+  neutralAllianceDefault: 50,
 } as const;
