@@ -373,9 +373,43 @@ describe('deposition, played into rather than built', () => {
      arrested" fate, and the guard re-confirmed the same way as every prior
      reseed: reverting `backersNeeded` to 2 and watching this fail before
      restoring it.
+
+     Reseeded a sixth time, 4046 to 4062, for Milestone 5. Two separate
+     changes landed together and each reshuffled this seed on its own:
+
+     (1) The Civic Insulation multiplier itself
+     (`config/civic.ts`'s `PublicStandingTier.caseGrowthMultiplier`, applied
+     in `investigation.ts`'s `tickInvestigations`) is not a causal-rng-call-
+     count change like every prior reseed above — it is a genuine mechanical
+     change to how fast federal cases grow, which changes *when* (or
+     whether) a case reaches indictment or trial on a given seed, which
+     changes how many rng calls `advanceStage`/`resolveTrial` draw and on
+     which day, reshuffling the stream downstream the way a real balance
+     change is expected to. A scan of seeds 4046-4146 with only this change
+     in place found seed 4048 still reachable.
+
+     (2) `gen_social_gathering`'s own eligibility gate — added afterward so
+     the shape does not fire against a brand-new career with no public
+     footprint at all (`eventgen.test.ts`'s "none of them fires against an
+     empty world") — is exactly the class of change this test's own history
+     already names three times over: a shape's `applies()` becoming
+     eligible or not on a given day changes which shape wins that day's
+     `generatedStream` pick, and a *different* generated memo firing (or not
+     firing) that day changes what its `resolveGenerated` branch does on the
+     real causal `rng`, reshuffling everything after. Seed 4048 (this test's
+     own value from change (1) above) landed on "nobody deposed" once this
+     second change was also in place.
+
+     A scan of seeds 4046-4246 with both changes in place found 42 that
+     still reach generation > 1 (4062, 4073, 4077, 4079, 4083, 4089, 4097,
+     4101, ...), so reachability did not regress either time. Seed 4062
+     confirmed to produce the same "nobody was killed and nobody was
+     arrested" fate, and the guard re-confirmed the same way as every prior
+     reseed: reverting `backersNeeded` to 2 (generation stayed at 1) and
+     restoring it to 1.
   */
   it('fires from an ordinary career under the current gate', () => {
-    const state = playOrdinaryCareer(4046, 1460);
+    const state = playOrdinaryCareer(4062, 1460);
     expect(
       state.succession.generation,
       'nobody was deposed — this is the reachability the config change exists to fix',

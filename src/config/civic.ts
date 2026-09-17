@@ -30,6 +30,7 @@
  */
 
 import type { AttributeId } from '../sim/types';
+import { SENTIMENT_START } from './territories';
 
 /** What a favour from this person actually does when you spend it. */
 export type FavourKind =
@@ -577,3 +578,98 @@ export const CIVIC_WORK = {
 } as const;
 
 export const CIVIC_ATTRIBUTE: AttributeId = 'influence';
+
+// ------------------------------------------------------- public standing ---
+
+/**
+ * The boss's public and civic identity — a dual reputation running beside
+ * street Fear and Respect (`sim/civic.ts`'s Milestone 5). Not a second
+ * roster: every input the score reads is a fact the simulation already
+ * keeps, and the score itself is never stored — see `sim/civic.ts`'s
+ * `publicStanding` header for why. No `SAVE_VERSION` bump, nothing to drift.
+ */
+export interface PublicStandingTier {
+  bar: number;
+  id: 'pariah' | 'shadow' | 'businessman' | 'pillar';
+  label: string;
+  blurb: string;
+  tone?: 'hot' | 'brass';
+  /** Multiplier on weekly federal case growth — the civic-insulation effect. See `investigation.ts`'s `tickInvestigations`. */
+  caseGrowthMultiplier: number;
+}
+
+/** Highest bar first — `publicStandingTier` takes the first one the score clears. */
+export const PUBLIC_STANDING_TIERS: PublicStandingTier[] = [
+  {
+    bar: 70,
+    id: 'pillar',
+    label: 'Community Pillar',
+    blurb: 'Seen as a generous benefactor. Neighbors close their doors to federal agents.',
+    tone: 'brass',
+    caseGrowthMultiplier: 0.8,
+  },
+  {
+    bar: 45,
+    id: 'businessman',
+    label: 'Respected Merchant',
+    blurb: 'Known as a legitimate commercial operator with quiet influence.',
+    caseGrowthMultiplier: 1.0,
+  },
+  {
+    bar: 20,
+    id: 'shadow',
+    label: 'Known Operator',
+    blurb: 'The neighborhood looks away when you pass. People suspect what you are.',
+    caseGrowthMultiplier: 1.15,
+  },
+  {
+    bar: 0,
+    id: 'pariah',
+    label: 'Street Parasite',
+    blurb: 'Considered a violent predator by local residents. Tips flow freely to police.',
+    tone: 'hot',
+    caseGrowthMultiplier: 1.35,
+  },
+];
+
+/**
+ * The four figures `publicStanding`'s alliance term reads.
+ *
+ * Not `lawyer`, the fifth `CIVIC_FIGURES` entry — the brief names Judge,
+ * Alderman, Police Chief (`captain` here — see `CIVIC_FIGURES`, there is no
+ * `police_chief` id) and Union Boss specifically, and a defense lawyer's
+ * standing already feeds a boss's *legal* exposure (`discretion`) rather
+ * than his public face.
+ */
+export const PUBLIC_STANDING_FIGURES: readonly string[] = ['captain', 'union', 'judge', 'alderman'];
+
+export const PUBLIC_STANDING = {
+  /** Average sentiment across districts actually held (`playerInfluence` > 0). */
+  sentimentWeight: 0.35,
+  /** Average `BusinessDef.legitimacy` of owned fronts. */
+  legitimacyWeight: 0.3,
+  /** Average standing with the four `PUBLIC_STANDING_FIGURES`. */
+  allianceWeight: 0.25,
+  /** Points docked from the composite per point of `state.org.heat`. */
+  heatDragScale: 0.2,
+  /**
+   * What the sentiment term reads as for a boss with no ground yet.
+   *
+   * Not zero. A brand-new boss has not offended anybody — he simply has not
+   * been measured — so this reads the same neutral midpoint a district
+   * itself starts at (`SENTIMENT_START`) rather than the floor, which is
+   * earned by being disliked somewhere you actually work.
+   */
+  neutralSentimentDefault: SENTIMENT_START,
+  /** Same reasoning as `neutralSentimentDefault`, for a boss with no fronts yet. */
+  neutralLegitimacyDefault: 50,
+  /**
+   * Same reasoning again, for a boss who has never engaged a single civic
+   * figure. Not the `standing: 0` a never-created `CivicStanding` entry
+   * would carry — that value is also what a figure genuinely run down
+   * through real anger decays toward, so it cannot double as "unmeasured"
+   * without reading an untouched boss as already hated. See
+   * `publicStandingTerms` in `sim/civic.ts` for how the two are told apart.
+   */
+  neutralAllianceDefault: 50,
+} as const;
