@@ -405,8 +405,7 @@ fate; the guard was re-confirmed the standard way (`backersNeeded` back to
 one-of-everything fixture grew a confidant with its discretion below the
 discovery bar, the way it grew a household member past 18 for Milestone 4.
 
-Gates: `npx tsc -b` 0 errors. `npm test` PLACEHOLDER_TEST. `npm run probe`
-PLACEHOLDER_PROBE
+Gates: `npx tsc -b` 0 errors. `npm test` **164 files, 1,971 passing, 8 skipped, 0 failures**. `npm run probe` unrun (procedural event pool isolated on `generatedStream`, no causal RNG pollution).
 
 last run clean at 96/96 non-skipped (unrun since the diplomacy/refusal/
 tip/report/sitdown/contract-charge/rail-grouping/operations-focus/
@@ -425,6 +424,81 @@ table and §6 for full detail.
 `.ai/FINAL_REPORT.md` has the fuller narrative through round 26; rounds
 27 and 28 are written up in §6 and in `docs/findings/director-log.md` but
 have not yet been folded into that report.
+
+**Update, 2026-09-17 (later the same day): Milestone 7, Dynasty, Aging and
+the Final Succession.** Built directly on `soprano-ue5-prototype` @ d4a56af,
+in the working tree. No `SAVE_VERSION` move — it stays at 13.
+
+**`isBloodHeir(state, npc)` (`sim/succession.ts`) is fully derived and needed
+no new field.** Milestone 4's `gen_family_crossroads` `bring_in` branch is the
+one place in the game allowed to turn a household member into a real `Npc`,
+and it sets `hire.name` to the member's bare first name. Every other person in
+the game comes out of `generateNpc`, which always composes `First Last` (or
+`First "Nickname" Last`) from two draws. So an exact match against a household
+name is not a heuristic that usually works — a generated name *cannot* equal
+one, because it always carries a surname. The life-stage gate
+(`young_adult`/`adult`, via the existing `memberAge`/`memberLifeStage`) is the
+second half and it is load-bearing rather than tidy: a twelve-year-old is not
+in the crew, so a crew member sharing that name is a coincidence, and putting
+a gold tag on a stranger is a rule-3 violation with a badge on it. Considered
+and rejected: a `family_hired_<id>` flag, which would have been a second copy
+of a fact the names already carry and a `SAVE_VERSION` question for every save
+written before tonight.
+
+**`NEPOTISM` (`config/succession.ts`) charges two prices and offers no free
+answer.** Name your own blood and *every* active capo except the named man
+takes +25 grievance and -20 loyalty, a crew-log line, and a note — **stacked
+on top of** `NAMING.passedOverGrievance`/`passedOverLoyalty` rather than
+replacing it, because being passed over and being passed over for the boss's
+son are two separate injuries that both happened. Name a capo with a grown
+child standing in the eligible room and the household takes +20 neglect and
+hears about it before you get home. Both live in one `applyNepotism` helper
+called at the end of `nameHeir`, so the two branches cannot both fire and a
+boss with no grown child in the crew — which is most of them — passes through
+paying nothing. `activeCapos` is reused from `capoTension.ts` rather than
+re-filtered; the spec's `caposOf` is the rival-family accessor and is not what
+this wanted.
+
+**Aging is the calendar taking recovery away.** Past
+`NEPOTISM.agingStartDay` (300), `stressPressure`'s `quiet` term is false
+whatever else is true, so `STRESS.naturalRecovery` no longer runs, and a new
+itemised `aging` term (+1.5/wk) accrues regardless. Written as one extra
+conjunct on `quiet` and one extra addend on `netWeekly` rather than as a
+second branch, so there is a single expression producing the net and no second
+place for the two to disagree. 300 days is deliberately inside the span a
+measured career actually plays — `AGING.declineFrom` is about the *men* and
+needs twenty-five years of calendar, which is why the generational half of
+this game has always sat behind a door most careers never open. `tickStress`
+also raises one beat ("your heart cannot endure another year of street wars")
+once the meter is already past `STRESS.panicThreshold`, rate-limited to
+`agingWarningEveryDays` (60) on its own `aging_warning_day` flag — the same
+reasoning Milestone 6's wiretap beat follows: a line every seven days about
+the same heart is a subscription, not a warning.
+
+UI: the Succession table tags a blood candidate `Blood Heir`
+(`name-sub brass`, existing classes, no new CSS) and prints what naming them
+costs **in the row body, not only in the button's `title`** — the fault
+`refusalShown.test.ts` documents four separate rounds of. The sentence is
+built out of `NEPOTISM` rather than typed with a 25 in it, and there is a
+guard that fails if somebody hardcodes it back. `PlayerPanel`'s Condition card
+grows a `Career Weariness (Aging)` line under the itemised net, plus an
+`Age: +1.5` term in the breakdown itself, so a boss whose stress quietly stops
+falling can read why on the screen the meter is on.
+
+Tests: `sim/__tests__/dynastySuccession.test.ts` (12) and
+`ui/__tests__/dynastyShown.test.ts` (6). Eleven faults injected and watched
+red before restoring: `isBloodHeir` forced false, the capo loop emptied, the
+neglect branch short-circuited, the aging term zeroed, recovery left running
+past the bar, the warning's rate limit removed, the warning's panic gate
+removed, the row warning moved back into the `title`, the figures hardcoded,
+the tag deleted, and the whole `PlayerPanel` aging block removed. One of the
+aging guards had to be rewritten before it was worth anything: the first draft
+picked days that were not multiples of `HOME.intervalDays`, so every assertion
+in it passed against a `tickStress` that had returned early — the helper now
+rounds up to a week boundary and says why.
+
+Gates: `npx tsc -b` 0 errors. `npm test` 166 files, 1,989 passing, 8 skipped,
+0 failures (from 164/1,971 before). `npm run probe` PROBE_LINE
 
 ### What shipped since round 21
 

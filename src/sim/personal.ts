@@ -36,6 +36,7 @@ import { territoryDef } from './territory';
 import { addLog } from './util';
 import { ownsHome } from './possessions';
 import { POSSESSION } from '../config/possessions';
+import { NEPOTISM } from '../config/succession';
 import { OPERATION_BY_ID } from '../config/operations';
 import { playerWars } from './diplomacy';
 import { canAfford, spend } from './economy';
@@ -463,8 +464,21 @@ export interface StressPressure {
   domestic: number;
   /** Weekly stress from wages carried unpaid. */
   payroll: number;
+  /**
+   * Weekly stress from the calendar itself, past `NEPOTISM.agingStartDay`.
+   *
+   * Itemised like every other term rather than folded silently into the net,
+   * because a boss who suddenly stops recovering has to be able to read why —
+   * the same rule the odds on a job follow.
+   */
+  aging: number;
   /** The sum of the above, less natural recovery when nothing above is firing. */
   netWeekly: number;
+}
+
+/** Whether the body has stopped mending on its own. See `NEPOTISM`. */
+export function isAging(state: GameState): boolean {
+  return state.day >= NEPOTISM.agingStartDay;
 }
 
 /**
@@ -480,14 +494,27 @@ export function stressPressure(state: GameState): StressPressure {
   const heat = state.org.heat >= 50 ? STRESS.highHeat : 0;
   const domestic = home(state).neglect >= 50 ? STRESS.domesticStrain : 0;
   const payroll = (state.org.wagesOwed ?? 0) > 0 ? STRESS.wageArrears : 0;
+  const aging = isAging(state) ? NEPOTISM.agingWearinessStress : 0;
+  /*
+     Recovery is the calendar's to withdraw.
+
+     Past `NEPOTISM.agingStartDay` a quiet week is merely a week that did not
+     make it worse. Written as an extra term on `quiet` rather than as a
+     separate branch so there is one expression producing `netWeekly` and no
+     second place for the two to disagree.
+  */
   const quiet =
-    playerWars(state).length === 0 && state.org.heat < 30 && home(state).neglect < 25;
+    !isAging(state) &&
+    playerWars(state).length === 0 &&
+    state.org.heat < 30 &&
+    home(state).neglect < 25;
   return {
     wars,
     heat,
     domestic,
     payroll,
-    netWeekly: wars + heat + domestic + payroll - (quiet ? STRESS.naturalRecovery : 0),
+    aging,
+    netWeekly: wars + heat + domestic + payroll + aging - (quiet ? STRESS.naturalRecovery : 0),
   };
 }
 
@@ -505,6 +532,25 @@ export function stressPressure(state: GameState): StressPressure {
 export function tickStress(state: GameState): void {
   if (state.day % HOME.intervalDays !== 0) return;
   state.player.stress = clamp(playerStress(state) + stressPressure(state).netWeekly, 0, STRESS.max);
+
+  /*
+     And the one line that says out loud what the meter has been doing.
+
+     Gated on the same bar `gen_panic_episode` fires from, so it never arrives
+     before the boss has felt anything — an aging warning to a man who is
+     coping is a birthday card. Rate-limited on its own flag rather than on
+     the weekly tick, for the reason the confidant's wiretap beat is: the
+     heart is not new information every seven days.
+  */
+  if (!isAging(state) || playerStress(state) < STRESS.panicThreshold) return;
+  const last = state.flags['aging_warning_day'];
+  if (last !== undefined && state.day - last < NEPOTISM.agingWarningEveryDays) return;
+  state.flags['aging_warning_day'] = state.day;
+  addLog(
+    state,
+    'The doctor quietly warned you that your heart cannot endure another year of street wars.',
+    'crew',
+  );
 }
 
 /**

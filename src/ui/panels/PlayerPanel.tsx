@@ -43,12 +43,14 @@ import {
   goHome,
   homeRead,
   payConfidantAllowance,
+  isAging,
   playerStress,
   stressPressure,
   stressTier,
   visitConfidant,
 } from '../../sim/personal';
 import { CONFIDANT, HOME, STRESS } from '../../config/personal';
+import { NEPOTISM } from '../../config/succession';
 import { priced } from '../../sim/market';
 import { ATTENTION } from '../../config/attention';
 import {
@@ -260,6 +262,7 @@ export default function PlayerPanel() {
     pressure.heat > 0 && `Heat: +${pressure.heat.toFixed(1)}`,
     pressure.domestic > 0 && `Home: +${pressure.domestic.toFixed(1)}`,
     pressure.payroll > 0 && `Payroll: +${pressure.payroll.toFixed(1)}`,
+    pressure.aging > 0 && `Age: +${pressure.aging.toFixed(1)}`,
   ].filter((x): x is string => Boolean(x));
 
   return (
@@ -467,6 +470,24 @@ export default function PlayerPanel() {
             {pressure.netWeekly.toFixed(1)}/wk
             {pressureParts.length > 0 ? ` (${pressureParts.join(', ')})` : ' — quiet'}
           </p>
+          {/*
+             Why a quiet week stopped being worth anything.
+
+             Directly under the breakdown rather than as its own card: the
+             line the boss is trying to read is the net, and the reason it
+             will not come down any more is a fact about that number. Rule 3
+             — a number that moved has to have a panel that can name why —
+             and the recovery that has gone missing is exactly the kind of
+             absence a player reads as a bug. See `NEPOTISM.agingStartDay`.
+          */}
+          {isAging(state) && (
+            <p className="hot tiny" style={{ margin: '0 14px 8px' }}>
+              Career Weariness (Aging) — past day {NEPOTISM.agingStartDay} the body stops
+              mending on its own. A quiet week no longer clears anything, and{' '}
+              {NEPOTISM.agingWearinessStress.toFixed(1)} a week accrues whatever else you do.
+              The doctor is the only way down now.
+            </p>
+          )}
           <button
             className="btn small"
             style={{ marginTop: 2, marginBottom: 10 }}
