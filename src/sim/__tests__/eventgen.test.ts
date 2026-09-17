@@ -796,7 +796,7 @@ describe('the family crossroads', () => {
     expect(career(state).length).toBeGreaterThan(beforeCareer);
   });
 
-  it('bring_in: real money, real neglect clear, and a real Npc on the roster', () => {
+  it('bring_in: free (the director\'s own figure), real neglect clear, and a real Npc on the roster', () => {
     const state = adultState();
     home(state).neglect = 50;
     const beforeCash = totalFunds(state);
@@ -805,7 +805,7 @@ describe('the family crossroads', () => {
 
     resolveEvent(state, new Rng(state.rng), 'evt_test', 'bring_in');
 
-    expect(totalFunds(state)).toBeLessThan(beforeCash);
+    expect(totalFunds(state)).toBe(beforeCash);
     expect(home(state).neglect).toBeLessThan(beforeNeglect);
     const hire = Object.values(state.npcs).find((n) => n.name === 'Junior');
     expect(hire, 'no Npc was created for the household member brought in').toBeDefined();

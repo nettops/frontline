@@ -667,16 +667,23 @@ describe('age and life stage', () => {
     expect(memberAge(state, 'Testy', 'eldest')).toBe(base + 20);
   });
 
-  it('crosses from Teenager into Adult at 18, not before', () => {
+  it("crosses Child -> Teenager -> Young Adult -> Adult at the director's own bands", () => {
     const state = game();
-    withChild(state, 'eldest');
-    const base = memberAge(state, 'Testy', 'eldest')!;
+    // `youngest`'s own start range (8-11) is the one that can actually begin
+    // in the Child band -- `eldest` starts at 14-16 and never sees it.
+    withChild(state, 'youngest');
+    const base = memberAge(state, 'Testy', 'youngest')!;
+    const stageAt = (age: number) => {
+      state.day = (age - base) * 365 + 1;
+      return memberLifeStage(memberAge(state, 'Testy', 'youngest')!).id;
+    };
 
-    state.day += (17 - base) * 365;
-    expect(memberLifeStage(memberAge(state, 'Testy', 'eldest')!).id).toBe('teen');
-
-    state.day += 365; // now 18
-    expect(memberLifeStage(memberAge(state, 'Testy', 'eldest')!).id).toBe('adult');
+    expect(stageAt(12)).toBe('child');
+    expect(stageAt(13)).toBe('teen');
+    expect(stageAt(17)).toBe('teen');
+    expect(stageAt(18)).toBe('young_adult');
+    expect(stageAt(22)).toBe('young_adult');
+    expect(stageAt(23)).toBe('adult');
   });
 
   it('counts down to the 18th birthday, and stops once there is nothing left to count', () => {
