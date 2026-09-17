@@ -4,8 +4,18 @@ import { Panel, Empty, KeyValue, Bar } from '../components';
 import { buyPatron, canBuyPatron, readCity } from '../../sim/perception';
 import { formatMoney, formatShortDay } from '../../sim/util';
 import { PATRON, CITY_INTEL } from '../../config/perception';
-import { askForWork, civicRead, spendFavour } from '../../sim/civic';
-import { CIVIC_WORK } from '../../config/civic';
+import {
+  askForWork,
+  callTheLaw,
+  callWalkout,
+  canCallTheLaw,
+  canCallWalkout,
+  civicRead,
+  spendFavour,
+} from '../../sim/civic';
+import { CIVIC_WORK, FAVOUR_EFFECT } from '../../config/civic';
+import { rivals } from '../../sim/faction';
+import { houseShort } from '../../sim/houses';
 import { Rng } from '../../sim/rng';
 import {
   canSit,
@@ -513,6 +523,66 @@ function Favours() {
                      disabled button that looked like a description.
                   */}
                   {p.blocked && <div className="tiny memo-choice-blocked">{p.blocked}</div>}
+                  {/*
+                     The two favours this network spends outward.
+
+                     Scoped to the union and captain rows — see the doc
+                     comment on `canCallWalkout` for why the other two
+                     grants have no honest rival-facing reading. One button
+                     per rival rather than a picker, so the reason a given
+                     house is or is not a target sits right on the control
+                     that would act on it.
+                  */}
+                  {p.id === 'union' && (
+                    <div className="tiny" style={{ marginTop: 8 }}>
+                      {rivals(state).map((f) => {
+                        const walkout = canCallWalkout(state, f.id);
+                        return (
+                          <button
+                            key={f.id}
+                            className="btn small"
+                            disabled={!walkout.ok}
+                            title={
+                              walkout.ok
+                                ? `Their fronts earn them nothing for ${FAVOUR_EFFECT.walkoutDays} days`
+                                : walkout.reason
+                            }
+                            style={{ marginRight: 6, marginTop: 4 }}
+                            onClick={() =>
+                              mutate((s) => {
+                                setNote(callWalkout(s, f.id).message);
+                              })
+                            }
+                          >
+                            Call a walkout — {houseShort(state, f.id)}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                  {p.id === 'captain' && (
+                    <div className="tiny" style={{ marginTop: 8 }}>
+                      {rivals(state).map((f) => {
+                        const law = canCallTheLaw(state, f.id);
+                        return (
+                          <button
+                            key={f.id}
+                            className="btn small"
+                            disabled={!law.ok}
+                            title={law.ok ? 'Puts real heat on them' : law.reason}
+                            style={{ marginRight: 6, marginTop: 4 }}
+                            onClick={() =>
+                              mutate((s) => {
+                                setNote(callTheLaw(s, f.id).message);
+                              })
+                            }
+                          >
+                            Have them looked at — {houseShort(state, f.id)}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
                 </td>
               </tr>
             ))}

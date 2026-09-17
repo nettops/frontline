@@ -21,6 +21,7 @@ import {
   perceivedClaim,
   removePlayer,
   rollAssassination,
+  weakClaim,
 } from '../succession';
 import { activeCondition, tickWorld, worldMod, worldSuccessDelta } from '../world';
 import { CLAIM, REMOVAL } from '../../config/succession';
@@ -89,6 +90,31 @@ describe('who has a claim', () => {
       opsCompleted: 0,
     });
     expect(perceivedClaim(state, stranger)).toBeGreaterThan(claimStrength(state, stranger));
+  });
+
+  /*
+     Round 28's blind report never once tried naming a successor across a
+     300-day career: every candidate showed the worst band ("Nobody would
+     follow them"), which reads exactly like `nameHeir`'s own refusal for
+     somebody too junior to be eligible at all. It is not that refusal —
+     `nameHeir` never reads claim strength, only rank and eligibility — so
+     the button beside a worst-band candidate has always worked. This is the
+     property `SuccessionPanel` now reads to say so on the button itself.
+  */
+  it('is the worst band, and the worst band is never a real refusal', () => {
+    const state = fresh();
+    // Fully known (high familiarity, so the fog reads his real numbers
+    // rather than an unknown man's default "average"), barely eligible at
+    // all, and terrible at everything that feeds a claim.
+    const weak = plant(state, 'a', 'soldier', { leadership: 1, skill: 1, courage: 1, ambition: 1 }, {
+      familiarity: 100,
+      daysInCrew: 1,
+      opsCompleted: 0,
+    });
+    expect(weakClaim(perceivedClaim(state, weak)), 'this candidate was not weak enough to prove the point').toBe(
+      true,
+    );
+    expect(nameHeir(state, weak.id).ok, 'the worst band silently blocked the naming').toBe(true);
   });
 
   it('never reports a claim outside 0..1', () => {

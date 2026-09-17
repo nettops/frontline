@@ -24,6 +24,10 @@ import { newGame } from '../state';
 import { advanceDay } from '../clock';
 import { rankNow } from '../rank';
 import { tradeUnlocked } from '../contraband';
+import { outgrewStreetWork } from '../operations';
+import { putInCharge } from '../delegation';
+import { crewList } from '../npc';
+import { territoryList } from '../territory';
 import { TRADES } from '../../config/contraband';
 import { withFronts } from './helpers';
 import type { GameState } from '../types';
@@ -123,6 +127,58 @@ describe('a door that opened while you were looking elsewhere', () => {
 
     for (let i = 0; i < 5; i++) {
       expect(dayOf(state).join(' ')).not.toMatch(new RegExp(TRADES.product.name, 'i'));
+    }
+  });
+});
+
+describe('street work, the day it actually comes off the board', () => {
+  /*
+     The blind round's own MUST FIX: delegating a district silently dropped
+     work_it_yourself and its neighbors off the manual board, with nothing on
+     screen explaining why — the tester traced it back to the decision only by
+     accident, days later. This is the other half of what the steward panel
+     already says about a hand's worth before the decision.
+  */
+  it('says nothing on the first day, because there is nothing to outgrow yet', () => {
+    const state = game();
+    const said = dayOf(state);
+    expect(said.some((t) => /corners|hands are full|young man/i.test(t))).toBe(false);
+    expect(state.org.streetWorkRetiredSaid).toBe(false);
+  });
+
+  it('says so the day a steward actually takes street work off the board', () => {
+    const state = game();
+    const t = territoryList(state)[0];
+    t.influence = { ...t.influence, player: 95 };
+    state.org.cash = 500_000;
+    const steward = crewList(state)[0];
+    steward.role = 'soldier';
+    advanceDay(state); // first tick, records the false baseline
+
+    expect(outgrewStreetWork(state)).toBe(false);
+    putInCharge(state, steward.id, t.id);
+    expect(outgrewStreetWork(state)).toBe(true);
+
+    const said = dayOf(state);
+    expect(said.some((t) => /corners|hands are full|young man/i.test(t))).toBe(true);
+    expect(state.org.streetWorkRetiredSaid).toBe(true);
+  });
+
+  it('says it once, not every day after', () => {
+    const state = game();
+    const t = territoryList(state)[0];
+    t.influence = { ...t.influence, player: 95 };
+    state.org.cash = 500_000;
+    const steward = crewList(state)[0];
+    steward.role = 'soldier';
+    advanceDay(state);
+    putInCharge(state, steward.id, t.id);
+
+    const said = dayOf(state);
+    expect(said.some((t) => /corners|hands are full|young man/i.test(t))).toBe(true);
+
+    for (let i = 0; i < 5; i++) {
+      expect(dayOf(state).some((t) => /corners|hands are full|young man/i.test(t))).toBe(false);
     }
   });
 });

@@ -134,8 +134,57 @@ export const TRADES: Record<TradeId, TradeDef> = {
      * trade alone — more than the largest operation in the game pays, forever,
      * with no roll. The trade should be the steady thing that funds the spiky
      * things, not a replacement for them.
+     *
+     * 2,600 -> 2,340 (-10%), 2026-09-10, against `ladder.probe`'s own
+     * "running both trades for 300 days" bar. Not a guess: the 2026-09-10
+     * income-breakdown pass paired the trading and non-trading arms of the
+     * same 36 seeds and found the trade's gross income (~$3.7M lifetime,
+     * median career) landing at $474,176 of net estate gain against a bar
+     * of $514,131 — real, not a bug, just short. Of the five costs the
+     * gain gets spent on (stock, job stakes, legal costs from heat, the
+     * wash's cut, front upkeep), stock is the only one specific to the
+     * trade itself; the other four are shared economy constants this
+     * project has already burned three tuning attempts on for this same
+     * bar with no consistent direction (`FRONT_UPKEEP_RATE`'s own
+     * comment). Cut proportionally with arms below, preserving the ratio
+     * between the two the arms figure's own comment calls out by name.
+     *
+     * 2,340 -> 1,521 (-35% more), 2026-09-12. A session that added fourteen
+     * new mechanisms elsewhere (diplomacy, loyalty, event weighting) — none
+     * of them touching this trade directly — tipped this bar back under:
+     * $743,448 against $764,625 at the usual 36 seeds, and, checked at
+     * `WIDE`'s 400 before trusting that reading (this bar's own history
+     * says a wider sample made an earlier shortfall *worse*, not noise) —
+     * **82.4% of the bar**, confirming a real shortfall rather than a
+     * reshuffled stream. Bisected across the three groups of new mechanisms
+     * one at a time; removing any single one made the 36-seed reading
+     * *worse*, not better, so no specific new system did this — it is the
+     * combined weight of real changes elsewhere landing on a bar that was
+     * already passing by $0.50 out of half a million.
+     *
+     * The repair took five tries to land, and the middle three are worth
+     * recording because they are this project's second demonstration (after
+     * `FRONT_UPKEEP_RATE`'s own three) that this bar's response to a small
+     * change in trade economics is not monotonic at 400 seeds: a further
+     * -15% off this cost alone read 97.1% of bar; -20% read *94.7%* — worse,
+     * not better; halving `wastagePerWeek` alone moved nothing (82.0%,
+     * indistinguishable from doing nothing); and -15% cost stacked with the
+     * halved wastage read *93.3%* — worse than the cost cut alone. None of
+     * that is noise in the sampling sense (400 seeds, same seeds every time,
+     * fully deterministic) — it is the population's aggregate response to a
+     * price genuinely not moving in a straight line, because a cheaper unit
+     * changes *when* and *how much* four hundred different careers choose to
+     * buy, which cascades into heat, legal cost and job-stake differences
+     * that partially offset the saving by an amount that does not scale
+     * predictably with the cut. Small moves in this range are reading that
+     * turbulence, not the trade's actual profitability.
+     *
+     * A large single move was not: -35% cleared at **111.3% of the 400-seed
+     * bar**, with the wastage figures left at their original values — real
+     * headroom, not another razor's edge. Preserving the 2:1 ratio with
+     * arms below, as before.
      */
-    unitCost: 2_600,
+    unitCost: 1_521,
     unitValue: 6_400,
 
     districtCapacity: 7,
@@ -210,7 +259,14 @@ export const TRADES: Record<TradeId, TradeDef> = {
 
     // Manufacture rather than purchase — see WORKSHOP. The cost here is
     // materials and wages per unit produced.
-    unitCost: 5_200,
+    // 5,200 -> 4,680 (-10%), 2026-09-10, moved with product's own cut and
+    // by the same factor — see that field's comment for the finding.
+    // 4,680 -> 3,042 (-35% more), 2026-09-12, moved with product's own
+    // second cut and by the same factor — see that field's comment for
+    // the full finding (a session's worth of unrelated changes tipping a
+    // razor-thin bar back under, three intermediate values proving the
+    // response non-monotonic at 400 seeds, and this one clearing at 111.3%).
+    unitCost: 3_042,
     unitValue: 16_500,
 
     districtCapacity: 2.5,

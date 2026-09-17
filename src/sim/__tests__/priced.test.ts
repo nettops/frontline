@@ -103,7 +103,7 @@ describe('priced choices', () => {
                below, and the exclusion is deliberately short so a new one has
                to be looked at rather than absorbed.
             */
-            const receiving = /take the \$|they paid|comes back as/i.test(
+            const receiving = /take the \$|they paid|comes back as|pays \$/i.test(
               `${choice.label} ${choice.hint}`,
             );
             if (receiving) continue;

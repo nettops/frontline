@@ -120,9 +120,17 @@ export interface SetupDef extends OperationDef {
   yields: GearId;
 }
 
+/*
+   None of these five ever reach a pitch — `availableOperations` reads
+   `OPERATIONS`, not `SETUPS`, and that is what keeps them off the board (see
+   this file's own header). `category` is only here because `OperationDef`
+   requires one; `contraband` fits the fiction (a heist's own prep work) and
+   nothing reads it.
+*/
 export const SETUPS: SetupDef[] = [
   {
     id: 'setup_case',
+    category: 'contraband',
     name: 'Case the Place',
     description:
       'Two weeks of somebody sitting across the street with a newspaper, writing down when the doors open.',
@@ -141,6 +149,7 @@ export const SETUPS: SetupDef[] = [
   },
   {
     id: 'setup_inside',
+    category: 'contraband',
     name: 'Turn Somebody Inside',
     description:
       'Find whoever is behind on something, and make being helpful the cheaper way out.',
@@ -159,6 +168,7 @@ export const SETUPS: SetupDef[] = [
   },
   {
     id: 'setup_wheels',
+    category: 'contraband',
     name: 'Steal a Car',
     description: 'Something ordinary, taken from somewhere nobody will look, plated off a wreck.',
     tier: 2,
@@ -176,6 +186,7 @@ export const SETUPS: SetupDef[] = [
   },
   {
     id: 'setup_masks',
+    category: 'contraband',
     name: 'Outfits and Masks',
     description: 'Work clothes, gloves and something over the face. Bought in four different shops.',
     tier: 2,
@@ -193,6 +204,7 @@ export const SETUPS: SetupDef[] = [
   },
   {
     id: 'setup_guns',
+    category: 'contraband',
     name: 'Buy Clean Guns',
     description: 'Nothing with a history, from somebody who does not ask and does not remember.',
     tier: 2,

@@ -13,7 +13,7 @@ import { Rng } from '../rng';
 import { newGame } from '../state';
 import { advanceDay, advanceDays } from '../clock';
 import { runDays, runDaysSolvent } from './helpers';
-import { crewList, driftNpcs, traitEffect, perceivedGoal } from '../npc';
+import { crewList, driftNpcs, loyaltyPressures, traitEffect, perceivedGoal } from '../npc';
 import {
   informFromMemory,
   poachableFromMemory,
@@ -306,6 +306,26 @@ describe('people want things', () => {
     const npc = crewList(state)[0];
     npc.stats.loyalty = 20;
     npc.stats.grievance = 60;
+    /*
+       Pinned rather than left to whatever `seated`'s capo rolled.
+
+       This npc is senior (a capo), so an unconstrained ambition above 68 also
+       qualifies him for 'run_it' (poachable 0.8) and an unconstrained fear
+       above 45 (or the family_man trait) also qualifies him for 'protect'
+       (poachable 0.75) or, past 52, 'go_straight' (poachable 0.6) — three
+       goals from the "contented half" this test means to rule out, each
+       reachable purely from stats this test never used to pin. It only ever
+       passed because the exact rng draw `reviewGoal` happens to land on
+       depends on how many calls came before it, and capo-attributed recruits
+       (this session's change to `refreshRecruits`) shift that count by
+       exactly the kind of margin the file's own header warns about. Pinning
+       these closes the gap instead of relying on the next unrelated change
+       not to land on a bad draw again.
+    */
+    npc.stats.fear = 20;
+    npc.stats.ambition = 50;
+    npc.age = 30;
+    npc.traits = npc.traits.filter((t) => t !== 'family_man');
     npc.goal = null;
     reviewGoal(state, new Rng(state.rng), npc, goalBoard(state));
     expect(npc.goal).not.toBeNull();
@@ -342,6 +362,91 @@ describe('people want things', () => {
     const known = perceivedGoal(npc);
     expect(known?.certain).toBe(true);
     expect(known?.text).toContain('chair');
+  });
+});
+
+/*
+   2026-09-10 polish pass: `driftNpcs` computes five real weekly terms for
+   loyalty and none of them had a UI surface at all, not even qualitative.
+   `loyaltyPressures` is the fix — each line gated on its own `perceive()`
+   call, same fog the rest of the crew sheet already respects, rather than
+   a numeric breakdown of a hidden stat.
+*/
+describe('what is working on somebody’s loyalty', () => {
+  it('says nothing about a stranger', () => {
+    const state = seated(50);
+    const npc = crewList(state)[0];
+    npc.familiarity = 0;
+    expect(loyaltyPressures(state, npc)).toEqual([]);
+  });
+
+  it('flags being underpaid, and reads it well once he is not', () => {
+    const state = seated(51);
+    const npc = crewList(state)[0];
+    npc.familiarity = 90;
+    npc.stats.greed = 50;
+
+    npc.wage = 1;
+    const short = loyaltyPressures(state, npc);
+    expect(short.some((p) => p.tone === 'bad' && /worth more/.test(p.text))).toBe(true);
+
+    npc.wage = wageExpectation(state, npc) + 1000;
+    const paid = loyaltyPressures(state, npc);
+    expect(paid.some((p) => p.tone === 'good')).toBe(true);
+  });
+
+  it('flags stagnation only for an ambitious man going nowhere', () => {
+    const state = seated(52);
+    const npc = crewList(state)[0];
+    npc.familiarity = 90;
+    npc.stats.ambition = 95;
+    npc.lastGoodDay = state.day - 200;
+    expect(
+      loyaltyPressures(state, npc).some((p) => /nothing has moved/i.test(p.text)),
+    ).toBe(true);
+
+    // Something good just happened — the clock most matters here reset.
+    npc.lastGoodDay = state.day;
+    expect(
+      loyaltyPressures(state, npc).some((p) => /nothing has moved/i.test(p.text)),
+    ).toBe(false);
+
+    // And a man with nowhere he wants to go is not stagnating by definition.
+    npc.lastGoodDay = state.day - 200;
+    npc.stats.ambition = 5;
+    expect(
+      loyaltyPressures(state, npc).some((p) => /nothing has moved/i.test(p.text)),
+    ).toBe(false);
+  });
+
+  it('flags heat-fear only when the street is actually hot and he actually scares', () => {
+    const state = seated(53);
+    const npc = crewList(state)[0];
+    npc.familiarity = 90;
+    npc.stats.fear = 95;
+
+    state.org.heat = 20;
+    expect(loyaltyPressures(state, npc).some((p) => /rattled/i.test(p.text))).toBe(false);
+
+    state.org.heat = 90;
+    expect(loyaltyPressures(state, npc).some((p) => /rattled/i.test(p.text))).toBe(true);
+
+    // And a man who does not scare is not rattled by the same street.
+    state.org.heat = 90;
+    npc.stats.fear = 5;
+    expect(loyaltyPressures(state, npc).some((p) => /rattled/i.test(p.text))).toBe(false);
+  });
+
+  it('flags an unresolved grievance', () => {
+    const state = seated(54);
+    const npc = crewList(state)[0];
+    npc.familiarity = 90;
+
+    npc.stats.grievance = 5;
+    expect(loyaltyPressures(state, npc).some((p) => /has not said/i.test(p.text))).toBe(false);
+
+    npc.stats.grievance = 70;
+    expect(loyaltyPressures(state, npc).some((p) => /has not said/i.test(p.text))).toBe(true);
   });
 });
 

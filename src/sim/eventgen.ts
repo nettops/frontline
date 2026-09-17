@@ -23,16 +23,20 @@
 
 import { Rng, clamp } from './rng';
 import type { EventDef } from './events';
-import type { GameState, Npc, PendingEvent, Territory } from './types';
+import type { GameState, HouseholdMember, Npc, PendingEvent, Territory } from './types';
 import { money, oneOf, payable } from './memo';
-import { addLog } from './util';
-import { addNote, crewList } from './npc';
+import { addLog, seedFollowup } from './util';
+import { addNote, crewList, generateNpc } from './npc';
 import { remember } from './memory';
 import { recordTie } from './ties';
 import { earnDirty, spend, totalFunds } from './economy';
 import { addHeat } from './heat';
 import { gainFear, gainRespect, trainAttribute } from './player';
 import { ownedBusinesses, weeklyRevenue } from './business';
+import { activeCapos } from './capoTension';
+import { rivals } from './faction';
+import { adjustRelationship, bond } from './diplomacy';
+import { houseShort } from './houses';
 import {
   addInfluence,
   adjustSentiment,
@@ -47,12 +51,34 @@ import { stewardOf } from './delegation';
 import { nicknameOf } from './nicknames';
 import { priced } from './market';
 import { readWhispers } from './whispers';
-import { goHome, home } from './personal';
-import { RELATIONS } from '../config/personal';
+import {
+  bodySpentTonight,
+  canGoHome,
+  confidant,
+  goHome,
+  home,
+  memberAge,
+  memberLifeStage,
+  playerStress,
+  setDiscretion,
+} from './personal';
+import {
+  CONFIDANT,
+  FAMILY_DILEMMAS,
+  HOME,
+  RELATIONS,
+  STRESS,
+  type FamilyDilemmaDef,
+} from '../config/personal';
 import { CIVIC_FIGURES } from '../config/civic';
-import { GEN_EFFECT, GEN_SHAPES, GEN_WHEN } from '../config/eventgen';
+import { HOME_TERRITORY } from '../config/territories';
+import type { FactionId } from '../config/factions';
+import { GEN_EFFECT, GEN_SEVERITY_WEIGHT_MAX, GEN_SHAPES, GEN_WHEN } from '../config/eventgen';
+import { recordCareerEvent } from './career';
 import { ROLE_LABEL } from '../config/economy';
 import { MEMORIES } from '../config/memories';
+import { ANCESTRAL_GHOST, ANCESTRAL_GHOSTS } from '../config/doctrine';
+import { relics } from './doctrine';
 
 /** Whether a memo came out of here rather than out of the authored table. */
 export function isGenerated(defId: string): boolean {
@@ -252,6 +278,25 @@ function tieCause(cause: string): string {
 const frontTrouble: EventDef = {
   id: 'gen_front_trouble',
   ...shape('gen_front_trouble'),
+  /*
+     Live severity, not a flat constant — see EVENT_WEIGHT_SHARPNESS and
+     GEN_SEVERITY_WEIGHT_MAX. A front barely past the bar scores its plain
+     base weight; one genuinely collapsing climbs toward
+     GEN_SEVERITY_WEIGHT_MAX times it, so a real crisis actually crowds out
+     flavour on a bad week instead of only reading worse in the prose.
+  */
+  weight: (_state, ctx) => {
+    const base = shape('gen_front_trouble').weight;
+    const b = ctx.business;
+    if (!b) return base;
+    const health = clamp((GEN_WHEN.frontHealthUnder - b.health) / GEN_WHEN.frontHealthUnder, 0, 1);
+    const exposure = clamp(
+      (b.exposure - GEN_WHEN.frontExposureOver) / (100 - GEN_WHEN.frontExposureOver),
+      0,
+      1,
+    );
+    return base * (1 + Math.max(health, exposure) * (GEN_SEVERITY_WEIGHT_MAX - 1));
+  },
   applies(state, rng) {
     const bad = ownedBusinesses(state).filter(
       (b) =>
@@ -427,6 +472,14 @@ const someoneOutside: EventDef = {
 const paperMoving: EventDef = {
   id: 'gen_paper_moving',
   ...shape('gen_paper_moving'),
+  /* Live severity — see gen_front_trouble's identical reasoning above. */
+  weight: (_state, ctx) => {
+    const base = shape('gen_paper_moving').weight;
+    const c = ctx.investigation;
+    if (!c) return base;
+    const severity = clamp((c.strength - GEN_WHEN.caseStrength) / (100 - GEN_WHEN.caseStrength), 0, 1);
+    return base * (1 + severity * (GEN_SEVERITY_WEIGHT_MAX - 1));
+  },
   applies(state, rng) {
     /*
        Only for a boss with nobody acting for them.
@@ -522,6 +575,334 @@ const askedForYou: EventDef = {
           id: 'later',
           label: 'Not this week',
           hint: 'It has been said before.',
+        },
+      ],
+    };
+  },
+};
+
+/**
+ * The same house, and this time something is actually on the table.
+ *
+ * `gen_asked_for_you` costs nothing to answer either way, which makes it a
+ * reminder rather than a decision. This is the same subject at the same
+ * gate, except staying pays and going home costs — a real choice between
+ * business and personal life, the thing Section 17 of the 2026-09-10 polish
+ * pass named as missing. Nothing here is a new mechanic: `earnDirty`,
+ * `gainRespect` and `home(state).neglect` are all numbers other systems
+ * already own.
+ */
+const homeOrBusiness: EventDef = {
+  id: 'gen_home_or_business',
+  ...shape('gen_home_or_business'),
+  applies(state) {
+    const house = home(state);
+    return house.neglect >= GEN_WHEN.neglect && house.people.length > 0 ? { atHome: true } : null;
+  },
+  build(state, rng) {
+    const house = home(state);
+    const who = house.people[Math.min(house.people.length - 1, Math.floor(rng.next() * house.people.length))];
+    const def = RELATIONS.find((r) => r.id === who.relationId);
+    const relation = def ? def.label : 'somebody at home';
+    const cash = money(priced(state, GEN_EFFECT.homeOrBusinessStayCash));
+    return {
+      defId: 'gen_home_or_business',
+      title: `${who.name} wants tonight, and so does the street`,
+      body: oneOf(rng, [
+        `${who.name}, ${relation}, asked for tonight specifically, not some evening. ` +
+          `Tonight is also the best night in weeks to be out working.`,
+        `You could be two places and you are not. ${who.name}, ${relation}, is waiting ` +
+          `on one of them, and there is real money in the other.`,
+        `${who.name}, ${relation}, did not ask for much. Just tonight, and not to be ` +
+          `told about it after the fact. Tonight is also a good night to be seen working.`,
+      ]),
+      severity: 'opportunity',
+      npcId: null,
+      data: {},
+      choices: [
+        {
+          id: 'go',
+          label: 'Go home for the evening',
+          hint: `Costs a little respect — word gets around. ${who.name} gets tonight.`,
+        },
+        {
+          id: 'stay',
+          label: 'This can\'t wait',
+          hint: `Pays ${cash} tonight. ${who.name} was told no, in as many words.`,
+        },
+      ],
+    };
+  },
+};
+
+/**
+ * The occasion itself, not just the calendar noticing you have been away.
+ *
+ * `askedForYou` and `homeOrBusiness` above both wait for `house.neglect` to
+ * cross `GEN_WHEN.neglect` -- correct for "the house has noticed", wrong for
+ * a school play. Nobody's kid waits for a stat to cross a bar before
+ * performing in one, so `applies` here does not read neglect at all: only
+ * that somebody in the house fits one of `FAMILY_DILEMMAS` and the boss is
+ * not already spoken for tonight (`canGoHome`, the same body `goHome` itself
+ * spends).
+ */
+/**
+ * Whether an occasion in `FAMILY_DILEMMAS` fits this household member — the
+ * relation, and the life stage when the entry cares (`teen_trouble` is the
+ * only one that does; the milestone 1-3 entries carry no `stages` and match
+ * on relation alone). Shared by `applies` and `build` so which person
+ * matched cannot drift between the day the memo is raised and the day it is
+ * built — the same discipline `gen_family_crossroads`'s own resolved-flag
+ * lookup follows.
+ */
+function dilemmaFits(state: GameState, dilemma: FamilyDilemmaDef, p: HouseholdMember): boolean {
+  if (!dilemma.relationIds.includes(p.relationId)) return false;
+  if (!dilemma.stages) return true;
+  const age = memberAge(state, p.name, p.relationId);
+  return age !== null && dilemma.stages.includes(memberLifeStage(age).id);
+}
+
+const familyDilemma: EventDef = {
+  id: 'gen_family_dilemma',
+  ...shape('gen_family_dilemma'),
+  applies(state, rng) {
+    if (!canGoHome(state).ok) return null;
+    const house = home(state);
+    const matches = FAMILY_DILEMMAS.filter((d) =>
+      house.people.some((p) => dilemmaFits(state, d, p)),
+    );
+    if (!matches.length) return null;
+    return { atHome: true, familyDilemmaId: rng.pick(matches).id };
+  },
+  build(state, rng, ctx) {
+    const dilemma = FAMILY_DILEMMAS.find((d) => d.id === ctx.familyDilemmaId)!;
+    const house = home(state);
+    const who = house.people.find((p) => dilemmaFits(state, dilemma, p))!;
+    const def = RELATIONS.find((r) => r.id === who.relationId);
+    const relation = def ? def.label : 'somebody at home';
+    const attendCash = priced(state, dilemma.attendCost);
+    const sendCash = priced(state, dilemma.sendCost);
+
+    return {
+      defId: 'gen_family_dilemma',
+      title: `${who.name}, ${dilemma.occasion}`,
+      body: oneOf(rng, dilemma.bodies.map((b) => `${who.name}, ${relation}, ${b}.`)),
+      severity: 'warning',
+      npcId: null,
+      data: { dilemmaId: dilemma.id, relationId: who.relationId },
+      choices: [
+        {
+          id: 'attend',
+          label: 'Go',
+          ...(dilemma.attendCost > 0
+            ? payable(state, attendCash, `and you are the one who has to be there`)
+            : {
+                hint: 'The work is still there tomorrow. It is always still there tomorrow.',
+                disabledReason: undefined,
+                cost: 0,
+              }),
+        },
+        {
+          id: 'send',
+          label: 'Send something instead',
+          ...payable(state, sendCash, dilemma.sendGesture),
+        },
+        {
+          id: 'stay',
+          label: 'Not this time',
+          hint: `${who.name} will remember this one specifically.`,
+        },
+      ],
+    };
+  },
+};
+
+/**
+ * The body, finally saying something.
+ *
+ * The only shape whose subject is the boss himself rather than something he
+ * owns or somebody he knows. Gated on `playerStress` alone — see `STRESS` in
+ * `config/personal.ts` for the drivers that get a career there — and on the
+ * same "not already spoken for tonight" check `canGoHome` uses, since the
+ * house-call choice below spends the identical evening.
+ */
+const panicEpisode: EventDef = {
+  id: 'gen_panic_episode',
+  ...shape('gen_panic_episode'),
+  applies(state) {
+    if (playerStress(state) < STRESS.panicThreshold) return null;
+    if (bodySpentTonight(state)) return null;
+    return { panicEpisode: true };
+  },
+  build(state, rng) {
+    const houseCallCash = priced(state, GEN_EFFECT.panicHouseCallCost);
+    const sedativeCash = priced(state, GEN_EFFECT.panicSedativeCost);
+    return {
+      defId: 'gen_panic_episode',
+      title: oneOf(rng, ['Chest Pains on the Avenue', 'Down on One Knee']),
+      body: oneOf(rng, [
+        `It came on in the middle of the day, standing still: the chest tight, the ` +
+          `room tilting, no air where there should be air.`,
+        `You went down on one knee on a public sidewalk, certain for a full minute ` +
+          `that this was the day it ended, and it was not a bullet.`,
+      ]),
+      severity: 'danger',
+      npcId: null,
+      data: {},
+      choices: [
+        {
+          id: 'house_call',
+          label: 'Discreet House Call',
+          ...payable(state, houseCallCash, 'a trusted private doctor, to a backroom, tonight'),
+        },
+        {
+          id: 'push_through',
+          label: 'Push Through',
+          hint: 'Free. Keeps the night open. The crew was watching, and some of them saw the sweat.',
+        },
+        {
+          id: 'sedatives',
+          label: 'Prescription Sedatives',
+          ...payable(state, sedativeCash, `clears less, dulls you for ${STRESS.sedatedDays} days, does not spend the night`),
+        },
+      ],
+    };
+  },
+};
+
+/**
+ * One household member's 18th birthday — the milestone 4 shape.
+ *
+ * The only shape whose eligibility is a flag rather than a cooldown: age is
+ * fully derived (`memberAge`) and only ever increases, so "eligible again in
+ * N days" would be false the moment the member turned 18 and stayed true
+ * forever after — this is a once-per-person event, not a recurring one.
+ * `state.flags[crossroads_resolved_<relationId>]` is what actually bounds
+ * it; `cooldownDays` on the shape only governs how often the shared daily
+ * draw bothers re-checking.
+ *
+ * Scans every household member rather than picking one at random off the
+ * causal `rng` — there are at most two who could ever match (`eldest`,
+ * `youngest`, the only relations `CHILD_START_AGES` tracks), and the first
+ * unresolved one found is the one raised, deterministically, same as any
+ * other `applies` that finds a single real subject rather than choosing
+ * among several.
+ */
+const familyCrossroads: EventDef = {
+  id: 'gen_family_crossroads',
+  ...shape('gen_family_crossroads'),
+  applies(state) {
+    const house = home(state);
+    for (const p of house.people) {
+      const age = memberAge(state, p.name, p.relationId);
+      if (age === null || age < 18) continue;
+      if (state.flags[`crossroads_resolved_${p.relationId}`]) continue;
+      return { atHome: true, crossroadsRelationId: p.relationId };
+    }
+    return null;
+  },
+  build(state, rng, ctx) {
+    const relationId = ctx.crossroadsRelationId!;
+    const house = home(state);
+    const who = house.people.find((p) => p.relationId === relationId)!;
+    const def = RELATIONS.find((r) => r.id === relationId);
+    const relation = def ? def.label : 'your child';
+    const tuitionCash = priced(state, GEN_EFFECT.crossroadsTuitionCost);
+    return {
+      defId: 'gen_family_crossroads',
+      title: `${who.name} is grown`,
+      body: oneOf(rng, [
+        `${who.name}, ${relation}, turned eighteen this year, and is not asking permission ` +
+          `for what comes next — just where you stand on it.`,
+        `Eighteen came and went without anybody deciding anything, and ${who.name}, ${relation}, ` +
+          `noticed that as much as you did.`,
+        `${who.name}, ${relation}, is grown now, and done waiting to be told what the plan is. ` +
+          `There has to be one.`,
+      ]),
+      severity: 'warning',
+      npcId: null,
+      data: { relationId },
+      choices: [
+        {
+          id: 'college',
+          label: 'Pay for college, and keep them out of it',
+          ...payable(state, tuitionCash, `${who.name} goes somewhere that has never heard your name`),
+        },
+        {
+          id: 'bring_in',
+          label: 'Bring them into the organization',
+          hint: `Free. ${who.name} is with you now, on the books like anybody else — some of your men will not like it.`,
+        },
+        {
+          id: 'let_go',
+          label: 'Let them go their own way',
+          hint: `Free. ${who.name} stops being somebody you can call on.`,
+        },
+      ],
+    };
+  },
+};
+
+/**
+ * The kitchen, at an hour nobody chose.
+ *
+ * The one memo this milestone raises, and the only place the private life
+ * meets the household. Two ways in, and they are not the same failure: the
+ * meter run down (`discoveryDiscretionThreshold` — somebody talked, a face
+ * was remembered, a bill arrived at the wrong address) or the house simply
+ * cold enough long enough to work it out unassisted (`discoveryNeglect`). A
+ * boss who pays the allowance every month and is never home still gets this
+ * conversation, which is the point of the second door.
+ *
+ * Fires once per career. `ConfidantState.discovered` is set by every branch
+ * of the resolver and refused on here — the shape's `cooldownDays` is not
+ * what bounds it, same as `gen_family_crossroads` above. Nothing raises it
+ * again afterwards: the house already knows, and the wire does not care what
+ * was decided.
+ */
+const affairFallout: EventDef = {
+  id: 'gen_affair_fallout',
+  ...shape('gen_affair_fallout'),
+  applies(state) {
+    const her = confidant(state);
+    if (!her.active || her.discovered) return null;
+    const quiet = her.discretion >= CONFIDANT.discoveryDiscretionThreshold;
+    const warm = home(state).neglect < CONFIDANT.discoveryNeglect;
+    if (quiet && warm) return null;
+    return { atHome: true };
+  },
+  build(state, rng) {
+    const her = confidant(state);
+    const peaceCash = priced(state, CONFIDANT.falloutPeaceCost);
+    return {
+      defId: 'gen_affair_fallout',
+      title: 'The Address Across the River',
+      body: oneOf(rng, [
+        `It was not a fight. You came in at two in the morning and the light was on in the ` +
+          `kitchen, and the question was already asked before you had your coat off.`,
+        `Somebody said something to somebody. By the time it reached your own table it had ` +
+          `a name attached to it, and the name was ${her.name}.`,
+        `Nobody raised their voice. That is what told you how long it had been known, and ` +
+          `how long the deciding had already been going on without you.`,
+      ]),
+      severity: 'danger',
+      npcId: null,
+      data: {},
+      choices: [
+        {
+          id: 'end_it',
+          label: 'End it tonight',
+          hint: `Free. ${her.name} does not hear it from anybody else, and the house still counts that there was something to end.`,
+        },
+        {
+          id: 'deny',
+          label: 'Deny it',
+          hint: 'Free, and nothing about it stops. The house will draw its own conclusion anyway.',
+        },
+        {
+          id: 'peace',
+          label: 'Make it right at home',
+          ...payable(state, peaceCash, 'and it does not end anything, it only buys the room back'),
         },
       ],
     };
@@ -965,6 +1346,165 @@ const theyAreFrightened: EventDef = {
   },
 };
 
+/**
+ * Milestone 5: the boss's dual identity. A parish feast, a wedding, a wake —
+ * dressed only as flavour drawn by `oneOf`; the three answers are what
+ * matter, and every one of them moves a number some existing system already
+ * owns. Nothing here writes to `publicStanding` directly — see that
+ * function's own header in `sim/civic.ts` for why there is no field to write
+ * to, and how each choice below instead moves one of the real inputs the
+ * formula reads.
+ *
+ * "Work the room" settles a real border grudge when the family actually has
+ * one, and raises a civic figure's standing otherwise — through
+ * `helpFigure`, the same rate-limited credit `gen_someone_outside` already
+ * uses, rather than the brief's literal "+10 political influence", which is
+ * not a stat this game has (see `config/civic.ts`'s `CIVIC_ATTRIBUTE`/
+ * `INFLUENCE_FROM` for the real one, which this deliberately does not touch —
+ * `helpFigure`'s own header is the whole argument for why not). The
+ * alderman and the union boss are the two this reaches, the same two
+ * `canCallWalkout`/`pullPermit` already established as this network's
+ * outward-facing figures, and the only two among `CIVIC_FIGURES` whose own
+ * blurb is about being seen with the right people.
+ */
+const socialGathering: EventDef = {
+  id: 'gen_social_gathering',
+  ...shape('gen_social_gathering'),
+  applies(state, rng) {
+    // A real border grudge to settle, if the family is actually carrying one
+    // — the same `bond` reading `rival_incursion` in `events.ts` already
+    // uses, picked by whichever rival resents the family most rather than at
+    // random.
+    const grudged = rivals(state)
+      .filter((f) => f.strength > 0 && bond(state, 'player', f.id).grudge > 0)
+      .sort((a, b) => bond(state, 'player', b.id).grudge - bond(state, 'player', a.id).grudge);
+    if (grudged.length > 0) return { faction: grudged[0] };
+
+    /*
+       A boss with no public footprint at all is not on anybody's invitation
+       list — no front to be seen running, no standing with a single soul
+       who matters. Every other shape in this table is instantiated against
+       a real subject; this is this shape's own version of that rule, and it
+       is what keeps a brand-new career from being invited to a gala on day
+       one (`eventgen.test.ts`'s "none of them fires against an empty
+       world").
+    */
+    const known = ownedBusinesses(state).length > 0 || CIVIC_FIGURES.some((def) => figure(state, def.id).standing > 0);
+    if (!known) return null;
+
+    // Nobody to make peace with tonight — the room still has an alderman or
+    // a union boss in it either way.
+    return { civicId: rng.pick(['alderman', 'union']) };
+  },
+  build(state, rng, ctx) {
+    const donateCost = priced(
+      state,
+      rng.int(GEN_EFFECT.socialDonateCashMin, GEN_EFFECT.socialDonateCashMax),
+    );
+    const occasion = oneOf(rng, [
+      'The Feast of Saint Anthony has taken over three blocks and the parish hall besides',
+      "A wedding — somebody's daughter, a business partner's family, it hardly matters whose — has the whole neighbourhood dressed up",
+      'A wake at the funeral home, for an old man half the street grew up calling an uncle',
+    ]);
+    return {
+      defId: 'gen_social_gathering',
+      title: 'An evening you are expected at',
+      body: oneOf(rng, [
+        `${occasion}. You are expected, and not showing up says something too.`,
+        `${occasion}. Everybody who is anybody in the neighbourhood will be there, ` +
+          `which is exactly why you were asked.`,
+        `${occasion}. It is the kind of night a man in your position is seen at, ` +
+          `one way or another.`,
+      ]),
+      severity: 'opportunity',
+      npcId: null,
+      data: { factionId: ctx.faction?.id ?? '', civicId: ctx.civicId ?? '', donateCost },
+      choices: [
+        {
+          id: 'host',
+          label: 'Play the generous benefactor',
+          ...payable(state, donateCost, 'and everybody sees who paid for it'),
+        },
+        {
+          id: 'work',
+          label: 'Work the room',
+          hint: 'Free. The house sees you working the room instead of attending as family.',
+        },
+        {
+          id: 'envelope',
+          label: 'Send an envelope, stay away',
+          ...payable(state, GEN_EFFECT.socialEnvelopeCash, 'and nobody mistakes it for showing up'),
+        },
+      ],
+    };
+  },
+};
+
+/**
+ * Somebody your father owed, standing in your social club.
+ *
+ * The only shape in the catalogue whose subject is nobody in the game. These
+ * men are not crew, not a faction and not a civic figure — they are a debt
+ * from thirty years ago attached to a person who is dead, and the only reason
+ * they are here is that you took his chair.
+ *
+ * Gated on the doctrine having been declared, which does two things at once:
+ * it is the design (the past turns up once you have said out loud what you
+ * are going to do with it), and it is what makes a twenty-first generated
+ * shape free — this `applies` returns null before touching the stream for
+ * every career that has never declared, so those careers never put it in the
+ * day's pool and their draws are unchanged.
+ *
+ * Once per ghost per career. `state.flags` carries that rather than the
+ * shape's `cooldownDays`, the same way `gen_family_crossroads` does it and
+ * for the same reason: a settled debt is settled, not on a timer.
+ */
+const ancestralGhost: EventDef = {
+  id: 'gen_ancestral_ghost',
+  ...shape('gen_ancestral_ghost'),
+  applies(state, rng) {
+    if (!state.doctrine) return null;
+    const unsettled = ANCESTRAL_GHOSTS.filter((g) => !state.flags[`ghost_${g.id}`]);
+    if (unsettled.length === 0) return null;
+    return { ancestralGhostId: rng.pick(unsettled).id };
+  },
+  build(state, rng, ctx) {
+    const ghost = ANCESTRAL_GHOSTS.find((g) => g.id === ctx.ancestralGhostId)!;
+    const ask = priced(state, ghost.settlement);
+    return {
+      defId: 'gen_ancestral_ghost',
+      title: "Somebody Your Father Knew",
+      body: oneOf(rng, [
+        `He waited outside until somebody went and got you. He is ${ghost.who}, and what ` +
+          `he is here about is ${ghost.claim}. He has no paper. He did not expect to need any.`,
+        `There is a man sitting in the back who has been there two hours. He is ${ghost.who}. ` +
+          `What he wants is ${ghost.claim}, and he is not asking you, exactly — he is ` +
+          `telling you what was agreed.`,
+        `Nobody could say who let him in. He is ${ghost.who}, and the thing he came about ` +
+          `is ${ghost.claim}. He said your father's name twice and yours not at all.`,
+      ]),
+      severity: 'warning',
+      npcId: null,
+      // Carried on the memo rather than re-picked in the resolver: a second
+      // draw would answer a different man's question from the one the player
+      // was shown.
+      data: { ghostId: ghost.id },
+      choices: [
+        {
+          id: 'settle',
+          label: 'Settle it',
+          ...payable(state, ask, 'and the last person alive who was owed it stops being owed it'),
+        },
+        {
+          id: 'refuse',
+          label: 'Tell him it died with your father',
+          hint: 'Free, and the older men at your own table will hear how it was said.',
+        },
+      ],
+    };
+  },
+};
+
 export const GEN_DEFS: EventDef[] = [
   wantsAWord,
   badBlood,
@@ -976,10 +1516,17 @@ export const GEN_DEFS: EventDef[] = [
   takeIsShort,
   nameCameUp,
   askedForYou,
+  homeOrBusiness,
+  familyDilemma,
+  panicEpisode,
+  familyCrossroads,
+  affairFallout,
   stewardAsks,
   theNameStuck,
   oldOwner,
   theyAreFrightened,
+  socialGathering,
+  ancestralGhost,
 ];
 
 // ------------------------------------------------------------- resolution ---
@@ -993,7 +1540,7 @@ export const GEN_DEFS: EventDef[] = [
  */
 export function resolveGenerated(
   state: GameState,
-  _rng: Rng,
+  rng: Rng,
   event: PendingEvent,
   choiceId: string,
 ): void {
@@ -1215,6 +1762,23 @@ export function resolveGenerated(
       }
       npc.stats.loyalty = clamp(npc.stats.loyalty + GEN_EFFECT.letItGoLoyalty, 0, 100);
       npc.skimTotal += GEN_EFFECT.letItGoTakes;
+      /*
+         Let go twice, and a steward who was never called on it is what tells
+         the others it is safe. Spreads to a different man holding a
+         district, with a total already past the floor `applies` reads —
+         the next steward asked about it is found by the same check that
+         found this one, not by a case built specially for him.
+      */
+      if (seedFollowup(state, 'let_take_go', 2)) {
+        const others = territoryList(state)
+          .map((t) => (t.stewardId ? state.npcs[t.stewardId] : null))
+          .filter((n): n is Npc => !!n && n.id !== npc.id && !n.isSkimming);
+        if (others.length) {
+          const spreadTo = rng.pick(others);
+          spreadTo.isSkimming = true;
+          spreadTo.skimTotal = Math.max(spreadTo.skimTotal, GEN_WHEN.skimmed * 1.5);
+        }
+      }
       return;
     }
 
@@ -1233,6 +1797,301 @@ export function resolveGenerated(
 
     case 'gen_asked_for_you': {
       if (choiceId === 'go') goHome(state);
+      return;
+    }
+
+    case 'gen_home_or_business': {
+      if (choiceId === 'go') {
+        goHome(state);
+        gainRespect(state, GEN_EFFECT.homeOrBusinessGoRespect);
+        return;
+      }
+      // 'stay': the night's take, and the house is told no to its face —
+      // worse than simply not visiting, which is why this goes straight at
+      // `neglect` rather than through `goHome`'s own (positive-only) door.
+      earnDirty(state, priced(state, GEN_EFFECT.homeOrBusinessStayCash));
+      const house = home(state);
+      house.neglect = clamp(house.neglect + GEN_EFFECT.homeOrBusinessRefusedNeglect, 0, 100);
+      if (house.neglect >= HOME.depositionFrom) {
+        recordCareerEvent(state, 'Chose business over family, again.', 'bad');
+      }
+      return;
+    }
+
+    case 'gen_family_dilemma': {
+      const dilemma = FAMILY_DILEMMAS.find((d) => d.id === String(event.data.dilemmaId ?? ''));
+      if (!dilemma) return;
+      const house = home(state);
+      const who = house.people.find((p) => p.relationId === event.data.relationId);
+      const name = who?.name ?? 'they';
+
+      if (choiceId === 'attend') {
+        /*
+           Checked again rather than trusted from `applies`: the memo can sit
+           pending for days, and by the time it is answered the boss may
+           already be out on the one job that needs him personally tonight.
+           Failing closed here, before any money moves, is what keeps this
+           from spending cash on a visit that `goHome` is about to refuse.
+        */
+        if (!canGoHome(state).ok) {
+          addLog(state, `Something else already had that evening. You did not go.`, 'failure');
+          return;
+        }
+        if (dilemma.attendCost > 0 && !spend(state, priced(state, dilemma.attendCost), 'world')) {
+          addLog(state, `The money was not there, so you did not go either.`, 'failure');
+          return;
+        }
+        if (dilemma.attendNeglectClear !== undefined) {
+          /*
+             `teen_trouble` alone: settling it with a precinct sergeant is
+             not a visit home, so it spends the same evening (`went_home_day`
+             — the flag `operations.ts` reads to refuse a same-day zero-crew
+             job, same resource `goHome`/`consultDoctor` spend) without going
+             through `goHome`'s own lastVisitDay/cold-reception machinery,
+             which is specific to an actual evening under the boss's own
+             roof. Clears less than the shared `familyDilemmaAttendExtraClear`
+             path (going to a police station is not a nice evening) and
+             draws real heat, per the director's own figures.
+          */
+          state.flags['went_home_day'] = state.day;
+          house.neglect = clamp(house.neglect - dilemma.attendNeglectClear, 0, 100);
+          if (dilemma.attendHeat) {
+            addHeat(state, dilemma.attendHeat, 'street', `settled ${name}'s trouble with the law personally`);
+          }
+          addLog(state, `You went down and settled it with the sergeant yourself. It cost you a favor and a little attention.`, 'crew');
+          return;
+        }
+        goHome(state);
+        // The occasion clears more than an ordinary evening. See
+        // `GEN_EFFECT.familyDilemmaAttendExtraClear` for the 1.5x.
+        house.neglect = clamp(house.neglect - GEN_EFFECT.familyDilemmaAttendExtraClear, 0, 100);
+        addLog(state, `You went. It cost you the evening, and it was worth it.`, 'crew');
+        return;
+      }
+
+      if (choiceId === 'send') {
+        if (!spend(state, priced(state, dilemma.sendCost), 'world')) {
+          addLog(state, `You had nothing to send either, and ${name} noticed that too.`, 'failure');
+          return;
+        }
+        house.neglect = clamp(
+          house.neglect + (dilemma.sendNeglect ?? GEN_EFFECT.familyDilemmaSendNeglect),
+          0,
+          100,
+        );
+        addLog(state, `You sent ${dilemma.sendGesture}. ${name} noticed who was not holding it.`, 'crew');
+        return;
+      }
+
+      // 'stay': free, and the most expensive answer in the room.
+      house.neglect = clamp(
+        house.neglect + (dilemma.stayNeglect ?? GEN_EFFECT.familyDilemmaStayNeglect),
+        0,
+        100,
+      );
+      recordCareerEvent(state, `Was not there for ${name}'s ${dilemma.occasion}.`, 'bad');
+      addLog(state, `You did not go. Nobody said anything about it, which was worse.`, 'crew');
+      return;
+    }
+
+    case 'gen_panic_episode': {
+      if (choiceId === 'house_call') {
+        /*
+           Checked again rather than trusted from `applies`, same discipline
+           `gen_family_dilemma`'s own `attend` branch uses: the memo can sit
+           pending, and the one body it spends may already be out on a job
+           by the time it is answered.
+        */
+        if (bodySpentTonight(state)) {
+          addLog(state, `Something else already had tonight. Nobody came.`, 'failure');
+          return;
+        }
+        if (!spend(state, priced(state, GEN_EFFECT.panicHouseCallCost), 'world')) {
+          addLog(state, `The money was not there, so nobody came either.`, 'failure');
+          return;
+        }
+        state.player.stress = clamp(playerStress(state) - GEN_EFFECT.panicHouseCallClear, 0, STRESS.max);
+        state.flags['went_home_day'] = state.day;
+        addLog(state, `A man came to a backroom and left inside the hour. Nobody in the crew asked why.`, 'crew');
+        return;
+      }
+      if (choiceId === 'sedatives') {
+        if (!spend(state, priced(state, GEN_EFFECT.panicSedativeCost), 'world')) {
+          addLog(state, `You had nothing for the pills either, and rode it out.`, 'failure');
+          return;
+        }
+        state.player.stress = clamp(playerStress(state) - GEN_EFFECT.panicSedativeClear, 0, STRESS.max);
+        state.flags['sedated_until_day'] = state.day + STRESS.sedatedDays;
+        addLog(state, `A bottle from a pharmacist who does not ask questions. It took the edge off, not the source.`, 'crew');
+        return;
+      }
+      // 'push_through': free, and the crew noticed.
+      state.player.stress = clamp(playerStress(state) + GEN_EFFECT.panicPushThroughStressSpike, 0, STRESS.max);
+      gainRespect(state, GEN_EFFECT.panicPushThroughRespect);
+      addLog(state, `You gripped the edge of the desk until the gray cleared. The crew noticed the sweat on your collar.`, 'crew');
+      return;
+    }
+
+    case 'gen_family_crossroads': {
+      const relationId = String(event.data.relationId ?? '');
+      const house = home(state);
+      const who = house.people.find((p) => p.relationId === relationId);
+      const name = who?.name ?? 'they';
+      /*
+         Fires exactly once per household member, regardless of what the
+         shape's own `cooldownDays` says — keyed on `relationId`, the stable
+         identifier this whole system keys on, rather than `name`, which is
+         cosmetic flavor drawn from a shared pool and not guaranteed distinct
+         in the way that matters here. Set before the branches, same
+         discipline `gen_wants_a_word`'s per-person cooldown flag uses, so a
+         branch added later cannot forget it.
+      */
+      state.flags[`crossroads_resolved_${relationId}`] = state.day;
+
+      if (choiceId === 'college') {
+        if (!spend(state, priced(state, GEN_EFFECT.crossroadsTuitionCost), 'world')) {
+          addLog(state, `The tuition was not there, and ${name} noticed you could not manage it.`, 'failure');
+          return;
+        }
+        house.neglect = clamp(house.neglect - GEN_EFFECT.crossroadsTuitionNeglectClear, 0, 100);
+        recordCareerEvent(state, `Paid for ${name} to go somewhere the family name has never been said.`, 'good');
+        addLog(state, `You paid, and ${name} left for somewhere that has no idea who you are.`, 'crew');
+        return;
+      }
+
+      if (choiceId === 'bring_in') {
+        // Free -- the director's own figure. What this option actually
+        // costs is neglect and, when there is a capo to carry it, grievance;
+        // not cash.
+        //
+        // The one case allowed to create a real Npc -- the household layer's
+        // own header bans a second roster everywhere else, and this is the
+        // one true exception: the kid actually joins the organization.
+        const hire = generateNpc(state, rng, 'soldier');
+        hire.name = name;
+        hire.joinedDay = state.day;
+        state.npcs[hire.id] = hire;
+        addNote(hire, state.day, 'Brought in by family, not off the street.', 'neutral');
+        // A spike, not a clear -- a spouse watching her own son handed a
+        // place on the street instead of a diploma does not take it quietly.
+        house.neglect = clamp(house.neglect + GEN_EFFECT.crossroadsHireNeglectSpike, 0, 100);
+        // A real capo, if there is one to carry the grievance — silently
+        // skipped otherwise, same as `gen_bad_blood` finding nobody to pair.
+        const capos = activeCapos(state);
+        if (capos.length) {
+          const capo = rng.pick(capos);
+          capo.stats.grievance = clamp(
+            capo.stats.grievance + GEN_EFFECT.crossroadsHireCapoGrievance,
+            0,
+            100,
+          );
+          addNote(
+            capo,
+            state.day,
+            `Watched the boss put his own boy ahead of men who took bullets for this family.`,
+            'bad',
+          );
+        }
+        recordCareerEvent(state, `Brought ${name} into the organization.`, 'neutral');
+        addLog(state, `${name} is with you now. Some of the men noticed who did not have to ask first.`, 'crew');
+        return;
+      }
+
+      // 'let_go': free, and the house feels it more than either paid option.
+      house.neglect = clamp(house.neglect + GEN_EFFECT.crossroadsEstrangedNeglect, 0, 100);
+      recordCareerEvent(state, `Let ${name} go their own way, and did not call it a loss out loud.`, 'bad');
+      addLog(state, `${name} stopped asking. You do not think they will ask again.`, 'crew');
+      return;
+    }
+
+    case 'gen_ancestral_ghost': {
+      const ghost = ANCESTRAL_GHOSTS.find((g) => g.id === String(event.data.ghostId ?? ''));
+      if (!ghost) return;
+      /*
+         Set before the branches, the same discipline the crossroads and the
+         fallout above follow: whichever way it went, this man has been
+         answered and does not come back. A branch added later cannot forget
+         it, which is exactly how `gen_wants_a_word` became a subscription.
+      */
+      state.flags[`ghost_${ghost.id}`] = state.day;
+
+      if (choiceId === 'settle') {
+        if (!spend(state, priced(state, ghost.settlement), 'world')) {
+          addLog(state, 'You did not have it, and he could see that you did not have it.', 'failure');
+          return;
+        }
+        gainRespect(state, ANCESTRAL_GHOST.settleRespect);
+        for (const npc of relics(state)) {
+          npc.stats.loyalty = clamp(npc.stats.loyalty + ANCESTRAL_GHOST.settleRelicLoyalty, 0, 100);
+          addNote(npc, state.day, "Heard you paid one of your father's debts.", 'good');
+        }
+        recordCareerEvent(state, `Settled an old debt of your father's.`, 'good');
+        addLog(state, 'He counted it in the car. Word of that was around the neighbourhood by Friday.', 'money');
+        return;
+      }
+
+      // 'refuse': free, and the older men at your own table hear how it was said.
+      gainRespect(state, ANCESTRAL_GHOST.refuseRespect);
+      gainFear(state, ANCESTRAL_GHOST.refuseFear);
+      for (const npc of relics(state)) {
+        npc.stats.grievance = clamp(npc.stats.grievance + ANCESTRAL_GHOST.refuseRelicGrievance, 0, 100);
+        addNote(npc, state.day, "Heard you sent one of your father's people away.", 'bad');
+      }
+      recordCareerEvent(state, `Sent away somebody your father owed.`, 'bad');
+      addLog(state, 'He did not argue. He put his hat on and went, and that was worse.', 'crew');
+      return;
+    }
+
+    case 'gen_affair_fallout': {
+      const her = confidant(state);
+      const house = home(state);
+      /*
+         Set before the branches, same discipline the crossroads flag above
+         follows and for the same reason: this is what stops the memo coming
+         back, and a branch added later cannot forget to write it. The house
+         knowing is not one of the three answers — it is the premise all three
+         are answers to.
+      */
+      her.discovered = true;
+
+      if (choiceId === 'end_it') {
+        her.active = false;
+        house.neglect = clamp(house.neglect + CONFIDANT.falloutBreakNeglect, 0, 100);
+        /*
+           The expensive part of ending it is not the household's ten points.
+           It is that the one relief in this file that was not a purchase is
+           gone, and the man is carrying the week without it — which is what
+           the stress is, rather than a punishment for the answer.
+        */
+        state.player.stress = clamp(playerStress(state) + CONFIDANT.falloutBreakStress, 0, STRESS.max);
+        recordCareerEvent(state, `Ended it with ${her.name}, and went home to a house that already knew.`, 'neutral');
+        addLog(state, `You told ${her.name} it was finished, and then you went home and sat in your own kitchen.`, 'crew');
+        return;
+      }
+
+      if (choiceId === 'peace') {
+        if (!spend(state, priced(state, CONFIDANT.falloutPeaceCost), 'world')) {
+          addLog(state, `You did not have it, so the only thing on the table was the truth.`, 'failure');
+          return;
+        }
+        house.neglect = clamp(house.neglect - CONFIDANT.falloutPeaceNeglectClear, 0, 100);
+        /*
+           A floor, not a gain. Either door can raise this memo, so a boss who
+           got here on neglect alone may still be perfectly discreet — adding
+           to what he has would pay him for being found out. `Math.max` means
+           the careless boss is bought back up to the figure and the careful
+           one is left exactly where he was.
+        */
+        setDiscretion(state, Math.max(her.discretion, CONFIDANT.falloutPeaceDiscretion));
+        addLog(state, `It cost money at home and money across the river, and nothing about it ended.`, 'crew');
+        return;
+      }
+
+      // 'deny': free, and the most expensive answer in the room.
+      house.neglect = clamp(house.neglect + CONFIDANT.falloutDenyNeglect, 0, 100);
+      setDiscretion(state, Math.max(her.discretion, CONFIDANT.falloutDenyDiscretion));
+      recordCareerEvent(state, `Was asked directly, at his own table, and said no.`, 'bad');
+      addLog(state, `You said there was nothing to it. Everybody in the room let you finish.`, 'crew');
       return;
     }
 
@@ -1317,6 +2176,65 @@ export function resolveGenerated(
       adjustSentiment(state, t.id, GEN_EFFECT.frightenedRefusedSentiment);
       gainFear(state, GEN_EFFECT.frightenedRefusedFear);
       addLog(state, `The envelope went back to ${where} unopened. That will be talked about.`, 'neutral');
+      return;
+    }
+
+    case 'gen_social_gathering': {
+      const factionId = event.data.factionId ? String(event.data.factionId) : null;
+      const civicId = event.data.civicId ? String(event.data.civicId) : null;
+      const donateCost = Number(event.data.donateCost ?? 0);
+
+      if (choiceId === 'host') {
+        if (!spend(state, donateCost, 'world')) {
+          addLog(state, 'There was nothing to put into the evening, so you did not host it.', 'failure');
+          return;
+        }
+        // Spends the evening, same flag `goHome`/`gen_family_dilemma`'s
+        // `teen_trouble` branch write for an occasion that is not itself a
+        // visit home — see its comment in `personal.ts` for what this
+        // flag guards against (a same-day zero-crew job).
+        state.flags['went_home_day'] = state.day;
+        adjustSentiment(state, HOME_TERRITORY, GEN_EFFECT.socialDonateSentiment);
+        helpFigure(state, 'alderman', GEN_EFFECT.socialDonateStanding);
+        const house = home(state);
+        house.neglect = clamp(house.neglect - GEN_EFFECT.socialDonateNeglectClear, 0, 100);
+        addLog(
+          state,
+          `${money(donateCost)} into the evening, and ${territoryDef(HOME_TERRITORY).name} saw exactly who paid for it.`,
+          'money',
+        );
+        return;
+      }
+
+      if (choiceId === 'work') {
+        const house = home(state);
+        house.neglect = clamp(house.neglect + GEN_EFFECT.socialWorkRoomNeglect, 0, 100);
+        if (factionId) {
+          adjustRelationship(state, 'player', factionId as FactionId, GEN_EFFECT.socialWorkRoomGrudgeSettled);
+          addLog(
+            state,
+            `An old grudge with ${houseShort(state, factionId as FactionId)} got smaller over drinks nobody will mention again.`,
+            'crew',
+          );
+          return;
+        }
+        const def = CIVIC_FIGURES.find((f) => f.id === civicId);
+        helpFigure(state, civicId ?? '', GEN_EFFECT.socialWorkRoomStanding);
+        addLog(state, `${def?.title ?? 'Somebody useful'} remembers who worked the room tonight.`, 'crew');
+        return;
+      }
+
+      // 'envelope'
+      if (!spend(state, GEN_EFFECT.socialEnvelopeCash, 'world')) {
+        addLog(state, 'You did not even send the envelope. That got noticed too.', 'failure');
+        return;
+      }
+      adjustSentiment(state, HOME_TERRITORY, -GEN_EFFECT.socialEnvelopeSentimentHit);
+      addLog(
+        state,
+        `The envelope arrived. So did the absence — ${territoryDef(HOME_TERRITORY).name} noticed both.`,
+        'money',
+      );
       return;
     }
 

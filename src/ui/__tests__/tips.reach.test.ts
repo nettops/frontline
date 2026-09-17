@@ -40,6 +40,7 @@ const ORDINARY = [
   'case_open', 'ground', 'sitdown', 'grievance', 'delegate',
   'leaks', 'rivals', 'war', 'heir', 'trade', 'why',
   'the_game', 'lean_on_it', 'contract', 'favours', 'autopilot',
+  'armoury', 'career',
 ];
 
 /** Reachable, but only by doing something this bot never does. */

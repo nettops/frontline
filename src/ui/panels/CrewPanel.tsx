@@ -13,6 +13,7 @@ import { Panel, Empty, StatRead, StatusTag, KeyValue, Bar, payRead } from '../co
 import {
   crewList,
   goalBlurb,
+  loyaltyPressures,
   perceive,
   perceivedGoal,
   secretKnown,
@@ -38,6 +39,19 @@ import {
   recruitCost,
   setWage,
 } from '../../sim/crew';
+import {
+  canMakeVouch,
+  denyVouch,
+  makeVouch,
+  vouchCandidates,
+  vouchLine,
+  waitOnVouch,
+} from '../../sim/capoVouches';
+import { capoTributeLeaderboard } from '../../sim/tribute';
+import { TRIBUTE, type EarnerStatus } from '../../config/tribute';
+import { assignDementiaCare, careOf, failingCapos } from '../../sim/dementia';
+import { DEMENTIA, type DementiaCareStatus } from '../../config/dementia';
+import { activeCases } from '../../sim/investigation';
 import { payrollForecast, recentWeeklyTake, wageBillWith } from '../../sim/economy';
 import { nightsWorked } from '../../sim/standing';
 import { canTeach, startTraining, stopTraining, trainingFor } from '../../sim/training';
@@ -50,6 +64,30 @@ import { PERCEPTION_TIERS, READABLE_STATS, TRAIT_BY_ID } from '../../config/npcs
 import type { Npc, NpcStatId } from '../../sim/types';
 
 const WARN_HIGH: NpcStatId[] = ['greed', 'ambition'];
+
+/*
+   What the board calls a man, said the way the table would say it rather than
+   the way the config stores it. Both maps are keyed off the union, so a fourth
+   band added to `EarnerStatus` fails the type check here rather than rendering
+   an empty cell.
+*/
+const EARNER_LABEL: Record<EarnerStatus, string> = {
+  top_earner: 'Carries the table',
+  steady_earner: 'Pays his end',
+  dead_weight: 'Being carried',
+};
+
+const EARNER_TONE: Record<EarnerStatus, string> = {
+  top_earner: 'brass',
+  steady_earner: 'dim',
+  dead_weight: 'hot',
+};
+
+const CARE_LABEL: Record<DementiaCareStatus, string> = {
+  active: 'Out on his own',
+  golden_cage: 'At Green Grove',
+  house_guard: 'A man in the house',
+};
 
 const STAT_LABEL: Record<NpcStatId, string> = {
   loyalty: 'Loyalty',
@@ -84,6 +122,7 @@ export default function CrewPanel() {
      It was doing something. It was not showing it.
   */
   const [meeting, setMeeting] = useState<Meeting | null>(null);
+  const [vouchMessage, setVouchMessage] = useState<string | null>(null);
   /*
      Round 24's blind report, reproduced on essentially every visit: clicking a
      row opens the detail panel below the table, not in a modal, and on a
@@ -96,6 +135,7 @@ export default function CrewPanel() {
   }, [selectedId]);
   const crew = crewList(state);
   const recruits = Object.values(state.recruits);
+  const vouches = vouchCandidates(state);
   const selected = selectedId ? state.npcs[selectedId] : null;
   const cost = recruitCost(state);
   const payroll = payrollForecast(state);
@@ -111,6 +151,10 @@ export default function CrewPanel() {
     : [];
   // What the place actually earns in a week: finished jobs plus the fronts.
   const income = recentWeeklyTake(state) + totalWeeklyRevenue(state);
+  const earners = capoTributeLeaderboard(state);
+  const failing = failingCapos(state);
+  // Whether a slipped word has anywhere to land. See the panel below.
+  const cases = activeCases(state);
 
   return (
     <>
@@ -235,6 +279,190 @@ export default function CrewPanel() {
         </Panel>
       )}
 
+      {/*
+         A capo's own recommendation, not a menu the player browses.
+
+         Reads `vouchCandidates`, which is a pure derived list — nothing here
+         is stored beyond the one cooldown field Wait and Deny both write.
+         Make is the same `promote` the roster button below already calls;
+         this is a shortcut for the case a capo is actually asking for,
+         with a real answer either way instead of a silent skip.
+      */}
+      {vouches.length > 0 && (
+        <Panel title="A capo's word">
+          {vouches.map(({ capo, associate }) => {
+            const makeCheck = canMakeVouch(state, associate.id);
+            return (
+              <div key={associate.id} className="row between" style={{ marginBottom: 8 }}>
+                <span className="dim">{vouchLine(capo, associate)}</span>
+                <div className="btn-row">
+                  <button
+                    className="btn small"
+                    disabled={!makeCheck.ok}
+                    title={makeCheck.message}
+                    onClick={() => {
+                      const result = mutate((s) => makeVouch(s, associate.id), true);
+                      if (result) setVouchMessage(result.message);
+                    }}
+                  >
+                    Make
+                  </button>
+                  <button
+                    className="btn small"
+                    onClick={() => {
+                      const result = mutate((s) => waitOnVouch(s, associate.id), true);
+                      if (result) setVouchMessage(result.message);
+                    }}
+                  >
+                    Wait
+                  </button>
+                  <button
+                    className="btn small danger"
+                    onClick={() => {
+                      const result = mutate((s) => denyVouch(s, associate.id), true);
+                      if (result) setVouchMessage(result.message);
+                    }}
+                  >
+                    Deny
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+          {vouchMessage && (
+            <p className="dim" style={{ margin: '4px 0 0' }}>
+              {vouchMessage}
+            </p>
+          )}
+        </Panel>
+      )}
+
+      {/*
+         Who is actually earning, which the roster table cannot say.
+
+         "Your people" is sorted by who they are — standing, loyalty, skill —
+         and none of those is the question a boss asks about a capo. The only
+         question is what came up on Friday, and until now the tribute the
+         weekly pass collects was invisible: money arrived, the log said so
+         once, and nothing anywhere ranked the men who brought it.
+
+         Estimated rather than stated, because it is: `capoTributeEstimate`
+         derives it from ground and volume every time it is asked, and what
+         actually lands can be short. The total beside it is what has been
+         handed over for real.
+      */}
+      {earners.length > 0 && (
+        <Panel title="What comes up" flush>
+          <div className="table-wrap">
+            <table className="data">
+              <thead>
+                <tr>
+                  <th>Capo</th>
+                  <th>Reads as</th>
+                  <th className="num">Expected weekly</th>
+                  <th className="num">Handed over, all told</th>
+                </tr>
+              </thead>
+              <tbody>
+                {earners.map((row) => (
+                  <tr key={row.capoId}>
+                    <td className="name-main">{row.name}</td>
+                    <td className={EARNER_TONE[row.status]}>{EARNER_LABEL[row.status]}</td>
+                    <td className="num mono brass">{formatMoney(row.weeklyEstimate)}</td>
+                    <td className="num mono">{formatMoney(row.totalTributePaid)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <p className="faint tiny" style={{ margin: '10px 18px 0' }}>
+            Money comes up, it does not go down. A capo holding ground and keeping his people
+            working is expected to bring {formatMoney(TRIBUTE.topEarnerWeeklyThreshold)} or more
+            a week; under {formatMoney(TRIBUTE.deadWeightWeeklyThreshold)} he is being carried by
+            the rest of the table, and they know it before you do.
+          </p>
+        </Panel>
+      )}
+
+      {/*
+         The man who made you, and what he is saying in the coffee shop.
+
+         On the crew screen rather than anywhere else because the decision is
+         about a person and all three answers are about the organization — a
+         bill out of clean money, a soldier taken off the roster indefinitely,
+         or the worst thing a boss can do to the men who remember his father.
+
+         The warning line is conditional on there being a file, because that is
+         exactly when it starts costing: `tickDementia` returns before any draw
+         when no case is open, and a panel that shouted at a boss with nothing
+         on him would be shouting about nothing.
+      */}
+      {failing.length > 0 && (
+        <Panel title="One of them is going">
+          {failing.map((npc) => {
+            const care = careOf(npc);
+            const covered = state.org.cash >= DEMENTIA.goldenCageCostMonthly;
+            const minder = npc.dementiaMinderId ? state.npcs[npc.dementiaMinderId] : undefined;
+            return (
+              <div key={npc.id} style={{ marginBottom: 14 }}>
+                <KeyValue
+                  label={`${npc.name}, ${ROLE_LABEL[npc.role]}`}
+                  value={CARE_LABEL[care]}
+                  tone={care === 'active' ? 'hot' : undefined}
+                />
+                <p className="faint tiny" style={{ margin: '2px 14px 4px' }}>
+                  It started to show around day {npc.dementiaSince}
+                  {minder ? `. ${minder.name} sits in his front room and is off everything else.` : '.'}
+                </p>
+                {care === 'active' && (
+                  <p className="hot tiny" style={{ margin: '0 14px 6px' }}>
+                    {cases.length > 0
+                      ? `He is out on his own, and there is an open file for a slipped word to land on. About a third of the weeks he leaves it costs you ${DEMENTIA.slippedTongueEvidenceWeekly} on that file, every week, until somebody does something.`
+                      : 'He is out on his own and nobody is writing any of it down yet. The day a file opens, every story he tells in a coffee shop starts landing on it.'}
+                  </p>
+                )}
+                <div className="btn-row">
+                  <button
+                    className="btn small"
+                    disabled={care === 'golden_cage' || !covered}
+                    title="A private place with a garden and a locked gate. Nobody can get to him and nobody can record him."
+                    onClick={() => mutate((g) => assignDementiaCare(g, npc.id, 'golden_cage'), true)}
+                  >
+                    Green Grove ({formatMoney(DEMENTIA.goldenCageCostMonthly)}/month)
+                  </button>
+                  <button
+                    className="btn small"
+                    disabled={care === 'house_guard'}
+                    title="One of your own men sits in his house all day. He is off the roster for as long as it lasts."
+                    onClick={() => mutate((g) => assignDementiaCare(g, npc.id, 'house_guard'), true)}
+                  >
+                    Put a man in the house
+                  </button>
+                  <button
+                    className="btn small danger"
+                    title="Instant, total, free. Every man at that table who is over fifty will know exactly what happened and why."
+                    onClick={() => mutate((g) => assignDementiaCare(g, npc.id, 'hit'), true)}
+                  >
+                    Have it dealt with
+                  </button>
+                </div>
+                {care !== 'golden_cage' && !covered && (
+                  <p className="faint tiny" style={{ margin: '6px 14px 0' }}>
+                    Green Grove bills {formatMoney(DEMENTIA.goldenCageCostMonthly)} a month out of
+                    clean money, and you hold {formatMoney(state.org.cash)} that could stand being
+                    asked about.
+                  </p>
+                )}
+              </div>
+            );
+          })}
+          <p className="faint tiny" style={{ marginBottom: 0 }}>
+            He has not betrayed anybody and he is not an informant. He is simply going, and he
+            knows everything.
+          </p>
+        </Panel>
+      )}
+
       <Panel title="Your people" flush>
         {crew.length === 0 ? (
           <Empty>Nobody. That is a problem.</Empty>
@@ -256,7 +484,7 @@ export default function CrewPanel() {
               </thead>
               <tbody>
                 {crew.map((npc) => {
-                  const pay = payRead(npc);
+                  const pay = payRead(state, npc);
                   return (
                     <tr
                       key={npc.id}
@@ -531,6 +759,7 @@ function CrewDetail({ npc, onClose }: { npc: Npc; onClose: () => void }) {
   */
   const loyaltyRead = perceive(npc, 'loyalty');
   const beyondReach = loyaltyRead.known && loyaltyRead.bandIndex === 0;
+  const pressures = loyaltyPressures(state, npc);
   const sitCheck = canSitDownWith(state, npc.id);
   const raiseCheck = canRaise(state, npc.id);
   const silenceCheck = canSilence(state, npc.id);
@@ -677,6 +906,31 @@ function CrewDetail({ npc, onClose }: { npc: Npc; onClose: () => void }) {
                   If they walked, as many as {wouldGo} could go with them.
                 </p>
               )}
+            </div>
+          )}
+
+          {/*
+             2026-09-10 polish pass: `driftNpcs` computes five real, weekly
+             terms for loyalty and none of them had a UI surface at all,
+             not even qualitative. `loyaltyPressures` reads the same terms
+             this sheet's own loyalty band comes from, through the same
+             fog — a numeric breakdown would violate the rule two lines
+             above this one exists to protect.
+          */}
+          {pressures.length > 0 && (
+            <div style={{ marginTop: 10 }}>
+              <div className="tiny" style={{ marginBottom: 4 }}>
+                What is working on their loyalty
+              </div>
+              {pressures.map((p, i) => (
+                <p
+                  key={i}
+                  className={p.tone === 'bad' ? 'hot' : p.tone === 'good' ? 'good' : 'dim'}
+                  style={{ margin: '0 0 2px' }}
+                >
+                  {p.text}
+                </p>
+              ))}
             </div>
           )}
 

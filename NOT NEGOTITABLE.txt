@@ -1,0 +1,1428 @@
+# NON-NEGOTIABLE COMPLETION REQUIREMENT
+
+**EVERY REQUIREMENT, PHASE, ACCEPTANCE CRITERION, BUG FIX, ACCESSIBILITY IMPROVEMENT, DISCOVERABILITY IMPROVEMENT, PACING IMPROVEMENT, RETENTION IMPROVEMENT, TESTING REQUIREMENT, AND VERIFICATION STEP IN THIS PROMPT IS MANDATORY.**
+
+**DO NOT MOVE ON, DECLARE THE TASK COMPLETE, STOP IMPLEMENTING, OR PRESENT THE WORK AS FINISHED UNTIL THE ENTIRE PROMPT HAS BEEN EXECUTED AND VERIFIED.**
+
+This is **not** a menu of suggestions.
+
+This is **not** a prioritization list where only the easiest or highest-impact items need to be completed.
+
+This is a **full acceptance specification**.
+
+You are expected to:
+
+1. Audit the entire repository.
+2. Implement every applicable requirement in this prompt.
+3. Fix every applicable issue identified by the audit.
+4. Test every affected system.
+5. Perform the required long-run testing.
+6. Verify edge cases.
+7. Verify UI interaction reliability.
+8. Verify save/load compatibility.
+9. Verify that the existing simulation has not been unintentionally simplified or damaged.
+10. Re-audit the acceptance criteria after implementation.
+11. Resolve any failures discovered during verification.
+12. Repeat testing after fixes.
+13. Only then report the work as complete.
+
+### DO NOT STOP EARLY
+
+Do not stop because:
+
+* the first pass appears successful
+* the major features are implemented
+* the code compiles
+* tests pass
+* one subsystem is finished
+* the changes look good
+* the task has become lengthy
+* implementation is taking multiple iterations
+
+If implementation reveals additional work required to satisfy this specification, **perform that work before completion.**
+
+If a requirement does not apply to the current codebase, explicitly verify why it does not apply and document that determination in the final report.
+
+If a requirement cannot be completed because of a genuine technical limitation, **do not silently skip it**. Identify the blocker, explain what was attempted, and continue completing every other applicable requirement.
+
+### COMPLETION GATE
+
+Before declaring completion, perform a final checklist against **every numbered section of this prompt**.
+
+For each section, mark it internally as:
+
+* **COMPLETE**
+* **VERIFIED**
+* **NOT APPLICABLE — VERIFIED**
+* **BLOCKED — EXPLAINED**
+
+There must be **no silently skipped requirements**.
+
+A response such as:
+
+> "The main polish work is complete."
+
+is **not acceptable**.
+
+Completion means the **entire applicable specification has been implemented and verified**, not merely the highest-priority items.
+
+### FINAL RULE
+
+**DO NOT ASK FOR PERMISSION TO CONTINUE BETWEEN PHASES.**
+
+Proceed autonomously through the entire implementation.
+
+**DO NOT WAIT FOR ANOTHER PROMPT TO FINISH REMAINING WORK.**
+
+**DO NOT HAND BACK A PARTIAL IMPLEMENTATION FOR REVIEW.**
+
+**DO NOT CONSIDER THIS TASK COMPLETE UNTIL THE FULL ACCEPTANCE SPECIFICATION HAS BEEN SATISFIED AND VERIFIED.**
+
+The only acceptable stopping point is when the complete applicable scope has been implemented, tested, re-tested where necessary, and documented in the final report.
+
+
+# FRONTLINE — POLISH / ACCESSIBILITY / RETENTION PASS
+
+You are working directly inside the Frontline repository.
+
+This is a **polish, accessibility, discoverability, pacing, and retention pass** — NOT a rewrite and NOT a redesign of the underlying simulation.
+
+The game already has a strong simulation foundation, strong writing/tone, meaningful consequences, and interconnected systems. The goal of this pass is to make the existing game easier to understand, smoother to operate, more discoverable, and more engaging over long careers.
+
+---
+
+# 1. CORE DIRECTIVE
+
+Improve the player's experience without flattening or simplifying the simulation.
+
+The target experience is:
+
+> **"I always understand what happened, why it happened, what it means, and what I can do about it — without the game constantly interrupting me."**
+
+Do NOT remove complexity simply because it is difficult.
+
+Instead:
+
+* expose complexity more clearly
+* improve information hierarchy
+* reduce unnecessary friction
+* improve system discoverability
+* improve late-game variety
+* make consequences easier to understand
+* preserve the existing tone and writing style
+* preserve successful mechanics
+* preserve meaningful player decisions
+
+The game should still feel like a serious, systemic Mafia management simulation.
+
+---
+
+# 2. BEFORE CHANGING ANYTHING — AUDIT THE REPOSITORY
+
+Start by thoroughly inspecting the existing codebase.
+
+Identify:
+
+* game state architecture
+* day/clock advancement
+* event/memo systems
+* notification systems
+* modal/dialog systems
+* job generation
+* job progression
+* organization/crew systems
+* family/home systems
+* heat systems
+* case/legal systems
+* economy
+* territory/front systems
+* negotiation systems
+* informant systems
+* hidden traits
+* player attributes
+* history/logging
+* UI state management
+* save/load/checkpoint systems
+* accessibility-related implementation
+* overlays that can block interaction
+* any existing event prioritization logic
+* any existing tutorial/onboarding systems
+
+Do NOT immediately start modifying files.
+
+First establish how the existing systems work and where the relevant logic lives.
+
+Look for duplicated systems, contradictory state representations, brittle UI logic, and places where presentation is disconnected from the underlying simulation state.
+
+---
+
+# 3. ESTABLISH A BASELINE
+
+Before implementation, document the current behavior of the following:
+
+### Critical systems
+
+* day advancement
+* event generation
+* event resolution
+* crew status
+* family/home
+* heat
+* legal/case progression
+* jobs
+* territory
+* economy
+* negotiations
+* informants
+* player attributes
+
+### UI
+
+Identify:
+
+* what appears automatically
+* what requires dismissal
+* what requires a decision
+* what is informational
+* what blocks interaction
+* what can be revisited
+* what disappears permanently
+* what is only accessible through secondary screens
+
+Create a short internal implementation plan based on this audit.
+
+Do not invent replacement systems before understanding the current ones.
+
+---
+
+# 4. INFORMATION HIERARCHY / EVENT PRIORITIZATION
+
+One of the biggest problems identified in testing is excessive memo/event friction during Days ~180–300.
+
+Not every event deserves equal interruption.
+
+Create or improve an event priority model.
+
+Use at least three levels:
+
+## CRITICAL
+
+Events that materially require player attention or an immediate decision.
+
+Examples:
+
+* raid
+* assassination attempt
+* major arrest
+* indictment
+* premises seizure
+* crew execution
+* major defection
+* major territory loss
+* major family crisis
+* irreversible decision
+
+These can interrupt the player's normal flow.
+
+---
+
+## IMPORTANT
+
+Events that matter but do not necessarily require an immediate modal interruption.
+
+Examples:
+
+* loyalty decline
+* increasing heat
+* financial deterioration
+* crew member entering custody
+* developing investigation
+* relationship deterioration
+* approaching job deadline
+
+These should appear in the daily digest and relevant system panels.
+
+---
+
+## INFORMATIONAL
+
+Events that provide flavor, background, or minor context.
+
+Examples:
+
+* someone asking about the player
+* minor rumors
+* small social developments
+* low-impact background activity
+* recurring flavor events
+
+These should NOT repeatedly interrupt day advancement.
+
+They should be logged for later review.
+
+---
+
+# 5. STOP MODALS FROM BECOMING ADMINISTRATION
+
+A major goal is to reduce:
+
+> advance day → dismiss memo → click decision → dismiss → advance day → repeat
+
+without removing meaningful events.
+
+Where possible:
+
+### Combine related informational events.
+
+Instead of:
+
+> Memo 1
+> dismiss
+
+> Memo 2
+> dismiss
+
+> Memo 3
+> dismiss
+
+Use:
+
+### DAILY BRIEFING
+
+**3 developments while you were away**
+
+* Luca was questioned by police.
+* The West Side collection route is producing less.
+* Your legal exposure increased.
+
+Then allow the player to inspect individual items if desired.
+
+Do NOT combine events that require genuinely separate player decisions.
+
+---
+
+# 6. FIX AMBIGUOUS CREW / NPC LANGUAGE
+
+This is a high-priority issue.
+
+Never use ambiguous phrases such as:
+
+> "X is out."
+
+when the underlying state could mean multiple things.
+
+The player must immediately understand whether someone is:
+
+* active
+* unavailable
+* in custody
+* being interrogated
+* arrested
+* cooperating
+* defecting
+* missing
+* injured
+* dead
+* permanently departed
+* temporarily unavailable
+
+Use explicit terminology.
+
+Examples:
+
+BAD:
+
+> Luca is out.
+
+GOOD:
+
+> Luca is in custody.
+
+BAD:
+
+> Carlo talked.
+
+GOOD:
+
+> Carlo spoke during questioning.
+
+BAD:
+
+> Lou is gone.
+
+GOOD:
+
+> Lou has defected.
+
+or:
+
+> Lou was killed.
+
+or:
+
+> Lou remains in custody.
+
+The exact wording should fit the game's established writing style.
+
+Do NOT make the writing generic or overly explanatory.
+
+---
+
+# 7. EVENT MESSAGES MUST COMMUNICATE STATE
+
+Every important event should answer, directly or indirectly:
+
+### WHAT HAPPENED?
+
+### WHY DOES IT MATTER?
+
+### WHAT STATE CHANGED?
+
+### DO I NEED TO ACT?
+
+For example:
+
+> **LEGAL PRESSURE**
+>
+> Federal investigators expanded the case.
+>
+> Case exposure: 61 → 68
+>
+> Primary causes:
+>
+> * Witness testimony
+> * Unexplained cash
+> * Crew member interrogation
+>
+> No immediate action required.
+
+This is substantially better than a vague:
+
+> "The investigation continues."
+
+The player should be able to understand the simulation without reverse-engineering it.
+
+---
+
+# 8. APPLY THE ODDS-SYSTEM PHILOSOPHY EVERYWHERE
+
+The existing itemized odds presentation is one of the strongest parts of the game.
+
+Use that as the design philosophy for other systems.
+
+Where appropriate, expose:
+
+* contributing factors
+* positive modifiers
+* negative modifiers
+* current value
+* previous value
+* projected value
+* relevant consequences
+
+Examples:
+
+### HEAT
+
+**FEDERAL HEAT — 68**
+
++12 Witness testimony
++9 Unexplained cash
++7 Crew interrogation
+−5 Political influence
+−3 Legal containment
+
+---
+
+### LOYALTY
+
+**LUCA — LOYALTY 72**
+
++8 Paid on time
++4 Territory share
+−10 Recent interrogation
+−5 Missed family obligation
+
+---
+
+### ECONOMY
+
+**WEEKLY CASH FLOW**
+
+Revenue: $184,000
+Operating costs: −$71,000
+Legal reserve: −$30,000
+Net: +$83,000
+
+Do not expose every calculation everywhere.
+
+Expose calculations when they help the player make better decisions.
+
+---
+
+# 9. IMPROVE DISCOVERABILITY OF EXISTING SYSTEMS
+
+The audit/test report identified that the Home/Family system could remain effectively invisible until very late.
+
+Do NOT solve this with giant tutorial popups.
+
+Instead, create organic discovery.
+
+Existing systems should naturally surface through gameplay.
+
+For example:
+
+* Family issues should emerge through family-related events.
+* Home should become relevant through household decisions.
+* Legal systems should become more visible as exposure rises.
+* Crew systems should become more important as the organization grows.
+* Political influence should become relevant as the player becomes more powerful.
+* Advanced operations should emerge as the player's status increases.
+
+The player should discover systems because their career creates reasons to use them.
+
+---
+
+# 10. DO NOT HIDE SYSTEMS JUST BECAUSE THEY ARE ADVANCED
+
+Advanced systems can remain complex.
+
+However, the player needs a clear indication that they exist.
+
+Use subtle discoverability cues such as:
+
+* new section becoming available
+* contextual memo
+* NPC conversation
+* consequence
+* notification
+* status panel
+* relevant decision
+* new category appearing in an existing interface
+
+Avoid:
+
+> "CONGRATULATIONS! YOU UNLOCKED THE FAMILY SYSTEM!"
+
+The game's tone does not support that style.
+
+---
+
+# 11. CREATE A CAREER / HISTORY SYSTEM IF ONE DOES NOT ALREADY EXIST
+
+The game needs stronger long-term memory.
+
+The player should be able to look backward and understand the story of their career.
+
+Create or improve a persistent **Career History / Timeline**.
+
+Track significant events such as:
+
+* promotions
+* major acquisitions
+* territory gains/losses
+* important crew changes
+* arrests
+* indictments
+* major investigations
+* executions
+* defections
+* betrayals
+* family milestones
+* major financial events
+* important negotiations
+* major victories
+* major failures
+* deaths
+
+Example:
+
+### CAREER — DAY 247
+
+**Day 18** — Joined organization
+**Day 43** — First independent operation
+**Day 76** — Promoted to Capo
+**Day 112** — Acquired first front
+**Day 147** — Federal investigation opened
+**Day 181** — Luca questioned
+**Day 203** — Lou Rabinowitz executed
+**Day 217** — Lost three fronts
+**Day 241** — Household fractured
+
+This should make the player's run feel like a **career**, not simply a sequence of numerical state changes.
+
+---
+
+# 12. PRESERVE IMPORTANT HISTORY
+
+Important events should not disappear permanently after being dismissed.
+
+The player should be able to reconstruct:
+
+* what happened
+* when it happened
+* who was involved
+* what changed
+* what the consequences were
+
+Do not require the player to remember something from 150 days ago.
+
+This is especially important for:
+
+* investigations
+* relationships
+* betrayals
+* family
+* crew loyalty
+* legal cases
+* territory
+* major financial events
+
+---
+
+# 13. LATE-GAME JOB VARIETY
+
+The report identified repeated job types across 70+ late-game days.
+
+Do NOT simply increase the number of randomly generated jobs.
+
+Instead, make jobs evolve with the player's career.
+
+Early career:
+
+* collections
+* muscle work
+* small favors
+* low-level enforcement
+
+Mid career:
+
+* larger collections
+* negotiations
+* protection
+* territory disputes
+* business opportunities
+* crew management
+
+Late career:
+
+* political influence
+* major negotiations
+* high-value fronts
+* strategic territory operations
+* legal containment
+* corrupt official relationships
+* large-scale organizational decisions
+* rival-family conflicts
+* succession issues
+* major investigations
+* high-level financial decisions
+
+The player's responsibilities should become increasingly managerial as their power increases.
+
+The game should gradually shift from:
+
+> "What job should I do today?"
+
+toward:
+
+> "What problems does my organization have today?"
+
+That is much more appropriate for a boss-level Mafia simulation.
+
+---
+
+# 14. PRESERVE MEANINGFUL REPETITION
+
+Do NOT eliminate recurring activities entirely.
+
+Repetition is appropriate for a management simulation.
+
+Instead, add:
+
+* escalating stakes
+* different modifiers
+* different NPCs
+* different consequences
+* different risk profiles
+* different political/legal circumstances
+* different financial outcomes
+
+The same basic activity can remain useful if its context changes.
+
+---
+
+# 15. IMPROVE CAUSAL FEEDBACK
+
+When something bad happens, the player should have enough information to determine whether it was:
+
+1. caused by their decision
+2. caused by neglect
+3. caused by another system
+4. random
+5. unavoidable
+
+Do not reveal hidden information that is intentionally supposed to remain hidden.
+
+Instead, expose enough evidence to allow reasonable deduction.
+
+Example:
+
+BAD:
+
+> Your legal situation worsened.
+
+BETTER:
+
+> Your legal exposure increased.
+>
+> Recent factors:
+> +11 unresolved witness pressure
+> +8 unexplained cash
+> +6 crew interrogation
+>
+> Your legal reserve remains below the recommended level.
+
+This creates accountability.
+
+---
+
+# 16. DIFFICULTY SHOULD FEEL FAIR
+
+Do NOT simply make the game easier.
+
+The tester experienced genuine collapse and recovery, which is valuable.
+
+Preserve:
+
+* risk
+* failure
+* irreversible decisions
+* resource pressure
+* legal danger
+* crew instability
+* territory loss
+
+Instead improve the player's ability to understand why they are losing.
+
+The goal is:
+
+> **"I lost because I made bad decisions."**
+
+rather than:
+
+> **"I lost because the game randomly decided to kill me."**
+
+Audit major failure states for causal transparency.
+
+---
+
+# 17. FAMILY / HOME SHOULD HAVE WEIGHT WITHOUT BECOMING A CHORE
+
+The family system should feel meaningful.
+
+Do not turn it into another checklist.
+
+Family events should occasionally:
+
+* conflict with business
+* influence decisions
+* create emotional stakes
+* impose opportunity costs
+* create long-term consequences
+* reflect the player's lifestyle
+
+The important thing is that family should feel like a competing part of the player's life.
+
+The player should sometimes have to choose between:
+
+> **business**
+
+and
+
+> **personal life**
+
+rather than simply completing family tasks.
+
+---
+
+# 18. ACCESSIBILITY / INTERACTION RELIABILITY
+
+Fix any issue where:
+
+* overlays swallow clicks
+* invisible layers block controls
+* modals cannot be read by standard extraction
+* buttons remain visually available while actually disabled
+* dialogs trap the player unexpectedly
+* click targets overlap
+* UI state does not match game state
+* dismissed information becomes unrecoverable
+
+Specifically investigate the reported situation where a daily-news/hint overlay silently intercepted clicks intended for controls underneath it.
+
+A UI element must not appear non-blocking while actually blocking interaction.
+
+If an overlay is active:
+
+* either visibly indicate that it is blocking input
+* or make it non-blocking
+
+Never silently intercept clicks.
+
+---
+
+# 19. MODAL / DIALOG ACCESSIBILITY
+
+Audit modal content.
+
+Important information must not exist exclusively in a rendering mechanism that makes it inaccessible to standard UI/text extraction where avoidable.
+
+Ensure:
+
+* readable text
+* predictable focus
+* clear close behavior
+* keyboard accessibility where appropriate
+* visible decision options
+* meaningful labels
+* no invisible interactive elements
+* no hidden modal state
+* consistent hierarchy
+
+Do not sacrifice the game's visual style.
+
+---
+
+# 20. DAY ADVANCEMENT SHOULD FEEL LIKE A DECISION
+
+The player should feel:
+
+> "I'm advancing the organization."
+
+not:
+
+> "I'm clicking through notifications."
+
+Before allowing the next day to advance, surface the information that actually matters.
+
+If there are only informational events, don't force unnecessary interaction.
+
+If there is a major decision, make it clear.
+
+---
+
+# 21. INFORMATION SHOULD BE REVISITABLE
+
+Where reasonable, important information should remain accessible after dismissal.
+
+Potential locations:
+
+* Career History
+* Case file
+* Organization panel
+* Family panel
+* Financial history
+* Territory history
+* Event log
+
+Do not force the player to remember everything.
+
+The game is supposed to simulate a complicated organization.
+
+The interface should help manage that complexity.
+
+---
+
+# 22. UI DESIGN PRINCIPLE
+
+Do not redesign the interface simply to make it "prettier."
+
+Prioritize:
+
+1. comprehension
+2. hierarchy
+3. consistency
+4. interaction reliability
+5. information density
+6. readability
+7. visual polish
+
+The game already has a strong visual/narrative identity.
+
+Do not introduce generic dashboard aesthetics.
+
+Do not turn the game into a neon cyberpunk interface.
+
+Do not introduce excessive gradients, rounded cards, emoji, giant icons, excessive animations, or generic "AI dashboard" styling.
+
+The interface should feel like a serious management system.
+
+---
+
+# 23. WRITING RULES
+
+Preserve the existing writing voice.
+
+The report strongly suggests that the game's dry, restrained tone is one of its strengths.
+
+Continue using:
+
+* concise language
+* specific observations
+* understated tension
+* dry delivery
+* consequences instead of exposition
+* no winking at the player
+
+Avoid:
+
+* corporate AI language
+* generic game UI language
+* motivational language
+* excessive exclamation points
+* emojis
+* "epic" terminology
+* fake cinematic narration
+* generic procedural filler
+
+Especially avoid AI-generated filler such as:
+
+> "The streets are buzzing."
+
+> "Your empire continues to grow."
+
+> "Things are heating up."
+
+unless the line has a specific systemic purpose.
+
+Every piece of text should communicate something.
+
+---
+
+# 24. REMOVE "AI SLOP"
+
+Audit existing UI and event text for:
+
+* repetitive sentence structures
+* vague descriptions
+* unnecessary adjectives
+* generic atmospheric filler
+* redundant summaries
+* fake drama
+* repetitive event openings
+* obvious template language
+
+Replace weak text with concise, specific writing.
+
+Do not rewrite good text merely for the sake of changing it.
+
+---
+
+# 25. PLAYER STATUS SHOULD EVOLVE
+
+The UI should reflect the player's increasing organizational responsibility.
+
+Early:
+
+> survive
+
+Mid:
+
+> expand
+
+Late:
+
+> manage
+
+Endgame:
+
+> maintain power / survive institutional pressure / manage succession / protect the organization
+
+The game should increasingly make the player feel like the **boss of a family**, not a high-level errand runner.
+
+---
+
+# 26. DO NOT DESTROY THE EXISTING DEPTH
+
+The audit specifically identified strong systems including:
+
+* negotiation mini-game
+* laundering-cut negotiation
+* hidden-trait perception
+* heat postures
+* informant "who was there" mechanics
+* family subsystem
+
+Do NOT remove or simplify these because they are complex.
+
+Instead make them easier to discover and understand.
+
+The existence of unused systems is evidence that discoverability needs work — not evidence that those systems should be deleted.
+
+---
+
+# 27. UNUSED SYSTEM AUDIT
+
+Identify systems that exist but are rarely or never exercised.
+
+Specifically investigate:
+
+* The Trade
+* Armoury / violence systems
+* Word
+* Ledger
+* Stomach attributes
+* city bribery / inside-source relationships
+* deeper Home/Family mechanics
+* any other systems that are technically implemented but rarely surfaced
+
+For each:
+
+Determine:
+
+1. Does it actually work?
+2. What conditions trigger it?
+3. Is the trigger reasonable?
+4. Does the player understand that the system exists?
+5. Is it useful?
+6. Is it too rare?
+7. Is it incorrectly gated?
+8. Does it need better contextual integration?
+
+Do not automatically increase activation rates.
+
+First understand why the system is underused.
+
+---
+
+# 28. RETENTION DESIGN
+
+Improve long-term engagement through **meaningful progression**, not artificial engagement tricks.
+
+Do NOT add:
+
+* daily login rewards
+* XP bars for everything
+* meaningless achievements
+* artificial timers
+* forced streaks
+* excessive notifications
+* arbitrary currencies
+* mobile-game retention mechanics
+
+Instead strengthen:
+
+### Career progression
+
+The player should feel their organization evolving.
+
+### Relationships
+
+NPCs should develop histories with the player.
+
+### Consequences
+
+Old decisions should occasionally return.
+
+### Organizational growth
+
+New responsibilities should emerge.
+
+### Risk
+
+Power should create new threats.
+
+### Legacy
+
+The player should eventually care about what they leave behind.
+
+---
+
+# 29. LONG-RUN TESTING
+
+After implementation, perform long-run playtests.
+
+Do not only test Days 1–20.
+
+Test at minimum:
+
+* early game
+* mid game
+* Days 100+
+* Days 180+
+* Days 250+
+* late-game/endgame
+
+Pay particular attention to:
+
+* notification volume
+* job repetition
+* decision density
+* system discoverability
+* family usage
+* legal pressure
+* crew management
+* economy
+* territory
+* UI reliability
+
+Record where the game starts feeling like administration instead of gameplay.
+
+---
+
+# 30. TEST FAILURE / EDGE CASES
+
+Intentionally test:
+
+* multiple events occurring on the same day
+* multiple critical events
+* simultaneous crew crises
+* custody + interrogation + defection states
+* family event + business event
+* modal opened while another overlay exists
+* dismissing an event and later trying to recover it
+* advancing days with unresolved information
+* long periods of inactivity
+* rapid day advancement
+* save/load during important events
+* late-game job generation
+* major territory loss
+* major financial collapse
+* legal collapse
+* player recovery after collapse
+
+The game must remain understandable even when several systems fire simultaneously.
+
+---
+
+# 31. DO NOT MASK PROBLEMS WITH MORE UI
+
+If a system is confusing, don't automatically add another panel.
+
+Ask:
+
+> Can the existing information be represented better?
+
+Prefer:
+
+* better labels
+* better hierarchy
+* better summaries
+* better state names
+* contextual information
+* history
+* prioritization
+
+over adding more screens.
+
+---
+
+# 32. PRESERVE SAVE COMPATIBILITY
+
+Do not casually invalidate existing saves.
+
+Before modifying persistent state:
+
+* inspect save schema
+* determine whether migrations are required
+* maintain backward compatibility where possible
+* provide defaults for newly introduced fields
+* never silently destroy existing career data
+
+If a migration is necessary, implement it deliberately and test it.
+
+---
+
+# 33. PERFORMANCE
+
+Do not introduce systems that create unnecessary processing every game tick/day.
+
+Be especially careful with:
+
+* event generation
+* history logging
+* NPC relationship tracking
+* job generation
+* daily calculations
+* UI re-rendering
+
+Long careers must remain performant.
+
+---
+
+# 34. IMPLEMENTATION RULE
+
+Work in small, verifiable groups.
+
+Recommended order:
+
+### PASS 1
+
+Audit + event architecture
+
+### PASS 2
+
+Clarity/state terminology
+
+### PASS 3
+
+Notification prioritization
+
+### PASS 4
+
+Career/event history
+
+### PASS 5
+
+System discoverability
+
+### PASS 6
+
+Late-game job/activity variety
+
+### PASS 7
+
+UI accessibility and interaction reliability
+
+### PASS 8
+
+Writing cleanup / AI-slop removal
+
+### PASS 9
+
+Long-run balancing
+
+### PASS 10
+
+Final regression testing
+
+Do not make one enormous uncontrolled rewrite.
+
+---
+
+# 35. TESTING REQUIREMENT
+
+Every meaningful code change must be tested.
+
+Before considering a task complete:
+
+* run the project's existing tests
+* add tests where appropriate
+* run lint/type checks where applicable
+* verify affected systems manually
+* verify UI interactions
+* verify save/load
+* verify no regressions
+* verify old functionality still works
+
+Do not report a feature as complete merely because the code compiles.
+
+The implementation must actually be verified.
+
+---
+
+# 36. GIT SAFETY REQUIREMENTS
+
+Git discipline is mandatory.
+
+### NEVER:
+
+* force push
+* reset unrelated work
+* delete user changes
+* rewrite history
+* modify unrelated files
+* commit generated junk
+* overwrite existing work without understanding it
+
+Before modifying anything:
+
+```bash
+git status
+git branch --show-current
+git log -5 --oneline
+```
+
+Inspect the current working tree.
+
+If there are existing uncommitted changes, preserve them.
+
+Do not assume they belong to you.
+
+Keep changes scoped to this pass.
+
+Before committing, inspect:
+
+```bash
+git status
+git diff
+git diff --stat
+```
+
+Only commit changes directly related to this task.
+
+Use clear commit messages.
+
+---
+
+# 37. NO FAKE COMPLETION
+
+Do not say:
+
+> "Implemented."
+
+unless the work was actually performed and verified.
+
+Do not claim:
+
+* tests passed
+* UI was verified
+* saves work
+* performance improved
+* systems were tested
+
+unless you actually tested them.
+
+If something cannot be verified, explicitly say so.
+
+---
+
+# 38. FINAL ACCEPTANCE CRITERIA
+
+The pass is successful when:
+
+### Clarity
+
+* important NPC states are unambiguous
+* major events communicate consequences
+* the player can understand why important values changed
+* important information is recoverable
+
+### Pacing
+
+* informational events don't constantly interrupt day advancement
+* critical decisions remain prominent
+* late-game administration is reduced
+* long runs feel smoother
+
+### Discoverability
+
+* existing systems naturally reveal themselves
+* Home/Family is discoverable earlier
+* advanced mechanics become visible through contextual play
+* unused systems are audited and appropriately surfaced
+
+### Depth
+
+* existing deep systems remain intact
+* player responsibilities evolve with organizational power
+* late-game gameplay becomes more strategic
+
+### Retention
+
+* careers develop a stronger sense of history
+* relationships accumulate meaning
+* old decisions can matter later
+* late-game activities have greater variety
+* the player increasingly feels like an organizational boss
+
+### Accessibility
+
+* overlays cannot silently intercept clicks
+* modal information is readable
+* important decisions are clearly presented
+* UI state matches simulation state
+* dismissed critical information can be recovered
+
+### Writing
+
+* existing tone remains intact
+* ambiguous terminology is removed
+* AI-slop/generic filler is reduced
+* system messages become more specific
+
+### Stability
+
+* existing saves remain functional
+* no major regressions
+* tests pass
+* long-run simulations remain stable
+* performance remains acceptable
+
+---
+
+# 39. FINAL PLAYTEST REPORT
+
+When finished, provide a concise but substantive report containing:
+
+## CHANGES MADE
+
+List the major changes.
+
+## SYSTEMS PRESERVED
+
+List important existing systems that were intentionally left unchanged.
+
+## BUGS FIXED
+
+List actual bugs/issues discovered.
+
+## DISCOVERABILITY IMPROVEMENTS
+
+Explain which previously hidden/underused systems are now easier to encounter.
+
+## PACING IMPROVEMENTS
+
+Explain how event volume and late-game repetition changed.
+
+## ACCESSIBILITY IMPROVEMENTS
+
+Explain overlay/modal/input fixes.
+
+## TESTING
+
+Include:
+
+* tests executed
+* results
+* manual playtesting performed
+* days reached during testing
+* save/load testing
+* edge cases tested
+
+## REMAINING ISSUES
+
+Do not hide unresolved problems.
+
+## RECOMMENDED NEXT PASS
+
+Only recommend additional work based on evidence from this implementation and testing.
+
+---
+
+# MOST IMPORTANT CONSTRAINT
+
+Do not confuse **polish** with **simplification**.
+
+Frontline's strength is its interconnected simulation.
+
+Do not turn it into a shallow, hand-holding management game.
+
+The objective is:
+
+> **Keep the complexity. Remove the confusion.**
+
+> **Keep the consequences. Remove the friction.**
+
+> **Keep the depth. Improve discoverability.**
+
+> **Keep the writing. Remove the filler.**
+
+> **Keep the difficulty. Improve causal understanding.**
+
+> **Keep the simulation. Make the player feel in control of it.**
+
+
+
+

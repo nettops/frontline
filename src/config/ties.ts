@@ -27,7 +27,9 @@ export type TieCause =
   | 'took_the_blame'
   | 'owes_money'
   | 'lost_the_room'
-  | 'saved_him';
+  | 'saved_him'
+  | 'crowded_ground'
+  | 'generational_clash';
 
 export const TIE_CAUSE_TEXT: Record<TieCause, string> = {
   worked_together: 'have worked together',
@@ -37,6 +39,8 @@ export const TIE_CAUSE_TEXT: Record<TieCause, string> = {
   owes_money: 'owes them money',
   lost_the_room: 'lost the room to them',
   saved_him: 'got them out of something',
+  crowded_ground: 'has ground that runs up against theirs',
+  generational_clash: 'is from a different era of this business',
 };
 
 /** Most ties one person can hold. The oldest and weakest is dropped first. */
@@ -65,6 +69,25 @@ export const TIE_EVENTS: Record<
   lost_the_room: { resentment: 30, trust: -18 },
   /** Pulled him out of something. The strongest positive edge there is. */
   saved_him: { trust: 24, debt: -25, mutual: false },
+  /**
+   * Two capos whose ground shares a border. Unlike `lost_the_room`, neither
+   * man outranks the other here — proximity is the fact, not a result — so
+   * this lands on both ties at once. Smaller than `lost_the_room`'s 30/-18:
+   * a shared border is a standing irritant, not a real defeat.
+   */
+  crowded_ground: { resentment: 20, trust: -6, mutual: true },
+  /**
+   * A relic and a tracksuit, in the same chain of command. Mutual like
+   * `crowded_ground` and for the same reason — neither man outranks the
+   * other in the thing they disagree about, and both of them think the other
+   * one is going to get everybody arrested.
+   *
+   * Smaller than `crowded_ground`'s 20, larger on trust than its -6: two
+   * capos sharing a border is an irritant about ground, and this is an
+   * irritant about judgement. A man who thinks you are reckless does not
+   * resent you more for it; he trusts you less.
+   */
+  generational_clash: { resentment: 16, trust: -10, mutual: true },
 };
 
 /**
@@ -125,3 +148,31 @@ export const TIE_DEPARTURE = {
 
 /** Chance a completed job writes a `worked_together` edge between two of the crew. */
 export const TIE_FROM_OPERATION = 0.45;
+
+/**
+ * How much who two people *are* changes what a shared job builds between them.
+ *
+ * `worked_together` used to land identically on any pair — a `loyalist` and a
+ * `greedy` man built exactly the same trust from the same job as two
+ * `old_school` men. Sparse on purpose: most trait pairs are simply different,
+ * not opposed, and `TraitDef.clashesWith` is only populated for the pairs that
+ * genuinely read as a clash. New, conservative, not yet probe-measured.
+ */
+export const TIE_COMPAT = {
+  /** Multiplies a tie event when both people share a trait. */
+  sameTraitMult: 1.25,
+  /** Multiplies a tie event when one holds a trait the other's clashes with. */
+  clashTraitMult: 0.65,
+
+  /**
+   * Peer contagion: a job that already found two well-trusted people together
+   * lets one's grievance nudge the other's — a real grapevine, rather than
+   * every tie being a static, independent modifier. Trust needed, both
+   * directions, before this fires at all.
+   */
+  contagionTrustAbove: 40,
+  /** How far the junior of the pair moves toward the senior's reading. */
+  contagionJuniorPull: 0.05,
+  /** ...and how far the senior moves toward the junior's — inertia, not none. */
+  contagionSeniorPull: 0.015,
+};

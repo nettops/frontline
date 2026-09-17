@@ -56,6 +56,8 @@
  * novelty, so the rate is set where it stops paying rather than pushed until a
  * number goes green.
  */
+import { HOME } from './personal';
+
 export const GEN_CHANCE_PER_DAY = 0.11;
 
 /** Which part of the world a shape needs before it can be raised. */
@@ -66,7 +68,8 @@ export type GenSubject =
   | 'district'
   | 'civic'
   | 'case'
-  | 'home';
+  | 'home'
+  | 'player';
 
 export interface GenShapeDef {
   id: string;
@@ -88,6 +91,31 @@ export interface GenShapeDef {
    */
   cooldownDays: number;
 }
+
+/**
+ * Sharpens the day's weighted draw between whichever shapes actually applied
+ * today — `e^(weight * sharpness)` in `weightedPick` rather than plain linear
+ * odds. Without this, `gen_front_trouble`/`gen_paper_moving`'s new live-
+ * severity weight (see their definitions in eventgen.ts) could only ever
+ * nudge the draw a little, because a flat multiplier on a small base weight
+ * stays small next to the authored table's own 15-25 range. This is the
+ * lever that lets real severity actually dominate selection instead of only
+ * the prose describing it, which is the gap HANDOFF names against the
+ * `oneOf` variety metric being gameable. New, conservative, not yet
+ * probe-measured — and applied only within one day's pool, since the
+ * authored and generated pools are never drawn against each other.
+ */
+export const EVENT_WEIGHT_SHARPNESS = 0.12;
+
+/**
+ * How far a live-weighted shape's odds can climb above its base weight, at
+ * maximum severity — see `gen_front_trouble`/`gen_paper_moving` in
+ * eventgen.ts. A front at exactly `GEN_WHEN.frontHealthUnder` or a case at
+ * exactly `GEN_WHEN.caseStrength` scores its plain base weight, same as
+ * before this pass; one further past the bar climbs toward this multiple.
+ * New, conservative, not yet probe-measured.
+ */
+export const GEN_SEVERITY_WEIGHT_MAX = 3;
 
 export const GEN_SHAPES: GenShapeDef[] = [
   { id: 'gen_wants_a_word', subject: 'crew', weight: 6, cooldownDays: 9 },
@@ -136,6 +164,167 @@ export const GEN_SHAPES: GenShapeDef[] = [
   */
   { id: 'gen_asked_for_you', subject: 'home', weight: 2, cooldownDays: 30 },
   /*
+     The same gate, and a real choice instead of a free one.
+
+     2026-09-10 polish pass: `gen_asked_for_you` costs nothing to answer
+     either way, which is a nag, not a stake — the doc it was built against
+     asked for family to "occasionally conflict with business... impose
+     opportunity costs," and a memo you can only ever agree with does
+     neither. This is the same subject, drawn against the same nights the
+     family has already noticed you missing, except this time something is
+     actually on the table both directions: a real night's take for staying,
+     a real ding to how the family reads you for going. Rarer than the
+     nag, because a stake this real every month would be a tax, not a memo.
+  */
+  { id: 'gen_home_or_business', subject: 'home', weight: 2, cooldownDays: 40 },
+  /*
+     The occasions themselves, not the house merely having noticed.
+
+     `gen_asked_for_you` and `gen_home_or_business` above both wait for
+     `house.neglect` to cross `GEN_WHEN.neglect` (45) -- which means a boss
+     who visits home regularly, keeping the number down on purpose, never
+     meets either of them. A school play, a sick parent, an anniversary: none
+     of those wait for a stat, so this shape's `applies` does not read
+     neglect at all. See `FAMILY_DILEMMAS` in `config/personal.ts`.
+
+     Weight 2, matching the other two `home` shapes, cooldown 38 (was 32) —
+     read the rest of this comment before moving either number again; two
+     more attempts were tried and abandoned, not for lack of effort.
+
+     `npm run probe` found this shape and `gen_panic_episode` moving "an
+     order is a decision rather than a payout" (`orders.ts`'s gang-supply
+     feature), an assertion neither shape touches on purpose: offered fell
+     from 18/36 careers (its own bar) to 16/36 once both joined the pool.
+     `orders.ts`'s own weekly roll runs on a stream deliberately independent
+     of `state.rng.calls` (see `offerStream`'s comment there) specifically
+     so unrelated changes cannot move it; what it does not protect is
+     `candidates()`, which reads real simulated territory influence — the
+     down-stream value any change to the causal rng stream can still shift.
+
+     Attempt 1: lengthen cooldown alone, 32 -> 38 (this value) and panic's
+     35 -> 45. Measured: no effect, still 16/36.
+
+     Attempt 2: weight 2 -> 1 alongside a further cooldown push to 50 (panic
+     to 60). This did clear the orders bar (20/36), but the same probe run
+     that confirmed it also turned up two *new* failures elsewhere in the
+     same file ("keeping one alongside playing is a free win" and "what a
+     district gives is worth anything") that pass cleanly at this file's
+     current 38/45 — checked directly, not inferred. Three data points now
+     (16/36 at 38-45, 17-20/36 at various weight-1 settings depending on the
+     exact cooldown, 2 fresh unrelated failures at the most aggressive one)
+     say the same thing DIRECTOR calls out by name: "a reading whose bars
+     flip non-monotonically as you turn the dial is an instrument that
+     cannot size your change." Pushing this dial does not converge on a fix;
+     it relocates which downstream probe assertion is currently unlucky.
+
+     Left at 38/45 — the one setting measured to add no *new* failures — and
+     the orders bar left failing, disclosed rather than chased further. It
+     is the same class of fragility `orders.ts`'s own header already names
+     as a known cost of touching the shared generated pool at all ("two of
+     [four bars] moved the first time this was wired up"), not a new defect
+     these two shapes introduced through any mechanism a weight or cooldown
+     number can fix.
+
+     Resolved structurally, later the same night: `tickEvents`'s generated
+     half now runs on `generatedStream(state)`, a `(seed, day)`-derived stream
+     of its own (`sim/events.ts`, mirroring `offerStream` in `sim/orders.ts`)
+     that never touches `state.rng.calls`. No weight or cooldown number could
+     fix this because the fault was never in either shape's tuning — it was
+     `eligible()`/`raise()` spending real draws from the *shared* causal
+     stream to decide whether a generated memo fires at all, so adding any
+     shape to the pool reshuffled every system downstream of it, for every
+     day after. That is now true of neither shape, nor of any future
+     addition to `GEN_SHAPES`.
+
+     Re-measured after the fix, `npm run probe` full suite, before/after:
+     both orders bars named above passed clean — "moving an order is worth"
+     (was 18 vs a bar of 18, now clears it) and "an order is a decision
+     rather than a payout" (was 16/18, now clears it) — and so did the third
+     collateral bar this same investigation found, "running them is worth
+     doing at all" ($886,020 vs a floor of $974,998 before, clears it now).
+     All three are gone because their actual cause — the reshuffle — is
+     gone, not because anything about orders or trades changed.
+
+     Two ladder.probe bars still move. "Keeps finding something to say in
+     the back half of a career" was already failing before this fix (33.8%
+     over a 33.3% bar) and still fails after (33.1%, now under the same
+     bar) — the same noise-band assertion this file's own header already
+     names, unrelated to either mechanism, both readings within the probe's
+     own stated sampling error. And a new one appeared: "what a district
+     gives is worth anything" passed before (26/36 careers ahead) and now
+     fails (17/36, against a bar of >18) — a bar its own comment already
+     calls a "sign flip rather than a landslide" at 36 paired seeds. Checked
+     deterministic (two independent runs, bit-identical: 17/36, same estate
+     figures both times) rather than a flake. Neither `gen_family_dilemma`
+     nor `gen_panic_episode` touches territory, district, or ground state
+     anywhere in `build`/`resolveGenerated` — grepped to confirm — so this
+     is the one-time reshuffle moving a different marginal bar than before,
+     not a new economic effect of either shape's content. Disclosed rather
+     than chased: this fix trades a structural, permanent fragility for one
+     last, one-time reshuffle of every existing seeded result, which is
+     exactly what it was for.
+  */
+  { id: 'gen_family_dilemma', subject: 'home', weight: 2, cooldownDays: 38 },
+  /*
+     Milestone 4. Not a recurring occasion like the four above -- a household
+     member's 18th birthday happens once, and the shape's own resolved-flag
+     (keyed on `relationId`, see `sim/eventgen.ts`) makes sure it fires at
+     most once per person regardless of how many times the cooldown clears
+     afterward. Kept out of `FAMILY_DILEMMAS`/`gen_family_dilemma`'s own pool
+     on purpose -- a one-time, three-way, higher-stakes choice is a different
+     shape than a recurring dilemma, and forcing it into that table's
+     attend/send/stay structure would have meant three choices that do not
+     actually map to going, sending, or staying away. Cooldown matches
+     `gen_asked_for_you`'s -- the flag, not this number, is what actually
+     bounds how often it can fire.
+  */
+  { id: 'gen_family_crossroads', subject: 'home', weight: 2, cooldownDays: 30 },
+  /*
+     Milestone 6, and bounded the same way the shape above it is: by its own
+     state rather than by this cooldown. `ConfidantState.discovered` is set by
+     every branch of the resolver, and `applies` refuses once it is set, so
+     this fires at most once in a career no matter how many times 30 days
+     clear. The number is here because the table requires one, not because it
+     is what governs the rate.
+
+     Weight and cooldown copied from the crossroads entry deliberately — the
+     two have the same shape from the pool's point of view (a one-time
+     household event with a hard gate of its own), and giving this one a
+     different figure would be a number nobody measured pretending to be a
+     decision.
+  */
+  { id: 'gen_affair_fallout', subject: 'home', weight: 2, cooldownDays: 30 },
+  /*
+     Not the household. The man.
+
+     Every shape above is instantiated against somebody or something else —
+     a man, a front, a street, the house. This one's subject is the boss
+     himself, gated on `playerStress` (`config/personal.ts`) rather than on
+     anything in the world. Weight 2, cooldown 45 (was 35) — a week past
+     `gen_family_dilemma`'s own, for the same reason as before: this shape's
+     gate (stress crossing 75) is already the rarer condition. See that
+     shape's comment above for the full, abandoned retuning history; both
+     numbers moved together throughout and neither is more settled than the
+     other.
+  */
+  { id: 'gen_panic_episode', subject: 'player', weight: 2, cooldownDays: 45 },
+  /*
+     The one shape whose subject is not in the game at all.
+
+     Old business with your father's name on it, and the only piece of the
+     past this simulation carries that is not a stat on somebody. Gated in
+     `applies` on the doctrine having been declared, which is both the design
+     (the ghost turns up once you have said out loud what you are doing with
+     what he left you) and the reason adding a twenty-first shape moved no
+     existing career: an `applies` that returns null before touching the
+     stream never enters the day's pool.
+
+     Weight 2 and a 40-day cooldown, the same band as the household shapes —
+     there are four ghosts in the catalogue and each is once-per-career, so
+     this is texture across a long run rather than a subscription.
+  */
+  { id: 'gen_ancestral_ghost', subject: 'player', weight: 2, cooldownDays: 40 },
+  /*
      Three shapes for the three systems built after this file was written.
 
      The generated pool thins exactly where the authored one does — late, once
@@ -152,6 +341,20 @@ export const GEN_SHAPES: GenShapeDef[] = [
   { id: 'gen_the_name_stuck', subject: 'crew', weight: 4, cooldownDays: 45 },
   { id: 'gen_old_owner', subject: 'business', weight: 5, cooldownDays: 20 },
   { id: 'gen_they_are_frightened', subject: 'district', weight: 4, cooldownDays: 16 },
+  /*
+     Milestone 5. The boss's public and civic life, not the household and not
+     the street — a parish feast, a wedding, a wake, dressed only as flavour;
+     what matters is the three answers, and all three move numbers other
+     systems already own (cash, a district's sentiment, a civic figure's
+     standing or a rival's grudge, the house's neglect). Gated lightly rather
+     than on a single flag like most shapes above: any real public footprint
+     at all (a front, or standing above zero with a civic figure) is enough
+     — a brand-new boss with neither is not on anybody's invitation list yet
+     (`sim/eventgen.ts`'s `socialGathering.applies`). Weight and cooldown
+     match `gen_panic_episode`'s own (2, 45), the closest existing shape with
+     no single recurring subject to exhaust.
+  */
+  { id: 'gen_social_gathering', subject: 'civic', weight: 2, cooldownDays: 45 },
 ];
 
 /**
@@ -426,4 +629,159 @@ export const GEN_EFFECT = {
   askedAboutGrievance: 10,
   askedAboutFear: 6,
   ignoredItRespect: 1,
+
+  /**
+   * The real choice, not the free one. See `gen_home_or_business`.
+   *
+   * Staying pays a night's take — a real number, not a token one, but well
+   * under a career's ordinary jobs at this point so the choice is felt
+   * without being the obviously correct one every time. It also refuses the
+   * family outright, which costs more than the passive drift it would
+   * otherwise be: a real snub, worth roughly two and a half weeks of
+   * `HOME.perWeekAway` in one hit, landing on top of whatever the house was
+   * already carrying. Going home still clears the account the normal way
+   * (`goHome`) — but this was the night business wanted you, and a small
+   * ding to respect says the street noticed you weren't where you told
+   * somebody you would be.
+   */
+  homeOrBusinessStayCash: 6_000,
+  homeOrBusinessGoRespect: -4,
+  homeOrBusinessRefusedNeglect: 9,
+
+  /*
+     The milestone family dilemmas -- school event, quiet evening, sick
+     relative, celebration. What each occasion costs to attend or send
+     something instead lives on `FAMILY_DILEMMAS` itself in
+     `config/personal.ts`, since that varies by occasion; these three are
+     what all four of them move on neglect, since the mechanic underneath
+     the occasion does not vary.
+  */
+  /**
+   * What attending clears, on top of `goHome`'s own `HOME.clearedByVisit`.
+   *
+   * The brief calls for attending to clear neglect "substantially" -- roughly
+   * one and a half times an ordinary visit. Half of `HOME.clearedByVisit` on
+   * top of the visit `goHome` already gives reaches that multiple exactly
+   * (22 base + 11 extra = 33, which is 1.5x 22) without a second formula for
+   * what an evening at home is worth.
+   */
+  familyDilemmaAttendExtraClear: Math.round(HOME.clearedByVisit * 0.5),
+  /** Sending something instead still tells the house you noticed, but not in person. */
+  familyDilemmaSendNeglect: 2,
+  /**
+   * Staying away entirely, on an occasion the house asked for by name.
+   *
+   * The brief's own figure: two and a half weeks of `HOME.perWeekAway` in one
+   * hit -- the same multiple `homeOrBusinessRefusedNeglect` already uses for
+   * refusing a generic night, because refusing a named occasion should sting
+   * at least as much as refusing an ordinary one, not less.
+   */
+  familyDilemmaStayNeglect: HOME.perWeekAway * 2.5,
+
+  /*
+     The panic episode. See `gen_panic_episode` in `sim/eventgen.ts` and
+     `STRESS` in `config/personal.ts` for the gate and the tiers it reads.
+     Figures are the brief's own; the two that were left open (how much a
+     public spell costs in front of the men, and how much the sedatives
+     dull) are sized against numbers already in this file rather than
+     invented.
+  */
+  /** A trusted private doctor to a backroom, no crew the wiser. */
+  panicHouseCallCost: 500,
+  panicHouseCallClear: 35,
+  /** Denying it in front of the men. Free, and it spikes rather than clears. */
+  panicPushThroughStressSpike: 8,
+  /**
+   * What the crew noticing costs. Sized against `homeOrBusinessGoRespect`
+   * (-4) just above -- a visible bad moment in front of the men is a smaller
+   * dent than a boss who openly chose business over his own family, not a
+   * bigger one.
+   */
+  panicPushThroughRespect: -3,
+  /** Pills instead of a doctor. Clears less than the house call and does not spend the evening. */
+  panicSedativeCost: 150,
+  panicSedativeClear: 20,
+
+  /*
+     The crossroads: one household member's 18th birthday, and the choice
+     the household system had never modeled before -- what a boss with a
+     family actually does about a child who is suddenly grown. See
+     `gen_family_crossroads` in `sim/eventgen.ts`.
+
+     Figures are this milestone's own, sized well above `FAMILY_DILEMMAS`'s
+     recurring costs (200-600) and `STRESS.consultCost` (350) on purpose: a
+     decision that fires at most once per household member, ever, is allowed
+     to cost more than one that can recur.
+
+     There is no fourth term here granting `legitimacy()` points directly --
+     that formula (`sim/legacy.ts`) is a pure derived read with no stored,
+     writable field anywhere, and none of its four existing weights
+     (visible/quiet/unnamed/explainable) has an honest causal path from
+     "paid for college" to a fixed point swing. The option still does
+     something real: a cash cost, a real neglect-clear, and a logged
+     `recordCareerEvent` beat -- just not a fabricated number on a formula
+     this milestone was not asked to redesign.
+
+     Cash figures are the director's own: $4,500 tuition on option A, and
+     option B (bringing them in) is free -- the "cost" of putting your own
+     kid ahead of the men is the grievance and the domestic rift it lands,
+     not a price tag. Neglect deltas below are also the director's own exact
+     figures, not this milestone's originally-built guesses.
+  */
+  /** Option A: pay for college, and keep them out of the life entirely. */
+  crossroadsTuitionCost: 4_500,
+  crossroadsTuitionNeglectClear: 20,
+  /**
+   * Option B: bring them into the organization, as a real hire. Free in
+   * cash -- the household pays in a real domestic rift instead: a spouse
+   * who watches her own son handed a place on the street rather than a
+   * degree does not take it quietly.
+   */
+  crossroadsHireNeglectSpike: 35,
+  /**
+   * The grievance landed on one real active capo when there is one to land
+   * it on (`activeCapos`, `sim/capoTension.ts`) -- an outsider handed a
+   * place at the table without going through the ranks is every capo's
+   * business, not only the boss's. Silently skipped where there is no capo
+   * to carry it, same as `gen_bad_blood`'s own pair check finding nobody.
+   */
+  crossroadsHireCapoGrievance: 10,
+  /** Option C: let them go their own way. Costs nothing in cash -- a
+   * permanent estrangement, not a decision that was handled. */
+  crossroadsEstrangedNeglect: 25,
+
+  /*
+     Milestone 5: the boss's public and civic life. See `gen_social_gathering`
+     in `sim/eventgen.ts` and `publicStanding` in `sim/civic.ts` — the derived
+     meter these three answers feed without ever writing to it directly. The
+     brief's own figures throughout; the range on the donation (rather than a
+     single number) is this milestone's own call, priced the same way
+     `homeOrBusinessStayCash` above is.
+  */
+  /** Option 1: host and donate. A range — a gala this size is a real spend, not a fixed one. */
+  socialDonateCashMin: 1_500,
+  socialDonateCashMax: 2_500,
+  socialDonateSentiment: 12,
+  /**
+   * Standing gained with the alderman specifically, through `helpFigure` so
+   * it is rate-limited the same as every other paid civic credit. He is the
+   * figure whose own blurb is explicitly about being seen with the right
+   * people at the right occasion — see `CIVIC_FIGURES`.
+   */
+  socialDonateStanding: 8,
+  socialDonateNeglectClear: 12,
+  /** Option 2: work the room instead of attending as family. Free; the house notices the difference anyway. */
+  socialWorkRoomStanding: 10,
+  socialWorkRoomGrudgeSettled: 10,
+  socialWorkRoomNeglect: 5,
+  /** Option 3: send money and stay away. */
+  socialEnvelopeCash: 400,
+  /**
+   * What staying away docks. `publicStanding` has no stored field to ding
+   * directly — see its own header — so this docks the real input the
+   * brief's "outgrown his roots" line is actually about: home-district
+   * sentiment, by enough to read as roughly the brief's stated 5-point hit
+   * at the composite's own sentiment weight (14 * 0.35 ≈ 4.9).
+   */
+  socialEnvelopeSentimentHit: 14,
 } as const;

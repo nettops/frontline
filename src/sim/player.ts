@@ -30,6 +30,7 @@ import {
   STANDING_HELD,
   attributeProgressNeeded,
 } from '../config/economy';
+import { doctrineFearDecay } from './doctrine';
 
 /**
  * How many people you can keep, which is now a question about ground.
@@ -91,7 +92,18 @@ export function tickFear(state: GameState): void {
      so the level a family lived at was decided by the sign of a subtraction
      rather than by how it played. This is the repair `heat.ts` already made.
   */
-  state.org.fear = Math.max(0, state.org.fear - state.org.fear * FEAR.decayShare);
+  /*
+     And half again as fast for a family that has stopped earning it.
+
+     `doctrineFearDecay` is 1 for everybody who has never declared, and 1.5
+     for the Holding Company — see `config/doctrine.ts`. On the share rather
+     than on a flat subtraction, so it moves the settling point rather than
+     the slope, which is the repair `FEAR.decayShare`'s own note describes.
+  */
+  state.org.fear = Math.max(
+    0,
+    state.org.fear - state.org.fear * FEAR.decayShare * doctrineFearDecay(state),
+  );
   if (level <= 0) return;
 
   // A neighbourhood that is frightened of you is not a neighbourhood that

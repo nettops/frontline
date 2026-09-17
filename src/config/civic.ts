@@ -30,6 +30,7 @@
  */
 
 import type { AttributeId } from '../sim/types';
+import { SENTIMENT_START } from './territories';
 
 /** What a favour from this person actually does when you spend it. */
 export type FavourKind =
@@ -305,8 +306,20 @@ export const CIVIC_FIGURES: CivicFigureDef[] = [
        `unionPayroll`: a score of 70 / 76 / 82, so the bar sits between the
        median and the 75th, which is where DIRECTOR section 5 puts one and
        where the other three figures were placed.
+
+       78 stopped being that placement without anyone moving it: the quantity
+       underneath moved again, the same way it did twice before. Measured
+       fresh at 2026-09-10 against `ladder.probe`'s own 36-career population,
+       peak union score reads (sorted) 15, 53, 61, 61, 65, 65, 67, 67, 67, 68,
+       69×4, 71×3, 73×7, 77×4, 79×2, 81×5, 83 — median 73, 75th 77. A bar of
+       78 sat above both, past the top of the distribution's own upper
+       quarter, and read 8 of 36: a figure that had quietly become unreachable
+       rather than rare. 76 sits back inside "between the median and the
+       75th" against the population as it stands today, and reads 12 of 36 —
+       the same shape as the other three, a relationship a third of careers
+       reach rather than a fixture or a wall.
     */
-    owesAbove: 78,
+    owesAbove: 76,
     needsInfluence: 0,
   },
   {
@@ -342,6 +355,31 @@ export const CIVIC_FIGURES: CivicFigureDef[] = [
     */
     owesAbove: 85,
     needsInfluence: 6,
+  },
+  {
+    id: 'lawyer',
+    title: 'A defense lawyer',
+    blurb:
+      'Keeps a card for every judge in the building and remembers exactly whose retainer cleared. Wants a client whose file is worth minding.',
+    /*
+       Same shape as every figure above: reads a quantity the game already
+       keeps, grants a favour the machinery already knows how to do. Watches
+       what the judge watches — legal exposure is exactly what a defense
+       lawyer is exposed to — and grants what the captain grants, which is
+       the literal job: getting evidence struck off a case. Nobody else on
+       the roster pairs those two, so this needed no new `CivicWatches` or
+       `FavourKind` and no new case in `scoreFor` or `apply`.
+
+       `owesAbove` is set by analogy with the judge, the only other figure
+       reading this quantity, rather than plotted against a population —
+       there is no measured distribution for a figure that did not exist
+       until now. Below the midpoint on purpose, the same rule the note
+       above this table used for all four original figures.
+    */
+    watches: 'discretion',
+    grants: 'bury_a_case',
+    owesAbove: 50,
+    needsInfluence: 2,
   },
 ];
 
@@ -469,6 +507,41 @@ export const FAVOUR_EFFECT = {
   quietSentiment: 30,
   /** Days city-hall pressure is held down, matching the old arrangement. */
   paperworkDays: 90,
+  /**
+   * Days a rival's payroll stops earning them anything, once the union boss
+   * calls a walkout on them.
+   *
+   * The first outward use of this currency — everything else the network
+   * buys is spent on a problem of your own. Sized against `buryColdDays`,
+   * the other favour that reads as "this stops mattering for a while"
+   * rather than a one-time jolt.
+   */
+  walkoutDays: 21,
+  /**
+   * Heat put on a rival, once the captain's division takes an interest.
+   *
+   * The second outward use — `bury_a_case` cools a live file of yours, and
+   * this is the same lever pointed the other way: a division that would
+   * like to be boring can be made to notice somebody else instead. Sized
+   * to clear `AGENDA.quietAbove` (45) for a rival sitting at the population
+   * mean and to cross `heatAlarmAbove` (60) for one already running hot,
+   * so the favour buys a real change in posture rather than a number that
+   * `heatDecayPerWeek` (2.5) erases before anyone would notice it moved.
+   */
+  heatOnRival: 20,
+  /**
+   * Days one specific rival business stops paying its owner anything,
+   * once the alderman finds a problem with its paperwork.
+   *
+   * The third outward use, and the narrowest — `lose_the_paperwork` holds
+   * off pressure on a file that is the player's own, and a rival family
+   * has no city-hall file of its own to lose. What it does have, since
+   * `RivalBusiness` gave a rival's fronts real identity, is permits: a
+   * specific front an alderman's signature can specifically make trouble
+   * for. Sized the same as `walkoutDays` — this is the same mechanism at
+   * the scale of one business rather than a whole family's payroll.
+   */
+  permitPulledDays: 21,
 } as const;
 
 /**
@@ -505,3 +578,98 @@ export const CIVIC_WORK = {
 } as const;
 
 export const CIVIC_ATTRIBUTE: AttributeId = 'influence';
+
+// ------------------------------------------------------- public standing ---
+
+/**
+ * The boss's public and civic identity — a dual reputation running beside
+ * street Fear and Respect (`sim/civic.ts`'s Milestone 5). Not a second
+ * roster: every input the score reads is a fact the simulation already
+ * keeps, and the score itself is never stored — see `sim/civic.ts`'s
+ * `publicStanding` header for why. No `SAVE_VERSION` bump, nothing to drift.
+ */
+export interface PublicStandingTier {
+  bar: number;
+  id: 'pariah' | 'shadow' | 'businessman' | 'pillar';
+  label: string;
+  blurb: string;
+  tone?: 'hot' | 'brass';
+  /** Multiplier on weekly federal case growth — the civic-insulation effect. See `investigation.ts`'s `tickInvestigations`. */
+  caseGrowthMultiplier: number;
+}
+
+/** Highest bar first — `publicStandingTier` takes the first one the score clears. */
+export const PUBLIC_STANDING_TIERS: PublicStandingTier[] = [
+  {
+    bar: 70,
+    id: 'pillar',
+    label: 'Community Pillar',
+    blurb: 'Seen as a generous benefactor. Neighbors close their doors to federal agents.',
+    tone: 'brass',
+    caseGrowthMultiplier: 0.8,
+  },
+  {
+    bar: 45,
+    id: 'businessman',
+    label: 'Respected Merchant',
+    blurb: 'Known as a legitimate commercial operator with quiet influence.',
+    caseGrowthMultiplier: 1.0,
+  },
+  {
+    bar: 20,
+    id: 'shadow',
+    label: 'Known Operator',
+    blurb: 'The neighborhood looks away when you pass. People suspect what you are.',
+    caseGrowthMultiplier: 1.15,
+  },
+  {
+    bar: 0,
+    id: 'pariah',
+    label: 'Street Parasite',
+    blurb: 'Considered a violent predator by local residents. Tips flow freely to police.',
+    tone: 'hot',
+    caseGrowthMultiplier: 1.35,
+  },
+];
+
+/**
+ * The four figures `publicStanding`'s alliance term reads.
+ *
+ * Not `lawyer`, the fifth `CIVIC_FIGURES` entry — the brief names Judge,
+ * Alderman, Police Chief (`captain` here — see `CIVIC_FIGURES`, there is no
+ * `police_chief` id) and Union Boss specifically, and a defense lawyer's
+ * standing already feeds a boss's *legal* exposure (`discretion`) rather
+ * than his public face.
+ */
+export const PUBLIC_STANDING_FIGURES: readonly string[] = ['captain', 'union', 'judge', 'alderman'];
+
+export const PUBLIC_STANDING = {
+  /** Average sentiment across districts actually held (`playerInfluence` > 0). */
+  sentimentWeight: 0.35,
+  /** Average `BusinessDef.legitimacy` of owned fronts. */
+  legitimacyWeight: 0.3,
+  /** Average standing with the four `PUBLIC_STANDING_FIGURES`. */
+  allianceWeight: 0.25,
+  /** Points docked from the composite per point of `state.org.heat`. */
+  heatDragScale: 0.2,
+  /**
+   * What the sentiment term reads as for a boss with no ground yet.
+   *
+   * Not zero. A brand-new boss has not offended anybody — he simply has not
+   * been measured — so this reads the same neutral midpoint a district
+   * itself starts at (`SENTIMENT_START`) rather than the floor, which is
+   * earned by being disliked somewhere you actually work.
+   */
+  neutralSentimentDefault: SENTIMENT_START,
+  /** Same reasoning as `neutralSentimentDefault`, for a boss with no fronts yet. */
+  neutralLegitimacyDefault: 50,
+  /**
+   * Same reasoning again, for a boss who has never engaged a single civic
+   * figure. Not the `standing: 0` a never-created `CivicStanding` entry
+   * would carry — that value is also what a figure genuinely run down
+   * through real anger decays toward, so it cannot double as "unmeasured"
+   * without reading an untouched boss as already hated. See
+   * `publicStandingTerms` in `sim/civic.ts` for how the two are told apart.
+   */
+  neutralAllianceDefault: 50,
+} as const;

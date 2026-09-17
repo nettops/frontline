@@ -444,6 +444,23 @@ export const FRONT_UPKEEP_NEGLECT_HEALTH_HIT = 8;
 /** Shuttering a business deliberately dumps its exposure but forfeits most of the price. */
 export const SHUTTER_REFUND_SHARE = 0.35;
 
+/**
+ * A front that has earned back a real multiple of what running one costs
+ * gets reinvested into — a permanent revenue bump, once. This is the middle
+ * path F15 found missing: money compounds only once a family holds a second
+ * front, so a one-front family that never crosses that specific line has no
+ * visible, continuously-filling route toward the compounding regime at all.
+ * A flat threshold rather than one scaled per business type, on purpose —
+ * this is a milestone a front reaches by being worked, not a figure priced
+ * against its own cost. New, conservative, not yet probe-measured.
+ */
+export const REINVEST = {
+  /** Lifetime revenue before a front reinvests. */
+  thresholdRevenue: 120_000,
+  /** Permanent multiplier on `weeklyRevenue` once it has. */
+  bonus: 0.15,
+};
+
 /** Buying costs more where you are weaker — you are paying somebody off. */
 export const ACQUISITION_PREMIUM_CONTESTED = 1.35;
 

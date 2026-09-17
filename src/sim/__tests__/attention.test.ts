@@ -21,8 +21,11 @@ import { crewList, generateNpc } from '../npc';
 import { openScore } from '../scores';
 import { startTraining } from '../training';
 import { setStanding } from '../standingOrders';
-import { declareWar } from '../diplomacy';
-import { eligibleHeirs, nameHeir } from '../succession';
+import { declareWar, playerWars } from '../diplomacy';
+import { eligibleHeirs, nameHeir, wouldTakeIt } from '../succession';
+import { home } from '../personal';
+import { HOME, STRESS } from '../../config/personal';
+import { GEN_SHAPES } from '../../config/eventgen';
 import { HOME_TERRITORY } from '../../config/territories';
 import { PATTERN } from '../../config/standingOrders';
 import { territoryDef, territoryList } from '../territory';
@@ -124,6 +127,15 @@ describe('what wants you today', () => {
     const line = attention(state).find((l) => l.id === 'trade');
     expect(line).toBeTruthy();
     expect(line!.panel).toBe('contraband');
+    /*
+       Round 28's blind report: unlocked at $2,800 mid solvency crisis, saw
+       this exact line, went looking, and hit a $40,000+ retainer with no
+       warning it was coming — filed under "wanted to, was blocked." The
+       line has to say a cost is coming, not just that the door is open.
+    */
+    expect(line!.text, 'says the door is open but not that it costs anything to walk through').toMatch(
+      /retainer/i,
+    );
 
     state.contraband.supplierId = 'some_supplier';
     expect(attention(state).some((l) => l.id === 'trade')).toBe(false);
@@ -224,11 +236,114 @@ describe('what wants you today', () => {
     expect(attention(state).some((l) => l.id === 'heir')).toBe(false);
   });
 
+  /*
+     Deposition and conviction are the other two doors out of the chair, and
+     until now only war got a nudge. A boss can be one meeting away from a
+     coup with nobody named and never hear a word about it from this list.
+  */
+  it('names the same heir nudge for a real deposition risk, no war needed', () => {
+    const state = game();
+    const risky = crewList(state)
+      .filter((n) => n.status === 'active' && n.role !== 'associate')
+      .slice(0, 2);
+    for (const npc of risky) {
+      npc.stats.ambition = 90;
+      npc.stats.respectForBoss = 10;
+      npc.stats.grievance = 80;
+      npc.stats.leadership = 100;
+      npc.stats.skill = 100;
+      npc.stats.courage = 100;
+      npc.opsCompleted = 25;
+      npc.daysInCrew = 365;
+    }
+    expect(wouldTakeIt(state)).toBeTruthy();
+    expect(playerWars(state)).toHaveLength(0);
+
+    const line = attention(state).find((l) => l.id === 'heir');
+    expect(line).toBeTruthy();
+    expect(line!.panel).toBe('succession');
+  });
+
   it('keeps the list short enough to read', () => {
     const state = game();
     for (const t of territoryList(state)) {
       t.influence.player = DELEGATION.promptAboveInfluence + 10;
     }
     expect(attention(state).length).toBeLessThanOrEqual(6);
+  });
+
+  /*
+     Milestone 2: the family, from the outside. Two ids, gated so only one
+     shows on a given day — see `attention.ts`'s own comment for why.
+
+     `daysSinceFired` is read off `GEN_SHAPES`' own cooldown rather than a
+     bare number, so a later retune of `gen_family_dilemma`'s cooldown (as
+     happened once already, 32 -> 38, to relieve crowding in the shared
+     generated-event slot) does not silently push this fixture outside the
+     window it means to test.
+  */
+  it('names the family horizon once the shape has fired before and is due soon', () => {
+    const state = game();
+    const cooldown = GEN_SHAPES.find((s) => s.id === 'gen_family_dilemma')!.cooldownDays;
+    state.flags['evt_gen_family_dilemma'] = state.day - (cooldown - 2); // 2 days from due
+    const line = attention(state).find((l) => l.id === 'family_horizon');
+    expect(line).toBeTruthy();
+    expect(line!.panel).toBe('player');
+  });
+
+  it('stays quiet about the horizon while it is not due soon', () => {
+    const state = game();
+    state.flags['evt_gen_family_dilemma'] = state.day; // just fired, weeks from due
+    expect(attention(state).some((l) => l.id === 'family_horizon')).toBe(false);
+  });
+
+  it('stays quiet about the horizon before the shape has ever fired', () => {
+    const state = game();
+    // No `evt_gen_family_dilemma` flag at all — the shape reads as eligible
+    // from day one, which is true and not news; see `familyHorizon`.
+    expect(attention(state).some((l) => l.id === 'family_horizon')).toBe(false);
+  });
+
+  it('names the neglect crisis once neglect reaches HOME.depositionFrom', () => {
+    const state = game();
+    home(state).neglect = HOME.depositionFrom;
+    const line = attention(state).find((l) => l.id === 'family_neglect_crisis');
+    expect(line).toBeTruthy();
+    expect(line!.panel).toBe('player');
+  });
+
+  it('does not name the crisis below the bar', () => {
+    const state = game();
+    home(state).neglect = HOME.depositionFrom - 1;
+    expect(attention(state).some((l) => l.id === 'family_neglect_crisis')).toBe(false);
+  });
+
+  it('shows the crisis rather than the horizon when both would otherwise apply', () => {
+    const state = game();
+    const cooldown = GEN_SHAPES.find((s) => s.id === 'gen_family_dilemma')!.cooldownDays;
+    state.flags['evt_gen_family_dilemma'] = state.day - (cooldown - 2);
+    home(state).neglect = HOME.depositionFrom;
+    const lines = attention(state);
+    expect(lines.some((l) => l.id === 'family_neglect_crisis')).toBe(true);
+    expect(lines.some((l) => l.id === 'family_horizon')).toBe(false);
+  });
+
+  /*
+     Milestone 3: the same bar `gen_panic_episode` reads to fire at all — see
+     `STRESS.panicThreshold` in `config/personal.ts`.
+  */
+  it('names the stress crisis once stress reaches STRESS.panicThreshold', () => {
+    const state = game();
+    state.player.stress = STRESS.panicThreshold;
+    const line = attention(state).find((l) => l.id === 'stress_critical');
+    expect(line).toBeTruthy();
+    expect(line!.panel).toBe('player');
+    expect(line!.text).toContain(`${Math.round(STRESS.panicThreshold)}%`);
+  });
+
+  it('stays quiet about stress below the threshold', () => {
+    const state = game();
+    state.player.stress = STRESS.panicThreshold - 1;
+    expect(attention(state).some((l) => l.id === 'stress_critical')).toBe(false);
   });
 });

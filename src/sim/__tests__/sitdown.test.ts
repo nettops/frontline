@@ -23,7 +23,10 @@ import {
   sitdownOptions,
 } from '../sitdown';
 import { bond } from '../diplomacy';
+import { spendPoint, statLevel } from '../build';
 import { SITDOWN } from '../../config/sitdown';
+import { STRESS } from '../../config/personal';
+import { VERB_AT } from '../../config/build';
 import type { GameState, Npc } from '../types';
 
 function game(seed = 4): GameState {
@@ -134,6 +137,49 @@ describe('the sit-down', () => {
     expect(landed, 'the fixture did not produce a hit and a miss').toBe(true);
     expect(missed).toBe(false);
     expect(dear.state.sitdown!.patience).toBeLessThan(cheap.state.sitdown!.patience);
+  });
+
+  /*
+     Milestone 3, point 6: a boss carrying real stress reads people worse.
+     `lands()` reads `state.player.attributes.leadership` through
+     `stressLeadershipMultiplier` (`sim/personal.ts`) — a real term in the
+     same check every register's outcome already goes through, not a
+     decorative meter. `listen` is `against: 'grievance', wants: 'high'`,
+     exempt from `SITDOWN.grievanceResistance` (`against === 'grievance'`),
+     so with `respectForBoss` at 0 the only thing standing between the man's
+     grievance and the threshold is the leadership `help` term — which is
+     exactly what a `critical`-tier boss loses a quarter of.
+
+     Grievance 21 against threshold 30: at full leadership (`help` 10) that
+     is 31, over; at the critical-tier multiple (`help` 7.5) it is 28.5,
+     under. Same man, same words, same day — only the boss's own condition
+     changed.
+
+     Watched to fail: with `stressLeadershipMultiplier` in `sim/personal.ts`
+     temporarily hard-coded to return 1, this read landed regardless of
+     stress and the assertion below caught it; restoring the real function
+     is what makes the read depend on stress again. Run by hand for this
+     session's report rather than left in the suite as a second copy of the
+     same guard.
+  */
+  it('a critical boss can no longer make a read an ordinary one still makes', () => {
+    const calm = sitting();
+    calm.npc.stats.grievance = 21;
+    calm.npc.stats.respectForBoss = 0;
+    calm.state.player.attributes.leadership = 100;
+    calm.state.player.stress = 0;
+
+    const critical = sitting();
+    critical.npc.stats.grievance = 21;
+    critical.npc.stats.respectForBoss = 0;
+    critical.state.player.attributes.leadership = 100;
+    critical.state.player.stress = STRESS.panicThreshold + 5; // well into `critical`
+
+    chooseRegister(calm.state, rng(calm.state), 'listen');
+    chooseRegister(critical.state, rng(critical.state), 'listen');
+
+    expect(calm.state.sitdown!.beats[0].landed, 'the boundary case did not land at full leadership').toBe(true);
+    expect(critical.state.sitdown!.beats[0].landed, 'stress did not cost the read it is supposed to').toBe(false);
   });
 
   /*
@@ -560,6 +606,55 @@ describe('the sit-down, continued', () => {
     const state = game();
     delete state.sitdown;
     expect(availableRegisters(state)).toHaveLength(0);
+    expect(canSitDownWith(state, first(state).id).ok).toBe(true);
+  });
+});
+
+/*
+   Word's one real restriction.
+
+   Everything else about a sit-down is open to everybody, crew and house
+   alike — that generosity is the point, and `PlayerPanel.tsx` used to have
+   to say so explicitly because Word gated nothing real. A house actively at
+   war is the one room a nobody does not get shown into.
+*/
+describe('a house you are at war with', () => {
+  function atWar(state: GameState): void {
+    state.factions['falcone'].bonds['player'] = {
+      grudge: 0,
+      respect: 0,
+      trust: 0,
+      warSince: state.day,
+    };
+  }
+
+  it('will not sit down with a boss whose word carries nothing yet', () => {
+    const state = game();
+    atWar(state);
+    expect(canSitDownWith(state, 'falcone').ok).toBe(false);
+  });
+
+  it('will sit down once Word is built', () => {
+    const state = game();
+    atWar(state);
+    state.player.points = 99;
+    while (statLevel(state, 'word') < VERB_AT.word) spendPoint(state, 'word');
+    expect(canSitDownWith(state, 'falcone').ok).toBe(true);
+  });
+
+  it('is still open to a house you are merely at odds with, not at war', () => {
+    const state = game();
+    state.factions['falcone'].bonds['player'] = {
+      grudge: 90,
+      respect: -80,
+      trust: -80,
+      warSince: null,
+    };
+    expect(canSitDownWith(state, 'falcone').ok).toBe(true);
+  });
+
+  it('never touches a crew sit-down — Word is about houses, not your own men', () => {
+    const state = game();
     expect(canSitDownWith(state, first(state).id).ok).toBe(true);
   });
 });
