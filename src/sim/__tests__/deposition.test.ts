@@ -444,9 +444,29 @@ describe('deposition, played into rather than built', () => {
      confirmed, and the guard re-confirmed the same way as every prior
      reseed: reverting `backersNeeded` to 2 (generation stayed at 1) and
      restoring it to 1.
+
+     Reseeded a ninth time, 4066 to 4068, for the player's own district
+     upkeep (`tickDistrictUpkeep`, `sim/territory.ts`, TASKS.md item 2). Not
+     a causal-rng-call-count change — `tickDistrictUpkeep` draws no rng of
+     its own — but a real mechanical one: it moves cash, dirty cash and a
+     held district's influence every payday, and this bot's own decisions
+     (what it can afford to recruit, which operation it launches) read those
+     same numbers, so which branches it takes and which rng-consuming code
+     runs on a given day shifts, reshuffling the stream downstream exactly
+     as Milestone 5's civic-multiplier reseed did. The rate itself moved
+     once during development ($200/week down to $75, see
+     `DISTRICT_HOLDING_UPKEEP_PER_WEEK`'s own comment for why), and each
+     rate reshuffled this seed on its own — the number below is against the
+     rate that shipped. A scan of seeds 4066-4166 at $75/week found 25 still
+     reaching generation > 1 with the same quiet fate (4068, 4070, 4071,
+     4072, 4084, 4091, 4095, 4096, 4101, 4111, ...), a comparable hit rate to
+     every scan before it, so reachability did not regress. Seed 4068
+     confirmed, and the guard re-confirmed the same way as every prior
+     reseed: reverting `backersNeeded` to 2 (generation stayed at 1) and
+     restoring it to 1.
   */
   it('fires from an ordinary career under the current gate', () => {
-    const state = playOrdinaryCareer(4066, 1460);
+    const state = playOrdinaryCareer(4068, 1460);
     expect(
       state.succession.generation,
       'nobody was deposed — this is the reachability the config change exists to fix',

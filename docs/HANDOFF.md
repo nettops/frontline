@@ -131,11 +131,125 @@ Criminal, Clarity 8, Interface 8, First hour 9.
   `sim/__tests__/tribute.test.ts` and 1 in `ui/__tests__/refusalShown.test.ts`
   — the fifth instance that file has caught of the same defect. Every one was
   seen red with the fault in place.
-- **Still open from the same report, not in this pass** — the unexplained
-  nav badge counts on Yourself, the two mid-game famines (days ~60–78 and
-  ~141–187 where no memo option was affordable), and the last-60-days memo
-  repetition. The latter two are the Difficulty 7 and Pacing 7 blockers and
-  are balance work.
+- **The rest of Part 2's SHOULD FIX list closed the same push** (in
+  `ffa33a5`, alongside Phase 6): `outgrewStreetWork` now checks free bodies
+  against `crewNeeded`, not only money against `totalFunds`, so the manual
+  board does not go empty for a crew-rich, cash-poor boss; "Above your
+  standing" now names which jobs qualified into the pitch rotation instead
+  of silently vanishing; `crew.ts`'s recruit-list lines now name a face off
+  the real `state.recruits` pool instead of a decorative name that never
+  appears in the pool (the Angelo Falcone finding). Guarded in
+  `ui/__tests__/statesShown.test.ts`.
+- **Nav badge counts, re-examined.** Every rail badge (`ui/Rail.tsx`) has
+  carried a `title` explaining its count since before this build — a real
+  player hovering it sees the answer. Round 29's tester drove the game
+  through the DOM harness (`src/dev/harness.ts`), which reads element text
+  and does not surface `title` attributes, so "Yourself 14" read as
+  unexplained to that tooling even though a human player would not hit
+  this. Same caveat class as the harness's `run()` finding — not
+  re-verified against a mouse-driven human tester.
+- **Still open from the same report** — the two mid-game famines (days
+  ~60–78 and ~141–187 where no memo option was affordable) and the
+  last-60-days memo repetition. Both are the Difficulty 7 and Pacing 7
+  blockers and are balance work, not a copy or wiring fix.
+
+**District holding cost, 2026-09-18.** `tsc -b` 0 errors, `npm test`
+**175 files / 2,181 passing**, 0 failures. `.ai/TASKS.md`'s old item 2 —
+a district was the one thing the player held for free forever, the same
+gap `weeklyFrontUpkeep` closed for businesses and rivals already pay via
+`AI.upkeepPerDistrict`.
+
+- **`tickDistrictUpkeep`, `sim/territory.ts`.** Flat weekly bill per
+  district at `control` or `dominance`, charged at payday alongside wages
+  and front upkeep, same dirty-then-clean shape as `frontUpkeepOwed`.
+  Unpaid, it costs the district's own influence rather than a hard loss —
+  enough neglect drops it out of `controlledTerritories` on its own,
+  which shrinks next week's bill instead of a hidden repossession rule.
+- **Favour-network reachability, re-checked before shipping** (the note
+  the old task item carried): none of `civic.ts`'s four figures read
+  district influence or count — `payroll` was moved to crew headcount and
+  `respectability` reads front sentiment, both for the same
+  `districtsHeld`-saturates-at-3-4 reason. This does not feed it.
+- **Sized by measurement, not guess** — the actual "second economy tax"
+  risk the old task item named. At $200/week (roughly one associate's
+  wage) the unit gate passed but `ladder.probe` cost two findings their
+  margin: a standing-order-moving tie flipped (18 vs. 18) and the trades'
+  measured advantage over a non-trading career fell below its floor
+  (746,761 against an 883,944 bar) — a flat bill is regressive against a
+  scaled-up career the same way front upkeep's revenue-share bill is not,
+  and the trades probe is built to catch exactly that. At $75/week both
+  cleared, and a full re-run matched `ladder.probe`'s own pre-existing
+  failure set on `main` (8 failures, none of them this feature's doing)
+  minus one — the favour-network-reachable failure passed. See
+  `DISTRICT_HOLDING_UPKEEP_PER_WEEK`'s own comment (`config/territories.ts`)
+  for the full numbers.
+- **Guard:** `sim/__tests__/districtUpkeep.test.ts` (new, 5), seen red
+  with the fault put back. `deposition.test.ts`'s long-seeded career test
+  reshuffled again (its own history's ninth entry — the bot's decisions
+  read the same cash and influence this tick moves) and was reseeded to
+  4068, reachability re-confirmed (25 of 100 seeds).
+
+**`distinctEnds`, diagnosed and closed with a finding, 2026-09-18.**
+`.ai/TASKS.md`'s other old item — "reads 2 of a possible 5" — was itself
+stale: `scorecard.probe.test.ts`'s own bot (48 worlds, seeds 1-48, no
+code changed) currently reads `{1:1, 2:2, 4:21, 5:24}`, four distinct
+tiers, not two. Root cause of the one still-missing tier found: every
+tier-3 job in `OPERATIONS` needs fronts or people who owe you, and this
+probe's bot only ever recruits and expands ground — it never buys a
+front or earns a favour, so tier 3's own gate never opens and the
+population jumps straight from whatever it had to tier 4's
+crew-and-district path, which asks for neither.
+
+Given a bot that buys fronts weekly (built, measured, then backed out —
+not shipped): tier 3 did open, but the count got *worse*, not better —
+`{3:4, 4:5, 5:39}`, three distinct tiers. A stronger bot does not spread
+the population, it converges it harder onto the ceiling rank, because
+recruiting, expanding and buying fronts is simply how a career climbs —
+give a bot all three and nearly all of them (39 of 48) reach the top
+before day 1460. `distinctEnds` is measuring how homogeneous outcomes are
+under capable play, and capable play reliably succeeding is not a defect
+to fix; tuning the bot further to chase a specific count would be shaping
+the instrument to the target, the thing this file's own committed-before-
+measurement culture exists to refuse. Closed as a finding: the axis reads
+better than the stale note claimed, its one real gap has a known and
+non-fixable cause, and nothing here is a bug. `.ai/TASKS.md` trimmed.
+
+**Favor-calls attributable to the wrong family, built, 2026-09-18.**
+`tsc -b` 0 errors, `npm test` **175 files / 2,184 passing**, 0 failures.
+`.ai/TASKS.md`'s last open item, also stale — its own premise ("every
+favor action that exists only benefits the player; none hurts a rival")
+was already false: `callWalkout` (union boss), `callTheLaw` (captain) and
+`pullPermit` (alderman) all shipped in `civic.ts` well before this pass,
+each hurting a named rival faction, each wired into the UI. What was
+missing was the other half — none of the three ever called `attribute()`
+(`beliefs.ts`), so a family that lost a payroll, took heat, or had a
+front's permit pulled had nothing to suspect and nobody to blame, right
+or wrong.
+
+- **`attributeToRival`, `civic.ts`.** One shared helper, called from all
+  three grants: `attribute(state, rng, target, 'player', territoryId,
+  'pressure', FAVOUR_EFFECT.outwardCare)`, then a relationship hit on
+  whoever gets believed, scaled by `damageShare(confidence)` — the same
+  pattern `faction.ts`'s own street-pressure call already uses.
+  `territoryId` is null for the walkout and the law (no single place to
+  read presence in); `pullPermit` passes the business's own district.
+- **`FAVOUR_EFFECT.outwardCare` (new, 0.6)** — a favour called in through
+  a city office reads as quieter than a crew leaning on a corner
+  (`faction.ts`'s own call passes `care` 0, the default), not immune:
+  `clarityFor` still reads presence, so a family standing on its own
+  front can still work it out.
+- **`FAVOUR_EFFECT.rivalGrudgeHit` (new, `[10, 20]`)** — reused from
+  `AI.pressure.relationshipHit` rather than invented: an empty payroll, a
+  hot rival, and a dead storefront are the same order of hostile act as a
+  street shove, not a lesser one.
+- **Guard:** 3 new tests in `sim/__tests__/civic.test.ts` (50 total),
+  each checking the action reaches the belief system and moves the
+  believed party's relationship — not re-proving `attribute()` itself,
+  which `deep.test.ts` already owns. Seen red with the fault put back
+  (`pullPermit`'s case, representative of all three).
+- **No probe re-run needed** — none of `scorecard.probe`, `ladder.probe`
+  or `broke.probe`'s bots call any of the three favours, so nothing in
+  this change touches an existing rng-consuming sequence.
 
 
 ## 1. What the project is

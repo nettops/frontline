@@ -354,6 +354,51 @@ export const UNFAMILIAR_HEAT_MULTIPLIER = 1.25;
 export const INFLUENCE_DECAY_PER_WEEK = 0.3;
 export const DAYS_IDLE_BEFORE_DECAY = 14;
 
+/**
+ * What holding ground costs, the gap `weeklyFrontUpkeep` closed for
+ * businesses and rivals already pay via `AI.upkeepPerDistrict`
+ * (`config/factions.ts`) — a district was the one thing in the game the
+ * player held for free forever.
+ *
+ * Flat rather than superlinear like the rivals' bill: they hold a dozen
+ * streets and need a ceiling on empire size, the player holds a handful
+ * (`districtsHeld` saturates at 3–4 for nearly every career — see
+ * `civic.ts`'s `scoreFor`, which abandoned counting them for the same
+ * reason) and a scaling term would only ever bite the one player who
+ * somehow held more, not the ones the bill is for.
+ *
+ * Unpaid, it costs influence rather than a hard loss of the district — the
+ * same "carried shortfall, no cliff" shape `frontUpkeepOwed` uses — so a
+ * district that goes unpaid long enough drops out of `controlledTerritories`
+ * on its own, which shrinks next week's bill instead of a hidden rule
+ * repossessing it outright. `civic.ts`'s favour standing was checked before
+ * this shipped: none of the four figures read district influence or count —
+ * `payroll` was moved to crew headcount for the same saturation reason above,
+ * and `respectability` reads front sentiment, not this. This does not feed it.
+ *
+ * Measured, both ways, with `ladder.probe`: at $200/week (roughly one
+ * associate's wage) this cleared the unit gate but cost two of the probe's
+ * own pre-existing findings a margin they were already reading close to —
+ * "moving a standing order" flipped a tie (18 vs. 18, needed strictly
+ * greater) and the trades' measured advantage over a non-trading career
+ * shrank below the bar (`746,761` against a `883,944` floor). The mechanism
+ * is real, not noise: unlike front upkeep, this bill is flat rather than a
+ * share of what the ground is worth, so it is regressive against a career
+ * that has scaled up rather than proportionate to it — a wealthy, well-held
+ * empire pays the same per district as a struggling one, and the trades
+ * probe is exactly the instrument built to catch a tax that lands harder on
+ * the strategy that is supposed to be winning. At $75/week (roughly half an
+ * associate's wage) both cleared, and a full re-run of the suite matched
+ * `main`'s own pre-existing failure set minus one — `ladder.probe` runs 8
+ * failures on `main` before this change at all (`favour network reachable`,
+ * `legitimacy across a population`, and six more, none of them this
+ * feature's doing); at $75 seven of the eight remained and the favour-
+ * network one passed. Reachability did not regress; nothing new broke.
+ */
+export const DISTRICT_HOLDING_UPKEEP_PER_WEEK = 75;
+/** Full week unpaid, one district: matches `FRONT_UPKEEP_NEGLECT_HEALTH_HIT`'s shape. */
+export const DISTRICT_HOLDING_NEGLECT_INFLUENCE_HIT = 3;
+
 // -------------------------------------------------------------- sentiment ---
 
 /**

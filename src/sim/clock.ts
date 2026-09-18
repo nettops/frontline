@@ -23,7 +23,7 @@ import { tickAutopilot } from './autopilot';
 import { closeWeek } from './ledger';
 import { tickPossessions } from './possessions';
 import { tickLaunderer } from './launderers';
-import { tickTerritory } from './territory';
+import { tickDistrictUpkeep, tickTerritory } from './territory';
 import { tickAnnouncements } from './announce';
 import { tickDelegation } from './delegation';
 import { tickCapoPitches } from './capoPitches';
@@ -149,6 +149,10 @@ export function advanceDay(state: GameState): void {
   //      upkeep out of the same empty pocket in the same breath, and the
   //      shortfall this carries is a front's health, not a man's loyalty.
   tickFrontUpkeep(state);
+  // 3a3. And the ground itself — same standing-bill reasoning as 3a2, same
+  //      order relative to it: whichever of the two a short week cannot
+  //      cover, it is arbitrary which goes first, so this simply follows.
+  tickDistrictUpkeep(state);
   // 3b. What the boss keeps, and what keeping it does for him.
   //
   //     After wages, because the upkeep on a yacht is a standing bill and
