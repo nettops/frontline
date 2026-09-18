@@ -645,11 +645,12 @@ export function consultDoctor(state: GameState): void {
   state.player.stress = clamp(playerStress(state) - cleared, 0, STRESS.max);
   state.flags['went_home_day'] = state.day;
   state.flags['last_consult_day'] = state.day;
+  state.flags['dr_vance_clarity_until'] = state.day + 14;
   addLog(
     state,
     covered
       ? 'A cardiologist in a building with a lobby, billed to a local you have never set foot in. He put you on a machine for an hour and told you what you already knew.'
-      : 'An hour in an unmarked office on 72nd Street. Nobody in the crew knows you were there. The air came back into your chest.',
+      : 'An hour in an unmarked office on 72nd Street. Nobody in the crew knows you were there. The air came back into your chest, and for the next fortnight your read on your people is razor sharp.',
     'crew',
   );
   /*

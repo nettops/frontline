@@ -71,7 +71,8 @@ export const PRESSURES: PressureDef[] = [
     id: 'clean',
     name: 'Keep it clean',
     short: 'Clean',
-    blurb: 'It is a business. It makes less and nobody has any reason to look at it.',
+    blurb:
+      'It is a business. It makes less, heals neighbourhood sentiment (+0.4/wk), and nobody has any reason to look at it.',
     launder: 0.25,
     revenue: 0.85,
     exposure: -0.6,
@@ -94,7 +95,7 @@ export const PRESSURES: PressureDef[] = [
     name: 'Lean on it',
     short: 'Lean',
     blurb:
-      'Everything through the till and the staff told not to ask. There is no limit on what it will move and no hiding what it is.',
+      'Everything through the till and the staff told not to ask. No launder ceiling, and skims emergency pocket cash if broke (<$1,000).',
     launder: 1.9,
     revenue: 1.25,
     exposure: 1.4,

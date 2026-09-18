@@ -267,6 +267,8 @@ export function postMortem(state: GameState): LegacyLine[] {
                 if (p.status === 'seized') return `${name} (taken on day ${p.goneDay})`;
                 if (p.status === 'lost') return `${name} (lost at cards on day ${p.goneDay})`;
                 if (p.status === 'sold') return `${name} (sold on day ${p.goneDay})`;
+                if (p.status === 'pawned') return `${name} (pawned on day ${p.goneDay})`;
+                if (p.status === 'gifted') return `${name} (gifted on day ${p.goneDay})`;
                 return name;
               })
               .join('; '),

@@ -153,6 +153,7 @@ describe('street work, the day it actually comes off the board', () => {
     state.org.cash = 500_000;
     const steward = crewList(state)[0];
     steward.role = 'soldier';
+    state.npcs['n2'] = { ...steward, id: 'n2', name: 'Second Hand', status: 'active' };
     advanceDay(state); // first tick, records the false baseline
 
     expect(outgrewStreetWork(state)).toBe(false);
@@ -171,6 +172,7 @@ describe('street work, the day it actually comes off the board', () => {
     state.org.cash = 500_000;
     const steward = crewList(state)[0];
     steward.role = 'soldier';
+    state.npcs['n2'] = { ...steward, id: 'n2', name: 'Second Hand', status: 'active' };
     advanceDay(state);
     putInCharge(state, steward.id, t.id);
 

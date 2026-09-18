@@ -44,7 +44,14 @@ import { DELEGATION } from '../config/delegation';
 import { ROLE_ORDER } from '../config/economy';
 import { GOAL_CERTAIN_ABOVE, GOAL_VISIBLE_ABOVE } from '../config/goals';
 import { OPERATION_BY_ID, OPERATION_CATEGORIES, type ApproachId } from '../config/operations';
-import { availableOperations, crewNeeded, launchOperation, STREET_WORK_IDS } from './operations';
+import {
+  availableOperations,
+  canLaunch,
+  crewNeeded,
+  launchOperation,
+  STREET_WORK_IDS,
+  type LaunchCheck,
+} from './operations';
 import { operableTerritories, territoryDef } from './territory';
 import { addNote, crewList } from './npc';
 import { remember } from './memory';
@@ -242,29 +249,82 @@ export function approvePitch(state: GameState, pitchId: Id): CapoPitch | null {
  * the operation, which `resolveOperation` reads for the boss's cut and for
  * command insulation.
  *
- * His own crew first: himself, then anybody whose `reportsTo` is him, then
- * whoever else is standing around. `canLaunch` wants exactly `crewNeeded`
- * bodies, so a capo short of people borrows rather than the pitch failing
- * silently — a delegated job the boss has to staff is still a delegated job.
+ * Who goes on it is `delegationCrew`; whether it can go at all is
+ * `canDelegatePitchAutonomous`, which the panel asks before the click.
  */
-export function delegatePitchAutonomous(
-  state: GameState,
-  pitchId: Id,
-  approach?: ApproachId,
-): ActiveOperation | null {
-  const pitch = list(state).find((x) => x.id === pitchId && x.status === 'open');
-  if (!pitch) return null;
-  const def = OPERATION_BY_ID[pitch.defId];
-  if (!def) return null;
-
+/**
+ * Whose crew goes on it, in the order the capo would reach for them.
+ *
+ * His own first: himself, then anybody whose `reportsTo` is him, then whoever
+ * else is standing around. `canLaunch` wants exactly `crewNeeded` bodies, so a
+ * capo short of people borrows rather than the pitch failing silently — a
+ * delegated job the boss has to staff is still a delegated job.
+ */
+function delegationCrew(state: GameState, pitch: CapoPitch): Npc[] {
   const capo = state.npcs[pitch.capoId];
   const free = (n: Npc | undefined): n is Npc => !!n && n.status === 'active';
   const own = crewList(state).filter((n) => free(n) && n.reportsTo === pitch.capoId);
   const rest = crewList(state).filter(
     (n) => free(n) && n.id !== pitch.capoId && n.reportsTo !== pitch.capoId,
   );
-  const ordered = [...(free(capo) ? [capo] : []), ...own, ...rest];
-  const crewIds = ordered.slice(0, crewNeeded(state, def)).map((n) => n.id);
+  return [...(free(capo) ? [capo] : []), ...own, ...rest];
+}
+
+/**
+ * Whether handing it over would actually launch, and what stops it if not.
+ *
+ * Round 29's MUST FIX #1: the button clicked, `launchOperation` refused, and
+ * the panel had nothing to print — every one of those refusals already had a
+ * sentence attached, it was simply computed inside the mutation where no
+ * renderer could reach it. This is the same check `delegatePitchAutonomous`
+ * runs, lifted out so the card can ask it before the click. Rule 4: no
+ * control takes a click and does nothing.
+ *
+ * Returns `LaunchCheck` rather than a shape of its own, because for every
+ * blocker but the headcount one this *is* `canLaunch`'s answer, unaltered.
+ */
+export function canDelegatePitchAutonomous(
+  state: GameState,
+  pitchId: Id,
+  approach?: ApproachId,
+): LaunchCheck {
+  const pitch = list(state).find((x) => x.id === pitchId && x.status === 'open');
+  if (!pitch) return { ok: false, reason: 'That pitch is not open any more.' };
+  const def = OPERATION_BY_ID[pitch.defId];
+  if (!def) return { ok: false, reason: 'That job no longer exists.' };
+
+  /*
+     Counted here rather than left to `canLaunch`, because the short list this
+     builds would reach it as a legal crew of the wrong size and come back
+     saying the wrong thing. The boss needs to read "you are two men short",
+     not a refusal about the men he does have.
+  */
+  const ordered = delegationCrew(state, pitch);
+  const needed = crewNeeded(state, def);
+  if (ordered.length < needed) {
+    return {
+      ok: false,
+      reason: `Needs ${needed} available crew (you have ${ordered.length}).`,
+    };
+  }
+  const crewIds = ordered.slice(0, needed).map((n) => n.id);
+  return canLaunch(state, def, crewIds, pitch.territoryId, approach);
+}
+
+export function delegatePitchAutonomous(
+  state: GameState,
+  pitchId: Id,
+  approach?: ApproachId,
+): ActiveOperation | null {
+  if (!canDelegatePitchAutonomous(state, pitchId, approach).ok) return null;
+  const pitch = list(state).find((x) => x.id === pitchId && x.status === 'open');
+  if (!pitch) return null;
+  const def = OPERATION_BY_ID[pitch.defId];
+  if (!def) return null;
+
+  const crewIds = delegationCrew(state, pitch)
+    .slice(0, crewNeeded(state, def))
+    .map((n) => n.id);
 
   const op = launchOperation(state, pitch.defId, crewIds, pitch.territoryId, approach);
   if (!op) return null;

@@ -5,6 +5,7 @@ import { STAT_BY_ID } from '../../config/build';
 import { useGame, mutate } from '../../store';
 import { Panel, Empty, Bar, StatRead } from '../components';
 import {
+  availableOperations,
   manualBoard,
   lockedOperations,
   canLaunch,
@@ -19,6 +20,7 @@ import {
 } from '../../sim/operations';
 import {
   approvePitch,
+  canDelegatePitchAutonomous,
   delegatePitchAutonomous,
   livePitches,
   pitchCapoPool,
@@ -75,7 +77,8 @@ import {
   type ApproachId,
 } from '../../config/operations';
 import { CONTROL_LABEL, SENTIMENT_HOSTILE_BELOW } from '../../config/territories';
-import { ATTRIBUTE_LABEL, ROLE_LABEL } from '../../config/economy';
+import { ATTRIBUTE_LABEL, ROLE_LABEL, rankIndex } from '../../config/economy';
+import { rankNow } from '../../sim/rank';
 import type { CapoPitch, OperationDef } from '../../sim/types';
 
 const RISKS = Object.keys(AUTOPILOT_RISK) as AutopilotRisk[];
@@ -119,6 +122,16 @@ export default function OperationsPanel() {
   useEffect(() => {
     if (selected) detailRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   }, [selected]);
+  /*
+     Where "you live off what they bring you" points to.
+
+     A ref rather than an anchor or a `querySelector('.panel')`: the pitches
+     panel is one of a dozen on this page and it only exists on the days a
+     capo has brought something. A link that scrolls to whichever panel
+     happens to be first would be a control that takes a click and lands
+     somewhere arbitrary — rule 4, in its quietest form.
+  */
+  const pitchesRef = useRef<HTMLDivElement>(null);
 
   /*
      Tier 0 only. Tier 1 and above used to be a permanent row per open job def
@@ -130,6 +143,7 @@ export default function OperationsPanel() {
   const pitches = livePitches(state);
   const envelopes = pendingEnvelopes(state);
   const locked = lockedOperations(state);
+  const unlockedTierOps = availableOperations(state).filter((op) => op.tier > 0);
   const active = Object.values(state.activeOperations);
   const free = availableCrew(state);
   const def = selected ? OPERATION_BY_ID[selected] : null;
@@ -642,6 +656,7 @@ export default function OperationsPanel() {
       )}
 
       {pitches.length > 0 && (
+        <div ref={pitchesRef}>
         <Panel title="Brought to you">
           {pitches.map((p) => (
             <PitchCard
@@ -662,7 +677,30 @@ export default function OperationsPanel() {
             at the scene.
           </p>
         </Panel>
+        </div>
       )}
+
+      {/*
+         What being broke actually excuses, said where the decision is made.
+
+         `launchOperation` has always waived the hands-on respect penalty below
+         `handsOnPovertyExemptionFunds` — a boss with nothing in the wallet is
+         not humiliating himself by working, he is eating. The waiver was real
+         and invisible: round 29 was insolvent at Capo, read the board as
+         closed to him, and never found out that the one thing that would have
+         paid was sitting there uncharged.
+      */}
+      {rankIndex(rankNow(state).id) >= rankIndex('capo') &&
+        totalFunds(state) < TRIBUTE.handsOnPovertyExemptionFunds && (
+          <aside className="coach urgent">
+            <span className="coach-label">Broke</span>
+            <span className="coach-text">
+              Under {formatMoney(TRIBUTE.handsOnPovertyExemptionFunds)} on hand, you can work a
+              corner yourself without the loss of standing it usually costs a man at your rank.
+              Nobody thinks less of a man for working until the payroll is covered.
+            </span>
+          </aside>
+        )}
 
       <Panel
         title="Work available"
@@ -712,6 +750,35 @@ export default function OperationsPanel() {
             </tbody>
           </table>
         </div>
+        {/*
+           A promotion, not a broken screen.
+
+           `outgrewStreetWork` takes tier 0 off the board once there is
+           somebody else to send, and what the player was left looking at was
+           eight column headers over nothing. Round 29 read that as the game
+           having stopped working and spent the first hour hunting for the
+           table's missing rows. Headers over an empty tbody say nothing; this
+           says which screen the work moved to.
+        */}
+        {open.length === 0 && (
+          <div style={{ padding: '16px 18px', textAlign: 'center' }}>
+            <p className="dim" style={{ margin: 0 }}>
+              Somebody else's hands do that kind of thing now — at your standing you live off
+              what your people bring you.
+            </p>
+            {pitches.length > 0 && (
+              <button
+                className="btn small"
+                style={{ marginTop: 10 }}
+                onClick={() =>
+                  pitchesRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+                }
+              >
+                {pitches.length} waiting on an answer
+              </button>
+            )}
+          </div>
+        )}
       </Panel>
 
       {def && (
@@ -1195,6 +1262,16 @@ export default function OperationsPanel() {
       */}
       {locked.length > 0 && !def && (
         <Panel title="Above your standing" flush>
+          <div style={{ padding: '10px 14px 4px' }}>
+            <p className="faint tiny" style={{ margin: 0 }}>
+              Work your organization cannot take on yet. When requirements are met, operations qualify into your crew's weekly proposal rotation — capos and earners will pitch them to you directly in <strong>Brought to you</strong> above.
+            </p>
+            {unlockedTierOps.length > 0 && (
+              <p className="dim tiny" style={{ margin: '6px 0 0' }}>
+                <strong>Qualified for proposals:</strong> {unlockedTierOps.map((op) => op.name).join(', ')}.
+              </p>
+            )}
+          </div>
           <div className="table-wrap">
             <table className="data">
               <thead>
@@ -1322,6 +1399,15 @@ function PitchCard({
     .filter((n) => n.id !== pitch.capoId)
     .slice(0, 2);
   const specialty = specialtyLine(capo);
+  /*
+     Round 29's MUST FIX #1: this button clicked, `delegatePitchAutonomous`
+     returned null, and nothing on the screen changed or said why. The reason
+     existed the whole time — it is `canLaunch`'s, or the headcount — it was
+     just computed inside the mutation. Same repair `refusalShown.test.ts`
+     has made four times now: the sentence goes on the row that was refused,
+     not in a `title` a player has to hover to find.
+  */
+  const canDel = canDelegatePitchAutonomous(state, pitch.id);
 
   return (
     <div className="kv" style={{ alignItems: 'flex-start', marginBottom: 10 }}>
@@ -1338,6 +1424,9 @@ function PitchCard({
           </>
         )}
       </span>
+      {/* `.kv` is a two-column flex row, so the refusal goes inside this
+          column under the buttons rather than as a third child of the row. */}
+      <div>
       <div className="btn-row">
         <button
           className={selected ? 'btn small primary' : 'btn small'}
@@ -1358,7 +1447,12 @@ function PitchCard({
         */}
         <button
           className="btn small"
-          title={`${capo.name} runs it with his own crew and keeps his end. You never touch it, and what it leaves behind does not point at you.`}
+          disabled={!canDel.ok}
+          title={
+            canDel.ok
+              ? `${capo.name} runs it with his own crew and keeps his end. You never touch it, and what it leaves behind does not point at you.`
+              : (canDel.reason ?? undefined)
+          }
           onClick={onDelegate}
         >
           Let {capo.name} run it ({Math.round(TRIBUTE.bossAutonomousCut * 100)}% to you)
@@ -1376,6 +1470,12 @@ function PitchCard({
             Give it to {alt.name}
           </button>
         ))}
+      </div>
+      {!canDel.ok && (
+        <div className="tiny faint" style={{ marginTop: 2, textAlign: 'right' }}>
+          {canDel.reason}
+        </div>
+      )}
       </div>
     </div>
   );

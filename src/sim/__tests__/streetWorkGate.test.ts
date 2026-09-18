@@ -127,4 +127,24 @@ describe('street work, once the organization has outgrown it', () => {
       availableOperations(state).map((o) => o.id),
     );
   });
+
+  it('never disappears from a career with no free bodies to send, even with cash', () => {
+    // MUST FIX 2(b): A boss with cash who has all crew in custody or busy cannot
+    // staff any tier > 0 job (all need 1+ bodies). Hiding street work in that
+    // state takes the whole game away.
+    const state = game();
+    build(state, 1, 2, 6);
+    state.org.cash = 500_000;
+    // Before crew is put in custody, the gate is on
+    expect(outgrewStreetWork(state)).toBe(true);
+
+    // All crew are arrested/in custody
+    for (const n of crewList(state)) {
+      n.status = 'arrested';
+    }
+    expect(outgrewStreetWork(state)).toBe(false);
+    const ids = manualBoard(state).map((o) => o.id);
+    expect(ids).toContain('work_it_yourself');
+  });
 });
+

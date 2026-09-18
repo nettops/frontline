@@ -28,6 +28,8 @@ import { priced } from './market';
 import { cover } from './perception';
 import { note } from './ledger';
 import { adjustSentiment, hasPresence, territoryList } from './territory';
+import { isFormerCrew, addNote, somethingGood } from './npc';
+import { remember } from './memory';
 import { PAYDAY_INTERVAL } from '../config/economy';
 import { POSSESSION, POSSESSIONS, POSSESSION_BY_ID, type PossessionDef } from '../config/possessions';
 import type { GameState, Possession } from './types';
@@ -259,6 +261,137 @@ export function sellPossession(state: GameState, defId: string): Refusal {
 }
 
 /**
+ * Portable possessions (watches, jewelry, cars) that can be pawned for liquidity
+ * or gifted to crew to clear grievances.
+ */
+export function isPortablePossession(def?: PossessionDef): boolean {
+  if (!def) return false;
+  return def.kind === 'jewellery' || def.kind === 'car';
+}
+
+export function canPawnPossession(state: GameState, defId: string): Refusal {
+  const owned = heldPossessions(state).find((p) => p.defId === defId);
+  if (!owned) return { ok: false, reason: 'You do not own that.' };
+  const def = possessionDef(owned);
+  if (!isPortablePossession(def)) {
+    return { ok: false, reason: 'You cannot pawn real estate or large institutions.' };
+  }
+  return { ok: true };
+}
+
+/**
+ * Pawn a portable possession for 80% liquid cash collateral.
+ * Can be redeemed later for 90% paid value.
+ */
+export function pawnPossession(state: GameState, defId: string): Refusal {
+  const check = canPawnPossession(state, defId);
+  if (!check.ok) return check;
+
+  const owned = heldPossessions(state).find((p) => p.defId === defId)!;
+  const def = possessionDef(owned);
+  const loan = Math.round(owned.paid * 0.8);
+  const redeemCost = Math.round(owned.paid * 0.9);
+
+  state.org.cash += loan;
+  owned.status = 'pawned';
+  owned.goneDay = state.day;
+  owned.pawnRedeemCost = redeemCost;
+
+  addLog(
+    state,
+    `Pawned ${def ? def.name.toLowerCase() : 'something of yours'} for ${formatMoney(loan)} liquid cash. ` +
+      `Redeemable for ${formatMoney(redeemCost)}.`,
+    'money',
+  );
+  return { ok: true };
+}
+
+/** The ones currently held by a broker in pawn. */
+export function pawnedPossessions(state: GameState): Possession[] {
+  return possessions(state).filter((p) => p.status === 'pawned');
+}
+
+export function canRedeemPossession(state: GameState, defId: string): Refusal {
+  const pawned = pawnedPossessions(state).find((p) => p.defId === defId);
+  if (!pawned) return { ok: false, reason: 'Not currently in pawn.' };
+  const cost = pawned.pawnRedeemCost ?? Math.round(pawned.paid * 0.9);
+  if (state.org.cash < cost) {
+    return {
+      ok: false,
+      reason: `You need ${formatMoney(cost)} to redeem it and you hold ${formatMoney(state.org.cash)}.`,
+    };
+  }
+  return { ok: true };
+}
+
+export function redeemPossession(state: GameState, defId: string): Refusal {
+  const check = canRedeemPossession(state, defId);
+  if (!check.ok) return check;
+
+  const pawned = pawnedPossessions(state).find((p) => p.defId === defId)!;
+  const def = possessionDef(pawned);
+  const cost = pawned.pawnRedeemCost ?? Math.round(pawned.paid * 0.9);
+
+  state.org.cash -= cost;
+  pawned.status = 'held';
+  pawned.goneDay = undefined;
+  pawned.pawnRedeemCost = undefined;
+
+  addLog(
+    state,
+    `Redeemed ${def ? def.name.toLowerCase() : 'your property'} from the pawn broker for ${formatMoney(cost)}. ` +
+      `It is back in your possession.`,
+    'money',
+  );
+  return { ok: true };
+}
+
+export function canGiftPossession(state: GameState, defId: string, npcId: string): Refusal {
+  const owned = heldPossessions(state).find((p) => p.defId === defId);
+  if (!owned) return { ok: false, reason: 'You do not own that.' };
+  const def = possessionDef(owned);
+  if (!isPortablePossession(def)) {
+    return { ok: false, reason: 'Only jewelry and cars can be gifted.' };
+  }
+  const npc = state.npcs[npcId];
+  if (!npc || isFormerCrew(npc)) {
+    return { ok: false, reason: 'They are no longer with the crew.' };
+  }
+  return { ok: true };
+}
+
+/**
+ * Hand a luxury watch, ring, or car to an aggrieved crew member.
+ * Wipes out 35 points of grievance and cements loyalty (+15).
+ */
+export function giftPossessionToCrew(state: GameState, defId: string, npcId: string): Refusal {
+  const check = canGiftPossession(state, defId, npcId);
+  if (!check.ok) return check;
+
+  const owned = heldPossessions(state).find((p) => p.defId === defId)!;
+  const def = possessionDef(owned);
+  const npc = state.npcs[npcId];
+
+  owned.status = 'gifted';
+  owned.goneDay = state.day;
+  owned.giftRecipientId = npcId;
+
+  npc.stats.grievance = Math.max(0, npc.stats.grievance - 35);
+  npc.stats.loyalty = Math.min(100, npc.stats.loyalty + 15);
+  remember(npc, state.day, 'looked_after');
+  addNote(npc, state.day, `Given ${def ? def.name.toLowerCase() : 'a luxury item'} as a personal gift.`, 'good');
+  somethingGood(state, npc);
+
+  addLog(
+    state,
+    `Gave your ${def ? def.name.toLowerCase() : 'gift'} to ${npc.name}. ` +
+      `An expensive gesture, but it took the edge off what they were carrying and cemented their loyalty.`,
+    'crew',
+  );
+  return { ok: true };
+}
+
+/**
  * What a warrant takes, beyond the money and the stock.
  *
  * The best single thing in the house, and nothing comes back. One per raid
@@ -302,6 +435,10 @@ export interface PossessionRow {
   value: number;
   /** What selling it would put back in the clean pool. */
   back: number;
+  /** What pawning it would borrow in liquid cash. */
+  pawnLoan: number;
+  /** Whether it can be pawned or gifted. */
+  portable: boolean;
 }
 
 /** What the panel shows, already priced. */
@@ -315,6 +452,8 @@ export function possessionRows(state: GameState): PossessionRow[] {
       def,
       value: possessionValue(state, def),
       back: Math.round(p.paid * POSSESSION.sellBackShare),
+      pawnLoan: Math.round(p.paid * 0.8),
+      portable: isPortablePossession(def),
     });
   }
   return rows.sort((a, b) => b.value - a.value);

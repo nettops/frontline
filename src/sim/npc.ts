@@ -287,8 +287,9 @@ function perceptionTier(familiarity: number) {
  * not reshuffle on every render — but it *does* change as familiarity crosses
  * a tier, which reads as your understanding of someone sharpening over time.
  */
-export function perceive(npc: Npc, statId: NpcStatId): Perception {
-  const tier = perceptionTier(npc.familiarity);
+export function perceive(npc: Npc, statId: NpcStatId, state?: GameState): Perception {
+  const clarityBonus = state && (state.flags['dr_vance_clarity_until'] ?? 0) >= state.day ? 30 : 0;
+  const tier = perceptionTier(npc.familiarity + clarityBonus);
   if (tier.noise >= 999) {
     return { known: false, band: '—', confidence: tier.label, bandIndex: -1 };
   }

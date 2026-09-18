@@ -22,12 +22,14 @@ import { addHeat, heatSuccessPenalty, isLayingLow } from './heat';
 import { earnDirty, refundDirty, spend, totalFunds } from './economy';
 import { ownedBusinesses } from './business';
 import { takeSomething } from './possessions';
+import { armsStrength } from './contraband';
 import { casedBonus, spendCasing } from './verbs';
 import { earningsBonus } from './nicknames';
 import { WORLD } from '../config/build';
 import { worldPull } from './build';
 import {
   addNote,
+  availableCrew,
   creditOperation,
   crewList,
   crewTraitEffect,
@@ -281,12 +283,15 @@ export function outgrewStreetWork(state: GameState): boolean {
   const board = opsBoard(state);
   if (board.districtsHeld === 0) return false;
 
+  const freeBodies = availableCrew(state).length;
+
   return OPERATIONS.some(
     (op) =>
       !STREET_WORK_IDS.has(op.id) &&
       op.tier > 0 &&
       isOpen(op, board) &&
-      operationCost(state, op) <= totalFunds(state),
+      operationCost(state, op) <= totalFunds(state) &&
+      crewNeeded(state, op) <= freeBodies,
   );
 }
 
@@ -530,7 +535,11 @@ export function successBreakdown(
 
   const worldTerm = worldSuccessDelta(state);
 
-  const approachTerm = APPROACH_BY_ID[approach].success;
+  const armsTerm =
+    approach === 'heavy' && armsStrength(state) > 0
+      ? Math.min(0.06, (armsStrength(state) / 100) * 0.1)
+      : 0;
+  const approachTerm = APPROACH_BY_ID[approach].success + armsTerm;
 
   const prepTerm = prepDelta(scoreOn(state, def.id));
 

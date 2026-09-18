@@ -35,9 +35,16 @@ import { legitimacy, postMortem } from '../legacy';
 import { priced } from '../market';
 import { home, goHome } from '../personal';
 import {
+  canGiftPossession,
+  canPawnPossession,
+  canRedeemPossession,
+  giftPossessionToCrew,
   heldPossessions,
   ownsHome,
+  pawnedPossessions,
+  pawnPossession,
   possessions,
+  redeemPossession,
   sellPossession,
   seizeOnePossession,
   tickPossessions,
@@ -473,5 +480,53 @@ describe('where a thing comes from now', () => {
     const state = game();
     expect(takeSomething(state, new Rng(state.rng), 400)).toBeNull();
     expect(heldPossessions(state)).toHaveLength(0);
+  });
+});
+
+describe('pawning and gifting personal assets', () => {
+  it('pawns portable jewelry for 80% liquid cash loan and allows redemption at 90%', () => {
+    const state = game(4, 100);
+    const watch = buy(state, 'watch');
+    const initialPaid = watch.paid;
+
+    const pawnRes = pawnPossession(state, 'watch');
+    expect(pawnRes.ok).toBe(true);
+    expect(state.org.cash).toBe(100 + Math.round(initialPaid * 0.8));
+    expect(heldPossessions(state)).toHaveLength(0);
+    expect(pawnedPossessions(state)).toHaveLength(1);
+
+    // Cannot redeem if cash is insufficient
+    state.org.cash = 0;
+    expect(canRedeemPossession(state, 'watch').ok).toBe(false);
+
+    // Can redeem when cash is available
+    state.org.cash = initialPaid;
+    const redeemRes = redeemPossession(state, 'watch');
+    expect(redeemRes.ok).toBe(true);
+    expect(heldPossessions(state)).toHaveLength(1);
+    expect(pawnedPossessions(state)).toHaveLength(0);
+  });
+
+  it('gifts a luxury possession to a crew member, reducing grievance by 35 and raising loyalty by 15', () => {
+    const state = game();
+    buy(state, 'ring');
+    const crew = Object.values(state.npcs)[0];
+    crew.stats.grievance = 60;
+    crew.stats.loyalty = 40;
+
+    expect(canGiftPossession(state, 'ring', crew.id).ok).toBe(true);
+    const giftRes = giftPossessionToCrew(state, 'ring', crew.id);
+    expect(giftRes.ok).toBe(true);
+    expect(crew.stats.grievance).toBe(25); // 60 - 35
+    expect(crew.stats.loyalty).toBe(55); // 40 + 15
+    expect(heldPossessions(state)).toHaveLength(0);
+    expect(possessions(state).find((p) => p.defId === 'ring')?.status).toBe('gifted');
+  });
+
+  it('refuses to pawn non-portable assets like real estate', () => {
+    const state = game();
+    buy(state, 'apartment');
+    const check = canPawnPossession(state, 'apartment');
+    expect(check.ok).toBe(false);
   });
 });

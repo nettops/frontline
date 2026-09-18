@@ -55,7 +55,7 @@ import {
   shutterBusiness,
 } from './business';
 import { BUSINESS_BY_ID } from '../config/businesses';
-import { contestedWith, factionInfluence, rivals } from './faction';
+import { contestedWith, districtsHeld, factionInfluence, rivals } from './faction';
 import {
   adjustBond,
   adjustRelationship,
@@ -1356,7 +1356,7 @@ const EVENT_DEFS: EventDef[] = [
               shortOf(state, demand),
             cost: demand,
           },
-          { id: 'refuse', label: 'Refuse', hint: 'The neighbourhood watches you pay somebody off' },
+          { id: 'refuse', label: 'Refuse', hint: 'The neighbourhood watches you stand your ground — or take the consequences.' },
           { id: 'remove', label: 'Remove them', hint: 'It ends tonight. Police come asking, and nobody on that street forgets' },
         ],
       };
@@ -1625,6 +1625,25 @@ const EVENT_DEFS: EventDef[] = [
         const territory = state.territories[recent.territoryId!];
         if (territory && playerInfluence(territory) > 5) return { faction, territory };
       }
+
+      // Past day 90, ambitious neighbours test the border of an established outfit
+      // even if they haven't run a formal pressure action yet.
+      if (state.day >= 90) {
+        for (const faction of rivals(state)) {
+          if (atWar(state, 'player', faction.id)) continue;
+          if (relationship(state, faction.id, 'player') > 15) continue;
+          const held = districtsHeld(state, faction.id);
+          for (const rTerr of held) {
+            for (const adjId of territoryDef(rTerr.id).adjacent) {
+              const pTerr = state.territories[adjId];
+              if (pTerr && playerInfluence(pTerr) >= 30) {
+                return { faction, territory: pTerr };
+              }
+            }
+          }
+        }
+      }
+
       return null;
     },
     build: (state, rng, { faction, territory }) => {
@@ -1773,12 +1792,22 @@ const EVENT_DEFS: EventDef[] = [
     weight: 12,
     cooldownDays: 30,
     applies: (state) => {
-      // Somebody you share ground with who has not soured on you.
-      const candidates = rivals(state).filter(
-        // Their view of the player: whether *they* would still sit down with
-        // you is not a question about your opinion of them.
-        (f) => relationship(state, f.id, 'player') > -30 && contestedWith(state, f.id).length > 0,
-      );
+      // Somebody you share ground with who has not soured on you, OR a neighbouring
+      // house seeking an understanding once the player holds substantial territory.
+      const candidates = rivals(state).filter((f) => {
+        if (relationship(state, f.id, 'player') <= -30) return false;
+        if (contestedWith(state, f.id).length > 0) return true;
+        if (state.day >= 75) {
+          const held = districtsHeld(state, f.id);
+          for (const rTerr of held) {
+            for (const adjId of territoryDef(rTerr.id).adjacent) {
+              const pTerr = state.territories[adjId];
+              if (pTerr && playerInfluence(pTerr) >= 25) return true;
+            }
+          }
+        }
+        return false;
+      });
       return candidates.length ? { faction: candidates[0] } : null;
     },
     build: (state, rng, { faction }) => {

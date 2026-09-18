@@ -2,6 +2,7 @@
 
 import type { ReactNode } from 'react';
 import type { GameState, Npc, NpcStatId } from '../sim/types';
+import type { TransmissionMethod } from '../config/tradecraft';
 import { perceive, wageExpectation } from '../sim/npc';
 
 export function Panel({
@@ -199,6 +200,64 @@ export function StatusTag({ npc, day }: { npc: Npc; day: number }) {
     case 'boss':
       return <span className="tag">Runs it now</span>;
     default:
+      if (npc.stats.grievance >= 55) {
+        return <span className="tag injured" title="Carrying a grievance. Sit down with them.">Grudge</span>;
+      }
       return <span className="tag">Available</span>;
   }
+}
+
+/**
+ * How the order gets said, which is the part of a killing that goes on tape.
+ *
+ * Shared by `RivalsPanel` and `LawPanel` rather than written twice, because
+ * they are the same decision about people of different sizes — the same
+ * reason `ContractButton` is one component for a capo and for the man above
+ * him. Two files would drift, and the copy here is the only place the player
+ * is told what either method costs.
+ *
+ * It says both prices unconditionally and it does not pretend to a number it
+ * cannot know: the misfire chance is a fact about whoever is standing in
+ * front of you (`misfireChance` in `sim/tradecraft.ts` reads his discipline
+ * and his traits), so the panel names the risk and refuses to invent a
+ * percentage for it. See rule 2 — a figure on screen has to be the figure the
+ * sim uses, and this one varies per man.
+ */
+export function TradecraftToggle({
+  method,
+  onChange,
+}: {
+  method: TransmissionMethod;
+  onChange: (next: TransmissionMethod) => void;
+}) {
+  const walking = method === 'walk_and_talk';
+  return (
+    <div style={{ marginBottom: 6 }}>
+      <div className="tiny faint" style={{ marginBottom: 3 }}>
+        How it gets said
+      </div>
+      <div className="carry-row">
+        <button
+          className={walking ? 'btn small ghost' : 'btn small'}
+          onClick={() => onChange('phone_euphemism')}
+        >
+          Phone call
+        </button>
+        <button
+          className={walking ? 'btn small' : 'btn small ghost'}
+          onClick={() => onChange('walk_and_talk')}
+        >
+          Walk in the woods
+        </button>
+      </div>
+      <p className="tiny faint" style={{ margin: '3px 0 0' }}>
+        {walking
+          ? 'An hour round the block and your evening is gone. Nothing said on a sidewalk ' +
+            'reaches a reel, and nobody mishears a man looking at his face.'
+          : 'Costs nothing and takes no time. If anybody has a wire up it goes onto a reel in ' +
+            'your own voice, and a man who has to be told in metaphor can take the metaphor ' +
+            'the wrong way.'}
+      </p>
+    </div>
+  );
 }

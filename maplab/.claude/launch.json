@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "map-lab",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["--prefix", "C:/Users/cory/Desktop/mafia/maplab", "run", "dev", "--", "--port", "5174", "--strictPort"],
+      "port": 5174
+    }
+  ]
+}

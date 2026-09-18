@@ -24,10 +24,12 @@ import type {
   FactionActionKind,
   FactionAgenda,
   GameState,
+  Npc,
   RivalBusiness,
   Territory,
 } from './types';
-import { addLog, formatMoneyShort, nextId, pushEvent, say } from './util';
+import { addLog, formatMoneyShort, hasSpecialVenture, nextId, pushEvent, say } from './util';
+import { VENTURE_PERKS } from '../config/tribute';
 import { rivalBusinesses } from './verbs';
 import { BUSINESSES } from '../config/businesses';
 import {
@@ -96,7 +98,7 @@ function temperament(state: GameState, faction: Faction) {
 }
 
 /** Districts where a faction has any real foothold. */
-function districtsHeld(state: GameState, id: FactionId): Territory[] {
+export function districtsHeld(state: GameState, id: FactionId): Territory[] {
   return territoryList(state).filter((t) => factionInfluence(t, id) >= 25);
 }
 
@@ -839,6 +841,39 @@ function executeDiplomacy(state: GameState, faction: Faction, option: Option): v
   );
 }
 
+/**
+ * How likely an offer is to land on this man, before anybody rolls for it.
+ *
+ * Exported and pulled out of `executePoach` so it can be asserted directly.
+ * The alternative was a statistical test over thirty seeds to size one
+ * multiplier, which is an instrument too blunt to see a 0.65 and exactly the
+ * kind of guard this project has twice found passing with the effect deleted.
+ */
+export function poachChance(state: GameState, target: Npc): number {
+  return clamp(
+    (POACH.baseChance + (POACH.loyaltyBelow - target.stats.loyalty) * POACH.perLoyaltyPoint) *
+      traitEffect(target, 'poachable') *
+      goalEffect(target, 'poachable') *
+      poachableFromMemory(target, state.day) *
+      /*
+         And whether there is a place of your own for him to be seen sitting.
+
+         The pork store's second half. A man who takes his coffee outside a
+         shop with your name behind it every morning is a harder man to talk
+         to quietly, and the block would know before you did. It moves the
+         offer landing, not the offer being made — a rival can still try, and
+         a refusal still comes back to you, which is the part worth more than
+         the money.
+
+         On the chance rather than on the roll, so the stream is untouched: a
+         career that never buys the place is bit-identical to one before this.
+      */
+      (hasSpecialVenture(state, 'pork_store') ? VENTURE_PERKS.porkStorePoachResist : 1),
+    0.05,
+    0.95,
+  );
+}
+
 function executePoach(state: GameState, faction: Faction, rng: Rng): void {
   const target = poachTarget(state, rng, POACH.loyaltyBelow);
   if (!target) return;
@@ -857,14 +892,7 @@ function executePoach(state: GameState, faction: Faction, rng: Rng): void {
    * things, and until memories existed the only thing he could bring to that
    * decision was a loyalty number nobody had kept the reasons for.
    */
-  const chance = clamp(
-    (POACH.baseChance + (POACH.loyaltyBelow - target.stats.loyalty) * POACH.perLoyaltyPoint) *
-      traitEffect(target, 'poachable') *
-      goalEffect(target, 'poachable') *
-      poachableFromMemory(target, state.day),
-    0.05,
-    0.95,
-  );
+  const chance = poachChance(state, target);
 
   if (rng.chance(chance)) {
     // The player finds out only because somebody stopped turning up.

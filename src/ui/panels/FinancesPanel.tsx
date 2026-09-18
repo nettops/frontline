@@ -195,12 +195,19 @@ function Holdings() {
           tone="brass"
         />
       )}
+      {/*
+         Round 29 read this as money that was locked away full stop, and the
+         Businesses panel as contradicting it — the sentence naming the one
+         exception was the fourth in the paragraph, after three that said
+         nothing can reach it. The exception goes first now. Same facts, and
+         the order is what was lying.
+      */}
       <p className="faint" style={{ marginTop: 12 }}>
-        Property, a stake in something, a box at a bank. The people whose opinion
-        decides your rank can see it. No job, no wage and no lawyer can touch it.
-        The one thing it will pay for is a front, because a front is the same
-        kind of money standing up — that comes straight out of here and does not
-        pay the hurry price. Selling in a hurry returns{' '}
+        Property, a stake in something, a box at a bank. Put away for standing: no wage, no
+        lawyer and no day's work can touch it, but it remains available as capital for a
+        business front — a front is the same kind of money standing up, so it comes straight
+        out of here and does not pay the hurry price. The people whose opinion decides your
+        rank can see all of it. Selling in a hurry returns{' '}
         {Math.round(HOLDINGS.withdrawReturn * 100)}% of it.
       </p>
       {/*
@@ -298,6 +305,30 @@ export default function FinancesPanel() {
         <span className="tiny">{formatMoney(totalFunds(state))} on hand</span>
       </div>
 
+      {/*
+         The shortfall paragraph in Outgoings is correct and it is four panels
+         down a long page, inside the one panel a player who is not already
+         worried about payroll has no reason to open. Round 29 went insolvent
+         mid-career, never found it, and lost crew to defection without ever
+         reading a line that named the three ways out. This is the same fact
+         at the top of the page, and it names them.
+
+         Gated on the wallet being under a payday's wages *and* genuinely
+         empty, so it is a state rather than a banner that lives here: a
+         family carrying a healthy float through a heavy week does not need
+         to be shouted at.
+      */}
+      {totalFunds(state) < weeklyWageBill(state) && totalFunds(state) < 1_000 && (
+        <aside className="coach urgent">
+          <span className="coach-label">Payroll</span>
+          <span className="coach-text">
+            There is not enough on hand to reach the next payday. Sell an underperforming front
+            from Businesses, sell what you carry from Yourself, or work a corner yourself —
+            before your own people start leaving unpaid.
+          </span>
+        </aside>
+      )}
+
       <SilentPartner />
 
       <Ledger />
@@ -317,7 +348,7 @@ export default function FinancesPanel() {
           */}
           {(org.holdings ?? 0) > 0 && (
             <KeyValue
-              label="Put away, not spendable"
+              label="Put away (capital for fronts only)"
               value={formatMoney(org.holdings ?? 0)}
               tone="brass"
             />

@@ -29,7 +29,7 @@ import {
   type StewardActionDef,
 } from '../config/delegation';
 import { ROLE_LABEL, ROLE_ORDER } from '../config/economy';
-import { addLog } from './util';
+import { addLog, formatMoney } from './util';
 import { addNote, crewList, somethingGood, wageExpectation } from './npc';
 import { authority } from './authority';
 import { AUTHORITY } from '../config/authority';
@@ -385,7 +385,20 @@ export function tickDelegation(state: GameState, rng: Rng): void {
     if (action.influence !== 0) addInfluence(state, t.id, action.influence);
     if (action.sentiment !== 0) adjustSentiment(state, t.id, action.sentiment);
     if (action.heat !== 0) addHeat(state, action.heat, 'street', `work in ${territoryDef(t.id).name}`);
-    if (reached > 0) earnDirty(state, reached);
+    if (reached > 0) {
+      earnDirty(state, reached, 'jobs');
+      addLog(
+        state,
+        `${npc.name} turned in ${formatMoney(reached)} from ${territoryDef(t.id).name}.`,
+        'money',
+      );
+    } else if (kept > 0) {
+      addLog(
+        state,
+        `${npc.name} turned in nothing from ${territoryDef(t.id).name} this week.`,
+        'crew',
+      );
+    }
 
     if (kept > 0) {
       npc.isSkimming = true;

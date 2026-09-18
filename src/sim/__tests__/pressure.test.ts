@@ -205,4 +205,25 @@ describe('the dial', () => {
       expect(worse.some(Boolean), `${p.id} costs nothing`).toBe(true);
     }
   });
+
+  it('heals district sentiment when kept clean', () => {
+    const cleanState = funded();
+    const clean = aFront(cleanState);
+    clean.pressure = 'clean';
+    const district = cleanState.territories[clean.territoryId];
+    district.sentiment = 40;
+
+    runWeeks(cleanState, 5);
+    expect(district.sentiment).toBeGreaterThan(40);
+  });
+
+  it('skims emergency cash from the tills when broke and leaning hard', () => {
+    const brokeState = funded();
+    const front = aFront(brokeState);
+    front.pressure = 'hard';
+    brokeState.org.cash = 200; // Under $1,000 threshold
+
+    runWeeks(brokeState, 1);
+    expect(brokeState.org.cash).toBeGreaterThan(200);
+  });
 });
