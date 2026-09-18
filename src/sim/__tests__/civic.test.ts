@@ -37,6 +37,7 @@ import { ownedBusinesses } from '../business';
 import { rivalBusinesses } from '../verbs';
 import { withFronts } from './helpers';
 import { Rng } from '../rng';
+import { relationship } from '../diplomacy';
 import { crewList, generateNpc } from '../npc';
 import {
   CIVIC,
@@ -650,6 +651,24 @@ describe('helping somebody outside the family', () => {
       unionOwed(state);
       expect(canCallWalkout(state, target).ok).toBe(true);
     });
+
+    /*
+       The whole reason this had to wait for a rival-hurting favour to exist
+       at all — `attribute()` (`beliefs.ts`) has been fully exercised on
+       `noteInfluenceTaken`'s territory grudge since `deep.test.ts` shipped,
+       and was never reachable from this network because none of its four
+       inward grants touched a rival. Not re-proving the mechanism works —
+       that is `deep.test.ts`'s job — only that this call now reaches it.
+    */
+    it('gives the family walked out on something to suspect', () => {
+      const state = game();
+      unionOwed(state);
+      const before = state.factions[target].suspicions.length;
+      callWalkout(state, target);
+      expect(state.factions[target].suspicions.length).toBe(before + 1);
+      const believed = state.factions[target].suspicions[0].actorId;
+      expect(relationship(state, target, believed)).toBeLessThan(0);
+    });
   });
 
   describe('having a rival looked at', () => {
@@ -686,6 +705,16 @@ describe('helping somebody outside the family', () => {
       captainOwed(state);
       state.factions[target].strength = 0;
       expect(canCallTheLaw(state, target).ok).toBe(false);
+    });
+
+    it('gives the family a division is asking about something to suspect', () => {
+      const state = game();
+      captainOwed(state);
+      const before = state.factions[target].suspicions.length;
+      callTheLaw(state, target);
+      expect(state.factions[target].suspicions.length).toBe(before + 1);
+      const believed = state.factions[target].suspicions[0].actorId;
+      expect(relationship(state, target, believed)).toBeLessThan(0);
     });
   });
 
@@ -764,6 +793,21 @@ describe('helping somebody outside the family', () => {
       const check = canPullPermit(state, biz.id);
       expect(check.ok).toBe(false);
       expect(check.reason).toMatch(/paperwork/i);
+    });
+
+    it('gives the family whose front it was something to suspect', () => {
+      const state = game();
+      aldermanOwed(state);
+      const biz = aFront(state);
+      const before = state.factions[target].suspicions.length;
+      pullPermit(state, biz.id);
+      expect(state.factions[target].suspicions.length).toBe(before + 1);
+      const suspicion = state.factions[target].suspicions[0];
+      // Scoped to the front's own district, not left null like the other
+      // two — a permit is pulled on one building, and `attribute()` reads
+      // presence in that specific place, not the city as a whole.
+      expect(suspicion.territoryId).toBe(biz.territoryId);
+      expect(relationship(state, target, suspicion.actorId)).toBeLessThan(0);
     });
   });
 

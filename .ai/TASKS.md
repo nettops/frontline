@@ -18,30 +18,9 @@ archives. The NOT NEGOTITABLE pass is **complete** —
 
 ## Open
 
-1. **NPC loyalty's weekly drift terms have zero UI surface** (NN §8's one
-   real gap, deliberately not built that pass). Stagnation, under/overpay
-   and heat-fear move loyalty every week and nothing on screen says so.
-   A numeric breakdown would break the "never a number" rule, so this
-   needs a banded "current pressures" list, not a percentage.
-
-2. **`distinctEnds` — final-rank diversity over four years reads 2 of a
-   possible 5.** Surfaced by the Difficulty re-measurement (the axis
-   itself is healthy at 6.07); now that axis's actual soft spot. Not
-   chased.
-
-3. **A district-holding cost for the player.** Rivals already pay
-   `upkeepPerDistrict`/`upkeepDistrictScale` (`config/factions.ts`); the
-   player never did — the same gap front upkeep closed for businesses.
-   Deliberately still not attempted: no tester across seven post-merge
-   rounds has named it as a felt problem, and a second economy tax risks
-   repeating F24's cross-system interaction. Size and measure on its own
-   if attempted, and re-check favour-network reachability first.
-
-4. **Favor-calls attributable to the wrong family** (boss-fantasy overhaul
-   item 6) — blocked. Every favor action that exists only benefits the
-   player; none hurts a rival, so there is nothing to make blamable via
-   `attribute()`. Needs a real rival-hurting favor action built first
-   (own scope/tests/probe).
+Nothing currently ready to build. `distinctEnds` is diagnosed and closed
+with a finding rather than a fix, and favor-calls attributable to the
+wrong family is built — see `HANDOFF.md` §0 for both.
 
 ## Smaller, lower-priority
 

@@ -69,7 +69,7 @@ export const LEDGER_LABEL: Record<LedgerKey, { name: string; blurb: string }> = 
   wash: { name: 'The wash', blurb: "The share taken to change money's colour. It buys nothing." },
   premises: {
     name: 'Premises and retainers',
-    blurb: 'Fronts, plants, workshops, and anybody on a standing arrangement.',
+    blurb: 'Fronts, plants, workshops, the ground held, and anybody on a standing arrangement.',
   },
   law: {
     name: 'Lawyers and contacts',

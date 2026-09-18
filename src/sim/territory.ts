@@ -12,8 +12,12 @@ import { addLog, hasSpecialVenture } from './util';
 import { VENTURE_PERKS } from '../config/tribute';
 import { holdingShare, yieldOf } from './holdings';
 import { houseColour, houseShort } from './houses';
+import { spend } from './economy';
+import { PAYDAY_INTERVAL } from '../config/economy';
 import {
   CONTESTED_MARGIN,
+  DISTRICT_HOLDING_NEGLECT_INFLUENCE_HIT,
+  DISTRICT_HOLDING_UPKEEP_PER_WEEK,
   DISTRICT_LIFE,
   CONTROL_LABEL,
   CONTROL_REQUIRES_LEAD,
@@ -164,6 +168,56 @@ export function controlledTerritories(state: GameState): Territory[] {
 
 export function hasPresence(t: Territory): boolean {
   return playerInfluence(t) >= 10;
+}
+
+/** What holding ground costs, before anybody has tried to pay it. */
+export function weeklyDistrictUpkeep(state: GameState): number {
+  return controlledTerritories(state).length * DISTRICT_HOLDING_UPKEEP_PER_WEEK;
+}
+
+/**
+ * Payday's third standing bill, alongside wages and front upkeep. Same
+ * shape as `tickFrontUpkeep`: dirty first, then clean, the shortfall
+ * carried rather than a cliff. See `DISTRICT_HOLDING_UPKEEP_PER_WEEK`
+ * (`config/territories.ts`) for why a flat bill and why influence is the
+ * penalty rather than a repossession.
+ */
+export function tickDistrictUpkeep(state: GameState): void {
+  if (state.day % PAYDAY_INTERVAL !== 0) return;
+
+  const owned = controlledTerritories(state);
+  if (owned.length === 0) return;
+
+  const due = weeklyDistrictUpkeep(state) + (state.org.districtUpkeepOwed ?? 0);
+  if (due <= 0) {
+    state.org.districtUpkeepOwed = 0;
+    return;
+  }
+
+  const fromDirty = Math.min(due, state.org.dirtyCash);
+  const remainder = due - fromDirty;
+  const fromClean = remainder > 0 && remainder <= state.org.cash ? remainder : 0;
+  const paid = fromDirty + fromClean;
+  if (paid > 0) spend(state, paid, 'premises');
+  state.org.districtUpkeepOwed = Math.max(0, Math.round(due - paid));
+
+  if (state.org.districtUpkeepOwed === 0) return;
+
+  const severity = due > 0 ? 1 - paid / due : 1;
+  const hit = DISTRICT_HOLDING_NEGLECT_INFLUENCE_HIT * severity;
+  for (const t of owned) {
+    t.influence.player = clamp(t.influence.player - hit, 0, 100);
+  }
+
+  addLog(
+    state,
+    paid > 0
+      ? `Upkeep on the streets came up short — $${Math.round(due).toLocaleString('en-US')} due, ` +
+        `$${Math.round(paid).toLocaleString('en-US')} paid. Word gets around.`
+      : `Nothing paid to keep the ground held. $${Math.round(due).toLocaleString('en-US')} owed, ` +
+        `and it is starting to slip.`,
+    'failure',
+  );
 }
 
 // ------------------------------------------------------------- expansion ---

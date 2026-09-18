@@ -542,6 +542,35 @@ export const FAVOUR_EFFECT = {
    * the scale of one business rather than a whole family's payroll.
    */
   permitPulledDays: 21,
+  /**
+   * How deniable a favour called in through a city office is, fed to
+   * `attribute()` (`beliefs.ts`) as `care`.
+   *
+   * The gap `.ai/TASKS.md` carried as blocked: the three outward grants
+   * above hurt a rival, but hurt them with nobody, ever, working out it
+   * was you — no call here reached `attribute()` at all, so a rival who
+   * lost a payroll or a front had nothing to suspect and nobody to blame,
+   * right or wrong. A crew leaning on a street corner is seen doing it
+   * (`faction.ts`'s own pressure call passes `care` 0, the default); a
+   * union boss, a captain, and an alderman are, by construction, a
+   * quieter channel than that — the whole point of routing a problem
+   * through a favour is that it does not have your face on it. Not
+   * total cover: `clarityFor` still reads presence in the district, so a
+   * family standing right on top of its own front can still work out
+   * who benefits.
+   */
+  outwardCare: 0.6,
+  /**
+   * How hard the grudge lands on whoever gets blamed for it, once it does.
+   *
+   * The same range `AI.pressure.relationshipHit` (`config/factions.ts`)
+   * uses for a crew shoving people around in a street — reused rather than
+   * invented, because an empty payroll, a hot rival and a dead storefront
+   * are the same order of hostile act as a physical shove, not a lesser
+   * one. `damageShare` still scales it down when the belief is only a
+   * guess, the same as every other use of this mechanic.
+   */
+  rivalGrudgeHit: [10, 20] as [number, number],
 } as const;
 
 /**

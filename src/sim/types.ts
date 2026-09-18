@@ -172,6 +172,13 @@ export interface Org {
    */
   frontUpkeepOwed?: number;
   /**
+   * District upkeep owed and not yet paid, same shape as `frontUpkeepOwed`.
+   * See `DISTRICT_HOLDING_UPKEEP_PER_WEEK` (`config/territories.ts`) for the
+   * reasoning. Optional so every save written before this loads with
+   * nothing owed.
+   */
+  districtUpkeepOwed?: number;
+  /**
    * The room stays genuinely unsettled until this day, set by a handover
    * whose winner had a weak claim — see `HANDOVER.shakyHandoverDays`. Read by
    * `driftNpcs`'s collective-defection term; a shaky win costs more than the

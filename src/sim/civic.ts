@@ -22,11 +22,13 @@
 
 import { addLog } from './util';
 import { activeCases } from './investigation';
-import { clamp } from './rng';
+import { clamp, Rng } from './rng';
 import { priced } from './market';
 import { earnDirty } from './economy';
 import { crewList } from './npc';
 import { businessDef, ownedBusinesses } from './business';
+import { attribute, damageShare } from './beliefs';
+import { adjustRelationship } from './diplomacy';
 import {
   adjustSentiment,
   playerInfluence,
@@ -420,6 +422,37 @@ export function askForWork(state: GameState, id: string): FavourResult {
 }
 
 /**
+ * What the family on the other end works out about who did it, and what
+ * that costs whoever they land on — shared by all three outward grants
+ * below.
+ *
+ * `territoryId` is null for the two that are not anchored to a place
+ * (a payroll, a division's attention); `pullPermit` passes its business's
+ * own district, since a permit is pulled on one building somewhere real.
+ * See `FAVOUR_EFFECT.outwardCare` for why this channel reads as quieter
+ * than `faction.ts`'s own street-level pressure, which calls `attribute`
+ * the same way with `care` at its default of 0.
+ */
+function attributeToRival(
+  state: GameState,
+  targetFactionId: FactionId,
+  territoryId: string | null,
+): void {
+  const rng = new Rng(state.rng);
+  const blame = attribute(
+    state,
+    rng,
+    targetFactionId,
+    'player',
+    territoryId,
+    'pressure',
+    FAVOUR_EFFECT.outwardCare,
+  );
+  const hit = rng.float(FAVOUR_EFFECT.rivalGrudgeHit[0], FAVOUR_EFFECT.rivalGrudgeHit[1]);
+  adjustRelationship(state, targetFactionId, blame.believed, -hit * damageShare(blame.confidence));
+}
+
+/**
  * The first of three favours in this network spent outward, on a rival,
  * rather than inward on a problem of the player's own.
  *
@@ -466,6 +499,7 @@ export function callWalkout(state: GameState, targetFactionId: FactionId): Favou
   held.owed -= 1;
   const target = state.factions[targetFactionId];
   target.walkoutUntilDay = state.day + FAVOUR_EFFECT.walkoutDays;
+  attributeToRival(state, targetFactionId, null);
 
   const message =
     `Nobody is showing up to work for the ${houseShort(state, targetFactionId)} for ` +
@@ -510,6 +544,7 @@ export function callTheLaw(state: GameState, targetFactionId: FactionId): Favour
   held.owed -= 1;
   const target = state.factions[targetFactionId];
   target.heat = clamp(target.heat + FAVOUR_EFFECT.heatOnRival, 0, 100);
+  attributeToRival(state, targetFactionId, null);
 
   const message = `A division has started asking questions about the ${houseShort(state, targetFactionId)}. That is their problem now.`;
   addLog(state, message, 'crew');
@@ -553,6 +588,7 @@ export function pullPermit(state: GameState, businessId: string): FavourResult {
   held.owed -= 1;
   const biz = rivalBusinesses(state)[businessId];
   biz.permitPulledUntilDay = state.day + FAVOUR_EFFECT.permitPulledDays;
+  attributeToRival(state, biz.factionId, biz.territoryId);
 
   const name = BUSINESS_BY_ID[biz.defId]?.name ?? 'The business';
   const message = `${name} has a permit problem that will take ${FAVOUR_EFFECT.permitPulledDays} days to sort out. It is not making anybody anything until then.`;

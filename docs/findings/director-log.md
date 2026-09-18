@@ -968,3 +968,89 @@ Not yet verified: "Hear them out" resolving invisibly, the extortion
 Refuse caption, the nav badge counts, log lines naming people who never
 materialize, `__frontline.run()`'s unsettled promise. Each gets checked
 before it is acted on.
+
+**Round 29 Part 2, verified and closed — 2026-09-17.** All eight
+game-facing SHOULD FIX items checked against live source, not just the
+test that guards them:
+
+- "Hear them out" now logs (`eventgen.ts:1580`, "You heard them out").
+- Extortion's Refuse caption fixed (`events.ts:1359`, no longer describes
+  paying).
+- Put-away-money contradiction fixed by copy order, not behaviour
+  (`FinancesPanel.tsx:207` — the exception moved to the front of the
+  sentence; the behaviour itself was already correct per round-8 design).
+- The rank-up empty table now names where the work went
+  (`OperationsPanel.tsx:763`).
+- "Above your standing" now names what qualified into the pitch rotation
+  (`OperationsPanel.tsx:1267`) — same finding as the tester's SF3, same fix.
+- The recruit-list log lines now name a face off the real `state.recruits`
+  pool (`crew.ts:150`) — Angelo Falcone could not recur, because every
+  variant now needs a real recruit to name.
+- Laundering line rounds (`business.ts:1001`).
+- Nav badges all carry a `title` (`Rail.tsx:195`) — but this predates the
+  round-29 build and the tester's own harness (`dev/harness.ts`) does not
+  read `title` attributes, only element text. The finding is real for that
+  tooling and not demonstrated against a human, mouse-driving player. Left
+  open as a tooling caveat rather than closed as a game fix — see
+  `HANDOFF.md` §0.
+
+Not a game fix: `__frontline.run()`'s promise not settling in the tester's
+own automation bridge, while the DOM steps it drives execute correctly.
+`run()`/`settle()`/`stillness()` read correctly in isolation; nothing in
+`dev/harness.ts` reproduces the symptom on inspection. Flagged for the
+harness owner, not chased without a reproducible repro.
+
+The two MUST FIX items and the `outgrewStreetWork` bodies-not-money defect
+were fixed in the same push (`ffa33a5`) — see that commit and `HANDOFF.md`
+§0's Round 29 entry for the fix detail.
+
+## District holding cost — 2026-09-18
+
+`.ai/TASKS.md`'s old item 2, built and measured both ways with
+`ladder.probe` per its own instruction to size and re-check reachability
+before shipping. Full detail in `HANDOFF.md` §0 and
+`DISTRICT_HOLDING_UPKEEP_PER_WEEK`'s comment (`config/territories.ts`).
+
+The one thing worth recording here rather than there: the first number
+tried ($200/week, roughly one associate's wage) was not a guess that
+happened to be wrong, it was reasoned from the existing wage scale and it
+still cost the trades-profitability probe its margin. The mechanism
+generalizes past this one feature — a **flat** per-unit bill is regressive
+against a career that has scaled up, in a way a **share-of-value** bill
+(what `weeklyFrontUpkeep` already charges) is not, because the flat bill
+takes the same dollar from a struggling holding and a thriving one while
+the share-of-value bill only ever asks for a cut of what actually came in.
+`ladder.probe`'s trades test is built to catch exactly that shape of tax
+landing on the strategy that is supposed to be winning, and it did its
+job. Worth remembering before pricing anything else in this game as a flat
+number per something the player can hold a lot of.
+
+## The last two `.ai/TASKS.md` items — 2026-09-18
+
+Both stale in the same specific way: written against a state of the code
+that had already moved on by the time they were read. Full detail in
+`HANDOFF.md` §0.
+
+**`distinctEnds`.** The note said 2 of 5 tiers reached; the probe's own
+bot currently reaches 4. Diagnosed the one real gap (tier 3 needs fronts
+or favours, the bot buys neither) and tried the honest fix — a bot that
+buys fronts. It made the number worse, not better, because a more capable
+bot converges harder onto the ceiling rank rather than spreading out. That
+is itself the finding: this axis is measuring population homogeneity
+under skilled play, and skilled play reliably succeeding is not a bug.
+Did not ship the stronger bot — it would have been tuning the instrument
+to a target number, and this project's culture is explicit that a
+pre-committed reading gets reported, not adjusted until it's flattering.
+
+**Favor-calls attributable to the wrong family.** The note said the
+rival-hurting favor action needed to exist first, and it already did —
+three of them, `callWalkout`/`callTheLaw`/`pullPermit`, shipped and live
+in the UI. Nobody had gone back to point `attribute()` at them once they
+existed. That was the actual remaining work, and it took one shared
+helper and three call sites.
+
+Same lesson both times: before treating a queue item as a problem to
+solve, check whether the premise it was written on is still true. Two of
+the last three items this session (this pair, plus round 29's nav-badge
+finding) turned out to be about a stale reading of the code rather than a
+real gap in it.
