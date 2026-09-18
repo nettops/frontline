@@ -32,6 +32,7 @@ import { HEALTH, EXPOSURE_ALARMING_ABOVE, SHUTTER_REFUND_SHARE } from '../../con
 import { priced } from '../../sim/market';
 import { Rng } from '../../sim/rng';
 import { SPECIAL_VENTURES } from '../../config/tribute';
+import { acquireSpecialVenture, canAcquireSpecialVenture } from '../../sim/tribute';
 import { canRunBoilerRoom, runBoilerRoom } from '../../sim/corporate';
 import { BOILER_ROOM } from '../../config/corporate';
 
@@ -481,7 +482,8 @@ export default function BusinessesPanel() {
             <p className="faint" style={{ fontSize: 11.5, margin: '0 18px 10px' }}>
               The price shown is what they are asking, not what you will pay. Going to see
               somebody opens a conversation — how you handle it decides the number, and what
-              you agree to besides the number.
+              you agree to besides the number. Fronts can be purchased using cash, dirty money,
+              or capital put away in holdings.
             </p>
             {/*
                The all-blocked paragraph that used to sit here is gone. It
@@ -594,44 +596,67 @@ export default function BusinessesPanel() {
 /**
  * The two covers this world is actually known for, and what each one is worth.
  *
- * Read-only, and that is not an oversight. `SPECIAL_VENTURES` is deliberately
- * kept out of `BUSINESSES` so the catalogue invariants `catalogue.test.ts` and
- * `ladder.probe` hold, which means there is no acquisition route to either of
- * them — so this panel names them, says what owning one does, and says plainly
- * that nobody is selling. A buy button here would be the thing rule 4 forbids.
+ * `SPECIAL_VENTURES` is deliberately kept out of `BUSINESSES` so the catalogue
+ * invariants `catalogue.test.ts` and `ladder.probe` hold, which means neither
+ * of them can be reached through the buy table above — that table walks the
+ * catalogue and these are not in it. `acquireSpecialVenture` is the route
+ * instead, and it is the reason this panel is no longer read-only.
  *
- * The owned check is real rather than decorative: `hasHealthInsurance` already
- * reads `waste_management` off the front list, so the day one of these becomes
- * buyable this panel starts reporting it without being touched.
+ * Every refusal is printed under the button rather than left in a hover, and
+ * it names the rung or the figure that would lift it. The owned state is a
+ * real read off the front list, the same one `hasHealthInsurance` makes its
+ * decision from.
  */
 function SignatureFronts() {
   const state = useGame();
   const owned = ownedBusinesses(state);
+  const [note, setNote] = useState<string | null>(null);
 
   return (
     <Panel title="The ones with a name">
       <p className="dim" style={{ marginTop: 0 }}>
-        Two covers that do more than wash money, and neither of them is on the market.
-        Somebody holds each one already, and getting near either is not a matter of price.
+        Two covers that do more than wash money. Neither washes anything at all — you buy
+        them in clean money, for what they hide and for the block they stand on.
       </p>
       {SPECIAL_VENTURES.map((venture) => {
         const have = owned.some((b) => b.defId === venture.id);
+        const can = canAcquireSpecialVenture(state, venture.id);
         return (
           <div key={venture.id} style={{ marginBottom: 12 }}>
             <KeyValue
               label={venture.name}
-              value={have ? 'Yours' : `${formatMoney(venture.cost)} if it were`}
+              value={have ? 'Yours' : formatMoney(venture.cost)}
               tone={have ? 'brass' : undefined}
             />
             <p className="faint tiny" style={{ margin: '2px 14px 4px' }}>
               {venture.blurb}
             </p>
-            <p className={have ? 'brass tiny' : 'dim tiny'} style={{ margin: '0 14px 0' }}>
+            <p className={have ? 'brass tiny' : 'dim tiny'} style={{ margin: '0 14px 6px' }}>
               {venture.perk}
             </p>
+            {!have && (
+              <div style={{ margin: '0 14px' }}>
+                <button
+                  className="btn small"
+                  disabled={!can.ok}
+                  onClick={() => {
+                    const out = mutate((s) => acquireSpecialVenture(s, venture.id), true);
+                    if (out) setNote(out.message);
+                  }}
+                >
+                  Acquire {venture.name} — {formatMoney(venture.cost)}
+                </button>
+                {!can.ok && <div className="tiny faint">{can.reason}</div>}
+              </div>
+            )}
           </div>
         );
       })}
+      {note && (
+        <p className="dim tiny" style={{ margin: '4px 14px 0' }}>
+          {note}
+        </p>
+      )}
     </Panel>
   );
 }

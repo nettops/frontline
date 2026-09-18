@@ -33,6 +33,8 @@ import crew from '../panels/CrewPanel.tsx?raw';
 import player from '../panels/PlayerPanel.tsx?raw';
 import finances from '../panels/FinancesPanel.tsx?raw';
 import businesses from '../panels/BusinessesPanel.tsx?raw';
+import rivals from '../panels/RivalsPanel.tsx?raw';
+import law from '../panels/LawPanel.tsx?raw';
 
 /** The file with its commentary taken out. See the header. */
 const code = (src: string): string =>
@@ -44,6 +46,8 @@ const PANELS: Record<string, string> = {
   'PlayerPanel.tsx': code(player),
   'FinancesPanel.tsx': code(finances),
   'BusinessesPanel.tsx': code(businesses),
+  'RivalsPanel.tsx': code(rivals),
+  'LawPanel.tsx': code(law),
 };
 
 /**
@@ -85,6 +89,13 @@ const ACTIONS: [system: string, panel: string, verb: string][] = [
   ['moving money somewhere else', 'FinancesPanel.tsx', 'siphonToFlorida'],
   ['leaving', 'FinancesPanel.tsx', 'retireToFlorida'],
   ['the floor', 'BusinessesPanel.tsx', 'runBoilerRoom'],
+  /*
+     Phase 6. Both of these were systems with nobody able to reach them in
+     exactly the sense this file was written for: `openContract` had taken a
+     `method` since tradecraft shipped and no caller ever passed one, and
+     `SPECIAL_VENTURES` was two priced entries with no route to either.
+  */
+  ['buying the place with your name on the door', 'BusinessesPanel.tsx', 'acquireSpecialVenture'],
 ];
 
 /* And the things that are a reading rather than a decision. */
@@ -96,7 +107,18 @@ const READS: [what: string, panel: string, name: string][] = [
   ['whether anybody is knocking on ordinary doors', 'PlayerPanel.tsx', 'civiliansAreBeingQuestioned'],
   ['what is in the account down there', 'FinancesPanel.tsx', 'floridaState'],
   ['the covers with a name on them', 'BusinessesPanel.tsx', 'SPECIAL_VENTURES'],
+  ['what it would take to buy one', 'BusinessesPanel.tsx', 'canAcquireSpecialVenture'],
 ];
+
+/**
+ * How the order gets said, on both screens that send somebody.
+ *
+ * A toggle rendered and never read would satisfy a bare `includes`, so this
+ * asks for the two halves separately: the control is on the screen, and the
+ * value it holds reaches `openContract`. That call is the only place the
+ * choice can possibly take effect — it is where `transmitOrder` runs.
+ */
+const SENDS: [panel: string][] = [['RivalsPanel.tsx'], ['LawPanel.tsx']];
 
 describe('every system built in phases 1-4 has a way in', () => {
   it('is reading the panels it asserts about', () => {
@@ -132,6 +154,17 @@ describe('every system built in phases 1-4 has a way in', () => {
  * is a thing you find by already suspecting it is there. Every new gate below
  * prints its own refusal as text beside the button.
  */
+describe('the tradecraft choice reaches the contract', () => {
+  it.each(SENDS)('%s renders the selector', (panel) => {
+    expect(PANELS[panel]).toContain('<TradecraftToggle');
+    expect(PANELS[panel]).toMatch(/useState<TransmissionMethod>\('phone_euphemism'\)/);
+  });
+
+  it.each(SENDS)('%s passes the chosen method into openContract', (panel) => {
+    expect(PANELS[panel]).toMatch(/openContract\([^)]*\bmethod\b[^)]*\)/);
+  });
+});
+
 describe('a refusal you can read without hovering', () => {
   it('says why a favour cannot be asked for, on the row that refused it', () => {
     expect(PANELS['PlayerPanel.tsx']).toMatch(
@@ -148,8 +181,11 @@ describe('a refusal you can read without hovering', () => {
     expect(PANELS['PlayerPanel.tsx']).toMatch(/locked !== null && \(/);
   });
 
-  it('says why the floor cannot be opened', () => {
+  it('says why the floor cannot be opened, and why a venture cannot be bought', () => {
     expect(PANELS['BusinessesPanel.tsx']).toMatch(/\{can\.reason\}/);
+    expect(PANELS['BusinessesPanel.tsx']).toMatch(
+      /\{!can\.ok && <div className="tiny faint">\{can\.reason\}<\/div>\}/,
+    );
   });
 
   it('says why a capo cannot be looked at', () => {

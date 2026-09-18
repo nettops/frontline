@@ -1578,6 +1578,7 @@ export function resolveGenerated(
       move(npc, GEN_EFFECT.heardLoyalty, GEN_EFFECT.heardGrievance);
       npc.stats.respectForBoss = clamp(npc.stats.respectForBoss + 5, 0, 100);
       addNote(npc, state.day, 'You heard them out.', 'good');
+      addLog(state, `You sat down with ${npc.name} and heard them out.`, 'crew');
       trainAttribute(state, 'leadership', 1);
       return;
     }

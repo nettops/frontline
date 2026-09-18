@@ -19,8 +19,20 @@
  */
 
 import { Rng, clamp } from './rng';
-import type { GameState, Id, Npc, TributeRecord, TributeState } from './types';
-import { TRIBUTE, type EarnerStatus, type LightEnvelopeDilemma } from '../config/tribute';
+import type { Business, GameState, Id, Npc, TributeRecord, TributeState } from './types';
+import {
+  SPECIAL_VENTURES,
+  TRIBUTE,
+  VENTURE_PERKS,
+  type EarnerStatus,
+  type LightEnvelopeDilemma,
+} from '../config/tribute';
+import { HEALTH } from '../config/businesses';
+import { HOME_TERRITORY } from '../config/territories';
+import { RANKS, rankIndex } from '../config/economy';
+import { rankNow } from './rank';
+import { note } from './ledger';
+import { formatMoney } from './util';
 import { activeCapos } from './capoTension';
 import { districtsHeldBy } from './delegation';
 import { earnDirty, spend } from './economy';
@@ -29,7 +41,7 @@ import { gainRespect } from './player';
 import { confidantIsExposed } from './personal';
 import { activeCases } from './investigation';
 import { stageIndex } from '../config/lawEnforcement';
-import { addLog, nextId, say } from './util';
+import { addLog, hasSpecialVenture, nextId, say } from './util';
 
 /** Lazy, so a save written before the envelopes existed loads with an empty book. */
 export function tributeState(state: GameState): TributeState {
@@ -329,4 +341,109 @@ export function insulateCommand(state: GameState, capo: Npc, before: Set<Id>): v
     'A job of his went wrong. Whatever it left behind stops with him.',
     'bad',
   );
+}
+
+// ------------------------------------------------------- signature covers ---
+
+/**
+ * The two places this world is actually known for, and the only way in.
+ *
+ * `SPECIAL_VENTURES` is kept out of `BUSINESSES` so the catalogue invariants
+ * hold, so neither of them can be reached through `canAcquire` — the buy table
+ * walks the catalogue and these are not in it. This is the route instead, and
+ * it is deliberately not a discount version of the ordinary one: no district
+ * to choose, no slot auction, no negotiation, and it is paid for in clean
+ * money because the entire point of both places is that they are legitimate on
+ * paper. A boss who has only ever earned dirty cannot buy his way onto a
+ * payroll, which is the correct answer.
+ */
+export { hasSpecialVenture };
+
+/** The venture by id, or undefined. Exported shape kept narrow on purpose. */
+function ventureDef(ventureId: string) {
+  return SPECIAL_VENTURES.find((v) => v.id === ventureId);
+}
+
+/**
+ * Whether it can be bought, and if not, what would lift the refusal.
+ *
+ * Rule 4: every branch names the thing standing in the way and the figure
+ * that clears it. "Not available" is the refusal this project keeps finding
+ * and deleting.
+ */
+export function canAcquireSpecialVenture(
+  state: GameState,
+  ventureId: string,
+): { ok: boolean; reason?: string } {
+  const venture = ventureDef(ventureId);
+  if (!venture) return { ok: false, reason: 'No such place.' };
+  if (hasSpecialVenture(state, ventureId)) {
+    return { ok: false, reason: `${venture.name} is already yours.` };
+  }
+
+  const held = rankNow(state);
+  const wanted = RANKS[rankIndex(VENTURE_PERKS.minRank)];
+  if (rankIndex(held.id) < rankIndex(VENTURE_PERKS.minRank)) {
+    return {
+      ok: false,
+      reason:
+        `Nobody puts a ${held.name.toLowerCase()} on a legitimate payroll as a consultant. ` +
+        `${wanted.name} is where that conversation starts.`,
+    };
+  }
+
+  if (state.org.cash < venture.cost) {
+    return {
+      ok: false,
+      reason:
+        `${formatMoney(venture.cost)} in clean money, and you have ${formatMoney(state.org.cash)}. ` +
+        `Dirty cash cannot buy a name on a door — wash ${formatMoney(venture.cost - state.org.cash)} more first.`,
+    };
+  }
+  return { ok: true };
+}
+
+/**
+ * Buy it. The front that comes out is an ordinary operating business in every
+ * respect the rest of the sim can see — it ticks, ages, earns and can be
+ * shuttered through the same code — which is what `businessDef` exists to
+ * make true. What is not ordinary is the perk, and each of those is
+ * implemented at the one funnel it belongs to rather than here.
+ */
+export function acquireSpecialVenture(
+  state: GameState,
+  ventureId: string,
+): { ok: boolean; message: string } {
+  const can = canAcquireSpecialVenture(state, ventureId);
+  if (!can.ok) return { ok: false, message: can.reason ?? 'No.' };
+  const venture = ventureDef(ventureId)!;
+
+  state.org.cash -= venture.cost;
+  note(state, 'premises', -venture.cost);
+
+  /*
+     Home, because both of them are about a neighbourhood rather than a market.
+     The pork store's perk reads `HOME_TERRITORY` directly and the transfer
+     station's does not care where it stands, so there is nothing for a
+     district picker to decide — and a control that asks a question with only
+     one answer is a click that does nothing.
+  */
+  const business: Business = {
+    id: nextId(state, 'biz'),
+    defId: venture.id,
+    territoryId: HOME_TERRITORY,
+    purchasedDay: state.day,
+    exposure: 0,
+    health: HEALTH.start,
+    revenueTotal: 0,
+    launderedTotal: 0,
+    lastLaundered: 0,
+    status: 'operating',
+  };
+  state.businesses[business.id] = business;
+  state.territories[HOME_TERRITORY].businessIds.push(business.id);
+
+  const message = `${venture.name} is yours. ${formatMoney(venture.cost)} of clean money, and your name is on the door.`;
+  addLog(state, message, 'money');
+  return { ok: true, message };
 }

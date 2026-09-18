@@ -51,6 +51,21 @@ describe('the approaches differ in the ways the panel says they do', () => {
     expect(h.approach).toBeLessThan(0);
   });
 
+  it('improves heavy approach odds when the family holds arms in stock', () => {
+    const state = fresh();
+    const def = OPERATION_BY_ID.corner_shakedown;
+    const crew = availableCrew(state);
+    const where = operableTerritories(state)[0].territory.id;
+
+    const unarmed = successBreakdown(state, def, crew.slice(0, 1), where, 'heavy');
+
+    state.contraband.stock.arms = 20;
+    const armed = successBreakdown(state, def, crew.slice(0, 1), where, 'heavy');
+
+    expect(armed.approach).toBeGreaterThan(unarmed.approach);
+    expect(armed.total).toBeGreaterThan(unarmed.total);
+  });
+
   it('projects a bigger score for the loud version of the same job', () => {
     const a = fresh();
     const b = fresh();

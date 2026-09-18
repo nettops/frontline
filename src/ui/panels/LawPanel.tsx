@@ -1,20 +1,25 @@
 import { useState } from 'react';
 import { useGame, mutate } from '../../store';
-import { Panel, Empty, KeyValue, Bar } from '../components';
+import { Panel, Empty, KeyValue, Bar, TradecraftToggle } from '../components';
+import type { TransmissionMethod } from '../../config/tradecraft';
 import { Rng } from '../../sim/rng';
 import {
   activeCases,
   allCases,
+  canUseLegalFavor,
   destroyEvidence,
   destroyEvidenceChance,
+  destroyEvidenceCost,
   hasContact,
   looseEvidence,
   pressureWitness,
   pressureWitnessChance,
+  pressureWitnessCost,
   readCase,
   weeklyLegalCost,
   worstStage,
 } from '../../sim/investigation';
+import { availableCrew } from '../../sim/npc';
 import { formatMoney, formatShortDay } from '../../sim/util';
 import { STAGES, STAGE_BY_ID, stageIndex, DESTROY_EVIDENCE, PRESSURE_WITNESS } from '../../config/lawEnforcement';
 import {
@@ -245,6 +250,13 @@ function CaseDetail({
   const state = useGame();
   const read = readCase(state, investigation);
   const [message, setMessage] = useState<string | null>(null);
+  /*
+     One selector for the whole row of witnesses rather than one per name:
+     the choice is how the boss talks this week, not which of five people he
+     talks about, and five toggles saying the same thing would be five copies
+     of the same decision.
+  */
+  const [method, setMethod] = useState<TransmissionMethod>('phone_euphemism');
 
   const suspects = investigation.suspectIds
     .map((id) => state.npcs[id])
@@ -355,13 +367,32 @@ function CaseDetail({
             What you can do about it
           </div>
           <div className="stack">
-            <button
-              className="btn small danger"
-              title={`${formatMoney(DESTROY_EVIDENCE.cost)}. Works more often the sharper you are. When it fails it becomes a charge of its own.`}
-              onClick={() => act((rng) => destroyEvidence(state, rng, investigation.id))}
-            >
-              Get at what they have — {formatMoney(DESTROY_EVIDENCE.cost)}
-            </button>
+            {canUseLegalFavor(state) ? (
+              <div className="btn-row" style={{ gap: 6 }}>
+                <button
+                  className="btn small danger"
+                  title={`Use 1 civic favor from police captain or judge to slash cost by 60% (${formatMoney(destroyEvidenceCost(state, true))}). Works more often the sharper you are.`}
+                  onClick={() => act((rng) => destroyEvidence(state, rng, investigation.id, { useFavor: true }))}
+                >
+                  Get at what they have (Civic favor) — {formatMoney(destroyEvidenceCost(state, true))}
+                </button>
+                <button
+                  className="btn small"
+                  title={`${formatMoney(DESTROY_EVIDENCE.cost)}. Full cash price without spending civic favor.`}
+                  onClick={() => act((rng) => destroyEvidence(state, rng, investigation.id))}
+                >
+                  Full cash — {formatMoney(DESTROY_EVIDENCE.cost)}
+                </button>
+              </div>
+            ) : (
+              <button
+                className="btn small danger"
+                title={`${formatMoney(DESTROY_EVIDENCE.cost)}. Works more often the sharper you are. When it fails it becomes a charge of its own.`}
+                onClick={() => act((rng) => destroyEvidence(state, rng, investigation.id))}
+              >
+                Get at what they have — {formatMoney(DESTROY_EVIDENCE.cost)}
+              </button>
+            )}
             {/*
                A round 17 finding: the risk was real and only ever said in a
                hover. Same fix this project has made for a refusal before —
@@ -379,18 +410,43 @@ function CaseDetail({
                 <div className="tiny" style={{ marginTop: 4 }}>
                   Lean on somebody they have named
                 </div>
-                {suspects.slice(0, 5).map((npc) => (
-                  <button
-                    key={npc.id}
-                    className="btn small danger"
-                    title={`${formatMoney(PRESSURE_WITNESS.cost)}. If they go to them instead, this gets much worse.`}
-                    onClick={() =>
-                      act((rng) => pressureWitness(state, rng, investigation.id, npc.id))
-                    }
-                  >
-                    {npc.name}
-                  </button>
-                ))}
+                {suspects.slice(0, 5).map((npc) => {
+                  const freeMuscle = availableCrew(state)[0];
+                  const hasFavor = canUseLegalFavor(state);
+                  const cashCost = hasFavor ? pressureWitnessCost(state, { useFavor: true }) : PRESSURE_WITNESS.cost;
+                  return (
+                    <div key={npc.id} className="btn-row" style={{ gap: 6, marginBottom: 4 }}>
+                      <button
+                        className="btn small danger"
+                        title={`${formatMoney(cashCost)}${hasFavor ? ' (using civic favor)' : ''}. If they go to them instead, this gets much worse.`}
+                        onClick={() =>
+                          act((rng) =>
+                            pressureWitness(state, rng, investigation.id, npc.id, {
+                              useFavor: hasFavor,
+                            }),
+                          )
+                        }
+                      >
+                        {npc.name} ({formatMoney(cashCost)})
+                      </button>
+                      {freeMuscle && (
+                        <button
+                          className="btn small"
+                          title={`Send ${freeMuscle.name} to intimidate witness for $1,500 grease (away for 2 days).`}
+                          onClick={() =>
+                            act((rng) =>
+                              pressureWitness(state, rng, investigation.id, npc.id, {
+                                muscleId: freeMuscle.id,
+                              }),
+                            )
+                          }
+                        >
+                          Send {freeMuscle.name} ($1,500)
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
                 <p className="faint tiny" style={{ margin: '-4px 0 4px' }}>
                   {Math.round(pressureWitnessChance(state) * 100)}% it works. If
                   they go to them instead, this gets much worse.
@@ -409,6 +465,7 @@ function CaseDetail({
                   Or send somebody, which takes {CONTRACT.crew} of your people for{' '}
                   {CONTRACT.days} days
                 </div>
+                <TradecraftToggle method={method} onChange={setMethod} />
                 {suspects.slice(0, 5).map((npc) => {
                   const target: ContractTarget = {
                     kind: 'witness',
@@ -437,7 +494,7 @@ function CaseDetail({
                           : check.message
                       }
                       onClick={() => {
-                        const out = mutate((s) => openContract(s, target), true);
+                        const out = mutate((s) => openContract(s, target, false, method), true);
                         if (out) setMessage(out.message);
                       }}
                     >

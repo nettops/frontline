@@ -586,4 +586,23 @@ describe('districtWorth', () => {
     expect(average).toBeGreaterThan(quoted * 0.2);
     expect(average).toBeLessThan(quoted * 2.5);
   });
+
+  it('logs weekly earnings to state.log so the player sees what was turned in', () => {
+    const state = game(41);
+    const t = territoryList(state)[0];
+    addInfluence(state, t.id, 70);
+
+    const [hand] = twoMen(state);
+    hand.role = ROLE_ORDER[DELEGATION.minRoleIndex];
+    hand.status = 'active';
+    putInCharge(state, hand.id, t.id);
+
+    const rng = new Rng(state.rng);
+    state.day = DELEGATION.intervalDays;
+    tickDelegation(state, rng);
+
+    const deliveryLog = state.log.find((l) => l.text.includes('turned in'));
+    expect(deliveryLog).toBeDefined();
+    expect(deliveryLog?.text).toContain(hand.name);
+  });
 });

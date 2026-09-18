@@ -27,6 +27,12 @@ import { Rng } from '../../sim/rng';
 import { canSitDownWith, openSitdown } from '../../sim/sitdown';
 import { REASONS, SITDOWN } from '../../config/sitdown';
 import { readMemories } from '../../sim/memory';
+import {
+  giftPossessionToCrew,
+  heldPossessions,
+  isPortablePossession,
+  possessionDef,
+} from '../../sim/possessions';
 import { daysLeft, promisesTo } from '../../sim/promises';
 import { PROMISE, PROMISES } from '../../config/promises';
 import {
@@ -609,7 +615,7 @@ export default function CrewPanel() {
       )}
 
       <Panel
-        title="Available to bring in"
+        title="Available to bring in — The Recruit List"
         action={
           <span className="tiny">
             {formatMoney(cost)} each · payroll {formatMoney(payroll.due)} a week against{' '}
@@ -620,6 +626,9 @@ export default function CrewPanel() {
         }
         flush
       >
+        <p className="faint tiny" style={{ margin: '8px 14px 6px' }}>
+          The street list of candidates looking for an in with your outfit. The list turns over every 10 days.
+        </p>
         {recruits.length === 0 ? (
           <Empty>Nobody worth approaching right now.</Empty>
         ) : (
@@ -763,6 +772,7 @@ function CrewDetail({ npc, onClose }: { npc: Npc; onClose: () => void }) {
   const sitCheck = canSitDownWith(state, npc.id);
   const raiseCheck = canRaise(state, npc.id);
   const silenceCheck = canSilence(state, npc.id);
+  const giftable = heldPossessions(state).filter((p) => isPortablePossession(possessionDef(p)));
   /*
      Two clicks, and the second one prints the odds.
 
@@ -1002,25 +1012,28 @@ function CrewDetail({ npc, onClose }: { npc: Npc; onClose: () => void }) {
              rather than among them.
           */}
           <div className="sit-row" style={{ marginTop: 14 }}>
-            <span className="tiny">Sit down with them</span>
-            {/*
-               A line saying that a room is a room.
-
-               Round 13 read these four labels for 299 days as "four buttons
-               that would produce a line of text, so I never pressed one", then
-               found the sit-down on day 300 and called it probably the best
-               system in the game. Round 12 found it on day 19 and said the same
-               thing about its quality. Same build, same system, 281 days apart
-               in discovery — the entry point was the only difference.
-
-               So the door says what is behind it: a scene, not a result. The
-               numbers come from `SITDOWN` rather than the sentence, because a
-               promise about a mechanic has to move when the mechanic does.
-            */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span className="tiny" style={{ fontWeight: 600 }}>Sit down today — immediate conversation (0 days)</span>
+              {npc.stats.grievance >= 55 && (
+                <span className="tag injured" style={{ fontSize: '10px' }}>Grudge</span>
+              )}
+            </div>
+            {npc.stats.grievance >= 55 && (
+              <div style={{
+                padding: '6px 10px',
+                background: 'rgba(217, 83, 79, 0.12)',
+                border: '1px solid rgba(217, 83, 79, 0.35)',
+                borderRadius: 4,
+                margin: '6px 0',
+                fontSize: '11px',
+                color: '#ff8a80',
+                lineHeight: 1.4,
+              }}>
+                ⚠️ <strong>Carrying a grudge ({perceive(npc, 'grievance').band})</strong>. Takes 0 days off the board. Unaddressed grievances compound weekly into defection or talking to police. Sit down with them now.
+              </div>
+            )}
             <p className="tiny faint" style={{ margin: '4px 0 0' }}>
-              A conversation in a back room, not an answer — it runs as long as they will
-              sit there, and how
-              you handle them decides what you come away knowing. Once every{' '}
+              Takes no days off the board — an immediate private conversation in the back room to settle bad blood, probe loyalty, or hear them out before grievances fester. Once every{' '}
               {SITDOWN.cooldownDays} days with the same person.
             </p>
             <div className="btn-row" style={{ marginTop: 6 }}>
@@ -1042,6 +1055,27 @@ function CrewDetail({ npc, onClose }: { npc: Npc; onClose: () => void }) {
                 </button>
               ))}
             </div>
+            {npc.stats.grievance > 0 && giftable.length > 0 && (
+              <div style={{ marginTop: 8 }}>
+                <div className="tiny faint">Gift personal luxury to wipe out grudge (-35 grievance, +15 loyalty):</div>
+                <div className="btn-row" style={{ marginTop: 4 }}>
+                  {giftable.map((p) => {
+                    const def = possessionDef(p);
+                    if (!def) return null;
+                    return (
+                      <button
+                        key={p.id}
+                        className="btn small"
+                        title={`Hand over ${def.name.toLowerCase()} to ${npc.name} to settle bad blood.`}
+                        onClick={() => mutate((s) => giftPossessionToCrew(s, p.defId, npc.id), true)}
+                      >
+                        Gift {def.name}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </div>
 
           <Teaching npc={npc} />
@@ -1213,12 +1247,11 @@ function Teaching({ npc }: { npc: Npc }) {
 
   return (
     <div style={{ marginTop: 14 }}>
-      <div className="tiny" style={{ marginBottom: 6 }}>
-        Put them with somebody
+      <div className="tiny" style={{ marginBottom: 6, fontWeight: 600 }}>
+        Apprentice pairing ({TRAINING.days} days off the street)
       </div>
       <p className="faint tiny" style={{ margin: '0 0 6px' }}>
-        {TRAINING.days} days. Both of them are off the board for all of it, and what
-        comes across is not only how good somebody is — it is how careful they are too.
+        Long-term pairing — takes both men off the board for {TRAINING.days} days to pass down trade skills and discipline.
       </p>
       {teachers.length === 0 ? (
         <Empty>Nobody free has anything to show them.</Empty>

@@ -12,6 +12,7 @@ import type {
   LogKind,
   PendingEvent,
 } from './types';
+import { VENTURE_PERKS } from '../config/tribute';
 
 export function nextId(state: GameState, prefix: string): string {
   state.nextId += 1;
@@ -29,8 +30,41 @@ export function addEvidence(
 ): EvidenceTrace {
   const id = nextId(state, 'ev');
   const full: EvidenceTrace = { attachedTo: [], ...trace, id };
+  /*
+     Barone Sanitation, and the one place it can possibly be applied.
+
+     A trace from a killing or a body is the only thing the transfer station
+     touches — finance, informants and ordinary job traces are somebody else's
+     problem and it would not make sense for a skip lorry to help with them.
+     Here rather than at the eleven places violence writes a trace, because a
+     perk implemented per call site is a perk that is wrong at the twelfth.
+
+     Nothing is drawn and nothing is written when the venture is not owned, so
+     a career without it is bit-identical to one before this existed.
+  */
+  if (
+    (full.source === 'violence' || full.source === 'disposal') &&
+    hasSpecialVenture(state, 'waste_management')
+  ) {
+    full.strength = full.strength * (1 - VENTURE_PERKS.wasteEvidenceReduction);
+  }
   state.evidence[id] = full;
   return full;
+}
+
+/**
+ * Whether one of the two signature covers is standing and earning.
+ *
+ * Here rather than in `business.ts` for the usual reason this file exists:
+ * `addEvidence` above needs it, `territory.ts` and `faction.ts` need it, and
+ * none of those can import the business module without a cycle. It reads
+ * nothing `ownedBusinesses` does not read — same filter, same field — so
+ * there is no second copy of the ownership question to drift.
+ */
+export function hasSpecialVenture(state: GameState, ventureId: string): boolean {
+  return Object.values(state.businesses).some(
+    (b) => b.status === 'operating' && b.defId === ventureId,
+  );
 }
 
 /** Newest entries first. Trimmed so a long game does not grow unbounded. */

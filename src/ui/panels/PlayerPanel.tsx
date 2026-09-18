@@ -86,7 +86,12 @@ import { CONTAGION, PET_PROJECTS } from '../../config/petProject';
 import { priced } from '../../sim/market';
 import { ATTENTION } from '../../config/attention';
 import {
+  canRedeemPossession,
+  pawnedPossessions,
+  pawnPossession,
+  possessionDef,
   possessionRows,
+  redeemPossession,
   sellPossession,
 } from '../../sim/possessions';
 import { controlledTerritories } from '../../sim/territory';
@@ -190,6 +195,7 @@ function Worth() {
 function Possessions() {
   const state = useGame();
   const owned = possessionRows(state);
+  const pawned = pawnedPossessions(state);
 
   const seen = (visibility: number) =>
     visibility >= 0.75 ? 'Everybody' : visibility >= 0.4 ? 'People notice' : 'Nobody much';
@@ -227,7 +233,7 @@ function Possessions() {
                 <td className="num mono">{formatMoney(row.value)}</td>
                 <td className="num mono">{formatMoney(row.back)}</td>
                 <td className="dim">{seen(row.def.visibility)}</td>
-                <td>
+                <td style={{ whiteSpace: 'nowrap' }}>
                   <button
                     className="btn small"
                     title={`Sell it for ${formatMoney(row.back)}. You paid ${formatMoney(row.possession.paid)}`}
@@ -235,11 +241,59 @@ function Possessions() {
                   >
                     Sell
                   </button>
+                  {row.portable && (
+                    <button
+                      className="btn small"
+                      style={{ marginLeft: 6 }}
+                      title={`Pawn it for ${formatMoney(row.pawnLoan)} liquid cash (80%). Can be redeemed later for 90%.`}
+                      onClick={() => mutate((g) => pawnPossession(g, row.def.id), true)}
+                    >
+                      Pawn ({formatMoney(row.pawnLoan)})
+                    </button>
+                  )}
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
+      )}
+
+      {pawned.length > 0 && (
+        <div style={{ marginTop: 8, marginBottom: 14 }}>
+          <div className="subhead" style={{ marginBottom: 4, fontWeight: 600 }}>In Pawn (Collateral)</div>
+          <table className="table">
+            <thead>
+              <tr>
+                <th>Item</th>
+                <th className="num">Redeem cost</th>
+                <th />
+              </tr>
+            </thead>
+            <tbody>
+              {pawned.map((p) => {
+                const def = possessionDef(p);
+                const check = canRedeemPossession(state, p.defId);
+                const cost = p.pawnRedeemCost ?? Math.round(p.paid * 0.9);
+                return (
+                  <tr key={p.id}>
+                    <td>{def ? def.name : 'Unknown item'}</td>
+                    <td className="num mono">{formatMoney(cost)}</td>
+                    <td style={{ textAlign: 'right' }}>
+                      <button
+                        className="btn small"
+                        disabled={!check.ok}
+                        title={check.ok ? `Redeem for ${formatMoney(cost)}` : check.reason}
+                        onClick={() => mutate((g) => redeemPossession(g, p.defId), true)}
+                      >
+                        Redeem
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       )}
 
       {/*
@@ -257,7 +311,7 @@ function Possessions() {
            on this screen is what the boss has, which is the half that five
            other systems were always reading.
         */}
-      {owned.length === 0 && (
+      {owned.length === 0 && pawned.length === 0 && (
         <p className="faint tiny" style={{ margin: '4px 0 0' }}>
           Nothing yet. Things turn up when a score comes home.
         </p>
@@ -619,6 +673,26 @@ export default function PlayerPanel() {
         line under it is the one thing on this screen that says what the
         promotion actually put you in.
       */}
+      {/*
+         Points that were sitting there unspent, said before the page starts.
+
+         "What you are made of" is most of a screen further down and a player
+         who has not scrolled to it has no way of knowing there is anything
+         waiting. Round 29 carried unspent points across a whole career and
+         read every operation's odds as the best they could be. Same `left`
+         the table below already computes — no second source for the count.
+      */}
+      {left > 0 && (
+        <aside className="coach urgent" style={{ marginBottom: 12 }}>
+          <span className="coach-label">Unspent</span>
+          <span className="coach-text">
+            You have {left} unspent attribute {left === 1 ? 'point' : 'points'}. Place them in
+            "What you are made of" below — every one of them lifts your odds on every job you
+            run.
+          </span>
+        </aside>
+      )}
+
       <div className="player-head">
         <PlayerPortrait player={player} scale={3} />
         <div>
@@ -868,6 +942,11 @@ export default function PlayerPanel() {
               {consulting.reason}
             </p>
           )}
+          {state.flags['dr_vance_clarity_until'] && state.flags['dr_vance_clarity_until'] >= state.day && (
+            <p className="tiny" style={{ color: '#63b3ed', marginTop: -4, marginBottom: 10 }}>
+              🧠 Fortnight of Clarity ({state.flags['dr_vance_clarity_until'] - state.day} days left). Read on your crew is razor sharp.
+            </p>
+          )}
           {/*
              And the other relief, which is the one that carries a risk.
 
@@ -892,6 +971,11 @@ export default function PlayerPanel() {
                 : undefined
             }
           />
+          {her.active && her.discretion < CONFIDANT.wiretapDiscretionThreshold && (
+            <div className="alert danger" style={{ margin: '4px 0 8px', padding: '6px 10px', fontSize: 12 }}>
+              ⚠️ <strong>Discretion slipping ({Math.round(her.discretion)})</strong>: The apartment on 72nd is drawing talk. Send an allowance or visit before wiretaps activate or rumors reach the house.
+            </div>
+          )}
           {her.active && (
             <>
               <p className="faint tiny" style={{ margin: '2px 14px 4px' }}>

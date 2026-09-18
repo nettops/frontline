@@ -1,7 +1,7 @@
 import { Fragment } from 'react';
 import { useGame } from '../store';
 import type { GameState } from '../sim/types';
-import { controlledTerritories, territoryDef } from '../sim/territory';
+import { territoryDef } from '../sim/territory';
 import { mostHostile } from '../sim/faction';
 import { activeCases } from '../sim/investigation';
 import { playerIsAtWar } from '../sim/diplomacy';
@@ -91,7 +91,6 @@ export default function Rail({
   const state = useGame();
   const pending = state.pendingEvents.length;
   const activeOps = Object.keys(state.activeOperations).length;
-  const held = controlledTerritories(state).length;
   const hostile = !!mostHostile(state);
   const cases = activeCases(state).length;
   const war = playerIsAtWar(state);
@@ -207,20 +206,15 @@ export default function Rail({
           */}
           {entry.id === 'operations' && activeOps > 0 && (
             <span className="rail-phase" title={`${activeOps} job${activeOps === 1 ? '' : 's'} running`}>
-              {activeOps}
-            </span>
-          )}
-          {entry.id === 'territory' && held > 0 && (
-            <span className="rail-phase" title={`${held} district${held === 1 ? '' : 's'} under your control`}>
-              {held}
+              {activeOps} live
             </span>
           )}
           {entry.id === 'player' && unspent > 0 && (
             <span
               className="rail-badge"
-              title={`${unspent} point${unspent === 1 ? '' : 's'} to place. They raise your odds on every job until you do`}
+              title={`${unspent} attribute point${unspent === 1 ? '' : 's'} to place in stats`}
             >
-              {unspent}
+              +{unspent} pts
             </span>
           )}
           {entry.id === 'rivals' && hostile && (
@@ -248,7 +242,7 @@ export default function Rail({
           )}
           {entry.id === 'contraband' && trading > 0 && (
             <span className="rail-phase" title="Stock on hand — a warrant can take this">
-              {trading}
+              {trading} cr.
             </span>
           )}
           {entry.id === 'crew' && carrying > 0 && (

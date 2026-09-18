@@ -29,6 +29,7 @@ import {
 import { activity, priced } from './market';
 import { outrageBusinessMultiplier } from './perception';
 import {
+  adjustSentiment,
   businessSlots,
   controlLevel,
   isContested,
@@ -68,9 +69,40 @@ import { WORLD } from '../config/build';
 import { worldPull } from './build';
 import type { ControlLevel } from '../config/territories';
 import { doctrineCleanYield } from './doctrine';
+import { SPECIAL_VENTURES } from '../config/tribute';
 
+/**
+ * The catalogue entry a front was bought from, or a synthesised one.
+ *
+ * The two signature covers are deliberately kept out of `BUSINESSES` so
+ * `catalogue.test.ts` and `ladder.probe` keep measuring the same ladder — see
+ * `config/tribute.ts`. That decision is what makes this branch necessary: a
+ * venture is a real operating front once bought, so it ticks, ages, earns and
+ * shutters through exactly the code every other front does, and every one of
+ * those reads its shape from here. Synthesising it at the single funnel is the
+ * whole of the integration; nothing downstream knows the difference.
+ *
+ * It washes nothing (`launderCapacity: 0`) on purpose. Neither of them is a
+ * laundry — the transfer station is bought for what it hides and the pork
+ * store for the block it sits on, and giving them capacity as well would make
+ * them straightly better than the fronts they cost four times as much as.
+ */
 export function businessDef(business: Business): BusinessDef {
-  return BUSINESS_BY_ID[business.defId];
+  const listed = BUSINESS_BY_ID[business.defId];
+  if (listed) return listed;
+  const venture = SPECIAL_VENTURES.find((v) => v.id === business.defId);
+  if (!venture) return BUSINESS_BY_ID[business.defId];
+  return {
+    id: venture.id,
+    name: venture.name,
+    description: venture.blurb,
+    cost: venture.cost,
+    revenue: venture.weeklyRevenue,
+    launderCapacity: 0,
+    exposureRate: 0.05,
+    legitimacy: venture.legitimacy,
+    minControl: 'control',
+  };
 }
 
 export function ownedBusinesses(state: GameState): Business[] {
@@ -718,6 +750,7 @@ export function tickBusinesses(
 
   for (const business of operating) {
     const def = businessDef(business);
+    const lean = pressureOf(business);
 
     // Clean income arrives regardless of what you push through it.
     // Legitimate trade is worse in a city that feels unsafe — which is a cost
@@ -727,7 +760,21 @@ export function tickBusinesses(
         worldMod(state, 'businessRevenue') *
         outrageBusinessMultiplier(state),
     );
-    revenue += earned;
+    let netEarned = earned;
+    if (lean.id === 'hard' && state.org.cash < 1_000 && earned > 0) {
+      const skim = Math.min(600, Math.round(earned * 0.5));
+      if (skim > 0) {
+        state.org.cash += skim;
+        netEarned -= skim;
+        note(state, 'fronts', skim);
+        addLog(
+          state,
+          `Emergency skim from ${def.name}: \$${skim.toLocaleString()} taken directly from the register for liquid cash.`,
+          'money',
+        );
+      }
+    }
+    revenue += netEarned;
     business.revenueTotal += earned;
 
     // The middle path: a front that has paid for itself several times over
@@ -774,7 +821,9 @@ export function tickBusinesses(
        "keep it clean" has to be worth something to a front that is idle — a
        restaurant nobody is washing through is quietly becoming a restaurant.
     */
-    const lean = pressureOf(business);
+    if (lean.id === 'clean') {
+      adjustSentiment(state, business.territoryId, 0.4);
+    }
     /*
        And the man you agreed to look after, who is standing outside it.
 
@@ -948,15 +997,15 @@ export function tickBusinesses(
   if (laundered > 0) {
     addLog(
       state,
-      `Businesses took in $${revenue.toLocaleString('en-US')}, put away rather than banked, ` +
-        `and moved $${laundered.toLocaleString('en-US')} through, ` +
-        `$${cut.toLocaleString('en-US')} lost in the washing.`,
+      `Businesses took in $${Math.round(revenue).toLocaleString('en-US')}, put away rather ` +
+        `than banked, and moved $${Math.round(laundered).toLocaleString('en-US')} through, ` +
+        `$${Math.round(cut).toLocaleString('en-US')} lost in the washing.`,
       'money',
     );
   } else if (revenue > 0) {
     addLog(
       state,
-      `Businesses took in $${revenue.toLocaleString('en-US')}. It goes to what is put away.`,
+      `Businesses took in $${Math.round(revenue).toLocaleString('en-US')}. It goes to what is put away.`,
       'money',
     );
   }

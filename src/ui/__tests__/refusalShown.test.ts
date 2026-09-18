@@ -38,6 +38,7 @@ import dashboard from '../panels/Dashboard.tsx?raw';
 import city from '../panels/CityPanel.tsx?raw';
 import law from '../panels/LawPanel.tsx?raw';
 import rivals from '../panels/RivalsPanel.tsx?raw';
+import operations from '../panels/OperationsPanel.tsx?raw';
 
 describe('a refusal on the row that was refused', () => {
   it('prints why a business cannot be bought beside its own button', () => {
@@ -106,5 +107,20 @@ describe('going dark on money you have not got', () => {
 
   it('still prices both paydays and the arrears, which an earlier round paid for', () => {
     expect(dashboard).toMatch(/perPayday \* paydays \+ \(state\.org\.wagesOwed \?\? 0\)/);
+  });
+});
+
+describe('handing a pitch to the man who brought it', () => {
+  /*
+     Round 29's MUST FIX #1, and the fifth instance of the same defect this
+     file exists for. `delegatePitchAutonomous` returned null — no crew, no
+     stake, laying low — and the button neither disabled itself nor printed
+     a word. The check now lives in `canDelegatePitchAutonomous`, outside the
+     mutation, so the card can ask it before the click.
+  */
+  it('disables the button and prints the reason on the card', () => {
+    expect(operations).toMatch(/const canDel = canDelegatePitchAutonomous\(state, pitch\.id\)/);
+    expect(operations).toMatch(/disabled=\{!canDel\.ok\}/);
+    expect(operations).toMatch(/\{!canDel\.ok && \([\s\S]{0,200}\{canDel\.reason\}/);
   });
 });

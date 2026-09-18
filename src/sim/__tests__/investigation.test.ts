@@ -19,13 +19,16 @@ import {
   agencyOf,
   buyContact,
   canBuyContact,
+  canUseLegalFavor,
   caseIntel,
   contactCost,
   destroyEvidence,
+  destroyEvidenceCost,
   hasContact,
   launderRestriction,
   looseEvidence,
   pressureWitness,
+  pressureWitnessCost,
   readCase,
   retainLawyer,
   surveillancePenalty,
@@ -681,6 +684,43 @@ describe('counterplay', () => {
     const investigation = openCaseFor(state, 'city_police', 40);
     expect(destroyEvidence(state, new Rng(state.rng), investigation.id).ok).toBe(false);
     expect(state.org.cash).toBe(0);
+  });
+
+  it('allows civic favors from the captain or judge to discount evidence destruction and witness pressure by 60%', () => {
+    const state = fresh();
+    state.org.cash = 50_000;
+    const captain = figure(state, 'captain');
+    captain.owed = 2;
+    expect(canUseLegalFavor(state)).toBe(true);
+
+    const normalCost = destroyEvidenceCost(state);
+    const discountedCost = destroyEvidenceCost(state, true);
+    expect(discountedCost).toBe(Math.round(normalCost * 0.4));
+
+    const investigation = openCaseFor(state, 'city_police', 50);
+    const beforeCash = state.org.cash;
+    destroyEvidence(state, new Rng({ seed: 5, calls: 0 }), investigation.id, { useFavor: true });
+    expect(captain.owed).toBe(1);
+    expect(state.org.cash).toBe(beforeCash - discountedCost);
+  });
+
+  it('lets street muscle lean on witnesses directly for $1,500 cash grease', () => {
+    const state = fresh();
+    state.org.cash = 2_000;
+    const muscle = crewList(state)[0];
+    const investigation = openCaseFor(state, 'city_police', 50);
+    const target = generateNpc(state, new Rng(state.rng), 'soldier');
+    state.npcs[target.id] = target;
+    investigation.suspectIds = [target.id];
+
+    expect(pressureWitnessCost(state, { muscleId: muscle.id })).toBe(1_500);
+
+    pressureWitness(state, new Rng({ seed: 9, calls: 0 }), investigation.id, target.id, {
+      muscleId: muscle.id,
+    });
+    expect(state.org.cash).toBe(500); // 2000 - 1500
+    expect(muscle.status).toBe('busy');
+    expect(muscle.unavailableUntilDay).toBe(state.day + 2);
   });
 });
 

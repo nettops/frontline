@@ -183,6 +183,7 @@ describe('every route onto the board', () => {
     protection_racket: { ...ZERO, districtsHeld: 1 },
     rent_the_crew: { ...ZERO, crew: 6 },
     debt_collection: { ...ZERO, crew: 4, opsBy: { freelance_muscle: 6 } },
+    low_stakes_game: { ...ZERO, districtsHeld: 1, fronts: 1 },
     backroom_game: { ...ZERO, districtsHeld: 2, fronts: 1 },
     union_local: { ...ZERO, districtsHeld: 2, owedFigures: 1 },
     counterfeit_run: { ...ZERO, fronts: 2, opsBy: { fence_goods: 5 } },

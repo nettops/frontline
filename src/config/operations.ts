@@ -270,6 +270,29 @@ export const OPERATIONS: OperationDef[] = [
     respect: 3,
   },
 
+  {
+    id: 'low_stakes_game',
+    category: 'vice',
+    name: 'Low-Stakes Card Game',
+    description:
+      'Run a modest game in the back of an existing front. Small pots, steady house vig, and two men at the door.',
+    opens: {
+      need: 'a district you can work and a room of your own',
+      met: (b) => b.districtsHeld >= 1 && b.fronts >= 1,
+    },
+    tier: 1,
+    risk: 'moderate',
+    crewRequired: 2,
+    investment: 1_000,
+    payout: [3_500, 7_000],
+    durationDays: 4,
+    baseSuccess: 0.8,
+    heatOnSuccess: 4,
+    heatOnFailure: 8,
+    attribute: 'negotiation',
+    respect: 4,
+  },
+
   // --------------------------------------------------------- crew leader ---
   {
     id: 'backroom_game',

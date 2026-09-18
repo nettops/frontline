@@ -245,7 +245,19 @@ export function read(): Snapshot {
 
 // ----------------------------------------------------------------- acting ---
 
-const frame = () => new Promise((r) => requestAnimationFrame(() => setTimeout(r, 0)));
+const frame = () =>
+  new Promise((r) => {
+    let resolved = false;
+    const done = () => {
+      if (resolved) return;
+      resolved = true;
+      r(undefined);
+    };
+    if (typeof requestAnimationFrame === 'function') {
+      requestAnimationFrame(() => setTimeout(done, 0));
+    }
+    setTimeout(done, 40);
+  });
 const pause = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 /** Two frames, because React commits after the handler returns and then paints. */

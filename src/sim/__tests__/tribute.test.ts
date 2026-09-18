@@ -21,7 +21,7 @@ import { generateNpc, crewList } from '../npc';
 import { confidant, setDiscretion } from '../personal';
 import { territoryList } from '../territory';
 import { launchOperation, tickOperations } from '../operations';
-import { delegatePitchAutonomous } from '../capoPitches';
+import { canDelegatePitchAutonomous, delegatePitchAutonomous } from '../capoPitches';
 import { advanceDay } from '../clock';
 import { TRIBUTE } from '../../config/tribute';
 import {
@@ -540,6 +540,86 @@ describe('handing a pitch to the man who brought it', () => {
 
     expect(delegatePitchAutonomous(state, 'p1')).toBeNull();
     expect(state.capoPitches![0].status).toBe('open');
+  });
+
+  /*
+     Round 29's MUST FIX #1. The button took a click and nothing happened —
+     `delegatePitchAutonomous` returned null and the panel had no way of
+     knowing it would, because the check lived inside the mutation. Rule 4:
+     a refusal has to be readable before the click, and it has to say what
+     would lift it.
+  */
+  it('says why before the click when the stake is not covered', () => {
+    const state = game(63);
+    const ts = territoryList(state);
+    ts[0].influence = { ...ts[0].influence, player: 95 };
+    const capo = hire(state, 'capo', 1);
+    hire(state, 'soldier', 40).reportsTo = capo.id;
+    fund(state, 0);
+
+    state.capoPitches = [
+      {
+        id: 'p1',
+        defId: 'protection_racket',
+        territoryId: ts[0].id,
+        capoId: capo.id,
+        offeredDay: state.day,
+        status: 'open',
+      },
+    ];
+
+    const check = canDelegatePitchAutonomous(state, 'p1');
+    expect(check.ok).toBe(false);
+    expect(check.reason).toBeTruthy();
+  });
+
+  it('names the shortfall in bodies rather than failing silently', () => {
+    const state = game(63);
+    const ts = territoryList(state);
+    ts[0].influence = { ...ts[0].influence, player: 95 };
+    const capo = hire(state, 'capo', 1);
+    for (const n of crewList(state)) if (n.id !== capo.id) n.status = 'dead';
+    fund(state, 20_000);
+
+    state.capoPitches = [
+      {
+        id: 'p1',
+        defId: 'protection_racket',
+        territoryId: ts[0].id,
+        capoId: capo.id,
+        offeredDay: state.day,
+        status: 'open',
+      },
+    ];
+
+    const check = canDelegatePitchAutonomous(state, 'p1');
+    expect(check.ok).toBe(false);
+    expect(check.reason).toMatch(/available crew/);
+    expect(delegatePitchAutonomous(state, 'p1')).toBeNull();
+    expect(state.capoPitches![0].status).toBe('open');
+  });
+
+  it('agrees with itself: ok means the launch goes through', () => {
+    const state = game(63);
+    const ts = territoryList(state);
+    ts[0].influence = { ...ts[0].influence, player: 95 };
+    const capo = hire(state, 'capo', 1);
+    hire(state, 'soldier', 40).reportsTo = capo.id;
+    fund(state, 20_000);
+
+    state.capoPitches = [
+      {
+        id: 'p1',
+        defId: 'protection_racket',
+        territoryId: ts[0].id,
+        capoId: capo.id,
+        offeredDay: state.day,
+        status: 'open',
+      },
+    ];
+
+    expect(canDelegatePitchAutonomous(state, 'p1').ok).toBe(true);
+    expect(delegatePitchAutonomous(state, 'p1')).not.toBeNull();
   });
 });
 

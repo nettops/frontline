@@ -1186,9 +1186,13 @@ export interface Possession {
    * purpose: the Legacy screen reads this record, and "lost at cards on day
    * 212" is a different sentence about a career from "sold on day 212".
    */
-  status: 'held' | 'sold' | 'seized' | 'lost';
+  status: 'held' | 'sold' | 'seized' | 'lost' | 'pawned' | 'gifted';
   /** Set when it stopped being yours, whichever way that happened. */
   goneDay?: number;
+  /** When pawned, redemption cost to get it back */
+  pawnRedeemCost?: number;
+  /** When gifted to a crew member, who received it */
+  giftRecipientId?: Id;
 }
 
 /**

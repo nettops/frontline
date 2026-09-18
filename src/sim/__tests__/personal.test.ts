@@ -46,6 +46,7 @@ import {
   tickStress,
 } from '../personal';
 import { canLaunch, launchOperation } from '../operations';
+import { crewList, perceive } from '../npc';
 import { OPERATION_BY_ID } from '../../config/operations';
 import { career } from '../career';
 import { declareWar } from '../diplomacy';
@@ -558,6 +559,7 @@ describe('stress', () => {
       expect(playerStress(state)).toBeCloseTo(50 - STRESS.consultRecovery, 5);
       expect(state.flags['went_home_day']).toBe(state.day);
       expect(state.flags['last_consult_day']).toBe(state.day);
+      expect(state.flags['dr_vance_clarity_until']).toBe(state.day + 14);
       expect(state.log.some((l) => l.text.includes('72nd Street'))).toBe(true);
     });
 
@@ -590,6 +592,18 @@ describe('stress', () => {
       hot.org.heat = STRESS.secrecyRiskHeat;
       consultDoctor(hot);
       expect(career(hot).some((e) => e.text.includes('federal plates'))).toBe(true);
+    });
+
+    it('sharpens perception of crew hidden stats during the fortnight of clarity', () => {
+      const state = game();
+      state.org.cash = 100_000;
+      const crew = crewList(state)[0];
+      crew.familiarity = 20;
+
+      consultDoctor(state);
+      expect(state.flags['dr_vance_clarity_until']).toBeGreaterThanOrEqual(state.day + 14);
+      const read = perceive(crew, 'loyalty', state);
+      expect(read.confidence).not.toBe('—');
     });
   });
 

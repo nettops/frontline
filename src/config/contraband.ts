@@ -347,6 +347,17 @@ export interface SupplierDef {
  */
 export const SUPPLIERS: SupplierDef[] = [
   {
+    id: 'runner',
+    name: 'A contact on the freight lines',
+    blurb:
+      'Small parcels and split crates taken off the trucks before inventory. Modest volume, but asks for very little up front.',
+    priceMultiplier: 1.25,
+    ceiling: 14,
+    retainer: 5_000,
+    failureChancePerWeek: 0.05,
+    exposure: 0.7,
+  },
+  {
     id: 'dockside',
     name: 'Somebody on the waterfront',
     blurb:

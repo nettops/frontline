@@ -27,7 +27,7 @@ import { applyVoucherConsequence } from './capoVouches';
 import { nightsWorked } from './standing';
 import { playerInfluence, territoryDef, territoryList } from './territory';
 import { remember } from './memory';
-import { publicStandingTier } from './civic';
+import { figure, publicStandingTier } from './civic';
 import { spend, totalFunds } from './economy';
 import { ownedBusinesses } from './business';
 import { seizeStock } from './contraband';
@@ -1372,6 +1372,28 @@ export function destroyEvidenceChance(state: GameState): number {
   );
 }
 
+export function canUseLegalFavor(state: GameState): boolean {
+  const captain = figure(state, 'captain');
+  const judge = figure(state, 'judge');
+  return (captain?.owed ?? 0) > 0 || (judge?.owed ?? 0) > 0;
+}
+
+export function destroyEvidenceCost(_state: GameState, useFavor?: boolean): number {
+  if (useFavor) {
+    return Math.round(DESTROY_EVIDENCE.cost * 0.4);
+  }
+  return DESTROY_EVIDENCE.cost;
+}
+
+export function pressureWitnessCost(
+  _state: GameState,
+  opts?: { useFavor?: boolean; muscleId?: string },
+): number {
+  if (opts?.muscleId) return 1_500;
+  if (opts?.useFavor) return Math.round(PRESSURE_WITNESS.cost * 0.4);
+  return PRESSURE_WITNESS.cost;
+}
+
 /**
  * Getting at what they have already collected. Works often enough to be worth
  * trying and fails badly enough to make it a real decision.
@@ -1380,16 +1402,30 @@ export function destroyEvidence(
   state: GameState,
   rng: Rng,
   caseId: string,
+  opts?: { useFavor?: boolean },
 ): LegalAction {
   const investigation = state.law.investigations[caseId];
   if (!investigation || investigation.status === 'closed') {
     return { ok: false, message: 'There is nothing to get at.' };
   }
-  if (!spend(state, DESTROY_EVIDENCE.cost, 'law')) {
+  const cost = destroyEvidenceCost(state, opts?.useFavor);
+  if (opts?.useFavor && !canUseLegalFavor(state)) {
+    return { ok: false, message: 'No civic favor available from captain or judge.' };
+  }
+  if (!spend(state, cost, 'law')) {
     return {
       ok: false,
-      message: `That costs ${formatMoney(DESTROY_EVIDENCE.cost)} and you hold ${formatMoney(totalFunds(state))}.`,
+      message: `That costs ${formatMoney(cost)} and you hold ${formatMoney(totalFunds(state))}.`,
     };
+  }
+
+  if (opts?.useFavor) {
+    const captain = figure(state, 'captain');
+    if (captain && captain.owed > 0) captain.owed -= 1;
+    else {
+      const judge = figure(state, 'judge');
+      if (judge && judge.owed > 0) judge.owed -= 1;
+    }
   }
 
   const chance = destroyEvidenceChance(state);
@@ -1454,20 +1490,57 @@ export function pressureWitness(
   rng: Rng,
   caseId: string,
   npcId: string,
+  opts?: { useFavor?: boolean; muscleId?: string },
 ): LegalAction {
   const investigation = state.law.investigations[caseId];
   const npc = state.npcs[npcId];
   if (!investigation || !npc) return { ok: false, message: 'Nobody to lean on.' };
-  if (!spend(state, PRESSURE_WITNESS.cost, 'law')) {
+
+  const cost = pressureWitnessCost(state, opts);
+  if (opts?.useFavor && !canUseLegalFavor(state)) {
+    return { ok: false, message: 'No civic favor available from captain or judge.' };
+  }
+
+  let muscle: Npc | undefined;
+  if (opts?.muscleId) {
+    muscle = state.npcs[opts.muscleId];
+    if (!muscle || muscle.status !== 'active') {
+      return { ok: false, message: 'That crew member is not available.' };
+    }
+  }
+
+  if (!spend(state, cost, 'law')) {
     return {
       ok: false,
-      message: `That costs ${formatMoney(PRESSURE_WITNESS.cost)} and you hold ${formatMoney(totalFunds(state))}.`,
+      message: `That costs ${formatMoney(cost)} and you hold ${formatMoney(totalFunds(state))}.`,
     };
+  }
+
+  if (opts?.useFavor) {
+    const captain = figure(state, 'captain');
+    if (captain && captain.owed > 0) captain.owed -= 1;
+    else {
+      const judge = figure(state, 'judge');
+      if (judge && judge.owed > 0) judge.owed -= 1;
+    }
+  }
+
+  if (muscle) {
+    muscle.status = 'busy';
+    muscle.unavailableUntilDay = state.day + 2;
   }
 
   // What fear is actually for. A man weighing whether to testify is weighing
   // it against what he has watched happen to other people.
-  const chance = pressureWitnessChance(state);
+  const chance = muscle
+    ? clamp(
+        PRESSURE_WITNESS.baseSuccess +
+          (muscle.stats.skill / 100) * 0.35 +
+          clamp(state.org.fear / FEAR.max, 0, 1) * FEAR.witnessBonusAtMax,
+        0.1,
+        0.95,
+      )
+    : pressureWitnessChance(state);
 
   if (rng.chance(chance)) {
     const removed = rng.float(PRESSURE_WITNESS.removed[0], PRESSURE_WITNESS.removed[1]);

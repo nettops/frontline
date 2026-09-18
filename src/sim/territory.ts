@@ -8,7 +8,8 @@
 
 import { clamp } from './rng';
 import type { GameState, Territory } from './types';
-import { addLog } from './util';
+import { addLog, hasSpecialVenture } from './util';
+import { VENTURE_PERKS } from '../config/tribute';
 import { holdingShare, yieldOf } from './holdings';
 import { houseColour, houseShort } from './houses';
 import {
@@ -19,6 +20,7 @@ import {
   CONTROL_THRESHOLDS,
   DAYS_IDLE_BEFORE_DECAY,
   HEAT_REDUCTION_BY_CONTROL,
+  HOME_TERRITORY,
   INFLUENCE_DECAY_PER_WEEK,
   MUSCLE_IN_SHARE,
   POLICE_HEAT_BASE,
@@ -358,7 +360,24 @@ export function tickTerritory(state: GameState): void {
     }
 
     if (t.sentiment < SENTIMENT_START) {
-      t.sentiment = clamp(t.sentiment + SENTIMENT_RECOVERY_PER_WEEK, 0, SENTIMENT_START);
+      /*
+         And the pork store, on the one block it is about.
+
+         Satriale's is not a business perk, it is a neighbourhood perk: cold
+         cuts on the counter, an espresso machine, and men the block sees every
+         morning who are from here. So it recovers the home district faster and
+         nowhere else, and it is bounded by the same ceiling as ordinary
+         recovery — the block forgives quicker, it never comes to love you.
+      */
+      const extra =
+        t.id === HOME_TERRITORY && hasSpecialVenture(state, 'pork_store')
+          ? VENTURE_PERKS.porkStoreHomeSentiment
+          : 0;
+      t.sentiment = clamp(
+        t.sentiment + SENTIMENT_RECOVERY_PER_WEEK + extra,
+        0,
+        SENTIMENT_START,
+      );
     }
 
     driftDistrict(state, t);

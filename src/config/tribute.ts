@@ -125,3 +125,41 @@ export const SPECIAL_VENTURES: SpecialVentureDef[] = [
     perk: 'Increases home district sentiment recovery and insulates capos against rival poaching.',
   },
 ];
+
+/**
+ * What owning one of them actually does, as numbers rather than as prose.
+ *
+ * Every figure here is read by exactly one place in the sim, and the blurbs
+ * above quote these rather than the other way round — rule 3 is the reason
+ * this file grew a second half at all. A perk described in `SpecialVentureDef.perk`
+ * and implemented nowhere is a panel telling the player something untrue.
+ */
+export const VENTURE_PERKS = {
+  /**
+   * How much of a violence or disposal trace the transfer station swallows.
+   *
+   * Applied at `addEvidence`, which is the single funnel every trace in the
+   * game goes through, so there is no second call site to miss. Deliberately
+   * a reduction rather than a suppression: a truck that can carry anything
+   * makes a body harder to find, not impossible.
+   */
+  wasteEvidenceReduction: 0.3,
+
+  /**
+   * Extra weekly sentiment recovery in the neighbourhood the pork store sits in.
+   *
+   * On top of `SENTIMENT_RECOVERY_PER_WEEK` and bounded by the same ceiling,
+   * so it makes the block forgive faster and never makes it love you.
+   */
+  porkStoreHomeSentiment: 2,
+
+  /**
+   * What a poach offer is worth against a crew that drinks coffee outside
+   * Satriale's every morning. A multiplier on the offer landing, not on it
+   * being made — a rival can still try, and still tells you when he fails.
+   */
+  porkStorePoachResist: 0.65,
+
+  /** The minimum rung that can put its name on a legitimate payroll. */
+  minRank: 'capo',
+} as const;

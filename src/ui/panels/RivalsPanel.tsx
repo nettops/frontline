@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useGame, mutate } from '../../store';
-import { Panel, Empty, KeyValue, Bar } from '../components';
+import { Panel, Empty, KeyValue, Bar, TradecraftToggle } from '../components';
+import type { TransmissionMethod } from '../../config/tradecraft';
 import {
   contestedWith,
   factionInfluence,
@@ -428,13 +429,21 @@ function ContractButton({
   const state = useGame();
   const check = canContract(state, target);
   /*
+     Defaults to the phone, which is what every caller did before tradecraft
+     existed — an order that simply arrived, free and instant. The walk is the
+     thing the player opts into on the week the file makes it worth an evening,
+     and defaulting the other way would charge a night to a boss with nothing
+     on him and no van outside.
+  */
+  const [method, setMethod] = useState<TransmissionMethod>('phone_euphemism');
+  /*
      Round 27: this button read "Not possible" on its face for every refused
      target, with the real reason — no crew free, a cooldown with days left,
      the cost uncovered — sitting only in the hover. Same rule 4 defect
      `LawPanel`'s witness-contract row had, fixed the same way.
   */
   const send = (charged: boolean) => {
-    const out = mutate((s) => openContract(s, target, charged), true);
+    const out = mutate((s) => openContract(s, target, charged, method), true);
     if (out) onDone(out.message);
   };
   if (!check.ok) {
@@ -446,7 +455,9 @@ function ContractButton({
   }
   const chargedChance = clamp((check.chance ?? 0) + CHARGE.odds, 0, 1);
   return (
-    <div className="carry-row">
+    <div>
+      <TradecraftToggle method={method} onChange={setMethod} />
+      <div className="carry-row">
       <button
         className="btn small danger"
         title={
@@ -468,7 +479,8 @@ function ContractButton({
         onClick={() => send(true)}
       >
         Use a charge
-      </button>
+        </button>
+      </div>
     </div>
   );
 }

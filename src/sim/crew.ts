@@ -147,14 +147,14 @@ export function refreshRecruits(state: GameState, rng: Rng, force = false): void
            organization with no capo yet still gets every line above.
         */
         [
-          face ? `${face.name} has been asking after you. So have ${fresh.length - 1} others.` : null,
-          face ? `${face.name} is new on the list. The men you were looking at last week are not.` : null,
-          face ? `Somebody sent ${face.name} your way and did not say who.` : null,
-          face ? `${face.name} turned up at the club asking who does the hiring.` : null,
+          face ? `${face.name} has been asking after you — on the recruit list in Crew.` : null,
+          face ? `${face.name} is new on the recruit list in Crew. The men you were looking at last week are not.` : null,
+          face ? `Somebody sent ${face.name} your way — on the recruit list in Crew.` : null,
+          face ? `${face.name} turned up asking who does the hiring — on the recruit list in Crew.` : null,
           face
-            ? `${face.name} claims a connection to somebody you know. On the list either way.`
+            ? `${face.name} claims a connection to somebody you know. On the recruit list in Crew.`
             : null,
-          faceCapo ? `${faceCapo.name} is putting ${face!.name} forward. Says he vouches for him.` : null,
+          faceCapo ? `${faceCapo.name} is putting ${face!.name} forward on the recruit list in Crew. Says he vouches for him.` : null,
           // Not `fresh.length > 1`, which is true nearly every week and put
           // this back at the top of the probe's loudest lines within one run.
           face ? null : `${fresh.length} new names and nobody you would write down.`,

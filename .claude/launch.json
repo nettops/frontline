@@ -57,6 +57,18 @@
         "orgpolitics0914"
       ],
       "port": 5329
+    },
+    {
+      "name": "mafia-round29",
+      "runtimeExecutable": "node",
+      "runtimeArgs": [
+        "scripts/playtest-run.mjs",
+        "--port",
+        "5329",
+        "--id",
+        "round29"
+      ],
+      "port": 5329
     }
   ]
 }
