@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef } from 'react';
-import type { Player } from '../sim/types';
+import type { Player, RankId } from '../sim/types';
 import { compose, paletteFor, SPRITE_H, SPRITE_W } from './art/parts';
 import { lookForPlayer } from './art/playerLook';
 import { paint, resolve } from './art/paint';
@@ -17,10 +17,19 @@ import { currentSkin } from './skin';
  *
  * Lit, too. `isLit` is the top familiarity tier and you are past it.
  */
-export function PlayerPortrait({ player, scale = 2 }: { player: Player; scale?: number }) {
+export function PlayerPortrait({
+  player,
+  rank,
+  scale = 2,
+}: {
+  player: Player;
+  /** The family's standing now, which is what the coat follows. See `lookForPlayer`. */
+  rank: RankId;
+  scale?: number;
+}) {
   const ref = useRef<HTMLCanvasElement>(null);
   const skin = currentSkin();
-  const look = useMemo(() => lookForPlayer(player), [player.look, player.name, player.rank]);
+  const look = useMemo(() => lookForPlayer(player, rank), [player.look, player.name, rank]);
   const rows = useMemo(() => compose(look), [look]);
   // `resolve` at full familiarity is a pass-through except under the CRT skin,
   // which it still has to run for — that one is grey on black by design.

@@ -48,6 +48,26 @@ describe('what you chose and what the ladder chose', () => {
     expect(high.garment).not.toBe(low.garment);
   });
 
+  /*
+     The coat follows the family's standing, which is derived, and not the
+     stored `player.rank`, which is pinned at the first rung for every career
+     (see `sim/rank.ts`). The caller passes what the organization currently is;
+     the stored field is only the fallback for a caller with no state to read.
+  */
+  it('dresses the standing it is given rather than the one on the player', () => {
+    const stored = player({ rank: 'street_criminal' });
+    const given = lookForPlayer(stored, 'capo');
+    const capo = lookForPlayer(player({ rank: 'capo' }));
+    const pinned = lookForPlayer(stored);
+
+    expect(given.suit).toBe(capo.suit);
+    expect(given.hat).toBe(capo.hat);
+    expect(given.suit, 'the given standing was ignored').not.toBe(pinned.suit);
+    // and the man is still the man
+    expect(given.build).toBe(pinned.build);
+    expect(given.skin).toBe(pinned.skin);
+  });
+
   it('dresses every rank, and has a line to say what in', () => {
     const seen = new Set<string>();
     for (const rank of RANKS.map((r) => r.id as RankId)) {

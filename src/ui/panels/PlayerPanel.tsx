@@ -667,8 +667,8 @@ export default function PlayerPanel() {
   return (
     <>
       {/*
-        The portrait beside the name, dressed by the rank rather than by
-        anything you chose — see ui/art/playerLook.ts. So the page about how
+        The portrait beside the name, dressed by the family's standing rather
+        than by anything you chose — see ui/art/playerLook.ts. So the page about how
         far you have climbed shows it rather than only counting it, and the
         line under it is the one thing on this screen that says what the
         promotion actually put you in.
@@ -694,7 +694,7 @@ export default function PlayerPanel() {
       )}
 
       <div className="player-head">
-        <PlayerPortrait player={player} scale={3} />
+        <PlayerPortrait player={player} rank={rankNow(state).id} scale={3} />
         <div>
           <div className="page-head" style={{ marginBottom: 2 }}>
             <h1 className="page-title">
@@ -710,7 +710,7 @@ export default function PlayerPanel() {
             </h1>
             <span className="tiny">{difficulty.name}</span>
           </div>
-          <p className="tiny faint" style={{ marginTop: 6 }}>{KIT_NOTE[player.rank]}</p>
+          <p className="tiny faint" style={{ marginTop: 6 }}>{KIT_NOTE[rankNow(state).id]}</p>
         </div>
       </div>
 

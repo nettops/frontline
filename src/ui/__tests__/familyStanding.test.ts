@@ -15,6 +15,7 @@ import { describe, expect, it } from 'vitest';
 import dashboard from '../panels/Dashboard.tsx?raw';
 import player from '../panels/PlayerPanel.tsx?raw';
 import app from '../App.tsx?raw';
+import portrait from '../PlayerPortrait.tsx?raw';
 import succession from '../panels/SuccessionPanel.tsx?raw';
 
 const code = (src: string): string =>
@@ -27,6 +28,7 @@ const flat = (src: string): string => code(src).replace(/\s+/g, ' ');
 const DASHBOARD = flat(dashboard);
 const PLAYER = flat(player);
 const APP = flat(app);
+const PORTRAIT = flat(portrait);
 const SUCCESSION = flat(succession);
 
 describe('the standing is the family’s', () => {
@@ -69,5 +71,26 @@ describe('the line of succession does not print the stored rank', () => {
     expect(SUCCESSION).not.toMatch(/inheritRank/);
     expect(SUCCESSION).not.toMatch(/They start as/);
     expect(SUCCESSION).not.toMatch(/<th>Reached<\/th>/);
+  });
+});
+
+/*
+   The portrait and the line under it are dressed by the family's standing.
+
+   They read `player.rank`, which nothing ever moves, so the coat a boss wore on
+   the last day of a career was the one he wore on the first. The standing is
+   derived and falls as well as rises, so the coat does too — which is the same
+   honesty `announce.ts` has about the name.
+*/
+describe('the portrait follows the derived standing', () => {
+  it('the panel dresses the portrait and writes its line from rankNow', () => {
+    expect(PLAYER).toMatch(/<PlayerPortrait player=\{player\} rank=\{rankNow\(state\)\.id\}/);
+    expect(PLAYER).toMatch(/KIT_NOTE\[rankNow\(state\)\.id\]/);
+    expect(PLAYER).not.toMatch(/KIT_NOTE\[player\.rank\]/);
+  });
+
+  it('the portrait repaints when the standing changes', () => {
+    expect(PORTRAIT).toMatch(/lookForPlayer\(player, rank\)/);
+    expect(PORTRAIT).toMatch(/\[player\.look, player\.name, rank\]/);
   });
 });

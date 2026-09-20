@@ -132,15 +132,20 @@ export function lookFromName(name: string): PlayerLook {
 }
 
 /**
- * The whole picture: your half, plus whatever your rank is wearing.
+ * The whole picture: your half, plus whatever the family's standing is wearing.
  *
- * The kit is picked off the rank rather than hashed, so it is the same coat
- * for every player at the same rank — which is what makes it read as a
+ * The kit is picked off the standing rather than hashed, so it is the same coat
+ * for every player at the same standing — which is what makes it read as a
  * uniform you have earned rather than as more randomness.
+ *
+ * `rank` is what the organization currently is (`rankNow(state).id`), and it
+ * has to be passed in: `player.rank` is pinned at the first rung for every
+ * career, so reading it left a boss in the coat he started in. It falls back to
+ * that field only for a caller with no state to read one from.
  */
-export function lookForPlayer(player: Player): CrewLook {
+export function lookForPlayer(player: Player, rank: RankId = player.rank): CrewLook {
   const chosen = player.look ?? lookFromName(player.name);
-  const kit = KIT_BY_RANK[player.rank] ?? KIT_BY_RANK.street_criminal;
+  const kit = KIT_BY_RANK[rank] ?? KIT_BY_RANK.street_criminal;
 
   const hat = chosen.hat ? kit.hat : 'none';
   return {

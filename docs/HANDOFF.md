@@ -401,9 +401,13 @@ move. Every guard below was seen red before its fix.
   chapter; `announce.ts` still logs standing changes.
 - **Succession no longer prints the stored rank** (`App.tsx` game-over roll,
   `SuccessionPanel.tsx` starting-rank row and "Reached" column). The field is
-  pinned at the first rung, so every predecessor read the same word. Still
-  reading it: `art/playerLook.ts` and `PlayerPanel`'s kit note pick the
-  portrait kit from `player.rank` — unlooked at.
+  pinned at the first rung, so every predecessor read the same word.
+- **The portrait follows the standing.** `lookForPlayer(player, rank)` and
+  `PlayerPortrait` take the family's standing (`rankNow(state).id`), and the
+  kit line under it reads the same; the stored `player.rank` is only the
+  fallback for a caller with no state (the title-screen customiser). It falls
+  as well as rises, like the name. Guards: `playerLook.test.ts`,
+  `familyStanding.test.ts`.
 - **First-route ramp shipped (`ROUTE_RAMP_START` 0.25, `ROUTE_RAMP_WEEKS` 4).**
   A trade's first route opens at 25% of capacity and reaches full over four
   weeks (`routeSince`, optional, a missing entry reads as settled, so no
