@@ -492,6 +492,14 @@ move. Every guard below was seen red before its fix.
   shared roll with shrinking noise would only ever sharpen. That is the
   perception system's core (rule 1, eleven call sites) and was not touched.
   Guard: `ui/__tests__/statRead.test.ts`, seen red.
+- **The Yourself banner agrees with the page under it.** It said the unspent
+  points "lift your odds on every job you run"; the panel it points at said
+  "not the odds on tonight's job". The panel is right: a point unlocks a verb
+  and changes how the city treats you (`config/build.ts`). It now says that.
+  The claim is held as a property, not a sentence:
+  `buildPointsAndOdds.test.ts` raises every stat to the cap and prices every
+  job before and after — identical — and was seen red with a build stat wired
+  into `successBreakdown`. Sentence guard: `yourselfBanner.test.ts`, seen red.
 
 ## 1. What the project is
 

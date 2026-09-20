@@ -687,8 +687,7 @@ export default function PlayerPanel() {
           <span className="coach-label">Unspent</span>
           <span className="coach-text">
             You have {left} unspent attribute {left === 1 ? 'point' : 'points'}. Place them in
-            "What you are made of" below — every one of them lifts your odds on every job you
-            run.
+            "What you are made of" below to unlock verbs and shape how the city treats you.
           </span>
         </aside>
       )}

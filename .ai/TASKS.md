@@ -18,9 +18,9 @@ archives. The NOT NEGOTITABLE pass is **complete** —
 
 ## Open
 
-1. **Round 30 SHOULD FIX items still unverified and not acted on:** the Yourself
-   banner wording, and the tester's failure streaks against shown odds. Every
-   other Round 30 item is closed; see `HANDOFF.md` §0.
+1. **Round 30 SHOULD FIX items still unverified and not acted on:** the tester's
+   failure streaks against shown odds. Every other Round 30 item is closed; see
+   `HANDOFF.md` §0.
 
 ## Smaller, lower-priority
 
