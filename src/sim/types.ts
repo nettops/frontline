@@ -1040,6 +1040,15 @@ export interface OperationResult {
   success: boolean;
   /** How far the roll landed from the threshold, -1..1. Scales payout. */
   margin: number;
+  /**
+   * The odds the job was launched at, which is what the board showed, and the
+   * number it was rolled against — `success` is exactly `roll < chance`. Kept so
+   * a run of bad luck can be told from a rigged table (the Why page reads them;
+   * the simulation does not). Optional, and absent on a result written before
+   * they were kept, which reads as "not on file".
+   */
+  chance?: number;
+  roll?: number;
   payout: number;
   heat: number;
   crewIds: Id[];

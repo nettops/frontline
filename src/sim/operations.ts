@@ -969,6 +969,10 @@ function resolveOperation(state: GameState, rng: Rng, op: ActiveOperation): void
     day: state.day,
     success,
     margin: success ? margin : -margin,
+    // The dice, kept as reporting: `roll` is the draw that decided this job and
+    // nothing is drawn to record it. See `rollRead` in trace.ts.
+    chance: op.successChance,
+    roll,
     payout: 0,
     heat: 0,
     crewIds: [...op.crewIds],

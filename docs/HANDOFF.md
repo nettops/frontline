@@ -500,6 +500,22 @@ move. Every guard below was seen red before its fix.
   `buildPointsAndOdds.test.ts` raises every stat to the cap and prices every
   job before and after — identical — and was seen red with a build stat wired
   into `successBreakdown`. Sentence guard: `yourselfBanner.test.ts`, seen red.
+- **The dice are on the Why page.** Round 30's tester could not tell a run of
+  bad luck from a rigged table and asked for a per-roll log. Each finished job
+  keeps `chance` (the odds it launched at, the ones the board showed) and `roll`
+  (the very draw that decided it: `success` is exactly `roll < chance`) on its
+  `OperationResult`; `rollRead` (`sim/trace.ts`) lists them and adds the shown
+  odds up against what went right, and the Why page prints "Rolled 91.3%
+  against 83.0% needed — went wrong". **Not `state.trace`, as the brief
+  suggested:** that ring is capped at 200 and holds the rival families'
+  decisions, and one job a day would have cut a year of theirs to twenty-odd
+  weeks; `operationHistory` already holds the jobs, is already persisted and
+  capped, and `roll` is an optional field, so old saves read "not on file" and
+  nothing moves `SAVE_VERSION`. Setup jobs are not in that history and so not
+  on the page. Sim-neutral: the autopilot ground reading reproduces to the digit
+  (195 jobs, +$1,412,775, 21/36). Guards: `rolls.test.ts` (the roll kept is the
+  draw that decided the job; seen red when the record drew its own number) and
+  `whyDice.test.ts`.
 
 ## 1. What the project is
 

@@ -18,9 +18,9 @@ archives. The NOT NEGOTITABLE pass is **complete** —
 
 ## Open
 
-1. **Round 30 SHOULD FIX items still unverified and not acted on:** the tester's
-   failure streaks against shown odds. Every other Round 30 item is closed; see
-   `HANDOFF.md` §0.
+Nothing currently ready to build. Every Round 30 item is closed — see
+`HANDOFF.md` §0. What is left is a blind round on the current build, which is
+the director's to order and not something to score from here.
 
 ## Smaller, lower-priority
 

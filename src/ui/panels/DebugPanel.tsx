@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { useGame } from '../../store';
 import { Panel, Empty } from '../components';
-import { explain } from '../../sim/trace';
+import { explain, rollRead } from '../../sim/trace';
+import { territoryDef } from '../../sim/territory';
 import { formatShortDay } from '../../sim/util';
 import { RIVAL_IDS } from '../../config/factions';
 import { houseShort } from '../../sim/houses';
@@ -26,6 +27,8 @@ export default function DebugPanel() {
   const [actor, setActor] = useState<string>('all');
 
   const traces = (state.trace ?? []).filter((t) => actor === 'all' || t.actor === actor);
+  const read = rollRead(state);
+  const pct = (n: number) => `${(n * 100).toFixed(1)}%`;
 
   return (
     <>
@@ -122,6 +125,63 @@ export default function DebugPanel() {
           <p style={{ margin: 0 }}>{explain(traces[0])}</p>
         </Panel>
       )}
+
+      {/*
+         The dice, for the jobs you ran.
+
+         Round 30's tester watched two shakedowns fail at a shown 83% and could
+         not say whether that was luck or the table, and asked for exactly this.
+         Each job is rolled once and succeeds when the roll comes in under the
+         odds it was launched at; both numbers are here, and the odds are added up
+         against what actually went right. Read off the finished jobs the game
+         already keeps, so it is the roll that decided them and not a copy.
+      */}
+      <Panel title="The dice — your jobs, against the odds you were shown">
+        {read.counted === 0 ? (
+          <Empty>
+            No job has finished with its dice on file. Run one and it will be here.
+          </Empty>
+        ) : (
+          <>
+            <p style={{ margin: '0 0 10px' }}>
+              {read.counted} {read.counted === 1 ? 'job' : 'jobs'} on file. The odds you were
+              shown add up to {read.expected.toFixed(1)} going right; {read.got} did. Each job is rolled once and goes right when the
+              roll comes in under its odds. A few can run against them and the sum is what they
+              settle toward.
+              {read.unrecorded > 0 &&
+                ` ${read.unrecorded} earlier ${
+                  read.unrecorded === 1 ? 'job was' : 'jobs were'
+                } finished before the dice were kept.`}
+            </p>
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Job</th>
+                  <th>The roll</th>
+                </tr>
+              </thead>
+              <tbody>
+                {read.rows.slice(0, 40).map((row) => (
+                  <tr key={row.id}>
+                    <td className="mono tiny">{formatShortDay(row.day)}</td>
+                    <td>
+                      <span className="name-main">{row.name}</span>
+                      <div className="tiny faint">{territoryDef(row.territoryId).name}</div>
+                    </td>
+                    <td className="mono tiny">
+                      Rolled {pct(row.roll)} against {pct(row.chance)} needed —{' '}
+                      <span className={row.success ? 'good' : 'hot'}>
+                        {row.success ? 'went right' : 'went wrong'}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </>
+        )}
+      </Panel>
     </>
   );
 }

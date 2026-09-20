@@ -13,7 +13,7 @@
  * thing being debugged.
  */
 
-import type { DecisionTrace, GameState } from './types';
+import type { DecisionTrace, GameState, Id } from './types';
 
 /**
  * How many decisions to keep.
@@ -68,4 +68,68 @@ export function explain(trace: DecisionTrace): string {
     ? `, over ${runnerUp.label} at ${runnerUp.score.toFixed(2)}`
     : ' (nothing else scored)';
   return `${trace.chose} at ${winner.score.toFixed(2)}${margin}. ${trace.because}`;
+}
+
+// --------------------------------------------------------------- the dice ---
+
+export interface RollRow {
+  id: Id;
+  day: number;
+  name: string;
+  territoryId: string;
+  /** What the board showed when the job went out. */
+  chance: number;
+  /** What it was rolled against. The job succeeded exactly when this is under `chance`. */
+  roll: number;
+  success: boolean;
+}
+
+export interface RollRead {
+  /** Newest first, only the jobs that kept their dice. */
+  rows: RollRow[];
+  counted: number;
+  /** The shown odds of those jobs, added up: how many should have gone right. */
+  expected: number;
+  /** How many did. */
+  got: number;
+  /** Finished jobs from before the dice were kept, so the page can say they exist. */
+  unrecorded: number;
+}
+
+/**
+ * The dice, and whether they have been fair.
+ *
+ * Round 30's tester saw failures that looked worse than the shown odds and could
+ * not prove it either way from one run. The claim to check is the second of the
+ * five things this game says must stay true — shown odds are real odds — so this
+ * lays each job's shown odds beside the number it was rolled against and adds
+ * the odds up. A run of ten jobs can land a long way from the sum; the sum is
+ * what it should settle toward.
+ *
+ * Derived from `operationHistory`, which the game already keeps and caps. It is
+ * read by the Why page and by nothing in the simulation.
+ */
+export function rollRead(state: GameState): RollRead {
+  const rows: RollRow[] = [];
+  let unrecorded = 0;
+  let expected = 0;
+  let got = 0;
+  for (const r of state.operationHistory) {
+    if (r.chance === undefined || r.roll === undefined) {
+      unrecorded += 1;
+      continue;
+    }
+    rows.push({
+      id: r.id,
+      day: r.day,
+      name: r.name,
+      territoryId: r.territoryId,
+      chance: r.chance,
+      roll: r.roll,
+      success: r.success,
+    });
+    expected += r.chance;
+    if (r.success) got += 1;
+  }
+  return { rows, counted: rows.length, expected, got, unrecorded };
 }
