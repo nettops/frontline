@@ -4,7 +4,7 @@
  * `chronicle.ts` already does this for the crew roster, and does it by
  * derivation on purpose — no state, no call site to miss, nothing that can
  * drift. This file cannot take that approach, and says why: a district taken
- * and lost again, a war fought and settled, a rank held and then lost, leave
+ * and lost again, a war fought and settled, leave
  * nothing behind in state once they are over. `chronicle.ts`'s own header
  * calls this out directly — "inventing a history for them would mean the
  * recorded second list this file exists to avoid." That second list is this
@@ -20,9 +20,9 @@
  */
 
 import type { FactionId } from '../config/factions';
-import { RANK_BY_ID, ROLE_LABEL, ROLE_ORDER } from '../config/economy';
+import { ROLE_LABEL, ROLE_ORDER } from '../config/economy';
 import { BUSINESS_BY_ID } from '../config/businesses';
-import type { CareerEntry, CareerTone, GameState, Id, NpcStatus, RankId, RoleId } from './types';
+import type { CareerEntry, CareerTone, GameState, Id, NpcStatus, RoleId } from './types';
 import { ownedBusinesses } from './business';
 import { controlledTerritories, territoryDef } from './territory';
 import { playerWars } from './diplomacy';
@@ -66,7 +66,6 @@ const NOTABLE_ROLE_FROM = ROLE_ORDER.indexOf('capo');
  * real; the two are not allowed to be the same function.
  */
 export interface CareerSnapshot {
-  rank: RankId;
   /** Status and role together, so a death and a promotion are told apart. */
   crew: Record<Id, { status: NpcStatus; role: RoleId }>;
   controlled: string[];
@@ -81,7 +80,6 @@ export function careerSnapshot(state: GameState): CareerSnapshot {
   const crew: CareerSnapshot['crew'] = {};
   for (const npc of Object.values(state.npcs)) crew[npc.id] = { status: npc.status, role: npc.role };
   return {
-    rank: state.player.rank,
     crew,
     controlled: controlledTerritories(state).map((t) => t.id),
     fronts: ownedBusinesses(state).map((b) => b.id),
@@ -96,18 +94,14 @@ export function careerSnapshot(state: GameState): CareerSnapshot {
 /**
  * The diff. Called once a day, after everything else has ticked.
  *
- * Every branch reads a number some other system already owns — `player.rank`,
- * `npc.status`, `controlledTerritories`, `ownedBusinesses`, `playerWars`,
+ * Every branch reads a number some other system already owns — `npc.status`,
+ * `controlledTerritories`, `ownedBusinesses`, `playerWars`,
  * `succession.generation`. Nothing here is a new mechanic, the same rule
  * `eventgen.ts` follows and for the same reason: this is the existing
  * simulation given a memory, not a second simulation running beside it.
  */
 export function recordCareerMilestones(state: GameState, before: CareerSnapshot): void {
   const now = careerSnapshot(state);
-
-  if (now.rank !== before.rank) {
-    record(state, `Reached ${RANK_BY_ID[now.rank]?.name ?? now.rank}.`, 'good');
-  }
 
   for (const [id, was] of Object.entries(before.crew)) {
     const npc = state.npcs[id];

@@ -27,6 +27,7 @@ import { businessDef, ownedBusinesses, weeklyRevenue } from '../business';
 import { hasHealthInsurance } from '../corporate';
 import { addEvidence } from '../util';
 import { rankNow } from '../rank';
+import { RANKS, RANK_BY_ID } from '../../config/economy';
 import { poachChance } from '../faction';
 import {
   acquireSpecialVenture,
@@ -98,7 +99,11 @@ describe('buying a cover with a name on it', () => {
     expect(rankNow(state).id).toBe('street_criminal');
     const can = canAcquireSpecialVenture(state, 'waste_management');
     expect(can.ok).toBe(false);
-    expect(can.reason).toContain('Capo');
+    // The rung it wants, by the name the ladder gives it, and where the family
+    // stands now — never a personal title for a man who is already the boss.
+    expect(can.reason).toContain(RANK_BY_ID.capo.name);
+    expect(can.reason).toContain(RANKS[0].name);
+    expect(can.reason).not.toMatch(/street criminal/i);
   });
 
   it('refuses on dirty money however much of it there is', () => {

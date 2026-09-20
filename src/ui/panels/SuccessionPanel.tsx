@@ -5,7 +5,6 @@ import {
   claimBand,
   eligibleHeirs,
   heirOf,
-  inheritRank,
   isBloodHeir,
   nameHeir,
   perceivedClaim,
@@ -13,7 +12,7 @@ import {
 } from '../../sim/succession';
 import { formatShortDay } from '../../sim/util';
 import { chronicle, chronicleSummary } from '../../sim/chronicle';
-import { ROLE_LABEL, RANK_BY_ID } from '../../config/economy';
+import { ROLE_LABEL } from '../../config/economy';
 import { CLAIM, HANDOVER, NEPOTISM } from '../../config/succession';
 
 /*
@@ -176,10 +175,6 @@ export default function SuccessionPanel() {
             value={`${Math.round(HANDOVER.cleanCashKept * 100)}%`}
           />
           <KeyValue label="Ground kept" value={`${Math.round(HANDOVER.influenceKept * 100)}%`} />
-          <KeyValue
-            label="They start as"
-            value={RANK_BY_ID[inheritRank(state.player.rank)].name}
-          />
           <p className="faint" style={{ marginTop: 10, marginBottom: 0 }}>
             The open files lose the man they were built around, so a succession is also
             the only way out of a case that is about to land. The evidence survives. It
@@ -337,7 +332,6 @@ export default function SuccessionPanel() {
                 <tr>
                   <th className="num">#</th>
                   <th>Name</th>
-                  <th>Reached</th>
                   <th>Ran it</th>
                   <th>How it ended</th>
                 </tr>
@@ -347,7 +341,6 @@ export default function SuccessionPanel() {
                   <tr key={`${p.name}-${p.toDay}`}>
                     <td className="num mono">{i + 1}</td>
                     <td className="name-main">{p.name}</td>
-                    <td className="dim">{RANK_BY_ID[p.rank].name}</td>
                     <td className="dim">
                       {formatShortDay(p.fromDay)} — {formatShortDay(p.toDay)}
                     </td>
@@ -357,7 +350,6 @@ export default function SuccessionPanel() {
                 <tr className="selected">
                   <td className="num mono">{state.succession.line.length + 1}</td>
                   <td className="name-main">{state.player.name}</td>
-                  <td className="dim">{RANK_BY_ID[state.player.rank].name}</td>
                   <td className="dim">still running it</td>
                   <td className="dim">—</td>
                 </tr>

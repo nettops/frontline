@@ -105,8 +105,34 @@ describe('the rank a player is actually at', () => {
 
     const names = [rankNow(a).name, rankNow(b).name, rankNow(c).name];
     expect(new Set(names).size).toBeGreaterThan(1);
-    // and none of them is still where they started
-    for (const n of names) expect(n).not.toBe('Street Criminal');
+    // and none of them is still where they started. Against the bottom rung's
+    // own name, not a literal: this read 'Street Criminal', and once the rungs
+    // were renamed for the family that string named nothing, so the line
+    // would have asserted nothing.
+    for (const n of names) expect(n).not.toBe(RANKS[0].name);
+  });
+
+  /*
+     The ladder measures the family, not the man. The player is the boss of a
+     family from the first morning (round 30's director call), so the rungs name
+     how much of the city the outfit is, and what people say of the family.
+
+     The ids are pinned as well as the names, and the reason is mechanical:
+     `outgrewStreetWork` reads `crew_leader`, the street-work respect cost, the
+     capo-pitch gate and the special-venture gate read `capo`, and `player.rank`
+     on every old save is one of these strings. A rename that moved an id would
+     move a gate.
+  */
+  it('names each rung for what the family is, and keeps the ids the gates read', () => {
+    expect(RANKS.map((r) => [r.id, r.name])).toEqual([
+      ['street_criminal', 'Nobody knows the name'],
+      ['enforcer', 'A couple of corners'],
+      ['crew_leader', 'A crew that works'],
+      ['capo', 'A seat at the table'],
+      ['underboss', 'One of the families'],
+      ['boss', "The city's business"],
+      ['crime_lord', 'Other cities know the name'],
+    ]);
   });
 
   it('is a ladder — a high rung is not reachable past an unmet low one', () => {

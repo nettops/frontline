@@ -34,7 +34,6 @@ import SavesPanel from './panels/SavesPanel';
 import CareerPanel from './panels/CareerPanel';
 import TipsPanel from './panels/TipsPanel';
 import DebugPanel from './panels/DebugPanel';
-import { RANK_BY_ID } from '../config/economy';
 
 export default function App() {
   const state = useOptionalGame();
@@ -259,11 +258,11 @@ export default function App() {
               </p>
               {state.succession.line.map((p) => (
                 <p key={`${p.name}-${p.toDay}`} className="tiny dim" style={{ margin: 0 }}>
-                  {p.name} — {RANK_BY_ID[p.rank].name}, until day {p.toDay}
+                  {p.name} — led the family until day {p.toDay}
                 </p>
               ))}
               <p className="tiny dim" style={{ margin: 0 }}>
-                {state.player.name} — {RANK_BY_ID[state.player.rank].name}, last
+                {state.player.name} — led the family last
               </p>
             </div>
           )}

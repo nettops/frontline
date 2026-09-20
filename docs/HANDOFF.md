@@ -379,6 +379,46 @@ everything here is derived on read, transient UI state, or config.
   `ladder.probe` and `broke.probe` results against a clean checkout of the
   same base: see `docs/findings/director-log.md`, Round 30 repairs.
 
+**Round 30 follow-up, 2026-09-20 — the director's calls.** No `SAVE_VERSION`
+move. Every guard below was seen red before its fix.
+
+- **The ladder is the family's standing (Option A).** The player is the boss
+  of a family from the first morning, so `RANKS` (`config/economy.ts`) names
+  how much of the city the outfit is: *Nobody knows the name · A couple of
+  corners · A crew that works · A seat at the table · One of the families ·
+  The city's business · Other cities know the name*. **Ids unchanged** — the
+  street-work gate, the capo-pitch gate, the venture gate and every old save's
+  `player.rank` key off them. The Overview and Yourself panels label it "Family
+  standing"; `announce.ts`, `tribute.ts`, `operations.ts` and the Broke coach
+  say it as the family's, lowercased mid-sentence and read off the rung's own
+  name so message and gate cannot drift. Guards: `rank.test.ts` (names and ids
+  pinned), `announce.test.ts`, `specialVentures.test.ts`, `tribute.test.ts`,
+  `ui/__tests__/familyStanding.test.ts`. `crime_lord` had no name in the
+  director's six; "Other cities know the name" was chosen and approved.
+- **Dead rank branch out of `career.ts`.** `careerSnapshot` read the pinned
+  `player.rank`, so "Reached Capo." could never fire; the old test passed only
+  because it assigned the field by hand. The chronicle keeps no ladder
+  chapter; `announce.ts` still logs standing changes.
+- **Succession no longer prints the stored rank** (`App.tsx` game-over roll,
+  `SuccessionPanel.tsx` starting-rank row and "Reached" column). The field is
+  pinned at the first rung, so every predecessor read the same word. Still
+  reading it: `art/playerLook.ts` and `PlayerPanel`'s kit note pick the
+  portrait kit from `player.rank` — unlooked at.
+- **First-route ramp (`ROUTE_RAMP_START` 0.25, `ROUTE_RAMP_WEEKS` 4) is built
+  and NOT shipped.** A trade's first route opens at 25% and reaches full over
+  four weeks (`routeSince`, optional, a missing entry reads as settled;
+  `districtCapacity` applies it). Only the first route ramps: ramping every
+  route was a standing tax, since the probe bot opens a route in every
+  district it takes. `ladder.probe` "running both trades for 300 days", paired
+  gap, same instrument: **400 seeds — 983,313 unramped, 917,044 ramped, against
+  a bar of 869,209 (clears, 105%)**. **36 seeds, the sample `npm run probe`
+  runs — 960,574 unramped, 587,919 ramped, against 817,661 (fails).** The
+  36-seed reading is turbulence, not a size: ramping every route read 707,768,
+  and 0.5/4 read 1,051,599, above no ramp at all. But the bar has already been
+  restated twice and its own comment warns against a third (`DIRECTOR.md` §5),
+  so it is left as it is and the ramp is held back for the director. The code
+  is uncommitted in the working tree; `.ai/TASKS.md` item 1.
+
 
 ## 1. What the project is
 

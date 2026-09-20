@@ -387,8 +387,8 @@ export function canAcquireSpecialVenture(
     return {
       ok: false,
       reason:
-        `Nobody puts a ${held.name.toLowerCase()} on a legitimate payroll as a consultant. ` +
-        `${wanted.name} is where that conversation starts.`,
+        `Nobody puts an outfit on a legitimate payroll as a consultant until it has weight. ` +
+        `Yours is "${held.name}"; the conversation starts at "${wanted.name}".`,
     };
   }
 

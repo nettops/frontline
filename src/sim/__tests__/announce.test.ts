@@ -37,6 +37,7 @@ import { putInCharge } from '../delegation';
 import { crewList } from '../npc';
 import { territoryList } from '../territory';
 import { TRADES } from '../../config/contraband';
+import { RANK_BY_ID } from '../../config/economy';
 import { withFronts } from './helpers';
 import type { GameState } from '../types';
 
@@ -66,7 +67,7 @@ describe('what the game says about you', () => {
   it('says nothing on the first day, because you are what you were', () => {
     const state = game();
     const said = dayOf(state);
-    expect(said.some((t) => /calling you/i.test(t))).toBe(false);
+    expect(said.some((t) => /the family has (come up|slipped)/i.test(t))).toBe(false);
     expect(state.org.rankSaid).toBe(rankNow(state).id);
   });
 
@@ -83,7 +84,7 @@ describe('what the game says about you', () => {
     const said = dayOf(state);
 
     expect(said.join(' '), 'a rank rise went unremarked').toMatch(
-      new RegExp(`calling you ${climbed.name}`, 'i'),
+      new RegExp(`the family has come up: ${climbed.name}\\.`, 'i'),
     );
     expect(state.org.rankSaid).toBe(climbed.id);
   });
@@ -103,8 +104,9 @@ describe('what the game says about you', () => {
     state.org.rankSaid = 'crime_lord';
     const said = dayOf(state);
 
-    expect(said.join(' ')).toMatch(/stopped calling you Crime Lord/i);
-    expect(said.join(' ')).toMatch(new RegExp(`${held.name} again`, 'i'));
+    expect(said.join(' ')).toMatch(/the family has slipped/i);
+    expect(said.join(' ')).toMatch(new RegExp(`it was ${RANK_BY_ID.crime_lord.name}`, 'i'));
+    expect(said.join(' ')).toMatch(new RegExp(`and is ${held.name} now`, 'i'));
   });
 });
 

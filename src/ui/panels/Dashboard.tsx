@@ -256,7 +256,9 @@ export default function Dashboard({ onNavigate }: { onNavigate: (id: PanelId) =>
       <div className="page-head">
         <h1 className="page-title">Overview</h1>
         {/*
-           What people call you, and what would change it.
+           What the family is, and what would change it. It is the family's
+           standing and not his title: he is the boss from the first morning,
+           so the ladder measures how much of the city the outfit is.
 
            The game refers to standing constantly — the whole locked-jobs table
            is headed "ABOVE YOUR STANDING" — and until now the only screen that
@@ -268,6 +270,7 @@ export default function Dashboard({ onNavigate }: { onNavigate: (id: PanelId) =>
            without a statement of what would satisfy it.
         */}
         <span className="tiny">
+          <span className="faint">Family standing </span>
           <span className="stamp cool">{rankNow(state).name}</span>
           {/* At the top there is no next rung, so the goal line used to
               vanish. `whatHoldsIt` says what the rank is standing on instead —
@@ -279,7 +282,7 @@ export default function Dashboard({ onNavigate }: { onNavigate: (id: PanelId) =>
           )}
           {whatItNeeds(state).length > 0 && (
             <span className="faint">
-              {' '}· {nextRank(state)?.name} wants {whatItNeeds(state).join(', ')}
+              {' '}· toward {nextRank(state)?.name.toLowerCase()}: {whatItNeeds(state).join(', ')}
             </span>
           )}
         </span>

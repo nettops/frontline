@@ -54,8 +54,8 @@ export function tickAnnouncements(state: GameState): void {
  * derived rank that only ever announced its rises would be a trophy cabinet
  * with the losses filed somewhere else.
  *
- * The first tick of a career sets the mark without saying anything, because a
- * street criminal being told he is a street criminal is not news.
+ * The first tick of a career sets the mark without saying anything, because an
+ * outfit nobody has heard of being told so is not news.
  */
 function announceRank(state: GameState): void {
   const now = rankNow(state);
@@ -68,11 +68,14 @@ function announceRank(state: GameState): void {
 
   const wasAbove = rankIndex(said) > rankIndex(now.id);
   state.org.rankSaid = now.id;
+  // The family's, not his: he is the boss from the first morning, so what moves
+  // is how much of the city the outfit is. The rung names are fragments and read
+  // lowercased inside a sentence.
   addLog(
     state,
     wasAbove
-      ? `People have stopped calling you ${nameFor(said)}. You are ${now.name} again.`
-      : `They are calling you ${now.name} now.`,
+      ? `The family has slipped. It was ${nameFor(said).toLowerCase()}, and is ${now.name.toLowerCase()} now.`
+      : `The family has come up: ${now.name.toLowerCase()}.`,
     wasAbove ? 'failure' : 'success',
   );
 }

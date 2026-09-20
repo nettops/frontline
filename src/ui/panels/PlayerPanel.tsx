@@ -1072,7 +1072,7 @@ export default function PlayerPanel() {
              stopped tracking them. Printing the actual rung directly above it
              is what tells the two apart.
           */}
-          <KeyValue label="They call you" value={rankNow(state).name} tone="brass" />
+          <KeyValue label="Family standing" value={rankNow(state).name} tone="brass" />
           {/* And at the top, what is keeping you there. See `whatHoldsIt`. */}
           {!nextRank(state) && whatHoldsIt(state).length > 0 && (
             <KeyValue
@@ -1082,7 +1082,7 @@ export default function PlayerPanel() {
           )}
           {nextRank(state) && whatItNeeds(state).length > 0 && (
             <KeyValue
-              label={`To be ${nextRank(state)!.name}`}
+              label={`Toward ${nextRank(state)!.name.toLowerCase()}`}
               value={whatItNeeds(state).join(', ')}
             />
           )}

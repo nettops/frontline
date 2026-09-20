@@ -77,7 +77,7 @@ import {
   type ApproachId,
 } from '../../config/operations';
 import { CONTROL_LABEL, SENTIMENT_HOSTILE_BELOW } from '../../config/territories';
-import { ATTRIBUTE_LABEL, ROLE_LABEL, rankIndex } from '../../config/economy';
+import { ATTRIBUTE_LABEL, RANK_BY_ID, ROLE_LABEL, rankIndex } from '../../config/economy';
 import { rankNow } from '../../sim/rank';
 import type { CapoPitch, OperationDef } from '../../sim/types';
 
@@ -737,7 +737,8 @@ export default function OperationsPanel() {
             <span className="coach-label">Broke</span>
             <span className="coach-text">
               Under {formatMoney(TRIBUTE.handsOnPovertyExemptionFunds)} on hand, you can work a
-              corner yourself without the loss of standing it usually costs a man at your rank.
+              corner yourself without the loss of standing it usually costs a family with{' '}
+              {RANK_BY_ID.capo.name.toLowerCase()}.
               Nobody thinks less of a man for working until the payroll is covered.
             </span>
           </aside>

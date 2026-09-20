@@ -43,12 +43,24 @@ describe('the ledger itself', () => {
 });
 
 describe('the snapshot diff', () => {
-  it('records a rank change', () => {
+  /*
+     This was 'records a rank change', and it passed for as long as it did
+     because it assigned the stored field by hand — the one thing nothing in the
+     game ever does. `player.rank` is pinned at the first rung (see `rank.ts`),
+     so in play the branch it guarded could never fire, and the chronicle never
+     said "Reached Capo." The director's call on round 30 was not to repair it:
+     the player is the boss of a family from the first morning, and a chapter
+     called "Reached Capo" about a man who was already the boss is a line that
+     contradicts the rest of the page. The family's standing is said once, in
+     the log, by `announce.ts`; the chronicle keeps people, ground, wars,
+     succession and cases.
+  */
+  it('does not keep a chapter for a change of rank', () => {
     const state = game();
     const before = careerSnapshot(state);
     state.player.rank = 'capo';
     recordCareerMilestones(state, before);
-    expect(career(state).some((c) => /Reached/.test(c.text))).toBe(true);
+    expect(career(state).some((c) => /Reached/.test(c.text))).toBe(false);
   });
 
   it('tells a death from a defection', () => {
@@ -143,7 +155,6 @@ describe('the snapshot diff', () => {
   it('does not write in Simulation mode', () => {
     const state = newGame({ name: 'Watching', difficulty: 'normal', seed: 41, mode: 'simulation' });
     const before = careerSnapshot(state);
-    state.player.rank = 'capo';
     recordCareerMilestones(state, before);
     // Nothing asserts this is wired into `advanceDay`'s own mode guard here —
     // that is `clock.ts`'s job. This only confirms calling the diff function

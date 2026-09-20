@@ -110,7 +110,7 @@ import {
 } from '../config/operations';
 import { LAWYER_BY_LEVEL } from '../config/lawEnforcement';
 import { CANCEL_OPERATION_HEAT } from '../config/heat';
-import { ATTRIBUTE_MAX, FEAR, ROLE_ORDER, rankIndex } from '../config/economy';
+import { ATTRIBUTE_MAX, FEAR, RANK_BY_ID, ROLE_ORDER, rankIndex } from '../config/economy';
 import { civicRoster } from './civic';
 import { bond } from './diplomacy';
 import { rivals } from './faction';
@@ -816,7 +816,14 @@ export function launchOperation(
     totalFunds(state) >= TRIBUTE.handsOnPovertyExemptionFunds
   ) {
     gainRespect(state, -TRIBUTE.handsOnStreetWorkRespectPenalty);
-    addLog(state, 'A boss seen working street shakedowns is a boss losing respect.', 'crew');
+    // Said about the family, and by the rung's own name so it cannot come apart
+    // from the gate above: he is the boss from the first morning, so what has
+    // changed is what the family has become.
+    addLog(
+      state,
+      `A family with ${RANK_BY_ID.capo.name.toLowerCase()} does not send its boss to work a corner. People noticed.`,
+      'crew',
+    );
   }
 
   const cost = operationCost(state, def);

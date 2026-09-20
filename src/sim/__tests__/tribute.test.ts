@@ -24,6 +24,7 @@ import { launchOperation, tickOperations } from '../operations';
 import { canDelegatePitchAutonomous, delegatePitchAutonomous } from '../capoPitches';
 import { advanceDay } from '../clock';
 import { TRIBUTE } from '../../config/tribute';
+import { RANK_BY_ID } from '../../config/economy';
 import {
   capoEarnerStatus,
   capoTributeEstimate,
@@ -639,6 +640,23 @@ describe('a boss on a corner', () => {
     launchOperation(state, 'work_it_yourself', [], territoryList(state)[0].id);
 
     expect(state.org.respect).toBe(50 - TRIBUTE.handsOnStreetWorkRespectPenalty);
+  });
+
+  /*
+     Said about the family, not the man. He is the boss from the first morning,
+     so "a boss seen working" contradicted the screen it was printed on; what
+     changes at this rung is what the family has become, and that is what
+     the line says. The rung is named by the ladder's own name for it, so the
+     message and the gate cannot come apart.
+  */
+  it('says what the family has become, and does not call him a boss on a corner', () => {
+    const state = seated(TRIBUTE.handsOnPovertyExemptionFunds);
+
+    launchOperation(state, 'work_it_yourself', [], territoryList(state)[0].id);
+
+    const said = state.log.map((l) => l.text).join(' ');
+    expect(said).toContain(RANK_BY_ID.capo.name.toLowerCase());
+    expect(said).not.toMatch(/a boss seen working/i);
   });
 
   it('excuses a man who has nothing — that is not pride, that is being broke', () => {

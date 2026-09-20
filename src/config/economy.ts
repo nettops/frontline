@@ -312,16 +312,31 @@ export const CREW_PER_DISTRICT = data.crew.perDistrict;
  */
 export const CREW_PER_FRONT = data.crew.perFront;
 
+/*
+   The ladder measures the family, not the man.
+
+   The player is the boss of a family from the first morning (round 30's
+   director call), so these are not titles he climbs through. They are how much
+   of the city the outfit is, and what people say of it. The ids did not move:
+   `outgrewStreetWork` reads `crew_leader`, the street-work respect cost, the
+   capo-pitch gate and the special-venture gate read `capo`, and `player.rank`
+   on every old save is one of these strings. Only the words are the family's.
+
+   Named as fragments so that they read in a stamp on their own and, lowercased,
+   inside a sentence — `announce.ts`, `tribute.ts` and `operations.ts` all say
+   them mid-line. The last rung is `crime_lord`, which the director's list of
+   six did not reach; "Other cities know the name" is the bookend to the first.
+*/
 export const RANKS: RankDef[] = [
   {
     id: 'street_criminal',
-    name: 'Street Criminal',
-    blurb: 'Nobody knows your name. Nobody is looking for you either.',
+    name: 'Nobody knows the name',
+    blurb: 'Nobody is looking for the family either.',
   },
   {
     id: 'enforcer',
-    name: 'Enforcer',
-    blurb: 'People on the block know what happens when you show up.',
+    name: 'A couple of corners',
+    blurb: 'People on the block know what happens when your people show up.',
     /*
        Deliberately cheap, and reachable inside the first month.
 
@@ -335,14 +350,14 @@ export const RANKS: RankDef[] = [
   },
   {
     id: 'crew_leader',
-    name: 'Crew Leader',
-    blurb: 'You give the orders now. The mistakes are yours too.',
+    name: 'A crew that works',
+    blurb: 'It runs without you standing over it. The mistakes are still yours.',
     needs: { districtsControlled: 1, fronts: 2, crew: 6 },
   },
   {
     id: 'capo',
-    name: 'Capo',
-    blurb: 'A seat at the table, and everyone at it counting your earnings.',
+    name: 'A seat at the table',
+    blurb: "Everyone at it is counting the family's earnings.",
     /*
        Sized against measured careers rather than against a feeling.
 
@@ -355,8 +370,8 @@ export const RANKS: RankDef[] = [
   },
   {
     id: 'underboss',
-    name: 'Underboss',
-    blurb: 'Second in the room. First in the indictment.',
+    name: 'One of the families',
+    blurb: 'First in the room. First in the indictment.',
     /*
        The first rung that asks for something other than growth.
 
@@ -369,14 +384,14 @@ export const RANKS: RankDef[] = [
   },
   {
     id: 'boss',
-    name: 'Boss',
+    name: "The city's business",
     blurb: 'Your family. Your rules. Your problem when it goes wrong.',
     needs: { districtsControlled: 4, fronts: 7, crew: 18, owedTotal: 2 },
   },
   {
     id: 'crime_lord',
-    name: 'Crime Lord',
-    blurb: 'Cities move around you. So do task forces.',
+    name: 'Other cities know the name',
+    blurb: 'Cities move around the family. So do task forces.',
     /*
        The only rung that needs a rival to think well of you.
 
