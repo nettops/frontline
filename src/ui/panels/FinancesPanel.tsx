@@ -15,9 +15,11 @@ import { HOLDINGS } from '../../config/economy';
 import { estate } from '../../sim/estate';
 import { crewList } from '../../sim/npc';
 import { ownedBusinesses } from '../../sim/business';
+import { SHUTTER_REFUND_SHARE } from '../../config/businesses';
 import { atWar, relationship } from '../../sim/diplomacy';
 import { rivals } from '../../sim/faction';
 import type { FactionId } from '../../config/factions';
+import type { GameState } from '../../sim/types';
 import {
   borrow,
   canBorrow,
@@ -283,6 +285,43 @@ function Holdings() {
   );
 }
 
+/**
+ * The ways out of an empty safe that this state actually has.
+ *
+ * Every line is conditional on the thing it names being reachable right now,
+ * which is the fourth rule applied to advice rather than to a button: telling
+ * a boss with no fronts to sell a front is a control that takes a click and
+ * does nothing, one step removed.
+ *
+ * The last line has no condition because it has no requirement — a corner and
+ * a pawnbroker are open to a man with nothing, which is the point of it.
+ */
+function exits(state: GameState): string[] {
+  const lines: string[] = [];
+  if (ownedBusinesses(state).length > 0) {
+    lines.push(
+      `Liquidate fronts: selling an underperforming business in Businesses returns ` +
+        `${Math.round(SHUTTER_REFUND_SHARE * 100)}% of what you paid for it and clears its ` +
+        `weekly upkeep.`,
+    );
+  }
+  /*
+     `friendlyFactionId` is null deliberately. The shark lends against
+     violence rather than obligation, so the field is not read on this path,
+     and computing the friendliest house here would duplicate `Credit`'s own
+     sort for a lender that does not use it.
+  */
+  if (canBorrow(state, 'shark', {
+    respect: state.org.respect,
+    businesses: ownedBusinesses(state).length,
+    friendlyFactionId: null,
+  }).ok) {
+    lines.push(`Emergency credit: the man on Delacroix will advance cash from $500 today.`);
+  }
+  lines.push(`Sell personal luxuries in Yourself, or work a street corner yourself.`);
+  return lines;
+}
+
 export default function FinancesPanel() {
   const state = useGame();
   const { org } = state;
@@ -322,9 +361,20 @@ export default function FinancesPanel() {
         <aside className="coach urgent">
           <span className="coach-label">Payroll</span>
           <span className="coach-text">
-            There is not enough on hand to reach the next payday. Sell an underperforming front
-            from Businesses, sell what you carry from Yourself, or work a corner yourself —
-            before your own people start leaving unpaid.
+            There is not enough on hand to reach the next payday.{' '}
+            {/*
+               Named exits, not a category.
+
+               The previous copy said "sell an underperforming front", and
+               round 29 held four fronts, respect over a hundred, and reported
+               not knowing a front could be sold at all — a banner that names
+               a door without saying it opens is the fourth rule with better
+               manners. Each line below is stated only when the state actually
+               allows it, so nothing here can send a broke boss at a control
+               that will refuse him.
+            */}
+            {exits(state).join(' ')} Do one of them before your own people start leaving
+            unpaid.
           </span>
         </aside>
       )}
@@ -640,6 +690,7 @@ function Lender({ id, facts }: { id: string; facts: BorrowerFacts }) {
   const def = LENDER_BY_ID[id];
   const check = canBorrow(state, id, facts);
   const ceiling = lenderCeiling(state, def);
+  const minAmount = def.id === 'shark' ? 500 : Math.round(ceiling * 0.1);
   const [amount, setAmount] = useState(0);
   const [message, setMessage] = useState<string | null>(null);
   const asking = amount || Math.round(ceiling / 2);
@@ -667,10 +718,22 @@ function Lender({ id, facts }: { id: string; facts: BorrowerFacts }) {
         <Empty>{check.message}</Empty>
       ) : (
         <div className="row" style={{ gap: 12, alignItems: 'center' }}>
+          {/*
+            The shark alone starts at $500, in steps of $250.
+
+            A tenth of the ceiling is a sensible floor for a bank, which lends
+            against something. It was $4,000 here, which priced the one lender
+            with no requirements at all out of reach of exactly the boss who
+            needs him — round 29 spent two stretches under $500 and asked for
+            "one cheap recovery lever (small loan, ...)" by name. `dueOn` in
+            `sim/market.ts` scales the weekly collection to match, so a small
+            advance is a small repayment rather than $350 a week.
+          */}
           <input
             type="range"
-            min={Math.round(ceiling * 0.1)}
+            min={minAmount}
             max={ceiling}
+            step={def.id === 'shark' ? 250 : 500}
             value={Math.min(asking, ceiling)}
             onChange={(e) => setAmount(Number(e.target.value))}
           />

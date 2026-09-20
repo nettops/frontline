@@ -174,6 +174,11 @@ const wantsAWord: EventDef = {
         `${npc.name} has been waiting outside since this morning. ${carrying} ${who}`,
         `${npc.name} asked whether you had five minutes, then asked again. ${carrying} ${who}`,
         `Somebody put it to you that ${npc.name} would like to be heard. ${carrying} ${who}`,
+        `${npc.name} came by twice and would not leave a message either time. ${carrying} ${who}`,
+        `${npc.name} is in the back and has not taken their coat off. ${carrying} ${who}`,
+        `Somebody mentioned, carefully, that ${npc.name} has been talking. Not to anyone ` +
+          `outside. ${carrying} ${who}`,
+        `${npc.name} stopped you on the way in and said it would not take long. ${carrying} ${who}`,
       ]),
       severity: 'warning',
       npcId: npc.id,
@@ -509,6 +514,18 @@ const paperMoving: EventDef = {
           `than they were: the case is at ${Math.round(c.strength)} out of a hundred ` +
           `and nothing about it is going quiet. You are not supposed to know, which ` +
           `is the only advantage you have.`,
+        `A clerk who drinks where your people drink said a box went upstairs with your ` +
+          `name on the index. ${agency.name} have it at ${Math.round(c.strength)} out of a ` +
+          `hundred. Knowing it early is the whole of what you have.`,
+        `${agency.name} put somebody new on it, which they do not do for files that are ` +
+          `going nowhere. ${Math.round(c.strength)} out of a hundred, and climbing. ` +
+          `Nobody was supposed to tell you that.`,
+        `The file came up in a room it had no business coming up in. ${agency.name}, ` +
+          `${Math.round(c.strength)} out of a hundred, and they have stopped asking ` +
+          `questions they already know the answers to. You are ahead of it, barely.`,
+        `Somebody has been pulling paper on you for a month without asking anybody ` +
+          `for permission. ${agency.name} are at ${Math.round(c.strength)} out of a hundred. ` +
+          `The advantage is that you know and they do not know you know.`,
       ]),
       severity: 'danger',
       npcId: null,
@@ -953,6 +970,18 @@ const somebodyInside: EventDef = {
           `asking them, they have not answered it yet.`,
         `${npc.name} has been in a room since Tuesday with people who do this for a living. ` +
           `${ROLE_LABEL[npc.role]}, ${npc.daysInCrew} days with you. Nobody has said what they have.`,
+        `${npc.name} did not come back from a stop on the avenue. ` +
+          `${ROLE_LABEL[npc.role]}, ${npc.daysInCrew} days with you, and the desk will not put ` +
+          `a charge on it yet, which is a choice somebody made.`,
+        `Somebody from the house called the club looking for ${npc.name}, which is how ` +
+          `you found out. ${ROLE_LABEL[npc.role]}, ${npc.daysInCrew} days with you. They are ` +
+          `held, and nobody downtown is in a hurry about it.`,
+        `They have had ${npc.name} two nights and asked for nothing, which is not how it goes ` +
+          `when they have a case. ${ROLE_LABEL[npc.role]}, ${npc.daysInCrew} days with you. ` +
+          `The waiting is the method.`,
+        `${npc.name} is in the county and the paperwork has the name spelled wrong, ` +
+          `which is the only reason it took this long to reach you. ${ROLE_LABEL[npc.role]}, ` +
+          `${npc.daysInCrew} days with you.`,
       ]),
       severity: 'danger',
       npcId: npc.id,
@@ -967,6 +996,33 @@ const somebodyInside: EventDef = {
             `out ${daysOff} ${daysOff === 1 ? 'day' : 'days'} sooner, and they know who sent them`,
           ),
         },
+        /*
+           The answer for a family that has not got bail money.
+
+           Between $1,500 and abandonment there was nothing, so a broke boss
+           met this as a one-button memo: leave him, -12 loyalty, and a man
+           who has been shown exactly what he is worth. Offered only when the
+           safe is genuinely empty — see `GEN_WHEN.brokeUnder` — because at
+           any real balance it is a cheaper way to buy most of the goodwill
+           and the expensive answer should stay the expensive answer.
+
+           It buys no days off the sentence and the hint says so. What it buys
+           is them knowing they were not written off, which is the half of this
+           memo that was never about the calendar.
+        */
+        ...(totalFunds(state) < GEN_WHEN.brokeUnder
+          ? [
+              {
+                id: 'word',
+                label: 'Send word and commissary money',
+                ...payable(
+                  state,
+                  GEN_EFFECT.insideWordCost,
+                  'nothing off the sentence — they just know you have not forgotten them',
+                ),
+              },
+            ]
+          : []),
         {
           id: 'wait',
           label: 'Let it run',
@@ -1067,6 +1123,17 @@ const nameCameUp: EventDef = {
         `Two people, separately, and neither of them knew the other had said it. ` +
           `${npc.name} — ${ROLE_LABEL[npc.role]}, ${npc.daysInCrew} days with you. ` +
           `Nobody has anything you could call evidence.`,
+        `The same name, from a different mouth, in a different room, a week apart. ` +
+          `${npc.name} — ${ROLE_LABEL[npc.role]}, ${npc.daysInCrew} days with you. ` +
+          `Neither of them was trying to tell you anything.`,
+        `Somebody said it and then wished they had not, which is worse than saying it ` +
+          `twice. ${npc.name}, ${ROLE_LABEL[npc.role]}, ${npc.daysInCrew} days with you. ` +
+          `There is nothing under it you could hold up.`,
+        `You have heard ${npc.name} come up twice now, both times in passing, both times ` +
+          `by people with no reason to lie about it. ${ROLE_LABEL[npc.role]}, ` +
+          `${npc.daysInCrew} days with you, and not a scrap of proof either way.`,
+        `A name that keeps arriving on its own is not an accusation and it is not nothing. ` +
+          `${npc.name} — ${ROLE_LABEL[npc.role]}, ${npc.daysInCrew} days with you.`,
       ]),
       severity: 'warning',
       npcId: npc.id,
@@ -1741,6 +1808,28 @@ export function resolveGenerated(
           `${money(bail)} and somebody who knows the desk sergeant. ${npc.name} was seen to` +
             (daysOff > 0 ? `, and is out ${daysOff} ${daysOff === 1 ? 'day' : 'days'} sooner.` : '.'),
           'money',
+        );
+        return;
+      }
+      /*
+         The broke answer. Guarded the same way `bail` is: a priced choice
+         whose money is not there must do nothing, not quietly do the free
+         version of itself. No `looked_after` memory and no days off — the
+         sentence runs exactly as long, and the deposition years later goes
+         the way it was always going to.
+      */
+      if (choiceId === 'word') {
+        if (!spend(state, GEN_EFFECT.insideWordCost, 'crew')) {
+          addLog(state, `Nothing went in for ${npc.name}. There was nothing to send.`, 'failure');
+          return;
+        }
+        npc.stats.loyalty = clamp(npc.stats.loyalty + GEN_EFFECT.insideWordLoyalty, 0, 100);
+        addNote(npc, state.day, 'Heard from you while they were in there.', 'good');
+        addLog(
+          state,
+          `${money(GEN_EFFECT.insideWordCost)} on the books inside, and a message with it. ` +
+            `${npc.name} is still in there, and knows whose money it was.`,
+          'crew',
         );
         return;
       }

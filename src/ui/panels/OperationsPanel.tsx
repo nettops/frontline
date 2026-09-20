@@ -316,6 +316,29 @@ export default function OperationsPanel() {
       </p>
 
       {/*
+         The page is four pages long and the player wanted the third one.
+
+         Round 29 measured fifteen hundred pixels of running jobs, automation
+         and work above the player's standing between the top of this screen
+         and the street job they had come to start. Nothing on it was wrong —
+         it was simply all there at once, in the order the systems were built.
+
+         A jump bar rather than collapsing the sections: what is on this page
+         is what the boss is being asked about, and folding half of it away is
+         how a standing order runs for three weeks unnoticed. The counts are
+         live, and a pill is only drawn when its section exists — a control
+         that scrolls to nothing is rule 4's quietest violation.
+      */}
+      <JumpBar
+        stops={[
+          { id: 'ops-active', label: 'Active', count: active.length },
+          { id: 'ops-pitches', label: 'Pitches', count: pitches.length },
+          { id: 'ops-street', label: 'Street Work', count: open.length },
+          { id: 'ops-standing', label: 'Standing', count: def ? 0 : locked.length },
+        ]}
+      />
+
+      {/*
          The one decision somebody else has already made for you.
 
          Top of the page, above the running jobs, because it is the only thing
@@ -384,7 +407,7 @@ export default function OperationsPanel() {
       )}
 
       {active.length > 0 && (
-        <Panel title="Running now" flush>
+        <Panel title="Running now" flush id="ops-active">
           <div className="table-wrap">
             <table className="data">
               <thead>
@@ -657,7 +680,7 @@ export default function OperationsPanel() {
 
       {pitches.length > 0 && (
         <div ref={pitchesRef}>
-        <Panel title="Brought to you">
+        <Panel title="Brought to you" id="ops-pitches">
           {pitches.map((p) => (
             <PitchCard
               key={p.id}
@@ -706,6 +729,7 @@ export default function OperationsPanel() {
         title="Work available"
         action={<SameAgain onLaunched={() => setSelected(null)} />}
         flush
+        id="ops-street"
       >
         <div className="table-wrap">
           <table className="data">
@@ -1261,7 +1285,7 @@ export default function OperationsPanel() {
          contributor to how far this page runs once a job is open.
       */}
       {locked.length > 0 && !def && (
-        <Panel title="Above your standing" flush>
+        <Panel title="Above your standing" flush id="ops-standing">
           <div style={{ padding: '10px 14px 4px' }}>
             <p className="faint tiny" style={{ margin: 0 }}>
               Work your organization cannot take on yet. When requirements are met, operations qualify into your crew's weekly proposal rotation — capos and earners will pitch them to you directly in <strong>Brought to you</strong> above.
@@ -1373,6 +1397,34 @@ function SameAgain({ onLaunched }: { onLaunched: () => void }) {
  * Reads its own state rather than taking every field as a prop, the same
  * shape `SameAgain` uses — a card knows what it needs to say about itself.
  */
+/**
+ * Where on this page the thing you came for is.
+ *
+ * Anchors rather than the ref the pitches panel already uses, because four of
+ * them through four refs is four more things to thread; `Panel` takes an `id`
+ * now and the browser does the rest. One stop is not a jump bar — below two
+ * live sections the page is short enough to read.
+ */
+function JumpBar({ stops }: { stops: { id: string; label: string; count: number }[] }) {
+  const live = stops.filter((s) => s.count > 0);
+  if (live.length < 2) return null;
+  return (
+    <nav className="ops-jump" aria-label="Jump to a section of this page">
+      {live.map((s) => (
+        <button
+          key={s.id}
+          className="ops-jump-pill"
+          onClick={() =>
+            document.getElementById(s.id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+          }
+        >
+          {s.label} <span className="ops-jump-count">{s.count}</span>
+        </button>
+      ))}
+    </nav>
+  );
+}
+
 function PitchCard({
   pitch,
   selected,

@@ -429,13 +429,11 @@ function ContractButton({
   const state = useGame();
   const check = canContract(state, target);
   /*
-     Defaults to the phone, which is what every caller did before tradecraft
-     existed — an order that simply arrived, free and instant. The walk is the
-     thing the player opts into on the week the file makes it worth an evening,
-     and defaulting the other way would charge a night to a boss with nothing
-     on him and no van outside.
+     Defaults to the walk in the woods — safe by default, leaving no evidence
+     on wiretaps and preventing misfires. Costs the evening, which is the honest
+     tradecraft price.
   */
-  const [method, setMethod] = useState<TransmissionMethod>('phone_euphemism');
+  const [method, setMethod] = useState<TransmissionMethod>('walk_and_talk');
   /*
      Round 27: this button read "Not possible" on its face for every refused
      target, with the real reason — no crew free, a cooldown with days left,

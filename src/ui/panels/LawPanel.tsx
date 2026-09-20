@@ -256,7 +256,7 @@ function CaseDetail({
      talks about, and five toggles saying the same thing would be five copies
      of the same decision.
   */
-  const [method, setMethod] = useState<TransmissionMethod>('phone_euphemism');
+  const [method, setMethod] = useState<TransmissionMethod>('walk_and_talk');
 
   const suspects = investigation.suspectIds
     .map((id) => state.npcs[id])

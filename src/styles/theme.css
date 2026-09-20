@@ -652,6 +652,42 @@ table.data tbody tr:hover {
   background: var(--ink-700);
 }
 
+/*
+   What is wrong with a row, in its gutter.
+
+   Same mechanism as the picked row below — a tr cannot carry a border-left of
+   its own, so it is an inset shadow on the first cell. These are declared
+   above `.selected` on purpose: equal specificity, so the picked row's red
+   still wins over an accent when both apply.
+
+   The tint is deliberately almost nothing. A roster with three red rows in it
+   is a roster nobody reads; the gutter does the work and the fill only stops
+   the bar looking detached.
+*/
+table.data tbody tr.row-threat td:first-child {
+  box-shadow: inset 4px 0 0 var(--stamp);
+}
+
+table.data tbody tr.row-threat {
+  background: rgba(124, 35, 24, 0.1);
+}
+
+table.data tbody tr.row-warn td:first-child {
+  box-shadow: inset 4px 0 0 var(--brass);
+}
+
+table.data tbody tr.row-ok td:first-child {
+  box-shadow: inset 4px 0 0 var(--ok-dim);
+}
+
+table.data tbody tr.row-muted td:first-child {
+  box-shadow: inset 4px 0 0 var(--line);
+}
+
+table.data tbody tr.row-muted td {
+  color: var(--text-faint);
+}
+
 /* The picked row: raised panel and the red gutter bar. The bar is an inset
    shadow because a tr cannot carry a border-left of its own. */
 table.data tbody tr.selected {
@@ -2000,6 +2036,10 @@ th.sortable:hover {
   border-color: var(--carbon-dim);
   color: var(--carbon);
 }
+.tag.warn {
+  border-color: var(--brass-dim);
+  color: var(--brass);
+}
 
 /* ---------------------------------------------------------- title screen --- */
 
@@ -3030,4 +3070,133 @@ th.sortable:hover {
   .customiser-fields {
     width: 100%;
   }
+}
+
+
+/*
+   The jump bar on Operations.
+
+   Sticky to the scrollport rather than to the masthead: `.main` is the thing
+   that scrolls, so `top: 0` here is the top of the work area and the bar sits
+   under the stat bar at all times without either knowing about the other.
+*/
+.ops-jump {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0 -24px 12px;
+  padding: 8px 24px;
+  background: var(--ink-900);
+  border-bottom: 1px solid var(--line);
+}
+
+.ops-jump-pill {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  background: var(--ink-700);
+  border: 1px solid var(--line);
+  padding: 5px 10px;
+  cursor: pointer;
+}
+
+.ops-jump-pill:hover {
+  color: var(--text);
+  border-color: var(--brass-dim);
+}
+
+.ops-jump-count {
+  color: var(--brass);
+  margin-left: 4px;
+}
+
+/*
+   Hold-to-peek.
+
+   The memo does not move and does not close — it goes nearly transparent and
+   stops taking clicks, so the desk it is sitting on can be read underneath it.
+   No transition: a fade would make the release feel like a delay, and this is
+   held down by hand.
+*/
+.memo-backdrop.peeking {
+  background: rgba(6, 4, 3, 0.15);
+}
+
+.memo-backdrop.peeking .memo {
+  opacity: 0.09;
+  pointer-events: none;
+}
+
+.memo-peek {
+  font-family: inherit;
+  font-size: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  color: var(--paper);
+  background: transparent;
+  border: 1px solid rgba(236, 227, 205, 0.4);
+  padding: 2px 8px;
+  cursor: pointer;
+}
+
+.memo-peek:hover {
+  border-color: var(--paper);
+}
+
+/*
+   The docket.
+
+   A single line under the masthead, in the masthead's own ink, so it reads as
+   part of the fixed furniture rather than as a notification. Every chip is a
+   button, because the only useful thing to do about a payroll cliff is to go
+   and look at the money.
+*/
+.statbar-shell {
+  grid-column: 1 / -1;
+  min-width: 0;
+}
+
+.docket {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 5px 16px;
+  background: var(--ink-850);
+  border-bottom: 1px solid var(--line);
+}
+
+.docket-toggle,
+.docket-item {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  background: transparent;
+  border: 1px solid var(--line);
+  color: var(--text-dim);
+  padding: 3px 8px;
+  cursor: pointer;
+}
+
+.docket-toggle {
+  color: var(--text-faint);
+  border-color: transparent;
+  padding-left: 0;
+}
+
+.docket-toggle:hover,
+.docket-item:hover {
+  color: var(--text);
+  border-color: var(--brass-dim);
+}
+
+.docket-item.hot {
+  color: var(--stamp-bright);
+  border-color: var(--stamp-deep);
 }

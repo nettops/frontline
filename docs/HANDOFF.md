@@ -93,13 +93,12 @@ errors, `npm test` **172 files / 2,150 passing**, 0 failures.
   sentiment recovery and multiplies the poach chance by 0.65.
   `hasHealthInsurance`'s `waste_management` branch, dead code since it was
   written, is now reachable and asserted with the other two routes removed.
-- **Open, and it needs the director** — defaulting the panels to
-  `phone_euphemism` is not the old behaviour. A UI contract used to pass
-  no method at all, which skips `transmitOrder` entirely: no misfire roll,
-  no wiretap interception. It now carries both. `ladder.probe` calls
-  `openContract` with no method, so no probe baseline moved and the
-  instrument cannot size this. Whether the default should be the walk
-  instead is a design call. See `.ai/LIVE_OVERSEER.log`, Phase 6 FINDING 1.
+- **Closed by director decision, 2026-09-18** — defaulted contract transmission
+  to `walk_and_talk` across both `RivalsPanel` and `LawPanel`. Protects players from
+  unintended federal wiretaps (+2.5 case evidence) and misfires (+12 street heat)
+  by default, at the honest tradecraft price of spending the Boss's evening
+  (`went_home_day`). Explicitly opted to phone euphemisms only when the boss
+  chooses the speed/convenience over safety. See `.ai/LIVE_OVERSEER.log`, Phase 6 FINDING 1.
 
 
 **Round 29 Part 2 fixes, 2026-09-17.** `tsc -b` 0 errors, `npm test`
@@ -148,10 +147,9 @@ Criminal, Clarity 8, Interface 8, First hour 9.
   unexplained to that tooling even though a human player would not hit
   this. Same caveat class as the harness's `run()` finding — not
   re-verified against a mouse-driven human tester.
-- **Still open from the same report** — the two mid-game famines (days
-  ~60–78 and ~141–187 where no memo option was affordable) and the
-  last-60-days memo repetition. Both are the Difficulty 7 and Pacing 7
-  blockers and are balance work, not a copy or wiring fix.
+- **Closed 2026-09-18** — the two mid-game famines (days ~60–78 and ~141–187
+  where no memo option was affordable) and the last-60-days memo repetition
+  closed by the famine and repetition pass below.
 
 **District holding cost, 2026-09-18.** `tsc -b` 0 errors, `npm test`
 **175 files / 2,181 passing**, 0 failures. `.ai/TASKS.md`'s old item 2 —
@@ -250,6 +248,69 @@ or wrong.
 - **No probe re-run needed** — none of `scorecard.probe`, `ladder.probe`
   or `broke.probe`'s bots call any of the three favours, so nothing in
   this change touches an existing rng-consuming sequence.
+
+**Four reading repairs, 2026-09-18.** `tsc -b` 0 errors, `npm test`
+**176 files / 2,201 passing**, 0 failures. All four answer complaints in
+round 29's report about *finding* things rather than about what the
+systems do. Presentation only: nothing writes to the save, no sim
+function changed, `SAVE_VERSION` stays 13, and no probe baseline can
+move because no rng-consuming sequence is touched.
+
+- **A jump bar on Operations** (`JumpBar`, `panels/OperationsPanel.tsx`).
+  Round 29 measured about fifteen hundred pixels of running jobs,
+  automation and work above the player's standing between the top of the
+  page and the street job they had come to start. Four sticky pills with
+  live counts — Active, Pitches, Street Work, Standing — scrolling to
+  `#ops-active`, `#ops-pitches`, `#ops-street`, `#ops-standing`. `Panel`
+  takes an optional `id` now, which beat wrapping four sections in divs
+  that exist only to be scrolled to. A pill is drawn only when its
+  section exists, and the bar itself only above two live sections — a
+  control that scrolls to nothing is rule 4 in its quietest form.
+- **Hold to peek on the memo** (`ui/MemoModal.tsx`). Half of these
+  questions are about money, heat or who is free, and the page that asks
+  covers the only place those figures are printed. Held rather than
+  toggled: mouse, touch, or P. While peeking the memo drops to 9% opacity
+  and stops taking clicks, so the release is listened for on the window
+  rather than on the button, which by then cannot receive it. The number
+  keys are untouched, and a new memo arrives with the page up.
+- **The docket** (`Docket`, `ui/StatBar.tsx`, under the masthead on every
+  screen). Payroll days and cost, heat once past 60, and how many people
+  are carrying a grievance — the three things that ruin a career while
+  the player is on another tab. Each chip jumps to the panel that owns
+  it, through the `goto` App already had. The payroll figure comes from
+  `payrollForecast`, the same function the payday runs, so it cannot
+  disagree with the event; a second copy of that arithmetic is exactly
+  the round-12 defect the forecast was written to fix. The payroll line
+  draws in the quiet tone when the money is there, because a strip that
+  appears only on bad news teaches the player to read its absence as
+  nothing coming.
+- **Row accents on the roster and the fronts** (`rowAccent`,
+  `panels/CrewPanel.tsx`; inline in `panels/BusinessesPanel.tsx`). The
+  same inset gutter `tr.selected` already uses, declared above it so the
+  picked row still wins. Crimson on the grievance threshold `StatusTag`
+  already prints "Grudge" from; amber through `perceive(npc, 'loyalty')`
+  rather than the raw stat, with a "Defection risk" chip beside the
+  status — a colour is something the player reads about a person, and
+  rule 1 has no exception for colours. Fronts take amber on `hard` or
+  past the alarming exposure line, green on `clean`.
+- **Guard:** `ui/__tests__/uiEvolution.test.ts` (new, 17), in
+  `sopranoControls.test.ts`'s idiom — source with commentary stripped,
+  plus the stylesheet — seen red (14 of 17) before any of it was built.
+  `discoverable.test.ts` caught the crew row's className rewrite; it
+  pins the literal `'clickable selected' : 'clickable'`, so the accent
+  appends to that ternary rather than replacing it.
+
+**Mid-game cash famines and late-career memo repetition, 2026-09-18.** `tsc -b` 0 errors, `npm test` **177 files / 2,215 passing**, 0 failures. Sized against the two Pacing 7 / Difficulty 7 blockers from round 29's report. Zero `SAVE_VERSION` bump.
+
+- **Family bedside dilemma (`sick_relative`).** In `config/personal.ts`, `attendCost` changed from $600 to 0 (matching `school_event`, `quiet_evening`, `teen_trouble`), with `sendCost` 450 untouched. Attending in person spends presence and an evening; a broke boss with $451 is never locked out by $2 from sitting by a sick relative's bedside.
+- **Loan shark emergency micro-loans.** In `sim/market.ts`, `dueOn` scales repayment for small balances: `minRepay = Math.min(REPAYMENT_MINIMUM, Math.max(50, Math.round(loan.owed * 0.1)))`. A $500 loan owes ~$60/week instead of forcing a crushing $350/week bill, while large loans ($40K+) retain their $350 floor. Slider in `FinancesPanel.tsx` starts at $500 with step $250.
+- **Actionable payroll shortfall exits.** The coach banner at the top of Finances now dynamically lists available exits: selling fronts in Businesses (recovering 35% capital and shedding upkeep), emergency credit from Delacroix ($500+), pawning personal luxuries from Yourself, or street corners.
+- **Memo pacing & repetition decay.** Cooldowns on the 5 over-frequent generated shapes extended: `somebody_inside` (8→18d), `paper_moving` (10→20d), `a_name_came_up` (9→18d), `wants_a_word` (9→16d), `the_take_is_short` (10→18d). Narrative variant pools grown across all four, and `somebody_inside` adds an affordable middle choice (sending commissary grease/word for $150) when broke (`totalFunds < 1_000`).
+- **Guard:** `sim/__tests__/famineRepetition.test.ts` (new, 14), seen red before implementation.
+
+**Contract tradecraft default: walk and talk, 2026-09-18.** `tsc -b` 0 errors. Sized per director decision.
+- **`RivalsPanel.tsx` & `LawPanel.tsx`.** Both default contract transmission method to `'walk_and_talk'` instead of `'phone_euphemism'`. Players are protected from unintended wiretaps (+2.5 case evidence) and misfire heat (+12 street heat) by default; opting for the phone is an explicit, conscious trade-off to save the evening.
+- **Guard:** `src/ui/__tests__/sopranoControls.test.ts` updated to assert `useState<TransmissionMethod>('walk_and_talk')` on both sending panels.
 
 
 ## 1. What the project is

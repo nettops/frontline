@@ -342,7 +342,21 @@ export const FAMILY_DILEMMAS: FamilyDilemmaDef[] = [
       'took a turn, and the doctor is asking who is coming',
       'is in bed and asking for you by name, which has not happened before',
     ],
-    attendCost: 600,
+    /*
+       Free, the same as `school_event`, `quiet_evening` and `teen_trouble`.
+
+       It was 600, and round 29 met it holding $451, with both answers priced
+       above that — $604 to go and $453 for the doctor. The only enabled
+       button was "Not this time", and the tester's own words for it were
+       *"which I did not choose at all — the game chose it for me."* A refusal
+       the state forces is not a decision, and this one is the memo the same
+       report called the best thing in the game.
+
+       Sitting in the room is presence and an evening, not an expense. The
+       bill is the doctor you send when you will not go yourself, which
+       `sendCost` still charges at exactly what it charged before.
+    */
+    attendCost: 0,
     sendCost: 450,
     sendGesture: 'a doctor sent in your name, and the bill settled from a distance',
   },

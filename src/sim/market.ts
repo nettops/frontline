@@ -101,8 +101,27 @@ export function weeklyRepayment(state: GameState): number {
   return loans(state).reduce((sum, l) => sum + dueOn(l), 0);
 }
 
+/**
+ * What one loan takes this payday.
+ *
+ * `REPAYMENT_MINIMUM` exists so a large balance cannot be outlasted at the
+ * share alone, and against a large balance it is doing exactly that. Against a
+ * small one it was doing something else: a $500 advance to a boss with nothing
+ * arrived owing $350 a week, which is not credit, it is a faster way to miss
+ * three payments and have somebody sent round. Round 29 spent two stretches
+ * under $500 — days ~60-78 and ~141-187 — and asked for exactly this in its
+ * own words: *"Normal's floor needs one cheap recovery lever (small loan,
+ * front sale hint, one stake-free job at every rank)."* The lever existed and
+ * its terms made it useless at the size that would have helped.
+ *
+ * So the floor is itself capped at a tenth of the balance — never below $50,
+ * so it cannot degenerate into a repayment of nothing. A $500 loan collects
+ * tens of dollars a week. Anything owing more than $3,500 sees the same
+ * arithmetic it always did, which is every loan the old floor was written for.
+ */
 function dueOn(loan: Loan): number {
-  return Math.min(loan.owed, Math.max(REPAYMENT_MINIMUM, Math.round(loan.owed * REPAYMENT_SHARE)));
+  const minRepay = Math.min(REPAYMENT_MINIMUM, Math.max(50, Math.round(loan.owed * 0.1)));
+  return Math.min(loan.owed, Math.max(minRepay, Math.round(loan.owed * REPAYMENT_SHARE)));
 }
 
 /**

@@ -49,6 +49,22 @@ export default function MemoModal() {
   */
   const [receipt, setReceipt] = useState<LogEntry[]>([]);
 
+  /*
+     Reading the desk without answering the memo.
+
+     A memo is modal because it is a question, and that is right. What was
+     wrong is that half of these questions are about money, heat or who is
+     free — an extortion demand, an emergency loan, a raid you can pay your way
+     out of — and the page that asks covers the only place those figures are
+     printed. Round 29 answered a $6,000 demand without being able to see what
+     was in the drawer.
+
+     Held, not toggled. A peek you have to keep holding cannot be left on by
+     accident, and the memo comes straight back the moment the hand or the key
+     comes up — so the question is never dismissed, only leaned past.
+  */
+  const [peeking, setPeeking] = useState(false);
+
   const answer = (eventId: string, choiceId: string) => {
     mutate((s) => {
       // The log is newest-first and capped, so counting the length is wrong
@@ -102,14 +118,55 @@ export default function MemoModal() {
   useEffect(() => {
     if (!event) return;
     const onKey = (e: KeyboardEvent) => {
+      /*
+         P holds the page down. `e.code`, not `e.key`, so a keyboard whose P is
+         somewhere else still works, and it is checked before the number keys
+         because `Number('p')` is NaN and would fall through to nothing.
+      */
+      if (e.code === 'KeyP') {
+        if (!e.repeat) setPeeking(true);
+        return;
+      }
       const choice = event.choices[Number(e.key) - 1];
       if (!choice || blocked(choice)) return;
       e.preventDefault();
       answer(event.id, choice.id);
     };
+    const onUp = (e: KeyboardEvent) => {
+      if (e.code === 'KeyP') setPeeking(false);
+    };
     window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    window.addEventListener('keyup', onUp);
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      window.removeEventListener('keyup', onUp);
+    };
   }, [event]);
+
+  /*
+     The release has to come off the window.
+
+     While peeking, the memo carries `pointer-events: none` — that is the whole
+     point, the dashboard underneath has to be readable — which means the
+     button the player is holding stops receiving events, and its own
+     `onMouseUp` would never fire. So the end of the hold is listened for
+     where the mouse actually is.
+  */
+  useEffect(() => {
+    if (!peeking) return;
+    const stop = () => setPeeking(false);
+    window.addEventListener('mouseup', stop);
+    window.addEventListener('touchend', stop);
+    window.addEventListener('blur', stop);
+    return () => {
+      window.removeEventListener('mouseup', stop);
+      window.removeEventListener('touchend', stop);
+      window.removeEventListener('blur', stop);
+    };
+  }, [peeking]);
+
+  // A new memo arrives with the page up, whatever was being held when it did.
+  useEffect(() => setPeeking(false), [event?.id]);
 
   const stamp =
     receipt.length > 0 ? (
@@ -125,12 +182,29 @@ export default function MemoModal() {
   if (!event) return stamp;
 
   return (
-    <div className="memo-backdrop" role="dialog" aria-modal="true" aria-label={event.title}>
+    <div
+      className={peeking ? 'memo-backdrop peeking' : 'memo-backdrop'}
+      role="dialog"
+      aria-modal="true"
+      aria-label={event.title}
+    >
       {stamp}
       <article className="memo">
         <header className="memo-head">
           <div className="memo-kicker">
             <span>{formatShortDay(event.day)}</span>
+            <button
+              className="memo-peek"
+              onMouseDown={() => setPeeking(true)}
+              onMouseUp={() => setPeeking(false)}
+              onMouseLeave={() => setPeeking(false)}
+              onTouchStart={() => setPeeking(true)}
+              onTouchEnd={() => setPeeking(false)}
+              onContextMenu={(e) => e.preventDefault()}
+              title="Hold to see the desk underneath. P does the same."
+            >
+              Hold to peek
+            </button>
             <span className={`memo-severity ${event.severity}`}>{event.severity}</span>
           </div>
           <h2 className="memo-title">{event.title}</h2>

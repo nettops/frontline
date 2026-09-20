@@ -157,7 +157,7 @@ describe('every system built in phases 1-4 has a way in', () => {
 describe('the tradecraft choice reaches the contract', () => {
   it.each(SENDS)('%s renders the selector', (panel) => {
     expect(PANELS[panel]).toContain('<TradecraftToggle');
-    expect(PANELS[panel]).toMatch(/useState<TransmissionMethod>\('phone_euphemism'\)/);
+    expect(PANELS[panel]).toMatch(/useState<TransmissionMethod>\('walk_and_talk'\)/);
   });
 
   it.each(SENDS)('%s passes the chosen method into openContract', (panel) => {

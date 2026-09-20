@@ -117,13 +117,34 @@ export const EVENT_WEIGHT_SHARPNESS = 0.12;
  */
 export const GEN_SEVERITY_WEIGHT_MAX = 3;
 
+/*
+   On the cooldowns, and why five of them doubled.
+
+   A cooldown here is the only thing standing between a shape and its own
+   subject, and the subjects that last the longest are the ones that were
+   fastest to come round again: a case runs for months, a man is inside for
+   weeks, a district is skimmed until somebody says so. At eight to ten days
+   each of those was raised two or three times inside a single case or a
+   single custody — the same question about the same file, and nothing had
+   changed between the asking.
+
+   It mattered most late. Past day 180 the authored pool is largely spent, and
+   round 29 reported the last third of a career carried by five memos in
+   rotation: *"By day 400 I was answering them without reading them."*
+
+   So `gen_somebody_inside`, `gen_paper_moving`, `gen_a_name_came_up`,
+   `gen_wants_a_word` and `gen_the_take_is_short` now sit sixteen to twenty
+   days apart, which is longer than most custody and a fair way into a case.
+   This lowers generated volume rather than the total: `pace.ts` fills from
+   whatever is eligible, and the shapes with slower subjects are still there.
+*/
 export const GEN_SHAPES: GenShapeDef[] = [
-  { id: 'gen_wants_a_word', subject: 'crew', weight: 6, cooldownDays: 9 },
+  { id: 'gen_wants_a_word', subject: 'crew', weight: 6, cooldownDays: 16 },
   { id: 'gen_bad_blood', subject: 'pair', weight: 5, cooldownDays: 11 },
   { id: 'gen_front_trouble', subject: 'business', weight: 5, cooldownDays: 9 },
   { id: 'gen_street_turning', subject: 'district', weight: 5, cooldownDays: 11 },
   { id: 'gen_someone_outside', subject: 'civic', weight: 4, cooldownDays: 13 },
-  { id: 'gen_paper_moving', subject: 'case', weight: 5, cooldownDays: 10 },
+  { id: 'gen_paper_moving', subject: 'case', weight: 5, cooldownDays: 20 },
   /*
      The one shape that is not about the business.
 
@@ -133,9 +154,9 @@ export const GEN_SHAPES: GenShapeDef[] = [
      in it on a week when something else also wanted doing is a decision. This
      is the surface that layer lives on.
   */
-  { id: 'gen_somebody_inside', subject: 'crew', weight: 6, cooldownDays: 8 },
-  { id: 'gen_the_take_is_short', subject: 'district', weight: 5, cooldownDays: 10 },
-  { id: 'gen_a_name_came_up', subject: 'crew', weight: 5, cooldownDays: 9 },
+  { id: 'gen_somebody_inside', subject: 'crew', weight: 6, cooldownDays: 18 },
+  { id: 'gen_the_take_is_short', subject: 'district', weight: 5, cooldownDays: 18 },
+  { id: 'gen_a_name_came_up', subject: 'crew', weight: 5, cooldownDays: 18 },
   /*
      The man you put in charge of a street, asking for something.
 
@@ -434,6 +455,12 @@ export const GEN_WHEN = {
   /** A whisper somebody has now brought you twice. */
   corroboratedConfidence: 55,
   /**
+   * Below this the family is broke, not merely tight, and a memo that only
+   * offers expensive answers is offering none. Read by
+   * `gen_somebody_inside` — see `GEN_EFFECT.insideWordCost`.
+   */
+  brokeUnder: 1_000,
+  /**
    * How long the house has to have noticed before anybody says anything.
    *
    * The same number as `HOME.depositionFrom`, which is where being away starts
@@ -618,6 +645,24 @@ export const GEN_EFFECT = {
   insideBailShortens: 0.45,
   insideAbandonedLoyalty: -12,
   insideAbandonedFear: 3,
+  /**
+   * The answer for a boss who has not got bail money.
+   *
+   * Bail is six weeks of a man's wage and there is no second option: pay it or
+   * leave him in there for -12 loyalty. Round 29 met this holding $186 and a
+   * crew already sore about missed wages, and the only enabled button was the
+   * one that costs you the man. That is a decision with one answer, which is
+   * not a decision.
+   *
+   * Commissary money and word sent in is what actually happens in the gap: it
+   * buys nothing off the sentence — the days stay on, and the choice says so —
+   * and it stops him concluding he has been written off. Priced at a figure a
+   * broke family can still find, worth about a third of what being seen to
+   * properly is worth, and it is not free, so a boss with the bail money has
+   * no reason to prefer it.
+   */
+  insideWordCost: 150,
+  insideWordLoyalty: 3,
 
   /** A steward who has been helping himself. */
   callItInLoyalty: -8,

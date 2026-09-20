@@ -282,7 +282,7 @@ export default function App() {
 
   return (
     <div className="app">
-      <StatBar onStep={step} live={!!live} onLive={live ? stopLive : startLive} />
+      <StatBar onStep={step} live={!!live} onLive={live ? stopLive : startLive} onGoto={goto} />
       <Rail active={shown} onSelect={goto} />
       <main className="main">
         {live && (

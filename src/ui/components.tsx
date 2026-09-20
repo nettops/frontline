@@ -10,14 +10,21 @@ export function Panel({
   action,
   children,
   flush,
+  id,
 }: {
   title: string;
   action?: ReactNode;
   children: ReactNode;
   flush?: boolean;
+  /**
+   * An anchor for a jump bar to land on. Operations is the only page long
+   * enough to need one, and giving the shared panel the id beats wrapping four
+   * of its sections in divs that exist only to be scrolled to.
+   */
+  id?: string;
 }) {
   return (
-    <section className="panel">
+    <section className="panel" id={id}>
       <header className="panel-head">
         <span className="panel-title">{title}</span>
         {action}

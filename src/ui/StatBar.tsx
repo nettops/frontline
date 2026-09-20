@@ -4,6 +4,7 @@ import { useCounter } from './motion';
 import { isMuted, play, setMuted } from './audio';
 import { crewList } from '../sim/npc';
 import { formatDay, formatMoneyShort } from '../sim/util';
+import { payrollForecast } from '../sim/economy';
 import { isLayingLow } from '../sim/heat';
 import { activeWars, factionStrength } from '../sim/diplomacy';
 import { rivals } from '../sim/faction';
@@ -12,6 +13,7 @@ import { setTipsOff, tipsOff } from './tips';
 import { CAREER_STEPS, MODE_BY_ID, SIMULATION_STEPS } from '../config/modes';
 import { heatTier } from '../config/heat';
 import { houseShort } from '../sim/houses';
+import type { PanelId } from './Rail';
 
 /**
  * A figure that counts toward its new value and briefly takes the colour of
@@ -142,15 +144,120 @@ function CityStats() {
   );
 }
 
+
+/**
+ * What is coming, on the tab you are not looking at.
+ *
+ * Three things in this game ruin a career while the player is somewhere else:
+ * a payday there is no money for, heat that has gone past what an organization
+ * absorbs, and a man carrying a grievance long enough to act on it. All three
+ * are already reported — in Finances, in Law Enforcement, on the roster — and
+ * all three are reported on a page the player has no reason to open on the day
+ * it matters. Round 29 lost a crew to a payroll miss it had been warned about
+ * four days earlier on a tab it never went back to.
+ *
+ * Derived entirely on read. `payrollForecast` is the same function the payday
+ * itself runs, so the figure here cannot disagree with the event — that was
+ * the whole of the round-12 defect the forecast was written to fix, and a
+ * second copy of the arithmetic would reintroduce it. Nothing is stored and
+ * `SAVE_VERSION` does not move.
+ *
+ * The payroll line is always drawn, in the quiet tone when the money is there.
+ * A strip that only appears when something is wrong teaches the player to read
+ * the absence of it as nothing coming, which on day five is a lie.
+ */
+function Docket({ onGoto }: { onGoto?: (id: PanelId) => void }) {
+  const state = useGame();
+  const [open, setOpen] = useState(true);
+  const pay = payrollForecast(state);
+  const tier = heatTier(state.org.heat);
+  /*
+     The same line the roster's own status column already draws — see
+     `StatusTag`. A badge here reading off a threshold the crew sheet did not
+     share would be a second opinion about a hidden stat, which is the one
+     thing perception is for.
+  */
+  const grudges = crewList(state).filter((n) => n.stats.grievance >= 55).length;
+
+  const items: { key: string; tone: string; text: string; go: PanelId; title: string }[] = [];
+
+  items.push(
+    pay.shortfall > 0
+      ? {
+          key: 'payroll',
+          tone: 'hot',
+          text: `Payroll in ${pay.daysAway}d · ${formatMoneyShort(pay.shortfall)} short`,
+          go: 'finances',
+          title: `Wages, counsel and arrears come to ${formatMoneyShort(pay.due)} and the drawer does not cover them. A miss costs every hand loyalty and leaves a grievance that bleeds for weeks.`,
+        }
+      : {
+          key: 'payroll',
+          tone: '',
+          text: `Payroll in ${pay.daysAway}d · ${formatMoneyShort(pay.due)}`,
+          go: 'finances',
+          title: 'What the next payday costs, and it is covered.',
+        },
+  );
+
+  if (state.org.heat > 60) {
+    items.push({
+      key: 'heat',
+      tone: 'hot',
+      text: tier.name,
+      go: 'law',
+      title: tier.description,
+    });
+  }
+
+  if (grudges > 0) {
+    items.push({
+      key: 'grudge',
+      tone: 'hot',
+      text: `${grudges} grudge${grudges === 1 ? '' : 's'}`,
+      go: 'crew',
+      title: 'Somebody is carrying something. Unaddressed, it compounds into walking out or talking to police.',
+    });
+  }
+
+  const loud = items.filter((i) => i.tone === 'hot').length;
+
+  return (
+    <div className="docket">
+      <button
+        className="docket-toggle"
+        onClick={() => setOpen(!open)}
+        aria-expanded={open}
+        title={open ? 'Put the docket away' : 'What is coming this week'}
+      >
+        Docket{loud > 0 ? ` · ${loud}` : ''}
+      </button>
+      {open &&
+        items.map((item) => (
+          <button
+            key={item.key}
+            className={item.tone ? `docket-item ${item.tone}` : 'docket-item'}
+            onClick={() => onGoto?.(item.go)}
+            title={item.title}
+          >
+            {item.text}
+          </button>
+        ))}
+    </div>
+  );
+}
+
 export default function StatBar({
   onStep,
   live,
   onLive,
+  onGoto,
 }: {
   onStep: (days: number) => void;
   /** The wire is running: the hand-driven time keys stand down. */
   live: boolean;
   onLive: () => void;
+  /** Where the docket's chips send you. Absent while watching the city. */
+  onGoto?: (id: PanelId) => void;
 }) {
   const state = useGame();
   const { org, player } = state;
@@ -182,6 +289,7 @@ export default function StatBar({
   };
 
   return (
+    <div className="statbar-shell">
     <header className="statbar">
       <div className="statbar-identity">
         <div className="statbar-name">{watching ? 'The city' : player.name}</div>
@@ -354,5 +462,12 @@ export default function StatBar({
         </button>
       </div>
     </header>
+    {/*
+       Under the masthead rather than inside it: the bar is already six figures
+       and a clock wide, and on a laptop the stats scroll horizontally. A strip
+       that had to share that row would be the first thing off the edge.
+    */}
+    {!watching && <Docket onGoto={onGoto} />}
+    </div>
   );
 }

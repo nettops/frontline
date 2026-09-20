@@ -269,8 +269,25 @@ export default function BusinessesPanel() {
                   const health = b.health ?? HEALTH.start;
                   const struggling = health < HEALTH.warnBelow;
                   const pressure = healthPressure(state, b);
+                  /*
+                     Which of these is about to become somebody's problem.
+
+                     The same gutter the crew roster now carries, off the two
+                     readings this table already prints in red: a front leaned
+                     on hard is earning its exposure, and one over the alarming
+                     line has an investigator's attention whatever you set it
+                     to. Green is the other half of the same sentence — a front
+                     run clean is healing the block it stands on, which is
+                     worth seeing from across the page.
+                  */
+                  const accent =
+                    alarming || (b.pressure ?? DEFAULT_PRESSURE) === 'hard'
+                      ? 'row-warn'
+                      : (b.pressure ?? DEFAULT_PRESSURE) === 'clean'
+                        ? 'row-ok'
+                        : '';
                   return (
-                    <tr key={b.id}>
+                    <tr key={b.id} className={accent}>
                       <td>
                         <div className="name-cell">
                           <span className="name-main">{def.name}</span>

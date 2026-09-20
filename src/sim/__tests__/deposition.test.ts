@@ -464,9 +464,28 @@ describe('deposition, played into rather than built', () => {
      confirmed, and the guard re-confirmed the same way as every prior
      reseed: reverting `backersNeeded` to 2 (generation stayed at 1) and
      restoring it to 1.
+
+     Reseeded a tenth time, 4068 to 4070, for the round 29 famine and
+     repetition pass. Mechanical on three fronts, none of them about
+     deposition: `sick_relative`'s `attendCost` went to 0, so the bot — which
+     takes the first enabled answer — now goes home on a memo it used to be
+     refused, spending an evening and keeping $600; `gen_somebody_inside`
+     grew a third answer that appears only under `GEN_WHEN.brokeUnder`, so
+     the first enabled choice is a different one on exactly the days the bot
+     is poor; and five shapes' cooldowns roughly doubled, which changes which
+     shape is eligible on a given day and therefore how many `applies()` rng
+     draws the generated pool makes. Any one of the three reshuffles the
+     stream from the first week.
+
+     A scan of seeds 4068-4168 with the pass in place found 32 still reaching
+     generation > 1 with the same quiet fate (4070, 4071, 4080, 4081, 4087,
+     4089, 4091, 4095, ...), a denser hit rate than the previous scan's, so
+     reachability did not regress. Seed 4070 confirmed, and the guard
+     re-confirmed the same way as every prior reseed: reverting
+     `backersNeeded` to 2 (generation stayed at 1) and restoring it to 1.
   */
   it('fires from an ordinary career under the current gate', () => {
-    const state = playOrdinaryCareer(4068, 1460);
+    const state = playOrdinaryCareer(4070, 1460);
     expect(
       state.succession.generation,
       'nobody was deposed — this is the reachability the config change exists to fix',

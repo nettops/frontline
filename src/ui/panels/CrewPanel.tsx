@@ -110,6 +110,33 @@ const STAT_LABEL: Record<NpcStatId, string> = {
 };
 
 
+
+/**
+ * What is wrong with this man, at the width of a gutter bar.
+ *
+ * Round 29 read the roster as a spreadsheet and missed a capo sitting on sixty
+ * grievance for a fortnight, because every row printed in the same grey. The
+ * accent is the same inset gutter the selected row already uses — see
+ * `tr.selected td:first-child` in theme.css — so it costs one class and no
+ * layout.
+ *
+ * Both rules read what the row is already showing. The crimson threshold is
+ * `StatusTag`'s own, which is what puts "Grudge" in the Standing column beside
+ * it; the amber one goes through `perceive`, so a man you have never worked
+ * with gets no accent rather than a free read of his loyalty. A colour is
+ * something the player reads about a person, and rule 1 does not have an
+ * exception for colours.
+ */
+function rowAccent(npc: Npc): string {
+  if (npc.stats.grievance >= 55) return 'row-threat';
+  if (npc.status === 'arrested' || npc.status === 'dead' || npc.status === 'defected') {
+    return 'row-muted';
+  }
+  const loyalty = perceive(npc, 'loyalty');
+  if (loyalty.known && loyalty.bandIndex <= 1) return 'row-warn';
+  return '';
+}
+
 export default function CrewPanel() {
   const state = useGame();
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -494,7 +521,9 @@ export default function CrewPanel() {
                   return (
                     <tr
                       key={npc.id}
-                      className={npc.id === selectedId ? 'clickable selected' : 'clickable'}
+                      className={`${
+                        npc.id === selectedId ? 'clickable selected' : 'clickable'
+                      } ${rowAccent(npc)}`.trim()}
                       onClick={() => setSelectedId(npc.id === selectedId ? null : npc.id)}
                     >
                       <td>
@@ -514,8 +543,23 @@ export default function CrewPanel() {
                           </div>
                         </div>
                       </td>
-                      <td>
+                      <td style={{ whiteSpace: 'nowrap' }}>
                         <StatusTag npc={npc} day={state.day} />
+                        {/*
+                           The gutter says something is wrong; this says what.
+                           `StatusTag` already names a grudge and a lockup, so
+                           the only chip it does not carry is the one that comes
+                           from a read rather than from a state.
+                        */}
+                        {rowAccent(npc) === 'row-warn' && (
+                          <span
+                            className="tag warn"
+                            title="You read their loyalty as low. People leave, and some of them talk on the way out."
+                          >
+                            {' '}
+                            Defection risk
+                          </span>
+                        )}
                       </td>
                       <td>
                         <StatRead npc={npc} stat="loyalty" />
