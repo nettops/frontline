@@ -2,6 +2,7 @@ import { useState } from 'react';
 
 import { useGame, mutate } from '../../store';
 import { Panel, Empty, KeyValue, Bar } from '../components';
+import { firstWithSameReason } from '../repeats';
 import {
   acquisitionOptions,
   businessDef,
@@ -70,6 +71,16 @@ export default function BusinessesPanel() {
   const outlook = launderOutlook(state);
   const options = acquisitionOptions(state);
   const affordable = options.filter((o) => o.check.ok);
+  /*
+     A refusal said once, and pointed at after that. A district with no room
+     refuses every business in it in the same sentence, and round 30 counted ten
+     of them down one table. Each blocked row still says why on the row — four
+     repairs put it there and `refusalShown.test.ts` holds it — but a row whose
+     reason an earlier row has already given says which one instead of saying
+     it again.
+  */
+  const listed = options.slice(0, 24);
+  const sameAs = firstWithSameReason(listed.map((o) => (o.check.ok ? undefined : o.check.reason ?? undefined)));
   /*
      What is actually available to put into a front, said out loud.
 
@@ -539,7 +550,7 @@ export default function BusinessesPanel() {
                      only when the same premises appear twice in the list, which
                      keeps the common case short and makes every label unique.
                   */}
-                {options.slice(0, 24).map(({ def, territory, check }) => (
+                {listed.map(({ def, territory, check }, row) => (
                   <tr key={`${def.id}-${territory.id}`}>
                     <td>
                       <div className="name-cell">
@@ -592,7 +603,14 @@ export default function BusinessesPanel() {
                          Same shape as the card tables in `CityPanel`, which
                          have done it this way since they shipped.
                       */}
-                      {!check.ok && <div className="tiny faint">{check.reason}</div>}
+                      {!check.ok &&
+                        (sameAs[row] === null ? (
+                          <div className="tiny faint">{check.reason}</div>
+                        ) : (
+                          <div className="tiny faint">
+                            Same reason as the {listed[sameAs[row]!].def.name} above.
+                          </div>
+                        ))}
                     </td>
                   </tr>
                 ))}

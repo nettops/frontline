@@ -450,6 +450,13 @@ move. Every guard below was seen red before its fix.
   boss at Major Investigation saw a red gauge and an empty strip. It reads
   `heatSeverity(...) === 'hot'` now, not a number of its own. Guard:
   `roundThirty.test.ts`, seen red.
+- **A refusal is said once on the buy list.** A district with no room refuses
+  every business in it in the same sentence, and round 30 counted ten down one
+  table. The first row says it in full and each repeat says "Same reason as the
+  X above" (`ui/repeats.ts`). **The reason stays on the row**: the brief offered
+  hiding full-district rows or a banner, but `refusalShown.test.ts` pins the
+  reason to the cell holding the button after four repairs to the same finding,
+  and this keeps it there. Guards: `repeats.test.ts`, seen red.
 
 ## 1. What the project is
 
