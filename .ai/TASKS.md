@@ -19,8 +19,7 @@ archives. The NOT NEGOTITABLE pass is **complete** —
 ## Open
 
 1. **Round 30 SHOULD FIX items outside the repair order**, checked or not:
-   "Little Sicily has gone quiet on you" as a fixed title
-   (`sim/eventgen.ts:397`); autopilot's missing odds
+   autopilot's missing odds
    floor (disclosed in its own button copy). Unverified and not acted on:
    skill labels changing between screens, the Yourself banner wording, and
    the tester's failure streaks against shown odds.

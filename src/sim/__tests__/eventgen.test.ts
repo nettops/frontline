@@ -29,7 +29,7 @@ import { GEN_EFFECT, GEN_SHAPES, GEN_WHEN } from '../../config/eventgen';
 import { acquireBusiness, ownedBusinesses } from '../business';
 import { crewList, generateNpc } from '../npc';
 import { HOME_TERRITORY } from '../../config/territories';
-import { territoryList } from '../territory';
+import { territoryDef, territoryList } from '../territory';
 import { figure } from '../civic';
 import { canLaunch } from '../operations';
 import { OPERATION_BY_ID } from '../../config/operations';
@@ -1268,5 +1268,66 @@ describe('gen_social_gathering', () => {
     const builtA = def.build(a, streamFor(a), ctxA!);
     const builtB = def.build(b, streamFor(b), ctxB!);
     expect(builtA).toEqual(builtB);
+  });
+});
+
+/*
+   The same headline twice, thirty-four days apart.
+
+   Round 30 read "Little Sicily has gone quiet on you" word for word on day 33
+   and again on day 67. The body already varied; the title was one template.
+
+   The title is *reporting*, so it is chosen from the day and the district
+   (`say`) and never from the causal stream. The body's `oneOf` draws one number
+   from it and that was always so; a second draw here would shift every roll
+   after every such memo, and a change that only touched words would move every
+   probe in the project. The first assertion pins the count.
+*/
+describe('the street-turning headline', () => {
+  const def = () => GEN_DEFS.find((d) => d.id === 'gen_street_turning')!;
+
+  function built(state: GameState, rng: Rng) {
+    const ctx = def().applies(state, rng)!;
+    expect(ctx, 'the fixture has no district that turned').not.toBeNull();
+    return { ctx, memo: def().build(state, rng, ctx) };
+  }
+
+  it('costs the causal stream exactly what it did — the body, and nothing for the title', () => {
+    const state = world();
+    const rng = new Rng(state.rng);
+    const ctx = def().applies(state, rng)!;
+    const before = state.rng.calls;
+    def().build(state, rng, ctx);
+    expect(state.rng.calls - before, 'the title drew from the causal stream').toBe(1);
+  });
+
+  it('does not depend on the stream at all', () => {
+    const state = world();
+    const ctx = def().applies(state, new Rng({ ...state.rng }))!;
+    const a = def().build(state, new Rng({ ...state.rng }), ctx).title;
+    const b = def().build(state, new Rng({ seed: state.rng.seed + 4242, calls: 17 }), ctx).title;
+    expect(a).toBe(b);
+  });
+
+  it('is not the same words for the same street every time', () => {
+    const state = world();
+    const { ctx } = built(state, new Rng({ ...state.rng }));
+    const where = territoryDef(ctx.territory!.id).name;
+    const titles = new Set<string>();
+    for (let day = 1; day <= 90; day++) {
+      state.day = day;
+      const title = def().build(state, new Rng({ ...state.rng }), ctx).title;
+      expect(title, `day ${day} stopped naming the district`).toContain(where);
+      titles.add(title);
+    }
+    expect(titles.size, 'the headline is one template again').toBeGreaterThanOrEqual(3);
+  });
+
+  it('reads the same on the same day, so a reloaded save tells the same story', () => {
+    const state = world();
+    const { ctx } = built(state, new Rng({ ...state.rng }));
+    const a = def().build(state, new Rng({ ...state.rng }), ctx).title;
+    const b = def().build(state, new Rng({ ...state.rng }), ctx).title;
+    expect(a).toBe(b);
   });
 });

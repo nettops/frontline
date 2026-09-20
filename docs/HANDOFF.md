@@ -457,6 +457,13 @@ move. Every guard below was seen red before its fix.
   hiding full-district rows or a banner, but `refusalShown.test.ts` pins the
   reason to the cell holding the button after four repairs to the same finding,
   and this keeps it there. Guards: `repeats.test.ts`, seen red.
+- **"Gone quiet" has four headlines.** `gen_street_turning`'s title was one
+  template, so day 33 and day 67 read word for word. It is chosen by day and
+  district through `say`, **not** `oneOf`: `oneOf` draws from the causal stream,
+  and a second draw would have shifted every roll after every such memo. The
+  guard pins the draw count (the body's one, nothing for the title), and the
+  naive version was seen to fail it. Sim-neutral: the autopilot ground reading is
+  identical to the digit with the title changed and the new floor at zero.
 
 ## 1. What the project is
 

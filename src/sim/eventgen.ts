@@ -25,7 +25,7 @@ import { Rng, clamp } from './rng';
 import type { EventDef } from './events';
 import type { GameState, HouseholdMember, Npc, PendingEvent, Territory } from './types';
 import { money, oneOf, payable } from './memo';
-import { addLog, seedFollowup } from './util';
+import { addLog, say, seedFollowup } from './util';
 import { addNote, crewList, generateNpc } from './npc';
 import { remember } from './memory';
 import { recordTie } from './ties';
@@ -394,7 +394,20 @@ const streetTurning: EventDef = {
     const where = territoryDef(t.id).name;
     return {
       defId: 'gen_street_turning',
-      title: `${where} has gone quiet on you`,
+      /*
+         Four ways of saying one thing, chosen by the day and the district and
+         not by the stream. The title used to be a single template, so the same
+         street read the same headline on day 33 and day 67 (round 30). It is
+         reporting, so it goes through `say` — a draw from `rng` here would shift
+         every roll after every such memo, which is how a change that only
+         touched words has moved a probe before.
+      */
+      title: say(`street_turning_title:${t.id}`, state.day, [
+        `${where} has gone quiet on you`,
+        `The street is turning cold in ${where}`,
+        `Nobody in ${where} is talking to your people`,
+        `${where} has stopped answering the door`,
+      ]),
       body: oneOf(rng, [
         `Nobody says anything to your people any more. Two shops that paid without ` +
           `being asked now want to be asked, and one of them has a lawyer.`,
