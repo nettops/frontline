@@ -20,7 +20,7 @@
 import { Rng, clamp } from './rng';
 import type { Contraband, GameState, Territory } from './types';
 import { addEvidence, addLog, formatMoney } from './util';
-import { addHeat } from './heat';
+import { addHeat, isLayingLow } from './heat';
 import { crewList } from './npc';
 import { controlLevel, people, prosperity, territoryDef, territoryList } from './territory';
 import { activity, priced } from './market';
@@ -40,6 +40,7 @@ import {
   SUPPLY_TRUST,
   TRADES,
   TRADE_IDS,
+  LAY_LOW_TRADE_SHARE,
   TRADE_SENTIMENT_FLOOR,
   UNITS_PER_CREW,
   WORKSHOP,
@@ -201,8 +202,10 @@ export interface Throughput {
   routes: number;
   /** What the available people could actually move. */
   crew: number;
-  /** The smaller of the two, which is what happens. */
+  /** The smaller of the two, which is what happens — halved while the boss lays low. */
   total: number;
+  /** Whether `total` is short of the smaller of the two because he is laying low. */
+  layingLow: boolean;
 }
 
 /**
@@ -222,7 +225,13 @@ export function throughput(state: GameState, trade: TradeId): Throughput {
   const available = crewList(state).filter((n) => n.status === 'active').length;
   const crew = available * UNITS_PER_CREW;
 
-  return { routes, crew, total: Math.min(routes, crew) };
+  const dark = isLayingLow(state);
+  return {
+    routes,
+    crew,
+    total: Math.min(routes, crew) * (dark ? LAY_LOW_TRADE_SHARE : 1),
+    layingLow: dark,
+  };
 }
 
 // ------------------------------------------------------------ the source ---
@@ -899,6 +908,14 @@ export function tickContraband(state: GameState, rng: Rng): void {
   c.lastRun = report;
 
   const total = report.product.earned + report.arms.earned;
+  if (isLayingLow(state) && report.product.moved + report.arms.moved > 0) {
+    // Said, so a quieter week reads as the price of going dark and not as a fault.
+    addLog(
+      state,
+      `The routes ran at ${Math.round(LAY_LOW_TRADE_SHARE * 100)}% this week. You are laying low.`,
+      'neutral',
+    );
+  }
   if (total > 0) {
     addLog(
       state,

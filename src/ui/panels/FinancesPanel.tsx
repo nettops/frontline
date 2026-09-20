@@ -693,7 +693,14 @@ function Lender({ id, facts }: { id: string; facts: BorrowerFacts }) {
   const minAmount = def.id === 'shark' ? 500 : Math.round(ceiling * 0.1);
   const [amount, setAmount] = useState(0);
   const [message, setMessage] = useState<string | null>(null);
-  const asking = amount || Math.round(ceiling / 2);
+  /*
+     Opens on the least he can take.
+
+     Half the ceiling was the default, so a boss holding $2,500 was one click
+     from a $20,000 loan at the shark's rate. The slider is still there for
+     anybody who wants more; what it should not do is choose for him.
+  */
+  const asking = amount || minAmount;
   const quote = quoteLoan(state, id, Math.min(asking, ceiling));
   const wages = weeklyWageBill(state);
 

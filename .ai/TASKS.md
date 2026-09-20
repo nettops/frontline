@@ -18,9 +18,32 @@ archives. The NOT NEGOTITABLE pass is **complete** —
 
 ## Open
 
-Nothing currently ready to build. `distinctEnds` is diagnosed and closed
-with a finding rather than a fix, and favor-calls attributable to the
-wrong family is built — see `HANDOFF.md` §0 for both.
+1. **The trade is too rich at day 55, and the bar says it must be.**
+   **Needs the director.** Round 30's tester reached the $5,000 runner door
+   on day 55 and cleared about $23.6K a week from one route against $3–7K
+   from pitched jobs. The ordered fix (runner `ceiling` 14→5, price ×1.85)
+   fails `ladder.probe`'s "running both trades for 300 days" bar — 717,717
+   against 869,209 at 400 seeds, 581,717 against 817,661 at 36 — and would
+   not touch the symptom anyway (one route carries ~3.9 loads; the ceiling
+   is 14). The bar is the project's own statement that the trade must be
+   worth running, so this is a decision about the bar, not a value to tune
+   around it. It also pulls against the day 27–55 cash famine: the trade is
+   the thing that ends it. Full numbers in the `SUPPLIERS` comment in
+   `config/contraband.ts` and `HANDOFF.md` §0. Options, none built: move the
+   bar with evidence (`DIRECTOR.md` §5), reshape the early ramp rather than
+   the ceiling, or leave it as the design intends.
+
+2. **Round 30 SHOULD FIX items outside the repair order**, checked or not:
+   the heat band text ("Your people are being watched") against Law's
+   "Nobody has a file open on you" — two sentences that cannot both be read
+   as true (`config/tuning/heat.json`, `sim/investigation.ts:1206`); the
+   Businesses list repeating one refusal ten times (`sim/business.ts:472`,
+   panel not read); "Little Sicily has gone quiet on you" as a fixed title
+   (`sim/eventgen.ts:397`); the Docket heat chip needing heat above 60
+   while `config/heat.ts` calls 41 the `hot` edge; autopilot's missing odds
+   floor (disclosed in its own button copy). Unverified and not acted on:
+   skill labels changing between screens, the Yourself banner wording, and
+   the tester's failure streaks against shown odds.
 
 ## Smaller, lower-priority
 

@@ -230,6 +230,39 @@ export function tickCapoPitches(state: GameState, rng: Rng): void {
   }
 }
 
+/**
+ * Launch a job from the assemble screen, and spend the pitch it came from if
+ * it actually went out.
+ *
+ * Round 30's MUST FIX 1. The pitch used to be spent by the Approve click, so a
+ * boss who backed out — Cancel, another tab, approving a second pitch —
+ * lost the offer with no word said. Approving now only opens the screen; the
+ * offer is spent here, at the one moment it has earned it.
+ *
+ * Only spent for the very job it was: same district as well as same job. Run
+ * somewhere else, it is a different piece of work and the capo's offer is
+ * still standing. A pitch that lapsed while the screen was open is not
+ * revived and does not stop the launch — the boss is running the job either
+ * way.
+ */
+export function launchPitched(
+  state: GameState,
+  pitchId: Id | null,
+  defId: string,
+  crewIds: string[],
+  territoryId: string,
+  approach?: ApproachId,
+  scoreId?: string,
+): ActiveOperation | null {
+  const op = launchOperation(state, defId, crewIds, territoryId, approach, scoreId);
+  if (!op || !pitchId) return op;
+  const pitch = livePitches(state).find(
+    (p) => p.id === pitchId && p.defId === defId && p.territoryId === territoryId,
+  );
+  if (pitch) approvePitch(state, pitch.id);
+  return op;
+}
+
 /** Funds and launches nothing itself — see this file's header. */
 export function approvePitch(state: GameState, pitchId: Id): CapoPitch | null {
   const p = list(state).find((x) => x.id === pitchId && x.status === 'open');

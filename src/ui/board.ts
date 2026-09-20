@@ -22,6 +22,7 @@ import { ALL_FACTIONS, type FactionId } from '../config/factions';
 import { liveTraining } from '../sim/training';
 import { territoryDef } from '../sim/territory';
 import { throughput } from '../sim/contraband';
+import { LAY_LOW_TRADE_SHARE } from '../config/contraband';
 import { houseShort } from '../sim/houses';
 import { formatShortDay } from '../sim/util';
 import { openContracts } from '../sim/contract';
@@ -45,6 +46,11 @@ function warSince(state: GameState, a: FactionId, b: FactionId): number | null {
     state.factions[b]?.bonds?.[a]?.warSince ??
     null
   );
+}
+
+/** A weekly ceiling is a sum of fractional district capacities: one decimal at most, and none when it is whole. */
+function loads(n: number): string {
+  return String(Math.round(n * 10) / 10);
 }
 
 export function boardItems(state: GameState): BoardItem[] {
@@ -158,12 +164,16 @@ export function boardItems(state: GameState): BoardItem[] {
       c.routes.product.length > 0;
     if (productRunning) {
       const cap = throughput(state, 'product');
-      const bound = cap.routes <= cap.crew ? 'streets are the ceiling' : 'people are the ceiling';
+      const bound = cap.layingLow
+        ? `laying low, ${Math.round(LAY_LOW_TRADE_SHARE * 100)}%`
+        : cap.routes <= cap.crew
+          ? 'streets are the ceiling'
+          : 'people are the ceiling';
       rows.push({
         kind: 'product',
         key: 'trade:product',
         title: 'The product trade',
-        sub: `${c.routes.product.length} route${c.routes.product.length === 1 ? '' : 's'} · up to ${cap.total}u a week · ${bound}`,
+        sub: `${c.routes.product.length} route${c.routes.product.length === 1 ? '' : 's'} · up to ${loads(cap.total)}u a week · ${bound}`,
         figure: `${Math.round(c.stock.product)}u`,
         progress: null,
         panel: 'contraband',
@@ -180,7 +190,7 @@ export function boardItems(state: GameState): BoardItem[] {
         kind: 'arms',
         key: 'trade:arms',
         title: 'The arms trade',
-        sub: `${c.workshops.length} workshop${c.workshops.length === 1 ? '' : 's'} · ${c.routes.arms.length} route${c.routes.arms.length === 1 ? '' : 's'} · up to ${cap.total}u a week`,
+        sub: `${c.workshops.length} workshop${c.workshops.length === 1 ? '' : 's'} · ${c.routes.arms.length} route${c.routes.arms.length === 1 ? '' : 's'} · up to ${loads(cap.total)}u a week`,
         figure: `${Math.round(c.stock.arms)}u`,
         progress: null,
         panel: 'contraband',

@@ -3118,9 +3118,11 @@ th.sortable:hover {
 /*
    Hold-to-peek.
 
-   The memo does not move and does not close — it goes nearly transparent and
+   The memo does not move and does not close — it goes fully transparent and
    stops taking clicks, so the desk it is sitting on can be read underneath it.
-   No transition: a fade would make the release feel like a delay, and this is
+   Fully, because round 30 found the old ghost at 0.09 laid its own text across
+   the digest and made the one thing being peeked at harder to read. No
+   transition: a fade would make the release feel like a delay, and this is
    held down by hand.
 */
 .memo-backdrop.peeking {
@@ -3128,7 +3130,7 @@ th.sortable:hover {
 }
 
 .memo-backdrop.peeking .memo {
-  opacity: 0.09;
+  opacity: 0;
   pointer-events: none;
 }
 

@@ -313,6 +313,73 @@ move because no rng-consuming sequence is touched.
 - **Guard:** `src/ui/__tests__/sopranoControls.test.ts` updated to assert `useState<TransmissionMethod>('walk_and_talk')` on both sending panels.
 
 
+**Round 30 repairs, 2026-09-20.** `tsc -b` 0 errors, `npm test` **181 files /
+2,241 passing**, `npm run build` clean. Round 30's blind report is
+`docs/findings/round30-report.md` (Capo on day 96, stopped day 100). Every
+guard below was seen red with its fault put back. No `SAVE_VERSION` move:
+everything here is derived on read, transient UI state, or config.
+
+- **A pitch is spent by the job it was for and nothing else (MUST FIX 1).**
+  Approve used to call `approvePitch` on the click, so Cancel, another tab, or
+  a second Approve threw the offer away silently. `launchPitched`
+  (`sim/capoPitches.ts`) now settles it at the launch, only for the same job in
+  the same district; the panel keeps `assemblingPitchId` as transient state.
+  A casing shows as "Casing in progress (Nd left)" on the card and in plain
+  text on the assemble screen. Live-checked in the browser on the round-30
+  save: approve two pitches and cancel, all three stay; launch spends only
+  its own. Guards: `sim/__tests__/pitchLaunch.test.ts`,
+  `ui/__tests__/pitchPreservation.test.ts`.
+- **Street work stays until a pitch he could take today (MUST FIX 3).**
+  `outgrewStreetWork` scanned every open job, but a Crew Leader reaches
+  tier 1+ only as capo pitches, weekly — so a newly promoted or broke boss
+  had the corners taken away against jobs he could not reach. It now needs a
+  live pitch that is affordable and staffable (`sim/operations.ts`, read off
+  `state.capoPitches` to avoid the import cycle). The gate tests' setups now
+  include a live pitch, which is the rule's precondition, not a weakened
+  assertion; four new cases pin the blackout. The retirement line is said
+  once per career (the gate can now rise and fall weekly). **Two parts of the
+  order not built:** keeping `work_it_yourself` whenever nothing is running is
+  already implied (there is a pitch to take) and applied literally would keep
+  the corners on every idle Crew Leader's board, undoing the retirement; the
+  fallback banner for "no open jobs and no pitches" cannot be reached now.
+- **Smaller repairs.** The Docket has a case chip built from `arrestRisk`
+  (the fogged posture the Overview already prints), **not** the ordered
+  "N% evidence": an exact figure on that strip would lift the fog `caseIntel`
+  keeps. Peek is fully transparent. A greyed-out district handover names
+  its reason on the page. The shark slider opens on $500, not half the ceiling.
+  The trade row prints whole loads or one decimal ("3.9u", was
+  "3.9172573331756046u"). Guard: `ui/__tests__/roundThirty.test.ts`,
+  `ui/__tests__/board.test.ts`. Not live-checked: the handover refusal (the
+  save had no refused state) and the peek visual.
+- **The trade (MUST FIX 2): measured, and the ordered numbers not shipped.**
+  Two of the order's three parts were already true or inert: the product trade
+  already needs two fronts (`minFronts: 2`), and the runner's `ceiling` (14) is
+  not binding for one route (~3.9 loads). The ordered runner change (`ceiling`
+  5, price ×1.85) fails `ladder.probe`'s "running both trades for 300 days"
+  bar: paired gap **717,717 against 869,209 at 400 seeds** (83%) and 581,717
+  against 817,661 at 36, where unmodified code reads 1,097,336 (126%) and
+  1,011,275. A failed pre-committed condition is the finding (`DIRECTOR.md`
+  §5), so the runner is left as it was, with the readings in a comment on it.
+  The 36-seed ceiling grid is not monotonic (5, 8, 10, 12 read 955,720,
+  1,028,510, 1,064,697, 856,281; ×1.5 at 10 reads 758,252, a fail), the
+  turbulence the `product` comment already records; the 400-seed lay-low
+  curve below is monotone. Open for the director: `.ai/TASKS.md` item 1.
+- **What did ship for the trade: lay-low costs it something.**
+  `LAY_LOW_TRADE_SHARE` (`config/contraband.ts`) scales `throughput`, so the
+  sale, the weekly buy, order sizing and the board row agree; a dark week logs
+  "The routes ran at 80% this week. You are laying low." The ordered half
+  fails the bar (0.5: 834,955, 96%); the curve at 400 seeds is 1.00 → 1,097,336
+  (126%), 0.85 → 1,024,954 (118%), **0.80 → 983,313 (113%, shipped)**, 0.75 →
+  930,346 (107%). 0.8 clears the ~111% the trade's history calls real
+  headroom. The probe's bot has heat near 100 and lays low far more than any
+  human tester, so these overstate what a real career pays. Guard:
+  `sim/__tests__/contrabandLayLow.test.ts`.
+- **What the instruments cannot see.** No probe reads the pitch flow or the
+  street-work gate, so MUST FIX 1 and 3 have no probe reading. Full
+  `ladder.probe` and `broke.probe` results against a clean checkout of the
+  same base: see `docs/findings/director-log.md`, Round 30 repairs.
+
+
 ## 1. What the project is
 
 Frontline is a crime-family management simulator. React 18 + TypeScript 5.7 +

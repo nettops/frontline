@@ -19,9 +19,9 @@ import {
   sentimentOutlook,
 } from '../../sim/operations';
 import {
-  approvePitch,
   canDelegatePitchAutonomous,
   delegatePitchAutonomous,
+  launchPitched,
   livePitches,
   pitchCapoPool,
   reassignPitch,
@@ -88,6 +88,15 @@ export default function OperationsPanel() {
   const [selected, setSelected] = useState<string | null>(null);
   const [crewPicked, setCrewPicked] = useState<string[]>([]);
   const [territoryPicked, setTerritoryPicked] = useState<string | null>(null);
+  /*
+     Which pitch the assemble screen was opened for, if it was opened from one.
+
+     Round 30's MUST FIX 1: Approve used to spend the pitch on the click, so
+     backing out any way but Launch lost it. Approving now only remembers it
+     here, and `launchPitched` spends it when the job goes out. Transient UI
+     state, deliberately not in the save.
+  */
+  const [assemblingPitchId, setAssemblingPitchId] = useState<string | null>(null);
   /*
      How you work is a habit, not a per-job decision.
 
@@ -173,6 +182,8 @@ export default function OperationsPanel() {
   const choose = (id: string, at?: string) => {
     setSelected(id === selected ? null : id);
     setCrewPicked([]);
+    // A job picked by hand is not the pitch that was open a moment ago.
+    setAssemblingPitchId(null);
     // A setup runs where the score is being built. Anywhere else is not the
     // same job, and making the player re-pick it every time would be four
     // clicks to say something the score already said.
@@ -180,13 +191,18 @@ export default function OperationsPanel() {
   };
 
   /*
-     Approving a pitch consumes it — the slot it held frees up on the next
-     weekly refresh — and opens the same assemble screen a hand-picked job
-     always used. Nothing about resolution changed; only how you got here.
+     Approving a pitch opens the same assemble screen a hand-picked job always
+     used, and nothing else. The pitch stays on the board until the job goes
+     out (`launchPitched`), so Cancel, another tab, or approving a second pitch
+     leaves the offer where it was rather than throwing it away. It opens the
+     job outright rather than through `choose`, which toggles: approving a job
+     that happened to be open already used to close it.
   */
   const approve = (pitchId: string, defId: string, territoryId: string) => {
-    mutate((s) => approvePitch(s, pitchId), true);
-    choose(defId, territoryId);
+    setSelected(defId);
+    setCrewPicked([]);
+    setTerritoryPicked(territoryId);
+    setAssemblingPitchId(pitchId);
   };
 
   /*
@@ -292,12 +308,14 @@ export default function OperationsPanel() {
     if (!def) return;
     const forScore = setupFor?.id;
     mutate(
-      (s) => launchOperation(s, def.id, crewPicked, territoryId, approach, forScore),
+      (s) =>
+        launchPitched(s, assemblingPitchId, def.id, crewPicked, territoryId, approach, forScore),
       true,
     );
     setSelected(null);
     setCrewPicked([]);
     setTerritoryPicked(null);
+    setAssemblingPitchId(null);
   };
 
   return (
@@ -838,6 +856,14 @@ export default function OperationsPanel() {
                 {STAT_BY_ID.method.verb}
               </button>{' '}
               <span className="faint">{STAT_BY_ID.method.verbBlurb}</span>
+              {/* Where a casing already under way is named, on the screen and
+                  not only in the disabled button's tooltip. */}
+              {state.org.cased && !canCase(state, territoryId).ok && (
+                <>
+                  <br />
+                  <span className="brass">{canCase(state, territoryId).message}</span>
+                </>
+              )}
             </p>
           )}
 
@@ -1217,7 +1243,13 @@ export default function OperationsPanel() {
                 >
                   Launch — {formatMoney(def.investment)}
                 </button>
-                <button className="btn" onClick={() => setSelected(null)}>
+                <button
+                  className="btn"
+                  onClick={() => {
+                    setSelected(null);
+                    setAssemblingPitchId(null);
+                  }}
+                >
                   Cancel
                 </button>
               </div>
@@ -1460,6 +1492,16 @@ function PitchCard({
      not in a `title` a player has to hover to find.
   */
   const canDel = canDelegatePitchAutonomous(state, pitch.id);
+  /*
+     A casing is a paid week on one job in one district, and until round 30 its
+     only trace was a tooltip on a disabled button on another screen. It goes
+     on the offer it was for, so a pitch being prepared does not read as one
+     that has gone missing.
+  */
+  const cased = state.org.cased;
+  const casing =
+    cased && cased.defId === pitch.defId && cased.territoryId === pitch.territoryId ? cased : null;
+  const casingDays = casing ? casing.readyDay - state.day : 0;
 
   return (
     <div className="kv" style={{ alignItems: 'flex-start', marginBottom: 10 }}>
@@ -1473,6 +1515,16 @@ function PitchCard({
           <>
             <br />
             <span className="faint tiny">{specialty}</span>
+          </>
+        )}
+        {casing && (
+          <>
+            <br />
+            <span className="brass tiny">
+              {casingDays > 0
+                ? `Casing in progress (${casingDays}d left)`
+                : 'Cased. It shows in the odds.'}
+            </span>
           </>
         )}
       </span>

@@ -666,6 +666,22 @@ function Steward({ territory }: { territory: Territory }) {
   const ledger = readLedger(territory);
   const average = averageTake(territory);
   const candidates = eligibleStewards(state);
+  /*
+     Why a name is greyed out, on the page and not only in a tooltip.
+
+     Round 30: "You have nothing here to hand anybody" lived in a `title` on a
+     dim button, and the tester never saw it. The same reason is the same for
+     every name, so it prints once.
+  */
+  const refusals = [
+    ...new Set(
+      candidates
+        .slice(0, 6)
+        .map((npc) => canPutInCharge(state, npc.id, territory.id))
+        .filter((check) => !check.ok)
+        .map((check) => check.message),
+    ),
+  ];
 
   /*
      What this place is actually for, and what stands between you and it.
@@ -809,6 +825,11 @@ function Steward({ territory }: { territory: Territory }) {
               })}
             </div>
           )}
+          {refusals.map((reason) => (
+            <p key={reason} className="hot tiny" style={{ margin: '6px 0 0' }}>
+              {reason}
+            </p>
+          ))}
         </>
       )}
 

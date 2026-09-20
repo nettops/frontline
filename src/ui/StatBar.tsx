@@ -12,6 +12,7 @@ import { districtOwner, territoryList } from '../sim/territory';
 import { setTipsOff, tipsOff } from './tips';
 import { CAREER_STEPS, MODE_BY_ID, SIMULATION_STEPS } from '../config/modes';
 import { heatTier } from '../config/heat';
+import { arrestRisk } from '../sim/investigation';
 import { houseShort } from '../sim/houses';
 import type { PanelId } from './Rail';
 
@@ -206,6 +207,33 @@ function Docket({ onGoto }: { onGoto?: (id: PanelId) => void }) {
       text: tier.name,
       go: 'law',
       title: tier.description,
+    });
+  }
+
+  /*
+     A file, for the boss whose street heat never reaches 60.
+
+     Heat is attention and a case is evidence, and a careful operator can sit
+     under the heat chip's line for weeks while a case grows — round 30's tester
+     had "Being watched −10%" on every odds card and nothing on this strip.
+     Read off `arrestRisk`, the same fogged sentence the Overview already
+     prints, and never off a case's own strength: an exact figure here would
+     hand over what `caseIntel` exists to blur, and a file the player has no
+     way to read stays "a file is open" rather than a stage.
+  */
+  const risk = arrestRisk(state);
+  if (risk.level === 'watched' || risk.level === 'building' || risk.level === 'closing') {
+    items.push({
+      key: 'case',
+      tone: risk.level === 'watched' ? '' : 'hot',
+      text:
+        risk.level === 'closing'
+          ? 'A case is closing'
+          : risk.level === 'building'
+            ? 'A case is building'
+            : 'A file is open',
+      go: 'law',
+      title: risk.line,
     });
   }
 

@@ -340,7 +340,7 @@ export interface Org {
    */
   rankSaid?: RankId;
   tradeSaid?: Partial<Record<TradeId, boolean>>;
-  /** Same idiom, for `outgrewStreetWork` — see `announce.ts`'s `announceStreetWorkRetired`. */
+  /** For `outgrewStreetWork` — said once per career and never cleared; see `announce.ts`'s `announceStreetWorkRetired`. */
   streetWorkRetiredSaid?: boolean;
 }
 

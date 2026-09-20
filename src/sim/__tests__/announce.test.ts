@@ -24,7 +24,15 @@ import { newGame } from '../state';
 import { advanceDay } from '../clock';
 import { rankNow } from '../rank';
 import { tradeUnlocked } from '../contraband';
-import { outgrewStreetWork } from '../operations';
+import {
+  availableOperations,
+  crewNeeded,
+  operationCost,
+  outgrewStreetWork,
+  STREET_WORK_IDS,
+} from '../operations';
+import { availableCrew } from '../npc';
+import { totalFunds } from '../economy';
 import { putInCharge } from '../delegation';
 import { crewList } from '../npc';
 import { territoryList } from '../territory';
@@ -131,6 +139,36 @@ describe('a door that opened while you were looking elsewhere', () => {
   });
 });
 
+/**
+ * A pitch the boss could take today, so the gate has something to live off.
+ *
+ * Round 30's MUST FIX 3: street work only comes off the board while a capo has
+ * brought him something he could actually run, so the day it retires is the day
+ * that is true, not the day a steward is named.
+ */
+function pitchedFor(state: GameState, territoryId: string): void {
+  const op = availableOperations(state).find(
+    (o) =>
+      o.tier > 0 &&
+      !STREET_WORK_IDS.has(o.id) &&
+      operationCost(state, o) <= totalFunds(state) &&
+      crewNeeded(state, o) <= availableCrew(state).length,
+  );
+  expect(op, 'the setup has nothing a capo could pitch').toBeTruthy();
+  state.capoPitches = [
+    {
+      id: 'pitch_setup',
+      defId: op!.id,
+      territoryId,
+      capoId: crewList(state)[0].id,
+      offeredDay: state.day,
+      status: 'open',
+    },
+  ];
+}
+
+const RETIRED_LINE = /corners yourself|hands do that|young man/i;
+
 describe('street work, the day it actually comes off the board', () => {
   /*
      The blind round's own MUST FIX: delegating a district silently dropped
@@ -157,6 +195,7 @@ describe('street work, the day it actually comes off the board', () => {
     advanceDay(state); // first tick, records the false baseline
 
     expect(outgrewStreetWork(state)).toBe(false);
+    pitchedFor(state, t.id);
     putInCharge(state, steward.id, t.id);
     expect(outgrewStreetWork(state)).toBe(true);
 
@@ -174,6 +213,7 @@ describe('street work, the day it actually comes off the board', () => {
     steward.role = 'soldier';
     state.npcs['n2'] = { ...steward, id: 'n2', name: 'Second Hand', status: 'active' };
     advanceDay(state);
+    pitchedFor(state, t.id);
     putInCharge(state, steward.id, t.id);
 
     const said = dayOf(state);
@@ -182,5 +222,36 @@ describe('street work, the day it actually comes off the board', () => {
     for (let i = 0; i < 5; i++) {
       expect(dayOf(state).some((t) => /corners|hands are full|young man/i.test(t))).toBe(false);
     }
+  });
+
+  it('does not say it again when the pitches lapse and come back', () => {
+    // All three of `announceStreetWorkRetired`'s variants, not just the ones the
+    // older tests here happen to draw on their days.
+    // Round 30's MUST FIX 3 tied the gate to what the capos have brought, and
+    // pitches arrive and lapse weekly, so the gate can flip on, off and on.
+    // Being told once that the corners are not his any more is the whole of
+    // the announcement; the same line every time a pitch lands is the
+    // repetition a blind tester filed about this one.
+    const state = game();
+    const t = territoryList(state)[0];
+    t.influence = { ...t.influence, player: 95 };
+    state.org.cash = 500_000;
+    const steward = crewList(state)[0];
+    steward.role = 'soldier';
+    state.npcs['n2'] = { ...steward, id: 'n2', name: 'Second Hand', status: 'active' };
+    advanceDay(state);
+    pitchedFor(state, t.id);
+    putInCharge(state, steward.id, t.id);
+    expect(dayOf(state).some((x) => RETIRED_LINE.test(x))).toBe(true);
+
+    // The pitch lapses: the corners are his again, in silence.
+    for (const p of state.capoPitches ?? []) p.status = 'expired';
+    expect(dayOf(state).some((x) => RETIRED_LINE.test(x))).toBe(false);
+    expect(outgrewStreetWork(state)).toBe(false);
+
+    // A new one lands, and the gate rises again.
+    pitchedFor(state, t.id);
+    expect(dayOf(state).some((x) => RETIRED_LINE.test(x))).toBe(false);
+    expect(outgrewStreetWork(state)).toBe(true);
   });
 });

@@ -119,11 +119,14 @@ function nameFor(id: RankId): string {
  * uses for a door that opened — said once, on the day it changes.
  */
 function announceStreetWorkRetired(state: GameState): void {
+  // Said once, for the whole career, and the mark never comes off. The gate is
+  // tied to what the capos have brought (`outgrewStreetWork`), and pitches
+  // arrive and lapse weekly, so it can rise, fall and rise again; announcing
+  // every rise would be the same line every time a pitch lands.
+  if (state.org.streetWorkRetiredSaid) return;
   const now = outgrewStreetWork(state);
-  const said = state.org.streetWorkRetiredSaid;
-  if (said === now) return;
   state.org.streetWorkRetiredSaid = now;
-  if (!now) return; // reverses in silence, same as a trade closing — nothing new to report
+  if (!now) return;
   addLog(
     state,
     say('street_work_retired', state.day, [

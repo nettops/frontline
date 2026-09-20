@@ -69,6 +69,18 @@
         "round29"
       ],
       "port": 5329
+    },
+    {
+      "name": "mafia-round30",
+      "runtimeExecutable": "node",
+      "runtimeArgs": [
+        "scripts/playtest-run.mjs",
+        "--port",
+        "5330",
+        "--id",
+        "round30"
+      ],
+      "port": 5330
     }
   ]
 }

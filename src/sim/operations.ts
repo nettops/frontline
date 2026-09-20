@@ -270,10 +270,20 @@ export const STREET_WORK_IDS = new Set([
  * Backs off the moment there is nowhere else to turn. Two ways that happens:
  * no district held at all — ground can decay under a steward without ever
  * running `takeItBack`, so "a steward exists" and "a district is held" are
- * not the same fact — or nothing else on the board is actually affordable,
- * which is the exact broke state `work_it_yourself` exists to answer (see
+ * not the same fact — or nothing he could actually take today has come to
+ * him, which is the exact state `work_it_yourself` exists to answer (see
  * `attention.ts`'s identical check for idle crew with nothing to send them
  * on).
+ *
+ * "Come to him" is literal, and it is round 30's MUST FIX 3. This used to scan
+ * the whole job list for anything open, affordable and staffable, but a Crew
+ * Leader cannot pick a tier-1-and-above job from the table: those reach him
+ * as capo pitches, weekly. So a boss who had just been promoted, or who was
+ * between refreshes, or whose pitches all cost more than he held, had street
+ * work taken away against jobs he could not reach — an empty table, seven
+ * idle crew, and a payroll running. The gate now needs a live pitch he could
+ * take right now, which is also what makes the empty-table message true: the
+ * work went somewhere, and it is on the page.
  */
 export function outgrewStreetWork(state: GameState): boolean {
   const delegated = territoryList(state).some((t) => !!t.stewardId);
@@ -285,14 +295,18 @@ export function outgrewStreetWork(state: GameState): boolean {
 
   const freeBodies = availableCrew(state).length;
 
-  return OPERATIONS.some(
-    (op) =>
-      !STREET_WORK_IDS.has(op.id) &&
-      op.tier > 0 &&
+  // Read off the state rather than `livePitches`: `capoPitches.ts` imports this
+  // file, and `p.status === 'open'` is the whole of what `livePitches` means.
+  return (state.capoPitches ?? []).some((p) => {
+    const op = OPERATION_BY_ID[p.defId];
+    return (
+      p.status === 'open' &&
+      !!op &&
       isOpen(op, board) &&
       operationCost(state, op) <= totalFunds(state) &&
-      crewNeeded(state, op) <= freeBodies,
-  );
+      crewNeeded(state, op) <= freeBodies
+    );
+  });
 }
 
 /** What the manual board actually shows — `availableOperations`, minus street work the organization has outgrown. */

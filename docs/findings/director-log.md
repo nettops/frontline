@@ -1054,3 +1054,73 @@ solve, check whether the premise it was written on is still true. Two of
 the last three items this session (this pair, plus round 29's nav-badge
 finding) turned out to be about a stale reading of the code rather than a
 real gap in it.
+
+## Round 30 — first round on the UI-evolution build — 2026-09-19
+
+Instance `mafia:run-round30` (port 5330), one tester, build `fdc213a`
+(local, unpushed: Docket, jump bar, peek, row accents, famine and repetition
+mitigations, Walk-and-Talk default). Full report:
+`docs/findings/round30-report.md`. The operator prompt named the Docket, jump
+bar, peek and row accents, so findings on those four are primed. Capo on day
+96, stopped day 100 (no day-150 or day-300 reading). First hour 7, Clarity 6,
+Feedback 8, Depth 8, Pacing 5, Difficulty 4, Writing 9, Interface 7,
+Standing 7, Fun 7. Three MUST FIX filed; checked against the source before
+anything is acted on.
+
+**Confirmed in the code.**
+
+- **Pitches vanish (MUST FIX 1, repros A and B).** `approvePitch`
+  (`sim/capoPitches.ts:234`) sets `status = 'approved'` the moment the button
+  is pressed, and `livePitches` lists only `'open'`. `OperationsPanel.tsx:182`
+  says this is deliberate ("approving a pitch consumes it"). What is missing is
+  any way back: Cancel on the assemble screen (`:1220`) and leaving the panel
+  both just drop the approved pitch. Nothing logs it, and no code path returns
+  it to `'open'`. Same class as round 29's delegate button: a control that
+  forfeits something real with no word said. Repro B (three pitches, one
+  staffable, Cancel leaves "0 available") is the same fault.
+- **Casing has no on-screen trace (repro C).** `caseJob` (`sim/verbs.ts:412`)
+  writes `state.org.cased` and one log line, "Somebody is watching the place
+  this week." Nothing renders `org.cased`; the only other trace is the
+  disabled-button tooltip. Combined with the consumed pitch, a cased pitched
+  job has nowhere to be seen.
+- **Raw float in the trade row.** `ui/board.ts:166` and `:183` print
+  `cap.total` unrounded; `throughput()` (`sim/contraband.ts:216`) sums
+  fractional district capacities. The tester's "3.9172573331756046u a week"
+  is exactly this. Rule 3, a shown number that is noise.
+- **Two panels say opposite things.** The heat band text for 41–60 is
+  "Resources are being spent. Your people are being watched."
+  (`config/tuning/heat.json:6`); `investigation.ts:1206` says "Nobody has a
+  file open on you." when there is no case and no loose evidence. Heat is
+  ambient attention and a file is a formal case, so the mechanism is
+  consistent, but the two sentences cannot both be read as true.
+- **Loan default.** `Lender` (`FinancesPanel.tsx:696`) starts the slider at
+  half the lender's ceiling, so a $2.5K boss is offered $20K by default at the
+  shark's rate. Not false, but the default steers.
+- **Autopilot has no odds floor**, and its own button copy says so ("It will
+  not stop when the odds turn", `OperationsPanel.tsx:1246`). Disclosed
+  behaviour, not a lie; the tester's complaint is a design one.
+- **Docket heat chip needs heat above 60** (`StatBar.tsx:202`); the grudge
+  chip needs grievance 55 or more. During heat 41–60, the "Major
+  Investigation" band, the strip shows payroll only. By design, but
+  `config/heat.ts:89` calls 41 the `hot` edge. Director's call on the
+  threshold.
+- **"Little Sicily has gone quiet on you"** is one fixed title template
+  (`sim/eventgen.ts:397`), so it repeats word for word for the same district.
+
+**Not verified, not acted on.**
+
+- The product trade dominating ($23.6K a week from one route, an 88K balance
+  by day 100). Balance claim from one run; needs a probe reading before or
+  after any change, and `ladder.probe` already carries seven pre-existing
+  failures on `main`.
+- Failure streaks against shown odds. The tester says outright they cannot
+  prove it. Ten failures in about fifteen pitched jobs at 50–75% is unlikely
+  but not impossible, and `scorecard.probe`'s quoted-against-landed reading
+  does not cover pitched or delegated jobs.
+- The day 27 to 55 cash famine. Round 29 found the same shape and `fdc213a`
+  carried mitigations; this run says they did not clear it.
+- Per-person skill labels changing between screens (probably per-trade, not
+  checked), the Yourself banner wording (the quoted phrase was not found in
+  `src/`), the peek overlay overlap (visual), and the Businesses list
+  repeating one refusal ten times (the reason text is def-independent,
+  `business.ts:472`, but the panel was not read).

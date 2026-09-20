@@ -319,6 +319,43 @@ export const TRADE_SENTIMENT_FLOOR = 15;
 
 export const TRADE_IDS: TradeId[] = ['product', 'arms'];
 
+/**
+ * How much of its weekly ceiling the trade carries while the boss is laying low.
+ *
+ * Round 30: "the trade also keeps earning while Lay Low is on", and it did — the
+ * trade's heat goes to the `money` channel, which laying low does nothing for
+ * (see `TradeDef.heatChannel`), so the boss's largest income was the one thing
+ * the decision to go quiet cost nothing against. A trade is people on street
+ * corners; when the organization goes quiet, some of them do. The arrangement,
+ * the stock and the routes are all still there, so it is a haircut and not a
+ * stop: a trade that stopped dead would make Lay Low a price nobody could pay.
+ *
+ * Read at `throughput`, so the sale, the weekly buy, the order sizing and the
+ * row on the board cannot disagree about what a dark week carries. Volume is
+ * what heat, evidence and street feeling are all charged on, so a quieter week
+ * is a quieter week in every one of them too.
+ *
+ * **Not the half the round-30 order asked for, and measured.** The bar is
+ * `ladder.probe`'s "running both trades for 300 days": a paired gap in best
+ * estate that must exceed half the non-trading median. Paired gap against
+ * that bar, 400 seeds, the response monotone (36 seeds is not — see the
+ * `SUPPLIERS` note on the runner):
+ *
+ *     share 1.00 (before)   1,097,336   126% of 869,209
+ *     share 0.85            1,024,954   118%
+ *     share 0.80            983,313     113%   (shipped)
+ *     share 0.75              930,346   107%
+ *     share 0.50 (ordered)    834,955    96%   fails
+ *
+ * Half is under the bar at both sizes (36 seeds: 595,861 against 817,661).
+ * The probe's bot has heat pegged near 100, so it lays low far more often than
+ * any human tester has — round 30's used it once — which means these are
+ * upper bounds on what a real career pays. That does not move the bar, and a
+ * pre-committed condition is not weakened to fit a change; it does mean 0.8
+ * costs a person less than it reads here.
+ */
+export const LAY_LOW_TRADE_SHARE = 0.8;
+
 // --------------------------------------------------------------- supply ---
 
 export interface SupplierDef {
@@ -346,6 +383,38 @@ export interface SupplierDef {
  * maintain rather than a switch you flick.
  */
 export const SUPPLIERS: SupplierDef[] = [
+  /*
+     Left where it was, on purpose, after round 30 asked for it to be cut.
+
+     A blind tester reached this door on day 55 for $5,000 and was clearing
+     about $23.6K a week from one route against $3–7K from pitched jobs, and
+     the order was `ceiling` 14 -> 5 and `priceMultiplier` 1.25 -> 1.85. Neither
+     reaches the symptom and together they break the trade's own bar.
+
+     The symptom is not the ceiling. One route carries about 3.9 loads, and the
+     ceiling is 14, so at day 55 this number is not what is binding — cutting
+     it to 5 changes nothing that tester saw. It binds later, when a career
+     has many routes, and `ladder.probe`'s bot opens this door in 36 of 36
+     careers and never leaves it, so in the probe the ceiling *is* the trade.
+
+     The bar is `ladder.probe`'s "running both trades for 300 days", a paired
+     gap in best estate that must exceed half the non-trading median. Measured
+     against the unmodified code, 36 seeds: **1,011,275 against 817,661**
+     (124% of the bar); 400 seeds: **1,097,336 against 869,209** (126%). The
+     ordered numbers: 36 seeds **581,717** (71%), 400 seeds **717,717** (83%) —
+     a failed pre-committed condition at both sizes, so not noise. Price alone
+     (1.85, ceiling 14) reads 985,987 (121%) and does almost nothing, because
+     the probe's income is bound by the ceiling and not the margin. Ceilings
+     5, 8, 10 and 12 at the old price read 955,720, 1,028,510, 1,064,697 and
+     856,281 — not monotonic, the same turbulence the `product` comment above
+     records at this bar, so this instrument cannot size a change this small.
+
+     What this leaves the director: the trade is meant to earn more than
+     anything else (its own blurb says so), the bar is the project's way of
+     holding it to that, and a rebalance that fixes "too rich at day 55" is a
+     rebalance of the whole trade. That is a decision about the bar, not a
+     value to tune around it.
+  */
   {
     id: 'runner',
     name: 'A contact on the freight lines',
