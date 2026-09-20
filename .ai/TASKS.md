@@ -18,10 +18,10 @@ archives. The NOT NEGOTITABLE pass is **complete** —
 
 ## Open
 
-1. **Round 30 SHOULD FIX items outside the repair order**, checked or not:
-   Unverified and not acted on:
-   skill labels changing between screens, the Yourself banner wording, and
-   the tester's failure streaks against shown odds.
+1. **Round 30 SHOULD FIX items still unverified and not acted on:** skill
+   labels changing between screens, the Yourself banner wording, and the
+   tester's failure streaks against shown odds. Every other Round 30 item is
+   closed; see `HANDOFF.md` §0.
 
 ## Smaller, lower-priority
 
