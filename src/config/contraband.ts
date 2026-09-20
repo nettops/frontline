@@ -356,6 +356,63 @@ export const TRADE_IDS: TradeId[] = ['product', 'arms'];
  */
 export const LAY_LOW_TRADE_SHARE = 0.8;
 
+/**
+ * How long a trade's first route takes to carry what the ground is worth, and
+ * what it carries on the day it opens.
+ *
+ * Round 30's MUST FIX 2, and the shape the director chose over a cap: the
+ * runner door opened on day 55 and one route paid about $23.6K a week almost
+ * at once, which ended the cash famine, and with it every decision the middle
+ * of the career was made of. The tester's own words: "About Day 55, when the
+ * trade opened. After that I clicked through the weekly pitches."
+ *
+ * The cap was tried first and failed its own bar. `ceiling` 14->5 with price
+ * x1.85 reads a paired gap of 717,717 against `ladder.probe`'s 869,209 — the
+ * trade stops being worth running — and it would not have touched the symptom
+ * anyway, because one route carries about 3.9 loads and the ceiling is 14. The
+ * ceiling was never the binding constraint at day 55. **Time was, and nothing
+ * charged for it.**
+ *
+ * So this charges for it. A street that has never moved anything for you does
+ * not move everything it will ever move in week one: the trade's first route
+ * opens at `ROUTE_RAMP_START` of its settled capacity and climbs to all of it
+ * over `ROUTE_RAMP_WEEKS`. It is a delay and not a tax — the settled ceiling a
+ * long career reaches is exactly the number it was before this existed.
+ *
+ * **First route only, and that is a measurement, not a taste.** The first cut
+ * ramped every route. `ladder.probe`'s bot opens a route in every district it
+ * takes, for three hundred days, so every new district paid a month at a
+ * quarter — a standing tax on expansion that read 707,768 against 960,574
+ * unramped at 36 seeds. What the windfall needs taming for is *entering* the
+ * trade, so a route opened while the trade already has one runs at once, and
+ * giving up every street and coming back is entering afresh. The price of that
+ * is a bypass: a boss holding two districts can open both in one sitting and
+ * only the first spools. Round 30's tester held one at day 55, which is the
+ * case this was built for; a boss with more ground at that point is already
+ * richer than the famine this is answering.
+ *
+ * Applied inside `districtCapacity`, the single function `throughput`, the
+ * weekly spread, the order sizing and the panel all read — the same place and
+ * for the same reason as `LAY_LOW_TRADE_SHARE`, so nothing on screen can
+ * advertise a week the trade will not deliver.
+ *
+ * Measured on `ladder.probe`'s "running both trades for 300 days" against the
+ * same checkout with the ramp switched off (`ROUTE_RAMP_START = 1`), paired gap
+ * in best estate against a bar of half the non-trading median:
+ *
+ *     400 seeds   unramped 983,313   ramped 917,044   bar 869,209   clears
+ *     36 seeds    unramped 960,574   ramped 587,919   bar 817,661   fails
+ *
+ * The 36-seed reading is not a size, it is turbulence: a ramp on every route
+ * read 707,768 there and a gentler 0.5/4 read 1,051,599, above no ramp at all.
+ * The bar reads 400 seeds for that reason (see the comment on the assertion).
+ * The 400 is not exact either — lay-low at 0.5 read 834,955 before the ramp and
+ * 911,206 with it — so about 7% is a cost inside that instrument's noise, not
+ * a number to defend to the decimal.
+ */
+export const ROUTE_RAMP_WEEKS = 4;
+export const ROUTE_RAMP_START = 0.25;
+
 // --------------------------------------------------------------- supply ---
 
 export interface SupplierDef {

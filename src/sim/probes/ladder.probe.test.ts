@@ -5898,6 +5898,22 @@ const RUNS_TRADING = lazyRuns(() => Array.from({ length: 36 }, (_, i) =>
 const RUNS_OWNED = lazyRuns(() => Array.from({ length: 36 }, (_, i) =>
   climb(700 + i, HUMAN_DAYS, { trades: true, ownSupply: true }),
 ));
+/*
+   The trading half of the trade bar's own sample: `WIDE`'s 400 seeds, played
+   with the trades on. Paired against `WIDE` itself, which is the same call on
+   the same seeds as `RUNS_300` with the trades off, so the first 36 of each
+   pair are exactly the two 36-seed arms above.
+
+   Dedicated rather than resizing `RUNS_TRADING`: that population has other
+   readers (the opened-a-route count, the routed-against-unrouted feeling
+   pairs, the ownership comparison) whose bars are sized against 36 and were
+   never asked to move. See the comment on "says whether running them is worth
+   doing at all" for why this one bar reads 400. Costs one extra 400-career
+   population on a full probe run.
+*/
+const WIDE_TRADING = lazyRuns(() => Array.from({ length: 400 }, (_, i) =>
+  climb(700 + i, HUMAN_DAYS, { trades: true }),
+));
 
 /*
    The third arm: the same trading bot, willing to lean on its premises.
@@ -8401,10 +8417,46 @@ describe('the trades, and the two things built on top of them', () => {
       opened.length,
       'most careers can never get into the trade at all',
     ).toBeGreaterThanOrEqual(Math.ceil(RUNS_TRADING.length / 2));
+    /*
+       **Resized to `WIDE`'s 400 seeds, 2026-09-20, by the director's call — the
+       widening this comment's own standing instruction asks for, and not a
+       fourth move of the number.** The bar is still half of the non-trading
+       median. What changed is the sample it is read against.
+
+       Round 30 ramped a trade's first route (`ROUTE_RAMP_WEEKS`) and the
+       assertion lost its resolution, which is the narrow exception in
+       `DIRECTOR.md` §5: it changed sign on a change that costs 6.7% where it
+       can be measured. Paired gap against the bar, best estate:
+
+           400 seeds   no ramp    983,313   bar 869,209   113%
+                       ramp       917,044                 105%   clears
+           36 seeds    no ramp    960,574   bar 817,661   117%
+                       ramp       587,919                  72%   fails
+                       (a ramp on *every* route read 707,768, and a gentler
+                       0.5/4 read 1,051,599 — above no ramp at all)
+
+       A ramp that is 6.7% at 400 seeds cannot be 39% at 36 and 10% the other
+       way on a milder shape; delaying one route changes a career's whole timing
+       and every draw after it, and 36 pairs do not resolve that. The 400 is the
+       instrument the earlier lay-low change was sized on, and its response is
+       monotone.
+
+       The first 36 of this 400 are the old 36 arms, still printed above, so the
+       history in this comment stays readable against it.
+    */
+    const wideBase = WIDE.map((r) => r.bestEstate);
+    // eslint-disable-next-line no-console
+    console.log(
+      `        paired gap, ${WIDE_TRADING.length} seeds: ` +
+        `${Math.round(pairedGap(WIDE_TRADING, WIDE, (r) => r.bestEstate))} against a bar of ` +
+        `${Math.round(median(wideBase) * 0.5)} ` +
+        `(36 seeds: ${Math.round(pairedGap(RUNS_TRADING, RUNS_300, (r) => r.bestEstate))} against ` +
+        `${Math.round(median(base) * 0.5)})`,
+    );
     expect(
-      pairedGap(RUNS_TRADING, RUNS_300, (r) => r.bestEstate),
+      pairedGap(WIDE_TRADING, WIDE, (r) => r.bestEstate),
       'running both trades for 300 days leaves a family no better off',
-    ).toBeGreaterThan(median(base) * 0.5);
+    ).toBeGreaterThan(median(wideBase) * 0.5);
     /*
        Paired, because the unpaired version could not attribute anything. The
        bot works jobs and standing orders in the districts it runs product

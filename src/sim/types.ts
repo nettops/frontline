@@ -1875,6 +1875,24 @@ export interface Contraband {
   plants?: { territoryId: string; since: number }[];
   /** Districts each trade is running through. */
   routes: Record<TradeId, string[]>;
+  /**
+   * The day a trade was entered, stored against its first route and keyed
+   * `trade:territoryId`. Read by `ROUTE_RAMP_WEEKS`, so a street that has never
+   * carried anything for you does not carry everything it will ever carry in
+   * week one. Only that first route has an entry; every route opened while the
+   * trade already had one reads as settled.
+   *
+   * Optional, and a missing entry reads as *settled* rather than as new. A
+   * save written before the ramp existed has routes that have been running —
+   * some for three hundred days — and taking a settled career's income away
+   * on load is the one thing a migration must not do. That is what keeps this
+   * off `SAVE_VERSION`.
+   *
+   * Kept beside `routes` rather than folded into it: `routes` is a plain list
+   * of ids that nine call sites `includes`, `indexOf` and `splice`, and a
+   * shape change there buys nothing this does not.
+   */
+  routeSince?: Record<string, number>;
   /** What last week did, for the panel. */
   lastRun: Record<
     TradeId,

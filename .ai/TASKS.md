@@ -18,20 +18,7 @@ archives. The NOT NEGOTITABLE pass is **complete** —
 
 ## Open
 
-1. **The first-route ramp clears the 400-seed bar and fails the 36-seed one.**
-   **Needs the director.** Round 30's day-55 windfall (one runner route,
-   ~$23.6K a week against $3–7K from pitched jobs) is answered by a ramp on a
-   trade's first route — built and guarded (`sim/__tests__/routeRamp.test.ts`),
-   uncommitted. `ladder.probe`, paired gap: 400 seeds 983,313 → 917,044 against
-   869,209 (clears); 36 seeds 960,574 → 587,919 against 817,661 (fails, and 36
-   seeds is not monotone in this change: 707,768 for every-route, 1,051,599 at
-   0.5/4). The bar has been restated twice and warns against a third
-   (`DIRECTOR.md` §5). Options: ship it and re-size the probe's sample to 400
-   with these readings in the log; drop it and keep lay-low at 80% as the only
-   trade change; or leave the day-55 windfall as designed. Detail in
-   `HANDOFF.md` §0, "Round 30 follow-up".
-
-2. **Round 30 SHOULD FIX items outside the repair order**, checked or not:
+1. **Round 30 SHOULD FIX items outside the repair order**, checked or not:
    the heat band text ("Your people are being watched") against Law's
    "Nobody has a file open on you" — two sentences that cannot both be read
    as true (`config/tuning/heat.json`, `sim/investigation.ts:1206`); the

@@ -11,6 +11,7 @@ import { describe, expect, it } from 'vitest';
 import statbar from '../StatBar.tsx?raw';
 import territory from '../panels/TerritoryPanel.tsx?raw';
 import finances from '../panels/FinancesPanel.tsx?raw';
+import contraband from '../panels/ContrabandPanel.tsx?raw';
 import css from '../../styles/theme.css?raw';
 
 const code = (src: string): string =>
@@ -65,5 +66,23 @@ describe('the loan slider does not choose the debt for him', () => {
   it('opens on the least he can take', () => {
     expect(FINANCES).toMatch(/const asking = amount \|\| minAmount;/);
     expect(FINANCES).not.toMatch(/amount \|\| Math\.round\(ceiling \/ 2\)/);
+  });
+});
+
+/*
+   The ramp's one screen obligation.
+
+   `ROUTE_RAMP_WEEKS` makes a new route carry a quarter of what the ground is
+   worth, and a "Would carry" figure that is going to climb on its own with
+   nothing on the page to say so is rule 3 — a number that moved for a reason
+   no panel can name. Read against the source for the same reason the rest of
+   this file is: the cell is a computed number, not a string a render test
+   could match.
+*/
+describe('a settling route says so on the trade screen', () => {
+  it('names the weeks left, and only while there are any', () => {
+    const TRADE = flat(contraband);
+    expect(TRADE).toMatch(/weeksToSettle\(state, tab, t\.id\) > 0/);
+    expect(TRADE).toMatch(/settling in/);
   });
 });

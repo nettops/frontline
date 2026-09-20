@@ -41,6 +41,8 @@ import {
   TRADES,
   TRADE_IDS,
   LAY_LOW_TRADE_SHARE,
+  ROUTE_RAMP_START,
+  ROUTE_RAMP_WEEKS,
   TRADE_SENTIMENT_FLOOR,
   UNITS_PER_CREW,
   WORKSHOP,
@@ -194,7 +196,39 @@ export function districtCapacity(state: GameState, trade: TradeId, t: Territory)
   // what they say rather than depending on the population numbers' scale.
   const folk = (people(state, t.id) / 62_000) * def.populationWeight;
 
-  return def.districtCapacity * (wealth + folk) * through;
+  return def.districtCapacity * (wealth + folk) * through * routeRamp(state, trade, t.id);
+}
+
+/** The key `routeSince` is stored under. One trade's route is not the other's. */
+function rampKey(trade: TradeId, territoryId: string): string {
+  return `${trade}:${territoryId}`;
+}
+
+/**
+ * How much of its settled capacity a route carries today, 0..1.
+ *
+ * A district nobody is running yet reads 1, because the question the panel is
+ * asking there is what the ground is worth — not what a route through it
+ * would carry in its first week. The same is true of a route from a save
+ * written before this existed: no opening day recorded means it has been
+ * running, which for those saves is exactly true.
+ *
+ * Linear. A curve would be a second thing to tune and nothing in the reading
+ * asks for one.
+ */
+export function routeRamp(state: GameState, trade: TradeId, territoryId: string): number {
+  const since = state.contraband?.routeSince?.[rampKey(trade, territoryId)];
+  if (since == null) return 1;
+  const weeks = Math.max(0, (state.day - since) / 7);
+  if (weeks >= ROUTE_RAMP_WEEKS) return 1;
+  return ROUTE_RAMP_START + (1 - ROUTE_RAMP_START) * (weeks / ROUTE_RAMP_WEEKS);
+}
+
+/** Weeks until a route carries everything it will, or 0 once it does. */
+export function weeksToSettle(state: GameState, trade: TradeId, territoryId: string): number {
+  const since = state.contraband?.routeSince?.[rampKey(trade, territoryId)];
+  if (since == null) return 0;
+  return Math.max(0, Math.ceil(ROUTE_RAMP_WEEKS - (state.day - since) / 7));
 }
 
 export interface Throughput {
@@ -640,7 +674,13 @@ export function openRoute(state: GameState, trade: TradeId, territoryId: string)
   const routes = state.contraband.routes[trade];
   if (routes.includes(territoryId)) return { ok: false, message: 'Already running there.' };
 
+  // Only a trade's first route ramps. Entering the trade is what the ramp is
+  // for; growing inside it is not, and ramping every route was a standing tax
+  // on expansion (see `ROUTE_RAMP_WEEKS`). Set here and nowhere else, so
+  // "entered" means the one moment it can mean.
+  const entering = routes.length === 0;
   routes.push(territoryId);
+  if (entering) (state.contraband.routeSince ??= {})[rampKey(trade, territoryId)] = state.day;
   addLog(
     state,
     `${TRADES[trade].name} is running through ${territoryDef(territoryId).name} now.`,
@@ -654,6 +694,9 @@ export function closeRoute(state: GameState, trade: TradeId, territoryId: string
   const index = routes.indexOf(territoryId);
   if (index === -1) return { ok: false, message: 'Nothing running there.' };
   routes.splice(index, 1);
+  // Giving up the street that was spooling gives up what it had built. If it
+  // was the last one, opening a street again is entering the trade afresh.
+  delete state.contraband.routeSince?.[rampKey(trade, territoryId)];
   return { ok: true, message: 'Closed.' };
 }
 

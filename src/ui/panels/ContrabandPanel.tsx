@@ -45,7 +45,7 @@ import {
   WORKSHOP,
   type TradeId,
 } from '../../config/contraband';
-import { districtCapacity } from '../../sim/contraband';
+import { districtCapacity, weeksToSettle } from '../../sim/contraband';
 import { priced } from '../../sim/market';
 import {
   CONTROL_LABEL,
@@ -271,7 +271,25 @@ export default function ContrabandPanel() {
                           </span>
                         </div>
                       </td>
-                      <td className="num mono">{Math.round(districtShare(state, tab, t.id))}</td>
+                      <td className="num mono">
+                        {Math.round(districtShare(state, tab, t.id))}
+                        {/*
+                           A figure that is going to change on its own says so.
+
+                           The ramp (ROUTE_RAMP_WEEKS) means a trade's first
+                           route carries a quarter of what the ground is
+                           worth in its opening week, and a player who is not
+                           told that reads the
+                           low number as the street being poor, or as a fault.
+                           Rule 3: if a number moved, a panel can name why.
+                        */}
+                        {open && weeksToSettle(state, tab, t.id) > 0 && (
+                          <span className="name-sub">
+                            settling in, {weeksToSettle(state, tab, t.id)} wk
+                            {weeksToSettle(state, tab, t.id) === 1 ? '' : 's'} to full
+                          </span>
+                        )}
+                      </td>
                       <td>
                         <div style={{ minWidth: 90 }}>
                           <Bar value={t.sentiment} tone={t.sentiment < 30 ? 'hot' : undefined} />

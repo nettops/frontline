@@ -404,21 +404,30 @@ move. Every guard below was seen red before its fix.
   pinned at the first rung, so every predecessor read the same word. Still
   reading it: `art/playerLook.ts` and `PlayerPanel`'s kit note pick the
   portrait kit from `player.rank` — unlooked at.
-- **First-route ramp (`ROUTE_RAMP_START` 0.25, `ROUTE_RAMP_WEEKS` 4) is built
-  and NOT shipped.** A trade's first route opens at 25% and reaches full over
-  four weeks (`routeSince`, optional, a missing entry reads as settled;
-  `districtCapacity` applies it). Only the first route ramps: ramping every
+- **First-route ramp shipped (`ROUTE_RAMP_START` 0.25, `ROUTE_RAMP_WEEKS` 4).**
+  A trade's first route opens at 25% of capacity and reaches full over four
+  weeks (`routeSince`, optional, a missing entry reads as settled, so no
+  `SAVE_VERSION` move; `districtCapacity` applies it; the trade panel says
+  "settling in, N wks to full"). Only the first route ramps — ramping every
   route was a standing tax, since the probe bot opens a route in every
-  district it takes. `ladder.probe` "running both trades for 300 days", paired
-  gap, same instrument: **400 seeds — 983,313 unramped, 917,044 ramped, against
-  a bar of 869,209 (clears, 105%)**. **36 seeds, the sample `npm run probe`
-  runs — 960,574 unramped, 587,919 ramped, against 817,661 (fails).** The
-  36-seed reading is turbulence, not a size: ramping every route read 707,768,
-  and 0.5/4 read 1,051,599, above no ramp at all. But the bar has already been
-  restated twice and its own comment warns against a third (`DIRECTOR.md` §5),
-  so it is left as it is and the ramp is held back for the director. The code
-  is uncommitted in the working tree; `.ai/TASKS.md` item 1.
-
+  district it takes. Round 30's first week would pay about a quarter of what it
+  did, and full from week five. Guard: `sim/__tests__/routeRamp.test.ts`,
+  eleven cases, the three that pin "first only" seen red against the
+  every-route version.
+- **`ladder.probe`'s trade bar now reads 400 seeds.** "Running both trades for
+  300 days", paired gap in best estate against half the non-trading median,
+  read against `WIDE` and a new dedicated `WIDE_TRADING` (same seeds, trades
+  on). Not a fourth move of the number: the bar's own comment says a third
+  restatement should widen the sample instead, and `DIRECTOR.md` §5's
+  exception is the assertion losing resolution. It had: **400 seeds — 983,313
+  unramped, 917,044 ramped, against 869,209; 36 seeds — 960,574 unramped,
+  587,919 ramped, against 817,661**, and every-route read 707,768 where a
+  gentler 0.5/4 read 1,051,599, above no ramp at all. The 400 is the reading
+  that sized lay-low too. A full probe run now pays for one extra 400-career
+  population. The other readers of the 36-seed arms keep their samples.
+  **The 400 is not exact either:** lay-low at the ordered 0.5 read 834,955
+  before the ramp and 911,206 with it, so a 6.7% cost is inside the noise of the
+  instrument, not a measurement of it.
 
 ## 1. What the project is
 
