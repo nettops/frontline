@@ -1124,3 +1124,73 @@ anything is acted on.
   `src/`), the peek overlay overlap (visual), and the Businesses list
   repeating one refusal ten times (the reason text is def-independent,
   `business.ts:472`, but the panel was not read).
+
+## Round 30 repairs — 2026-09-20
+
+The repair order for round 30's three MUST FIX items and five smaller ones.
+What shipped and what did not is in `HANDOFF.md` §0; this is the reasoning
+worth keeping and the instrument findings.
+
+**The order was checked against the code before it was built, and two of its
+premises were wrong.** The product trade already required two fronts
+(`minFronts: 2`), and the runner's `ceiling` of 14 is not what binds for one
+route (about 3.9 loads), so cutting it to 5 would not have touched the
+symptom the tester saw. The order's own arithmetic also used a unit cost that
+is not in the config (it assumed $1,275 where `unitCost` is 1,521), so its
+stated "$15–20K gross" outcome was not what its numbers produce.
+
+**The trade bar is a real constraint, and it answered clearly.**
+`ladder.probe`'s "running both trades for 300 days" must clear half the
+non-trading median. Unmodified: 1,011,275 against 817,661 (36 seeds) and
+1,097,336 against 869,209 (400 seeds). The ordered runner numbers: 581,717
+and 717,717. Two different sample sizes, same verdict, so the ordered change
+breaks the bar rather than brushing it. It was not shipped and the bar was
+not touched (`DIRECTOR.md` §5). What the director gets instead is the curve:
+the ceiling and price grid at 36 seeds is not monotonic (955,720 / 1,028,510
+/ 1,064,697 / 856,281 for ceilings 5 / 8 / 10 / 12; ×1.5 at 10 fails at
+758,252) and cannot size a change this small, which is exactly what the
+`product` comment already says of this bar. At 400 seeds the lay-low response
+is monotone and readable, which is why that part could be sized.
+
+**MUST FIX 2 and MUST FIX 3 pull against each other.** The tester's famine
+ran from day 27 to about day 55 and ended when the trade opened; the trade
+they call dominant is what rescued them. Any fix that trims the early trade
+lengthens the famine the third item complains about. That is the real content
+of `.ai/TASKS.md` item 1 and it is the director's call.
+
+**Lay-low is a fair price, sized by measurement.** The ordered half fails the
+bar at both sizes (595,861 at 36; 834,955 at 400). 0.8 reads 983,313 (113%),
+above the ~111% this trade's history calls real headroom, so that is what
+shipped. The probe's bot has heat near 100 and lays low far more than any
+human tester (round 30's used it once), so the probe overstates the cost to a
+real career; that does not move the bar.
+
+**A second-order fault found by writing the test.** Tying the street-work gate
+to weekly pitches means it can rise and fall, and the retirement line would
+have been said every time. The first version of that guard passed for the
+wrong reason (its pattern matched two of the announcement's three variants,
+and the older tests here only pass because their days draw a variant that
+matches). Fixed by making the mark once per career, with a pattern that
+covers all three.
+
+**Fog kept.** The order's Docket chip read "N% evidence" straight off a case.
+That is the number `caseIntel` exists to blur, so the chip reads `arrestRisk`,
+the same fogged sentence the Overview already prints, and a source guard
+keeps `.strength` and "evidence" out of that function.
+
+**Full probe comparison.** `ladder.probe` and `broke.probe` on this working
+tree against a clean checkout of the same base commit (`e877c44`, with only
+`maplab/` changed since): the identical seven `ladder.probe` failures in both
+(back-half memos, favour-network reachability, legitimacy across a population,
+"anybody sit down", pricing repetition, moving the trades off the street
+channel, telling a setting apart), `broke.probe` green in both. No failure
+added, none fixed. Those seven predate this work.
+
+**What the probes cannot see.** None of them opens the pitch flow or reads
+the street-work gate, so MUST FIX 1 and 3 have no probe reading; they are
+guarded by unit tests and were checked by hand in the browser on the round-30
+save (approve two pitches and cancel, all three remain; launch spends only its
+own; casing shows on the card and in the assemble screen; the Docket case
+chip, the trade row and the loan default read as intended). The handover
+refusal and the peek visual were not reachable in that save and rest on the
+source guards.
