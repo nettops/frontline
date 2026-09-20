@@ -86,7 +86,7 @@ import {
   type LawyerLevel,
   type StageId,
 } from '../config/lawEnforcement';
-import { CHANNEL_OF_SOURCE } from '../config/heat';
+import { CHANNEL_OF_SOURCE, HEAT_CHANNELS, HEAT_WATCHED_LINE, heatSeverity } from '../config/heat';
 import { ARREST_DAYS } from '../config/operations';
 import { DIFFICULTY_BY_ID } from '../config/difficulty';
 import { FEAR, PAYDAY_INTERVAL } from '../config/economy';
@@ -1202,6 +1202,23 @@ export function arrestRisk(state: GameState): ArrestRisk {
 
   if (cases.length === 0) {
     const loose = looseEvidence(state);
+    /*
+       Once the heat tier itself says somebody is looking, "nobody has a file
+       open" on the next line cannot be read as true beside it — round 30 read
+       both on one panel. The tier edge is the one the gauge already reddens
+       at (`heatSeverity`), not a number of its own, and the sentence names
+       whichever kind of attention is largest.
+
+       The level does not move. `watched` is what the Docket turns into "A
+       file is open", and a loud week with nothing lying around is not an
+       investigation (`foresight.test.ts`); only what the line says changes.
+    */
+    if (heatSeverity(state.org.heat) !== 'ok') {
+      const lead = HEAT_CHANNELS.reduce((a, b) => (channelHeat(state, b) > channelHeat(state, a) ? b : a));
+      return loose <= 0
+        ? { level: 'clear', line: HEAT_WATCHED_LINE[lead].file, ceiling, cost }
+        : { level: 'traces', line: HEAT_WATCHED_LINE[lead].traces, ceiling, cost };
+    }
     if (loose <= 0) {
       return { level: 'clear', line: 'Nobody has a file open on you.', ceiling, cost };
     }

@@ -17,6 +17,7 @@ import { crewList, generateNpc } from '../npc';
 import {
   activeCases,
   agencyOf,
+  arrestRisk,
   buyContact,
   canBuyContact,
   canUseLegalFavor,
@@ -47,7 +48,13 @@ import {
   stageIndex,
   type StageId,
 } from '../../config/lawEnforcement';
-import { CHANNEL_OF_SOURCE, HEAT_CHANNELS, type HeatChannel } from '../../config/heat';
+import {
+  CHANNEL_OF_SOURCE,
+  HEAT_CHANNELS,
+  HEAT_TIERS,
+  heatSeverity,
+  type HeatChannel,
+} from '../../config/heat';
 import { setHeat, tickHeat } from '../heat';
 import { figure, publicStandingTier } from '../civic';
 import { PUBLIC_STANDING_FIGURES } from '../../config/civic';
@@ -1055,5 +1062,94 @@ describe('starving a case', () => {
       c.strength,
       `after a year of quiet the file still holds ${c.strength.toFixed(1)}`,
     ).toBeLessThan(CASE_CLOSED_BELOW);
+  });
+});
+
+/*
+   Heat and a file are different things, and the sentence between them has to
+   admit it.
+
+   Round 30's tester read "Major Investigation — resources are being spent" over
+   "NOBODY HAS A FILE OPEN ON YOU" on the same panel, and both were true: heat is
+   attention and a case is evidence. But two lines that cannot both be read as
+   true are a fault whatever the mechanism says, so once the heat tier itself
+   claims somebody is looking, the case line says what is looking and that it
+   has not yet opened anything.
+
+   The level stays `clear` when there is no evidence. `watched` is what the
+   Docket turns into "A file is open", and `foresight.test.ts` pins that a loud
+   week is not an investigation; only the sentence changes.
+*/
+describe('the case line does not contradict the heat above it', () => {
+  it('says what is watching, and that no file is open, once the heat tier says somebody is', () => {
+    const state = fresh();
+    setHeat(state, 'street', 50);
+    expect(activeCases(state)).toHaveLength(0);
+    expect(looseEvidence(state)).toBe(0);
+
+    const risk = arrestRisk(state);
+    expect(risk.level, 'a loud week must not read as an investigation').toBe('clear');
+    expect(risk.line).toBe(
+      'Patrol cars are watching the corners. Nobody has opened a formal file on you yet.',
+    );
+    expect(risk.line).not.toMatch(/has a file open on you/);
+  });
+
+  it('keeps the traces level and says so when there is evidence lying around', () => {
+    const state = fresh();
+    setHeat(state, 'street', 50);
+    drop(state, 'operation', 20);
+
+    const risk = arrestRisk(state);
+    expect(risk.level).toBe('traces');
+    expect(risk.line).toBe(
+      'The precinct is watching the block, and there is evidence lying around with your name on it.',
+    );
+  });
+
+  it('names the kind of attention rather than always sending patrol cars', () => {
+    // Trade heat lands on the books, not the street; a patrol car on a corner
+    // would be a sentence about something that is not happening.
+    const money = fresh();
+    setHeat(money, 'money', 50);
+    expect(arrestRisk(money).line).not.toMatch(/patrol/i);
+    expect(arrestRisk(money).line).toMatch(/money/i);
+    expect(arrestRisk(money).line).toMatch(/Nobody has opened a formal file/);
+
+    const inside = fresh();
+    setHeat(inside, 'inside', 50);
+    expect(arrestRisk(inside).line).not.toMatch(/patrol/i);
+    expect(arrestRisk(inside).line).toMatch(/talking/i);
+  });
+
+  it('follows the tier that says somebody is looking, not a number of its own', () => {
+    const edge = HEAT_TIERS.find((t) => heatSeverity(t.min) !== 'ok')!.min;
+    const under = fresh();
+    setHeat(under, 'street', edge - 1);
+    expect(arrestRisk(under).line).toBe('Nobody has a file open on you.');
+
+    const on = fresh();
+    setHeat(on, 'street', edge);
+    expect(arrestRisk(on).line).toMatch(/Nobody has opened a formal file/);
+  });
+
+  it('is never the flat denial at any heat the panel reddens at', () => {
+    for (let heat = 0; heat <= 100; heat++) {
+      const state = fresh();
+      setHeat(state, 'street', heat);
+      if (heatSeverity(state.org.heat) === 'ok') continue;
+      expect(
+        arrestRisk(state).line,
+        `at heat ${heat} the panel says somebody is looking and the case line denies it`,
+      ).not.toMatch(/has a file open on you/);
+    }
+  });
+
+  it('leaves an open case to say what it says', () => {
+    const state = fresh();
+    setHeat(state, 'street', 80);
+    const c = openCaseFor(state, 'city_police', 40);
+    expect(c).toBeDefined();
+    expect(arrestRisk(state).line).not.toMatch(/Nobody has opened a formal file/);
   });
 });

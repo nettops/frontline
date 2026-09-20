@@ -395,6 +395,38 @@ export const HEAT_CHANNEL_BLURB: Record<HeatChannel, string> = {
   inside: 'People who used to work for you and are now talking to somebody else.',
 };
 
+/**
+ * What "somebody is looking" is, said for each kind of attention.
+ *
+ * Round 30's tester read a heat tier claiming resources were being spent above
+ * a case line reading "Nobody has a file open on you" — both true, and unable
+ * to be read as true together. Once the tier says somebody is watching, the
+ * case line says who and that they have not yet opened anything
+ * (`arrestRisk`). One sentence for each channel, because the heat that trade
+ * and fronts write lands on the books and a patrol car on a corner would be a
+ * line about something that is not happening.
+ *
+ * `file` is for a boss with nothing lying around; `traces` for one who has
+ * evidence out there for somebody to find.
+ */
+export const HEAT_WATCHED_LINE: Record<HeatChannel, { file: string; traces: string }> = {
+  street: {
+    file: 'Patrol cars are watching the corners. Nobody has opened a formal file on you yet.',
+    traces:
+      'The precinct is watching the block, and there is evidence lying around with your name on it.',
+  },
+  money: {
+    file: 'Somebody is asking where the money comes from. Nobody has opened a formal file on you yet.',
+    traces:
+      'Somebody is asking where the money comes from, and there is evidence lying around with your name on it.',
+  },
+  inside: {
+    file: 'Somebody who used to work for you is talking. Nobody has opened a formal file on you yet.',
+    traces:
+      'Somebody who used to work for you is talking, and there is evidence lying around with your name on it.',
+  },
+};
+
 /** Which channel an evidence source belongs to. Agencies read their focus. */
 export const CHANNEL_OF_SOURCE: Record<
   'operation' | 'violence' | 'finance' | 'informant' | 'disposal' | 'ordnance',
