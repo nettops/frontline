@@ -15,3 +15,6 @@ coverage
 
 .worktrees/
 .ai/
+
+# Map Lab dev tool: local only, kept out of git
+maplab/
