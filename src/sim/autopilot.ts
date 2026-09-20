@@ -16,7 +16,8 @@
  *
  * Two properties carry it, and the second was expensive to learn:
  *
- * **It changes who goes, never what runs.** Jobs are still taken in
+ * **It changes who goes, and holds back what is a bad price; it never
+ * reorders what runs.** Jobs are still taken in
  * expected-value order — the same order a hand would take them. The first
  * version of the arm also sorted the board by danger, and lost by a million:
  * it spent the bench and the stake on the most dangerous work before it ever
@@ -69,6 +70,7 @@ import {
   crewNeeded,
   launchOperation,
   operationCost,
+  successBreakdown,
 } from './operations';
 import { scoreOn, setupsLeft } from './scores';
 import { controlLevel, operableTerritories } from './territory';
@@ -241,11 +243,28 @@ export function tickAutopilot(state: GameState, _rng: Rng): void {
 
     const best = [...free].sort((a, b) => crewCompetence([b]) - crewCompetence([a]));
     const score = scoreOn(state, def.id);
+    const crew = best.slice(0, bodies);
+    const territoryId = score ? score.territoryId : where;
+    /*
+       The odds floor. Read here rather than in pass one because the odds are a
+       function of who goes, and this is the first place who goes is known. It
+       is `successBreakdown`, the figure the board prints and `launchOperation`
+       snapshots, so what is declined is what a hand would have read as a bad
+       price. Nothing is spent and nobody is committed; the crew stays free for
+       the next job down the list.
+
+       A job with a score behind it is exempt. The player opened that score and
+       spent a month of groundwork on it, the loop already holds it until the
+       window is closing, and declining it here would let the window lapse with
+       nothing said — the game moving the job out from under somebody, which
+       is the one thing a window may never do.
+    */
+    if (!score && successBreakdown(state, def, crew, territoryId).total < risk.minSuccess) continue;
     launchOperation(
       state,
       def.id,
-      best.slice(0, bodies).map((n) => n.id),
-      score ? score.territoryId : where,
+      crew.map((n) => n.id),
+      territoryId,
       undefined,
       score?.id,
     );

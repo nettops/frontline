@@ -542,8 +542,9 @@ export default function OperationsPanel() {
           ))}
         </div>
         <p className="faint tiny" style={{ margin: '8px 0 0' }}>
-          It changes who goes, never what runs — the jobs are the ones you would have
-          taken anyway. {AUTOPILOT_RISK_BLURB[autopilotRisk(state)]}
+          It picks who goes, not which jobs — they are the ones you would have taken
+          anyway, less any it would send out at worse odds than the line below.{' '}
+          {AUTOPILOT_RISK_BLURB[autopilotRisk(state)]}
         </p>
       </Panel>
 

@@ -464,6 +464,22 @@ move. Every guard below was seen red before its fix.
   guard pins the draw count (the body's one, nothing for the title), and the
   naive version was seen to fail it. Sim-neutral: the autopilot ground reading is
   identical to the digit with the title changed and the new floor at zero.
+- **Autopilot has an odds floor** (`AUTOPILOT_RISK[...].minSuccess`: cautious
+  55%, **normal 45%**, aggressive 35%). Round 30 watched it launch a $6,000
+  Warehouse Job at 44%. Read off `successBreakdown` for the crew it would send,
+  in the handout pass; a job with a score behind it is exempt, so a staged
+  window cannot lapse in silence. This is a balance move and it was measured on
+  the one instrument that turns the shipped autopilot on ("a boss who hands the
+  work over still takes the ground", 36 paired careers, normal): none
+  +$1,261,959 / 20 of 36 ahead / 146 jobs / 49 crew left; **0.45 +$1,412,775 /
+  21 / 195 / 58**; 0.50 -$346,668 / 17 / 212 / 66; 0.55 -$890,625 / 13 / 216 / 74.
+  The ground bar held at every floor. Jobs and crew climb the whole way; the
+  estate gap is noisy and flips sign between neighbours. 0.55, the first cut, is
+  not shipped. Cautious and aggressive sit ten points either side and are
+  unmeasured (the probe never sets a risk). **This changes `normal` for a save
+  with the loop already on**, which the old blurb ("what this always did") said
+  it would not, so the blurb and the panel's "never what runs" line now say the
+  floor. Guards: `autopilot.test.ts`, seen red.
 
 ## 1. What the project is
 

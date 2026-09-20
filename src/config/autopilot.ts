@@ -33,30 +33,67 @@ export const AUTOPILOT = {
  * shape of answer: crude, three settings, and the number line is `AUTOPILOT`
  * above, not a new idea next to it.
  *
- * `normal` **is** `AUTOPILOT` above, verbatim — an existing save with
- * autopilot already on gets the exact behaviour it already had, because
+ * `normal`'s heat thresholds **are** `AUTOPILOT` above, verbatim, and
  * `autopilotRisk` is optional and absent reads as `normal`. `cautious` moves
  * both heat thresholds down by the same fifteen points `quietAbove` sits
  * below `stopAbove` today, and adds the one thing that was actually missing:
  * it will not spend into the coming payday. `aggressive` moves them up by
- * the same amount and changes nothing else — a player who wants the loop to
- * run hotter is asking for exactly the risk this file already prices,
- * further out.
+ * the same amount and changes nothing else about heat — a player who wants
+ * the loop to run hotter is asking for exactly the risk this file already
+ * prices, further out.
+ *
+ * ## The odds floor, added after round 30
+ *
+ * `minSuccess` is a fraction of the odds the board would show for the crew the
+ * loop is about to send. Round 30's tester watched a $6,000 Warehouse Job go
+ * out at 44% under a panel that said "your best and most careful on the
+ * riskiest work". The heat levers say when the city is too hot; nothing said
+ * when a *job* was a bad price. It is stricter the more careful the setting,
+ * and it is the one respect in which `normal` no longer does exactly what it
+ * did before this: an existing save with the loop on now declines work it
+ * used to take. That is the change, not a side effect of it, and the setting's
+ * button says so. Jobs the player staged a score for are exempt — see
+ * `tickAutopilot`.
  *
  * Reported, not yet asserted, in `ladder.probe.test.ts`'s autopilot-risk
  * arms — the numbers are a first cut sized off the existing gap between the
  * two thresholds, the same way the original two were sized off measurement
  * rather than guessed twice.
+ *
+ * **`normal`'s floor is measured; the other two are not.** The instrument is
+ * "a boss who hands the work over still takes the ground" (`ladder.probe`, 36
+ * paired careers, the shipped autopilot at `normal`), against the same boss
+ * running it himself. The bar it asserts — the ground — held at every floor;
+ * what moved is what it reports:
+ *
+ *     floor    jobs finished   crew left   estate gap, median   ahead
+ *     none          146           49         +$1,261,959        20/36
+ *     0.45          195           58         +$1,412,775        21/36
+ *     0.50          212           66           -$346,668        17/36
+ *     0.55          216           74           -$890,625        13/36
+ *
+ * Jobs finished and crew left climb the whole way, which is the mechanism: a
+ * floor keeps men out of the jobs that lose them. The estate gap is noisy at
+ * 36 and its sign flips between neighbouring floors, so read it as "0.45 costs
+ * nothing this instrument can see and 0.50 starts to". 0.55, the first thing
+ * tried, reads 13/36 against the hand and is not shipped. `cautious` and
+ * `aggressive` sit ten points either side of `normal` and nothing measures
+ * them: the probe never sets a risk.
  */
 export type AutopilotRisk = 'cautious' | 'normal' | 'aggressive';
 
 export const AUTOPILOT_RISK: Record<
   AutopilotRisk,
-  { quietAbove: number; stopAbove: number; reservesPayroll: boolean }
+  { quietAbove: number; stopAbove: number; reservesPayroll: boolean; minSuccess: number }
 > = {
-  cautious: { quietAbove: 25, stopAbove: 50, reservesPayroll: true },
-  normal: { quietAbove: AUTOPILOT.quietAbove, stopAbove: AUTOPILOT.stopAbove, reservesPayroll: false },
-  aggressive: { quietAbove: 55, stopAbove: 80, reservesPayroll: false },
+  cautious: { quietAbove: 25, stopAbove: 50, reservesPayroll: true, minSuccess: 0.55 },
+  normal: {
+    quietAbove: AUTOPILOT.quietAbove,
+    stopAbove: AUTOPILOT.stopAbove,
+    reservesPayroll: false,
+    minSuccess: 0.45,
+  },
+  aggressive: { quietAbove: 55, stopAbove: 80, reservesPayroll: false, minSuccess: 0.35 },
 };
 
 export const AUTOPILOT_RISK_LABEL: Record<AutopilotRisk, string> = {
@@ -65,10 +102,12 @@ export const AUTOPILOT_RISK_LABEL: Record<AutopilotRisk, string> = {
   aggressive: 'Aggressive',
 };
 
+const percent = (n: number): number => Math.round(n * 100);
+
 export const AUTOPILOT_RISK_BLURB: Record<AutopilotRisk, string> = {
-  cautious: `Eases off at ${AUTOPILOT_RISK.cautious.quietAbove} heat, stops at ${AUTOPILOT_RISK.cautious.stopAbove}, and never spends into what payday costs.`,
-  normal: `Eases off at ${AUTOPILOT_RISK.normal.quietAbove} heat, stops at ${AUTOPILOT_RISK.normal.stopAbove}. What this always did.`,
-  aggressive: `Eases off at ${AUTOPILOT_RISK.aggressive.quietAbove} heat, stops at ${AUTOPILOT_RISK.aggressive.stopAbove}. Spends everything it has.`,
+  cautious: `Eases off at ${AUTOPILOT_RISK.cautious.quietAbove} heat, stops at ${AUTOPILOT_RISK.cautious.stopAbove}, holds back any job under ${percent(AUTOPILOT_RISK.cautious.minSuccess)}%, and never spends into what payday costs.`,
+  normal: `Eases off at ${AUTOPILOT_RISK.normal.quietAbove} heat, stops at ${AUTOPILOT_RISK.normal.stopAbove}, and holds back any job under ${percent(AUTOPILOT_RISK.normal.minSuccess)}%.`,
+  aggressive: `Eases off at ${AUTOPILOT_RISK.aggressive.quietAbove} heat, stops at ${AUTOPILOT_RISK.aggressive.stopAbove}, and holds back any job under ${percent(AUTOPILOT_RISK.aggressive.minSuccess)}%. Spends everything it has.`,
 };
 
 /**

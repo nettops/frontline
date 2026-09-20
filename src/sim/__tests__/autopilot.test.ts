@@ -12,7 +12,9 @@
  * Two properties matter more than anything about the payoff, and both come
  * straight from what the probe learned building it:
  *
- * 1. **It does not change *what* runs, only *who* goes.** The first version of
+ * 1. **It does not reorder *what* runs, only *who* goes** — and, since round 30,
+ *    it holds back a job whose odds with the crew it would send are under a
+ *    floor (see 'the odds floor' below). The first version of
  *    the arm also reordered the board — riskiest job first instead of by
  *    expected value — and lost by a million, because it spent the bench and the
  *    stake on the most dangerous work before reaching the work that pays. Jobs
@@ -33,6 +35,7 @@ import { OPERATION_BY_ID } from '../../config/operations';
 import { AUTOPILOT, AUTOPILOT_RISK } from '../../config/autopilot';
 import { payrollForecast } from '../economy';
 import { PAYDAY_INTERVAL } from '../../config/economy';
+import autopilotSource from '../autopilot.ts?raw';
 import type { GameState } from '../types';
 
 function game(seed = 7): GameState {
@@ -381,5 +384,79 @@ describe('how hard it is allowed to push', () => {
       out.some((op) => OPERATION_BY_ID[op.defId].investment === 0),
       'a free job was refused for money the reserve only imagines it needs',
     ).toBe(true);
+  });
+});
+
+/*
+   An odds floor, because "your best and most careful on the riskiest work"
+   is a sentence about who goes, and round 30's tester watched it send a $6,000
+   Warehouse Job out at 44%.
+
+   The floor is read off `successBreakdown`, the same figure the board shows and
+   `launchOperation` snapshots, so what the loop declines is what a hand would
+   have read as a bad price. It is checked in the handout pass, after the best
+   crew for the job has been chosen, because the odds depend on who goes.
+*/
+describe('the odds floor', () => {
+  it('is a fraction, and each setting is stricter than the one that pushes harder', () => {
+    const { cautious, normal, aggressive } = AUTOPILOT_RISK;
+    for (const r of [cautious, normal, aggressive]) {
+      expect(r.minSuccess).toBeGreaterThan(0);
+      expect(r.minSuccess).toBeLessThan(1);
+    }
+    expect(cautious.minSuccess).toBeGreaterThan(normal.minSuccess);
+    expect(normal.minSuccess).toBeGreaterThan(aggressive.minSuccess);
+  });
+
+  it('sends nothing out when no job clears it', () => {
+    const state = game();
+    setAutopilot(state, true);
+    const risk = AUTOPILOT_RISK.normal as { minSuccess: number };
+    const was = risk.minSuccess;
+    risk.minSuccess = 1; // above the most a job can ever read
+    try {
+      tickAutopilot(state, new Rng(state.rng));
+    } finally {
+      risk.minSuccess = was;
+    }
+    expect(Object.keys(state.activeOperations), 'a job went out under the floor').toHaveLength(0);
+  });
+
+  it('launches nothing whose odds, as launched, are under the line it was set to', () => {
+    const state = game();
+    setAutopilot(state, true);
+    tickAutopilot(state, new Rng(state.rng));
+
+    const out = Object.values(state.activeOperations);
+    expect(out.length, 'nothing went out, so there is nothing to check').toBeGreaterThan(0);
+    for (const op of out) {
+      expect(
+        op.successChance,
+        `${op.defId} went out at ${Math.round(op.successChance * 100)}%`,
+      ).toBeGreaterThanOrEqual(AUTOPILOT_RISK.normal.minSuccess);
+    }
+  });
+
+  it('holds the same line at every setting, each at its own number', () => {
+    for (const setting of ['cautious', 'normal', 'aggressive'] as const) {
+      const state = game();
+      setAutopilot(state, true);
+      setAutopilotRisk(state, setting);
+      tickAutopilot(state, new Rng(state.rng));
+      for (const op of Object.values(state.activeOperations)) {
+        expect(op.successChance, `${setting}: ${op.defId}`).toBeGreaterThanOrEqual(
+          AUTOPILOT_RISK[setting].minSuccess,
+        );
+      }
+    }
+  });
+
+  /*
+     Exempt on purpose: a score is a month of groundwork the player opened, and
+     the loop already holds it until the window is closing. Declining it at the
+     floor would let the window lapse with nothing said.
+  */
+  it('does not decline a job the player staged a score for', () => {
+    expect(autopilotSource).toMatch(/if \(!score && successBreakdown\(/);
   });
 });
