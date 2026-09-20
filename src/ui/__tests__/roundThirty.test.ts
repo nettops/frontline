@@ -86,3 +86,20 @@ describe('a settling route says so on the trade screen', () => {
     expect(TRADE).toMatch(/settling in/);
   });
 });
+
+/*
+   The heat chip and the gauge redden at the same place.
+
+   The chip needed heat above 60 while the Overview's gauge, the stat bar's tone
+   and `heatSeverity` all call 41 — Major Investigation, where the tier text says
+   resources are being spent — the `hot` edge. So a boss at 55 saw a red gauge
+   and a strip with nothing on it. It reads `heatSeverity` rather than a number
+   of its own, which is what `config/heat.ts` says two parts of one screen must
+   not disagree about.
+*/
+describe('the docket heat chip follows the gauge', () => {
+  it('appears at the tier the gauge reddens at, not at a number of its own', () => {
+    expect(BAR).toMatch(/heatSeverity\(state\.org\.heat\) === 'hot'/);
+    expect(BAR).not.toMatch(/state\.org\.heat > 60/);
+  });
+});

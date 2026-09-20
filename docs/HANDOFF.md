@@ -445,6 +445,11 @@ move. Every guard below was seen red before its fix.
   rule that ramps more read **964,529**, above it, against 983,313 unramped, and
   lay-low at the ordered 0.5 read 834,955 before the ramp and 911,206 with it.
   What the ramp costs is inside the noise of the instrument; the bar clears.
+- **The Docket heat chip follows the gauge.** It needed heat above 60 while the
+  Overview's gauge, the stat bar's tone and `heatSeverity` redden at 41, so a
+  boss at Major Investigation saw a red gauge and an empty strip. It reads
+  `heatSeverity(...) === 'hot'` now, not a number of its own. Guard:
+  `roundThirty.test.ts`, seen red.
 
 ## 1. What the project is
 

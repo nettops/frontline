@@ -11,7 +11,7 @@ import { rivals } from '../sim/faction';
 import { districtOwner, territoryList } from '../sim/territory';
 import { setTipsOff, tipsOff } from './tips';
 import { CAREER_STEPS, MODE_BY_ID, SIMULATION_STEPS } from '../config/modes';
-import { heatTier } from '../config/heat';
+import { heatSeverity, heatTier } from '../config/heat';
 import { arrestRisk } from '../sim/investigation';
 import { houseShort } from '../sim/houses';
 import type { PanelId } from './Rail';
@@ -200,7 +200,13 @@ function Docket({ onGoto }: { onGoto?: (id: PanelId) => void }) {
         },
   );
 
-  if (state.org.heat > 60) {
+  /*
+     The gauge's own edge, not a number of the strip's own. This read `> 60`
+     while the Overview's gauge, this bar's tone and `heatSeverity` all redden
+     at 41 — Major Investigation, where the tier says resources are being
+     spent — so a boss at 55 had a red gauge and a strip with nothing on it.
+  */
+  if (heatSeverity(state.org.heat) === 'hot') {
     items.push({
       key: 'heat',
       tone: 'hot',
@@ -211,7 +217,7 @@ function Docket({ onGoto }: { onGoto?: (id: PanelId) => void }) {
   }
 
   /*
-     A file, for the boss whose street heat never reaches 60.
+     A file, for the boss whose heat never reaches the gauge's red.
 
      Heat is attention and a case is evidence, and a careful operator can sit
      under the heat chip's line for weeks while a case grows — round 30's tester
