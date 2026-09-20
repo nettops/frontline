@@ -357,8 +357,8 @@ export const TRADE_IDS: TradeId[] = ['product', 'arms'];
 export const LAY_LOW_TRADE_SHARE = 0.8;
 
 /**
- * How long a trade's first route takes to carry what the ground is worth, and
- * what it carries on the day it opens.
+ * How long a route opened while the trade is being established takes to carry
+ * what the ground is worth, and what it carries on the day it opens.
  *
  * Round 30's MUST FIX 2, and the shape the director chose over a cap: the
  * runner door opened on day 55 and one route paid about $23.6K a week almost
@@ -374,22 +374,24 @@ export const LAY_LOW_TRADE_SHARE = 0.8;
  * charged for it.**
  *
  * So this charges for it. A street that has never moved anything for you does
- * not move everything it will ever move in week one: the trade's first route
- * opens at `ROUTE_RAMP_START` of its settled capacity and climbs to all of it
- * over `ROUTE_RAMP_WEEKS`. It is a delay and not a tax — the settled ceiling a
+ * not move everything it will ever move in week one: a route opened while the
+ * trade is still being established starts at `ROUTE_RAMP_START` of its settled
+ * capacity and climbs to all of it over `ROUTE_RAMP_WEEKS`. It is a delay and not a tax — the settled ceiling a
  * long career reaches is exactly the number it was before this existed.
  *
- * **First route only, and that is a measurement, not a taste.** The first cut
- * ramped every route. `ladder.probe`'s bot opens a route in every district it
- * takes, for three hundred days, so every new district paid a month at a
- * quarter — a standing tax on expansion that read 707,768 against 960,574
- * unramped at 36 seeds. What the windfall needs taming for is *entering* the
- * trade, so a route opened while the trade already has one runs at once, and
- * giving up every street and coming back is entering afresh. The price of that
- * is a bypass: a boss holding two districts can open both in one sitting and
- * only the first spools. Round 30's tester held one at day 55, which is the
- * case this was built for; a boss with more ground at that point is already
- * richer than the famine this is answering.
+ * **While the trade is being established, not only the first route.** The
+ * first cut ramped every route. `ladder.probe`'s bot opens a route in every
+ * district it takes, for three hundred days, so every new district paid a month
+ * at a quarter — a standing tax on expansion. The second ramped only the
+ * literal first route, which left a way round: open it, then open the rest the
+ * same afternoon, and a boss with two districts at day 55 skipped the ramp
+ * entirely. What the windfall needs taming for is the *establishment* of the
+ * trade, so a route ramps from its own opening while no route in that trade has
+ * matured, and once one has, every later route runs at once. Giving up every
+ * street and coming back is establishing afresh, and so is giving up the only
+ * one that had matured. The cost of a stagger is bounded: a route opened in the
+ * last week of establishment ramps for its own four, so the outside is eight
+ * weeks from the first opening.
  *
  * Applied inside `districtCapacity`, the single function `throughput`, the
  * weekly spread, the order sizing and the panel all read — the same place and
@@ -400,15 +402,21 @@ export const LAY_LOW_TRADE_SHARE = 0.8;
  * same checkout with the ramp switched off (`ROUTE_RAMP_START = 1`), paired gap
  * in best estate against a bar of half the non-trading median:
  *
- *     400 seeds   unramped 983,313   ramped 917,044   bar 869,209   clears
- *     36 seeds    unramped 960,574   ramped 587,919   bar 817,661   fails
+ *     400 seeds   unramped 983,313
+ *                 first route only       917,044   bar 869,209   clears
+ *                 until one has matured  964,529   bar 869,209   clears
+ *     36 seeds    unramped 960,574
+ *                 first route only       587,919   bar 817,661   fails
+ *                 until one has matured  680,135   bar 817,661   fails
  *
  * The 36-seed reading is not a size, it is turbulence: a ramp on every route
  * read 707,768 there and a gentler 0.5/4 read 1,051,599, above no ramp at all.
  * The bar reads 400 seeds for that reason (see the comment on the assertion).
- * The 400 is not exact either — lay-low at 0.5 read 834,955 before the ramp and
- * 911,206 with it — so about 7% is a cost inside that instrument's noise, not
- * a number to defend to the decimal.
+ * The 400 is not exact either. The wider ramp, which ramps more, reads *higher*
+ * than the narrower one, and lay-low at 0.5 read 834,955 before the ramp and
+ * 911,206 with it. The three readings sit inside a 66,000 band, so what the
+ * ramp costs is not a number this instrument can give; what it can say is that
+ * the bar still clears.
  */
 export const ROUTE_RAMP_WEEKS = 4;
 export const ROUTE_RAMP_START = 0.25;

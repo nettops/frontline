@@ -1876,11 +1876,11 @@ export interface Contraband {
   /** Districts each trade is running through. */
   routes: Record<TradeId, string[]>;
   /**
-   * The day a trade was entered, stored against its first route and keyed
-   * `trade:territoryId`. Read by `ROUTE_RAMP_WEEKS`, so a street that has never
-   * carried anything for you does not carry everything it will ever carry in
-   * week one. Only that first route has an entry; every route opened while the
-   * trade already had one reads as settled.
+   * The day a route was opened while its trade was still being established,
+   * keyed `trade:territoryId`. Read by `ROUTE_RAMP_WEEKS`, so a street that has
+   * never carried anything for you does not carry everything it will ever carry
+   * in week one. A route has an entry only if no route in its trade had matured
+   * when it opened; every later one reads as settled.
    *
    * Optional, and a missing entry reads as *settled* rather than as new. A
    * save written before the ramp existed has routes that have been running —

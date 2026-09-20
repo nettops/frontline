@@ -276,10 +276,10 @@ export default function ContrabandPanel() {
                         {/*
                            A figure that is going to change on its own says so.
 
-                           The ramp (ROUTE_RAMP_WEEKS) means a trade's first
-                           route carries a quarter of what the ground is
-                           worth in its opening week, and a player who is not
-                           told that reads the
+                           The ramp (ROUTE_RAMP_WEEKS) means a route opened
+                           while the trade is being established carries a
+                           quarter of what the ground is worth in its opening
+                           week, and a player who is not told that reads the
                            low number as the street being poor, or as a fault.
                            Rule 3: if a number moved, a panel can name why.
                         */}

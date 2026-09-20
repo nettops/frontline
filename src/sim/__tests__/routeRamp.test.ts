@@ -12,12 +12,14 @@
  * instead of a cheque, while the settled ceiling a long career reaches is
  * exactly what it was.
  *
- * **Only the first.** The first cut ramped every route, and against
- * `ladder.probe` that was a standing tax on expansion: the bot opens a route in
- * every district it takes, for three hundred days, so every new district paid
- * a month at a quarter. What the windfall needed taming for is entering the
- * trade, not growing inside it, so a route opened while the trade already has
- * one runs at once.
+ * **Entering the trade, not growing inside it.** The first cut ramped every
+ * route and against `ladder.probe` that was a standing tax on expansion: the bot
+ * opens a route in every district it takes, for three hundred days, so every new
+ * district paid a month at a quarter. The second ramped only the literal first
+ * route, which left a bypass — open the first, then the second the same
+ * afternoon, and only the first spooled. What the windfall needed taming for is
+ * the establishment of the trade, so a route ramps if no route in that trade has
+ * yet matured, and once one has, every later route runs at once.
  *
  * Applied inside `districtCapacity`, which is the single place `throughput`,
  * the weekly spread, the order sizing and the panel all read — the same
@@ -84,6 +86,13 @@ function settledFirst(seed = 31): number {
   return carried;
 }
 
+/** What every route the state has open would carry once all of them had settled. */
+function settledEvery(state: GameState): number {
+  const s = ready();
+  for (const id of state.contraband.routes.product) openOn(s, id, s.day - ROUTE_RAMP_WEEKS * 7 * 10);
+  return throughput(s, 'product').routes;
+}
+
 describe('the first route spools up', () => {
   it('carries the opening share on the week it opens', () => {
     const state = ready();
@@ -140,23 +149,55 @@ describe('the first route spools up', () => {
 });
 
 /*
-   The reason this is only the first route, as a guard. Reverting to a
-   per-route ramp fails every test in this block, and each of them is a
-   statement about what the ramp is *for*: entering the trade, not growing in it.
+   The rule, as guards. A route ramps while the trade is still being
+   established — no route in it has matured — and runs at once after. Reverting
+   to "only the literal first route" fails the first two tests here; reverting
+   to "every route" fails the last three.
 */
-describe('the ramp is for entering the trade, not for growing inside it', () => {
-  it('a second route opened while the first is still spooling runs at once', () => {
+describe('the ramp is for establishing the trade, not for growing inside it', () => {
+  it('routes opened in one sitting all spool, so there is no way round it', () => {
     const state = ready();
-    const [a, b] = ground(state);
-    openOn(state, a, state.day);
-    openOn(state, b, state.day);
+    const ids = ground(state);
+    for (const id of ids) openOn(state, id, state.day);
 
-    expect(routeRamp(state, 'product', a)).toBeCloseTo(ROUTE_RAMP_START, 6);
-    expect(routeRamp(state, 'product', b)).toBe(1);
-    expect(weeksToSettle(state, 'product', b)).toBe(0);
+    for (const id of ids) {
+      expect(routeRamp(state, 'product', id), `${id} skipped the ramp`).toBeCloseTo(
+        ROUTE_RAMP_START,
+        6,
+      );
+    }
+    expect(throughput(state, 'product').routes).toBeCloseTo(
+      settledEvery(state) * ROUTE_RAMP_START,
+      6,
+    );
   });
 
-  it('a district taken long after the trade was entered carries in full the day it opens', () => {
+  it('a route opened while the first is still spooling spools from its own opening', () => {
+    const state = ready();
+    const [a, b] = ground(state);
+    const week = 7;
+    openOn(state, a, state.day - 2 * week);
+    openOn(state, b, state.day);
+
+    // The first is halfway through its own four weeks; the second has just begun.
+    expect(routeRamp(state, 'product', a)).toBeGreaterThan(ROUTE_RAMP_START);
+    expect(routeRamp(state, 'product', a)).toBeLessThan(1);
+    expect(routeRamp(state, 'product', b)).toBeCloseTo(ROUTE_RAMP_START, 6);
+    expect(weeksToSettle(state, 'product', b)).toBe(ROUTE_RAMP_WEEKS);
+  });
+
+  it('a route opened the day the first matures runs at once', () => {
+    const state = ready();
+    const [a, b] = ground(state);
+    openOn(state, a, state.day - ROUTE_RAMP_WEEKS * 7);
+    expect(weeksToSettle(state, 'product', a)).toBe(0);
+    openOn(state, b, state.day);
+
+    expect(routeRamp(state, 'product', b)).toBe(1);
+    expect(state.contraband.routeSince?.[`product:${b}`]).toBeUndefined();
+  });
+
+  it('a district taken long after the trade was established carries in full the day it opens', () => {
     const state = ready();
     const [a, b] = ground(state);
     openOn(state, a, state.day - ROUTE_RAMP_WEEKS * 7 * 5);
@@ -165,7 +206,7 @@ describe('the ramp is for entering the trade, not for growing inside it', () => 
     expect(state.contraband.routeSince?.[`product:${b}`]).toBeUndefined();
   });
 
-  it('closing and reopening a street while another still runs is not a new entry', () => {
+  it('closing and reopening a street while an established one still runs is not a new entry', () => {
     const state = ready();
     const [a, b] = ground(state);
     openOn(state, a, state.day - ROUTE_RAMP_WEEKS * 7);
@@ -186,6 +227,18 @@ describe('the ramp is for entering the trade, not for growing inside it', () => 
 
     openOn(state, a, state.day);
     expect(routeRamp(state, 'product', a)).toBeCloseTo(ROUTE_RAMP_START, 6);
+  });
+
+  it('giving up the only route that had matured leaves the trade unestablished', () => {
+    // A matured, B still spooling. Close A: nothing in the trade has matured,
+    // so a route opened now is establishing it, not expanding it.
+    const state = ready();
+    const [a, b, c] = ground(state);
+    openOn(state, a, state.day - ROUTE_RAMP_WEEKS * 7);
+    openOn(state, b, state.day - 7);
+    closeRoute(state, 'product', a);
+    openOn(state, c, state.day);
+    expect(routeRamp(state, 'product', c)).toBeCloseTo(ROUTE_RAMP_START, 6);
   });
 
   it('the trade being entered on one street says nothing about the other trade', () => {

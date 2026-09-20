@@ -674,13 +674,16 @@ export function openRoute(state: GameState, trade: TradeId, territoryId: string)
   const routes = state.contraband.routes[trade];
   if (routes.includes(territoryId)) return { ok: false, message: 'Already running there.' };
 
-  // Only a trade's first route ramps. Entering the trade is what the ramp is
-  // for; growing inside it is not, and ramping every route was a standing tax
-  // on expansion (see `ROUTE_RAMP_WEEKS`). Set here and nowhere else, so
-  // "entered" means the one moment it can mean.
-  const entering = routes.length === 0;
+  // A route ramps while the trade is still being established — no route in it
+  // has matured — and runs at once after. That is entering the trade, which is
+  // what the ramp is for; growing inside it is not, and ramping every route was
+  // a standing tax on expansion (see `ROUTE_RAMP_WEEKS`). Ramping only the
+  // literal first route left a way round: open it, then open the rest the same
+  // afternoon. An empty trade has nothing matured, so its first route ramps.
+  // Set here and nowhere else, so "opened" means the one moment it can mean.
+  const established = routes.some((id) => weeksToSettle(state, trade, id) === 0);
   routes.push(territoryId);
-  if (entering) (state.contraband.routeSince ??= {})[rampKey(trade, territoryId)] = state.day;
+  if (!established) (state.contraband.routeSince ??= {})[rampKey(trade, territoryId)] = state.day;
   addLog(
     state,
     `${TRADES[trade].name} is running through ${territoryDef(territoryId).name} now.`,
@@ -694,8 +697,8 @@ export function closeRoute(state: GameState, trade: TradeId, territoryId: string
   const index = routes.indexOf(territoryId);
   if (index === -1) return { ok: false, message: 'Nothing running there.' };
   routes.splice(index, 1);
-  // Giving up the street that was spooling gives up what it had built. If it
-  // was the last one, opening a street again is entering the trade afresh.
+  // Giving up a street gives up what it had built. If that leaves no route
+  // matured, opening one again is establishing the trade afresh.
   delete state.contraband.routeSince?.[rampKey(trade, territoryId)];
   return { ok: true, message: 'Closed.' };
 }

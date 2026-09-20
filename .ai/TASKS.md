@@ -19,10 +19,7 @@ archives. The NOT NEGOTITABLE pass is **complete** —
 ## Open
 
 1. **Round 30 SHOULD FIX items outside the repair order**, checked or not:
-   the heat band text ("Your people are being watched") against Law's
-   "Nobody has a file open on you" — two sentences that cannot both be read
-   as true (`config/tuning/heat.json`, `sim/investigation.ts:1206`); the
-   Businesses list repeating one refusal ten times (`sim/business.ts:472`,
+   the Businesses list repeating one refusal ten times (`sim/business.ts:472`,
    panel not read); "Little Sicily has gone quiet on you" as a fixed title
    (`sim/eventgen.ts:397`); the Docket heat chip needing heat above 60
    while `config/heat.ts` calls 41 the `hot` edge; autopilot's missing odds

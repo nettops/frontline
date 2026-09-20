@@ -402,22 +402,34 @@ move. Every guard below was seen red before its fix.
 - **Succession no longer prints the stored rank** (`App.tsx` game-over roll,
   `SuccessionPanel.tsx` starting-rank row and "Reached" column). The field is
   pinned at the first rung, so every predecessor read the same word.
+- **The case line no longer denies the heat above it.** With no case open,
+  `arrestRisk` used to say "Nobody has a file open on you" under a heat tier
+  reading "Resources are being spent" (round 30). From the tier edge the gauge
+  already reddens at (`heatSeverity`, heat 26) it now names what is looking, by
+  largest heat channel (`HEAT_WATCHED_LINE`, `config/heat.ts`), and says nobody
+  has opened a formal file *yet*. **The level stays `clear`**, not `watched`
+  as the brief asked: the Docket turns `watched` into "A file is open", and
+  `foresight.test.ts` pins that a loud week is not an investigation. Guards in
+  `investigation.test.ts`, five seen red.
 - **The portrait follows the standing.** `lookForPlayer(player, rank)` and
   `PlayerPortrait` take the family's standing (`rankNow(state).id`), and the
   kit line under it reads the same; the stored `player.rank` is only the
   fallback for a caller with no state (the title-screen customiser). It falls
   as well as rises, like the name. Guards: `playerLook.test.ts`,
   `familyStanding.test.ts`.
-- **First-route ramp shipped (`ROUTE_RAMP_START` 0.25, `ROUTE_RAMP_WEEKS` 4).**
-  A trade's first route opens at 25% of capacity and reaches full over four
-  weeks (`routeSince`, optional, a missing entry reads as settled, so no
-  `SAVE_VERSION` move; `districtCapacity` applies it; the trade panel says
-  "settling in, N wks to full"). Only the first route ramps — ramping every
-  route was a standing tax, since the probe bot opens a route in every
-  district it takes. Round 30's first week would pay about a quarter of what it
-  did, and full from week five. Guard: `sim/__tests__/routeRamp.test.ts`,
-  eleven cases, the three that pin "first only" seen red against the
-  every-route version.
+- **Route ramp shipped (`ROUTE_RAMP_START` 0.25, `ROUTE_RAMP_WEEKS` 4).** A
+  route opened while its trade is still being established — no route in it has
+  matured — starts at 25% of capacity and reaches full over four weeks; once
+  one has matured, every later route runs at once (`routeSince`, optional, a
+  missing entry reads as settled, so no `SAVE_VERSION` move;
+  `districtCapacity` applies it; the trade panel says "settling in, N wks to
+  full"). Giving up every street, or the only matured one, is establishing
+  afresh. Two earlier shapes are recorded on the constant: every route (a
+  standing tax on expansion, the probe bot opens one in every district) and only
+  the literal first (open it, then the rest the same afternoon, and a boss with
+  two districts at day 55 skipped the ramp). The stagger is bounded: eight
+  weeks from the first opening at most. Guard: `sim/__tests__/routeRamp.test.ts`,
+  the three tests that close the bypass seen red against the first-only rule.
 - **`ladder.probe`'s trade bar now reads 400 seeds.** "Running both trades for
   300 days", paired gap in best estate against half the non-trading median,
   read against `WIDE` and a new dedicated `WIDE_TRADING` (same seeds, trades
@@ -429,9 +441,10 @@ move. Every guard below was seen red before its fix.
   gentler 0.5/4 read 1,051,599, above no ramp at all. The 400 is the reading
   that sized lay-low too. A full probe run now pays for one extra 400-career
   population. The other readers of the 36-seed arms keep their samples.
-  **The 400 is not exact either:** lay-low at the ordered 0.5 read 834,955
-  before the ramp and 911,206 with it, so a 6.7% cost is inside the noise of the
-  instrument, not a measurement of it.
+  **The 400 is not exact either:** first-route-only read 917,044, the wider
+  rule that ramps more read **964,529**, above it, against 983,313 unramped, and
+  lay-low at the ordered 0.5 read 834,955 before the ramp and 911,206 with it.
+  What the ramp costs is inside the noise of the instrument; the bar clears.
 
 ## 1. What the project is
 
