@@ -480,6 +480,18 @@ move. Every guard below was seen red before its fix.
   with the loop already on**, which the old blurb ("what this always did") said
   it would not, so the blurb and the panel's "never what runs" line now say the
   floor. Guards: `autopilot.test.ts`, seen red.
+- **A read says why it moved.** Round 30 saw Elena "very good" on one job and
+  "learning" on the next. Nothing was wrong: `perceive` re-draws a stat's
+  estimate when familiarity crosses a tier, and every job worked beside a man
+  raises it, so two reads a fortnight apart can sit two bands apart and the
+  second is the sharper. `StatRead` now carries `readTitle` — the band, the
+  tier's own label, and "a read sharpens as you know them better, and can move
+  when it does". Nothing the fog kept is disclosed (the label is the one the
+  person's page prints). **A question, not built:** the per-tier rolls are
+  independent, so a read can move *away* from the truth before it settles; a
+  shared roll with shrinking noise would only ever sharpen. That is the
+  perception system's core (rule 1, eleven call sites) and was not touched.
+  Guard: `ui/__tests__/statRead.test.ts`, seen red.
 
 ## 1. What the project is
 

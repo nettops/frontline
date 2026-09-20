@@ -161,6 +161,21 @@ export function payRead(state: GameState, npc: Npc): { text: string; tone: strin
   return { text: 'thinks they are worth more', tone: 'hot' };
 }
 
+/**
+ * The sentence under a read, for a player who has watched it change.
+ *
+ * `perceive` keeps a man's estimate still for a familiarity tier and re-draws
+ * it when he crosses into the next, and every job worked beside somebody raises
+ * it — so the same stat on the same man can read two bands apart a fortnight
+ * later, and the later read is the sharper. That is the design, and to a player
+ * with nothing on the page saying so it is a bug (round 30: "very good" on one
+ * job, "learning" on the next). The confidence is the tier's own label, which
+ * the person's page already prints, so it discloses nothing the fog kept.
+ */
+export function readTitle(read: { band: string; confidence: string }): string {
+  return `${read.band} — ${read.confidence}. A read sharpens as you know them better, and can move when it does.`;
+}
+
 export function StatRead({
   npc,
   stat,
@@ -177,7 +192,7 @@ export function StatRead({
   }
   const warn = warnHigh && read.bandIndex >= 3;
   return (
-    <span className="read">
+    <span className="read" title={readTitle(read)}>
       <span className="pips" aria-hidden="true">
         {[0, 1, 2, 3, 4].map((i) => (
           <span
